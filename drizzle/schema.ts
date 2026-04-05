@@ -1,17 +1,16 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  decimal,
+  json,
+} from "drizzle-orm/mysql-core";
 
-/**
- * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
- */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +24,40 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+export const expenseCategories = mysqlTable("expense_categories", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
+  color: varchar("color", { length: 20 }).notNull().default("#6366f1"),
+  icon: varchar("icon", { length: 50 }).notNull().default("tag"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ExpenseCategory = typeof expenseCategories.$inferSelect;
+export type InsertExpenseCategory = typeof expenseCategories.$inferInsert;
+
+export const receipts = mysqlTable("receipts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  vendor: varchar("vendor", { length: 255 }),
+  receiptDate: timestamp("receiptDate"),
+  amount: decimal("amount", { precision: 10, scale: 2 }),
+  tax: decimal("tax", { precision: 10, scale: 2 }),
+  categoryId: int("categoryId"),
+  categoryName: varchar("categoryName", { length: 100 }),
+  status: mysqlEnum("status", ["pending", "processing", "processed", "failed"])
+    .default("pending")
+    .notNull(),
+  imageUrl: text("imageUrl"),
+  thumbnailUrl: text("thumbnailUrl"),
+  originalFilename: varchar("originalFilename", { length: 255 }),
+  mimeType: varchar("mimeType", { length: 100 }),
+  rawText: text("rawText"),
+  lineItems: json("lineItems").$type<Array<{ description: string; amount: number }>>(),
+  notes: text("notes"),
+  currency: varchar("currency", { length: 10 }).default("GBP"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Receipt = typeof receipts.$inferSelect;
+export type InsertReceipt = typeof receipts.$inferInsert;
