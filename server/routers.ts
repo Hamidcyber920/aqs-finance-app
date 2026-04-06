@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
+import { localAuthRouter, adminRouter } from "./routers/localAuth";
 import {
   createReceipt,
   deleteReceipt,
@@ -120,6 +121,8 @@ Be precise with amounts. If a field cannot be determined, use null.`;
 
 export const appRouter = router({
   system: systemRouter,
+  localAuth: localAuthRouter,
+  admin: adminRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -150,8 +153,10 @@ export const appRouter = router({
         })
       )
       .query(async ({ ctx, input }) => {
+        // Admins can see all receipts; regular users see only their own
+        const userId = ctx.user.role === "admin" ? undefined : ctx.user.id;
         return listReceipts({
-          userId: ctx.user.id,
+          userId,
           categoryName: input.categoryName,
           vendor: input.vendor,
           dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
@@ -167,7 +172,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const receipt = await getReceiptById(input.id);
         if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
-        if (receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin" && receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
         return receipt;
       }),
 
@@ -190,7 +195,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const receipt = await getReceiptById(input.id);
         if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
-        if (receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin" && receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
         const { id, receiptDate, ...rest } = input;
         await updateReceipt(id, {
           ...rest,
@@ -204,7 +209,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const receipt = await getReceiptById(input.id);
         if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
-        if (receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin" && receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
         await deleteReceipt(input.id);
         return { success: true };
       }),
@@ -214,11 +219,16 @@ export const appRouter = router({
         z.object({
           dateFrom: z.string().optional(),
           dateTo: z.string().optional(),
+          userId: z.number().optional(),
         })
       )
       .query(async ({ ctx, input }) => {
+        // Admins can pass a specific userId or omit for all-org totals
+        const targetUserId = ctx.user.role === "admin"
+          ? (input.userId ?? ctx.user.id)
+          : ctx.user.id;
         return getCategoryTotals(
-          ctx.user.id,
+          targetUserId,
           input.dateFrom ? new Date(input.dateFrom) : undefined,
           input.dateTo ? new Date(input.dateTo) : undefined
         );
@@ -230,7 +240,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const receipt = await getReceiptById(input.receiptId);
         if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
-        if (receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (ctx.user.role !== "admin" && receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
         if (!receipt.imageUrl) throw new TRPCError({ code: "BAD_REQUEST", message: "No image URL" });
 
         await updateReceipt(input.receiptId, { status: "processing" });

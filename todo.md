@@ -29,3 +29,23 @@
 - [x] Vitest: export CSV generation
 - [x] Vitest: category totals
 - [x] Vitest: auth logout (existing)
+
+## Auth & Admin (Phase 2)
+- [x] Add passwordHash, resetToken, resetTokenExpiry fields to users table
+- [x] Generate and apply DB migration for auth fields
+- [x] Backend: POST /api/auth/register (name, email, password)
+- [x] Backend: POST /api/auth/login (email, password → JWT session cookie)
+- [x] Backend: POST /api/auth/logout (clear cookie)
+- [x] Backend: POST /api/auth/forgot-password (send reset email via notification)
+- [x] Backend: POST /api/auth/reset-password (token + new password)
+- [x] Backend: GET /api/auth/me (return current user from session)
+- [x] Admin tRPC procedures: listAllUsers, updateUserRole, suspendUser, listAllReceipts
+- [x] Frontend: Login page (email + password form)
+- [x] Frontend: Register page (name + email + password)
+- [x] Frontend: Forgot Password page (email input)
+- [x] Frontend: Reset Password page (token from URL + new password)
+- [x] Frontend: Admin Panel page (user management table + all-receipts view)
+- [x] Guard all receipt procedures: regular users see only their own; admins see all
+- [x] Replace Manus OAuth login button with email/password form
+- [x] Vitest: register, login, forgot-password, reset-password procedures
+- [x] Vitest: admin-only procedures reject non-admin users

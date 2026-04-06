@@ -177,3 +177,109 @@ export async function getMonthlyTotal(userId: number, year: number, month: numbe
     .where(and(eq(receipts.userId, userId), gte(receipts.receiptDate, dateFrom), lte(receipts.receiptDate, dateTo)));
   return Number(result[0]?.total ?? 0);
 }
+
+// ── Local Auth Helpers ────────────────────────────────────────────────────────
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result[0];
+}
+
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createLocalUser(data: {
+  name: string;
+  email: string;
+  passwordHash: string;
+  role?: "user" | "admin";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(users).values({
+    name: data.name,
+    email: data.email,
+    passwordHash: data.passwordHash,
+    loginMethod: "local",
+    role: data.role ?? "user",
+    lastSignedIn: new Date(),
+  });
+  return result.insertId as number;
+}
+
+export async function updateUserPassword(userId: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ passwordHash, resetToken: null, resetTokenExpiry: null }).where(eq(users.id, userId));
+}
+
+export async function setResetToken(userId: number, token: string, expiry: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ resetToken: token, resetTokenExpiry: expiry }).where(eq(users.id, userId));
+}
+
+export async function getUserByResetToken(token: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.resetToken, token)).limit(1);
+  return result[0];
+}
+
+export async function updateLastSignedIn(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
+}
+
+// ── Admin Helpers ─────────────────────────────────────────────────────────────
+
+export async function listAllUsers(limit = 100, offset = 0) {
+  const db = await getDb();
+  if (!db) return { rows: [], total: 0 };
+  const [rows, countResult] = await Promise.all([
+    db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      loginMethod: users.loginMethod,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+      lastSignedIn: users.lastSignedIn,
+    }).from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(users),
+  ]);
+  return { rows, total: Number(countResult[0]?.count ?? 0) };
+}
+
+export async function updateUserRole(userId: number, role: "user" | "admin") {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+}
+
+export async function setUserActive(userId: number, isActive: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ isActive }).where(eq(users.id, userId));
+}
+
+export async function getAdminReceiptStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, processed: 0, pending: 0, failed: 0, totalAmount: 0 };
+  const result = await db.select({
+    total: sql<number>`COUNT(*)`,
+    processed: sql<number>`SUM(CASE WHEN ${receipts.status} = 'processed' THEN 1 ELSE 0 END)`,
+    pending: sql<number>`SUM(CASE WHEN ${receipts.status} IN ('pending','processing') THEN 1 ELSE 0 END)`,
+    failed: sql<number>`SUM(CASE WHEN ${receipts.status} = 'failed' THEN 1 ELSE 0 END)`,
+    totalAmount: sql<number>`COALESCE(SUM(CAST(${receipts.amount} AS DECIMAL(10,2))), 0)`,
+  }).from(receipts);
+  return result[0] ?? { total: 0, processed: 0, pending: 0, failed: 0, totalAmount: 0 };
+}

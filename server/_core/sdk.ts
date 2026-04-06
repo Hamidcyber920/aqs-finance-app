@@ -268,6 +268,17 @@ class SDKServer {
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
+
+    // Local auth: openId is stored as "local:{userId}"
+    if (sessionUserId.startsWith("local:")) {
+      const localId = parseInt(sessionUserId.slice(6), 10);
+      if (isNaN(localId)) throw ForbiddenError("Invalid local session");
+      const localUser = await db.getUserById(localId);
+      if (!localUser) throw ForbiddenError("User not found");
+      if (!localUser.isActive) throw ForbiddenError("Account suspended");
+      return localUser;
+    }
+
     let user = await db.getUserByOpenId(sessionUserId);
 
     // If user not in DB, sync from OAuth server automatically
@@ -293,7 +304,7 @@ class SDKServer {
     }
 
     await db.upsertUser({
-      openId: user.openId,
+      openId: user.openId!,
       lastSignedIn: signedInAt,
     });
 
