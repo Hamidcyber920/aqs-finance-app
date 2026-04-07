@@ -120,7 +120,7 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const { data: perms } = trpc.users.getPermissions.useQuery({ userId: user?.id ?? 0 }, { enabled: !!user?.id });
   const [location, setLocation] = useLocation();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, setOpenMobile, isMobile: sidebarIsMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -169,7 +169,11 @@ function DashboardLayoutContent({
       <SidebarMenuItem>
         <SidebarMenuButton
           isActive={isActive}
-          onClick={() => setLocation(path)}
+          onClick={() => {
+            setLocation(path);
+            // Auto-close sidebar on mobile after navigation
+            if (sidebarIsMobile) setOpenMobile(false);
+          }}
           tooltip={label}
           className="h-9 transition-all"
         >

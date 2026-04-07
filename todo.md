@@ -86,3 +86,14 @@
 - [x] Fix Loans: PDF download not showing — root cause was unauthenticated session; PDF code confirmed working; fix: publish latest checkpoint so login works on production
 - [x] Verify deployed domain uses latest checkpoint — publish required (checkpoint ab03e354 saved and ready)
 - [x] Add vitest for loans.generatePdf: assert UNAUTHORIZED for unauthenticated session, and successful URL return for admin — 40/40 tests passing
+
+## New Requests (Apr 7 2026)
+- [x] Sidebar: auto-close on mobile when a nav item is selected (slide back)
+- [x] Loans PDF: open in browser / trigger print dialog instead of file download (mobile-friendly)
+- [x] Loans: correct loan direction — worshipper lends TO mosque (not mosque to worshipper)
+- [x] Loans: add dashboard view showing all active loans and repayment due dates
+- [x] Loans: fixed 6-month repayment schedule with monthly repayment amount field
+- [x] Loans: add Purpose dropdown (Rimmers Purchase, Refurbishment, + free text option)
+- [x] Loans: add payment evidence upload (file/image) to record proof of repayment
+- [x] Payroll: add PDF upload with AI auto-analysis to auto-populate payroll fields
+- [x] Vitest: payroll.analyzePayslip (3 tests) + loan evidence repayment (2 tests) — 45/45 passing

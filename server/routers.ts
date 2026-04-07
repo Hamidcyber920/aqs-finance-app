@@ -481,6 +481,54 @@ export const appRouter = router({
   payroll: router({
     list: adminProcedure.input(z.object({ userId: z.number().optional(), year: z.number().optional(), month: z.number().optional() })).query(({ input }) => getPayrollRecords(input.userId, input.year, input.month)),
     myPayslips: protectedProcedure.query(({ ctx }) => getPayrollRecords(ctx.user.id)),
+
+    analyzePayslip: adminProcedure
+      .input(z.object({ fileUrl: z.string(), mimeType: z.string().default("application/pdf") }))
+      .mutation(async ({ input }) => {
+        const contentType = input.mimeType.startsWith("application/pdf") ? "file_url" : "image_url";
+        const prompt = `You are a UK payroll document parser. Extract all payroll data from this payslip and return structured JSON.
+{
+  "employeeName": "string or null",
+  "employeeId": "string or null",
+  "taxCode": "string or null",
+  "niNumber": "string or null",
+  "period": "string or null (e.g. April 2026)",
+  "month": number or null (1-12),
+  "year": number or null,
+  "grossPay": number or null,
+  "incomeTax": number or null,
+  "nationalInsurance": number or null,
+  "pensionContribution": number or null,
+  "otherDeductions": number or null,
+  "netPay": number or null,
+  "paymentMethod": "bank_transfer|cheque|cash or null"
+}`;
+        const userContent = contentType === "image_url"
+          ? [{ type: "image_url" as const, image_url: { url: input.fileUrl } }]
+          : [{ type: "file_url" as const, file_url: { url: input.fileUrl, mime_type: "application/pdf" as const } }];
+        const llmResponse = await invokeLLM({
+          messages: [
+            { role: "system", content: prompt },
+            { role: "user", content: userContent },
+          ],
+          response_format: { type: "json_schema", json_schema: { name: "payslip_data", strict: true, schema: { type: "object", properties: { employeeName: { type: ["string", "null"] }, employeeId: { type: ["string", "null"] }, taxCode: { type: ["string", "null"] }, niNumber: { type: ["string", "null"] }, period: { type: ["string", "null"] }, month: { type: ["number", "null"] }, year: { type: ["number", "null"] }, grossPay: { type: ["number", "null"] }, incomeTax: { type: ["number", "null"] }, nationalInsurance: { type: ["number", "null"] }, pensionContribution: { type: ["number", "null"] }, otherDeductions: { type: ["number", "null"] }, netPay: { type: ["number", "null"] }, paymentMethod: { type: ["string", "null"] } }, required: ["employeeName", "employeeId", "taxCode", "niNumber", "period", "month", "year", "grossPay", "incomeTax", "nationalInsurance", "pensionContribution", "otherDeductions", "netPay", "paymentMethod"], additionalProperties: false } } },
+        });
+        const content = llmResponse.choices[0]?.message?.content ?? "{}";
+        let parsed: Record<string, unknown>;
+        try {
+          parsed = typeof content === "string" ? JSON.parse(content) : content;
+        } catch {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI returned malformed data — please try again or fill fields manually" });
+        }
+        return parsed as {
+          employeeName: string | null; employeeId: string | null; taxCode: string | null; niNumber: string | null;
+          period: string | null; month: number | null; year: number | null;
+          grossPay: number | null; incomeTax: number | null; nationalInsurance: number | null;
+          pensionContribution: number | null; otherDeductions: number | null; netPay: number | null;
+          paymentMethod: string | null;
+        };
+      }),
+
     create: adminProcedure
       .input(z.object({ userId: z.number(), month: z.number(), year: z.number(), grossPay: z.string(), incomeTax: z.string().default("0"), nationalInsurance: z.string().default("0"), pensionContribution: z.string().default("0"), otherDeductions: z.string().default("0"), netPay: z.string(), paymentMethod: z.string().default("bank_transfer"), payslipUrl: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {

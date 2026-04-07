@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -9,15 +9,52 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Wallet, Users, TrendingDown, FileText } from "lucide-react";
+import { Plus, Wallet, Users, TrendingDown, FileText, Upload, Sparkles, Loader2 } from "lucide-react";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+type PayslipFields = {
+  userId: string;
+  month: string;
+  year: string;
+  grossPay: string;
+  incomeTax: string;
+  nationalInsurance: string;
+  pensionContribution: string;
+  otherDeductions: string;
+  netPay: string;
+  paymentMethod: string;
+  notes: string;
+  payslipUrl: string;
+};
+
+const EMPTY_FIELDS: PayslipFields = {
+  userId: "",
+  month: (new Date().getMonth() + 1).toString(),
+  year: new Date().getFullYear().toString(),
+  grossPay: "",
+  incomeTax: "0",
+  nationalInsurance: "0",
+  pensionContribution: "0",
+  otherDeductions: "0",
+  netPay: "",
+  paymentMethod: "cheque",
+  notes: "",
+  payslipUrl: "",
+};
 
 export default function Payroll() {
   const { user } = useAuth();
   const [newOpen, setNewOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number | undefined>();
+  const [fields, setFields] = useState<PayslipFields>(EMPTY_FIELDS);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfUploading, setPdfUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzedName, setAnalyzedName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isAdmin = user?.role === "admin" || user?.role === "manager" || user?.role === "superadmin" || user?.role === "trustee";
 
   const { data: allRecords = [], refetch } = trpc.payroll.list.useQuery(
@@ -25,12 +62,46 @@ export default function Payroll() {
     { enabled: isAdmin }
   );
   const { data: myPayslips = [] } = trpc.payroll.myPayslips.useQuery(undefined, { enabled: !isAdmin });
+  const { data: staffList = [] } = trpc.users.list.useQuery({ limit: 100 }, { enabled: isAdmin });
 
   const records = isAdmin ? allRecords : myPayslips;
 
   const createRecord = trpc.payroll.create.useMutation({
-    onSuccess: () => { toast.success("Payroll record created"); setNewOpen(false); refetch(); },
+    onSuccess: () => {
+      toast.success("Payroll record created");
+      setNewOpen(false);
+      setFields(EMPTY_FIELDS);
+      setPdfFile(null);
+      setAnalyzedName(null);
+      refetch();
+    },
     onError: (e) => toast.error(e.message),
+  });
+
+  const analyzePayslip = trpc.payroll.analyzePayslip.useMutation({
+    onSuccess: (data) => {
+      setAnalyzing(false);
+      const updates: Partial<PayslipFields> = {};
+      if (data.grossPay != null) updates.grossPay = data.grossPay.toFixed(2);
+      if (data.incomeTax != null) updates.incomeTax = data.incomeTax.toFixed(2);
+      if (data.nationalInsurance != null) updates.nationalInsurance = data.nationalInsurance.toFixed(2);
+      if (data.pensionContribution != null) updates.pensionContribution = data.pensionContribution.toFixed(2);
+      if (data.otherDeductions != null) updates.otherDeductions = data.otherDeductions.toFixed(2);
+      if (data.netPay != null) updates.netPay = data.netPay.toFixed(2);
+      if (data.month != null) updates.month = data.month.toString();
+      if (data.year != null) updates.year = data.year.toString();
+      if (data.paymentMethod) updates.paymentMethod = data.paymentMethod;
+      if (data.taxCode || data.niNumber) {
+        updates.notes = [data.taxCode ? `Tax Code: ${data.taxCode}` : "", data.niNumber ? `NI: ${data.niNumber}` : ""].filter(Boolean).join(" | ");
+      }
+      setFields(prev => ({ ...prev, ...updates }));
+      if (data.employeeName) setAnalyzedName(data.employeeName);
+      toast.success(`Payslip analysed — fields auto-populated${data.employeeName ? ` for ${data.employeeName}` : ""}`);
+    },
+    onError: (e) => {
+      setAnalyzing(false);
+      toast.error(`Analysis failed: ${e.message}`);
+    },
   });
 
   const totalGross = records.reduce((s, r) => s + parseFloat(r.grossPay?.toString() ?? "0"), 0);
@@ -42,6 +113,48 @@ export default function Payroll() {
     return [y, y - 1, y - 2];
   }, []);
 
+  // Compute net pay live
+  const computedNet = useMemo(() => {
+    const gross = parseFloat(fields.grossPay || "0");
+    const tax = parseFloat(fields.incomeTax || "0");
+    const ni = parseFloat(fields.nationalInsurance || "0");
+    const pension = parseFloat(fields.pensionContribution || "0");
+    const other = parseFloat(fields.otherDeductions || "0");
+    const net = gross - tax - ni - pension - other;
+    return isNaN(net) ? "" : net.toFixed(2);
+  }, [fields.grossPay, fields.incomeTax, fields.nationalInsurance, fields.pensionContribution, fields.otherDeductions]);
+
+  const setField = (key: keyof PayslipFields, value: string) => {
+    setFields(prev => ({ ...prev, [key]: value }));
+  };
+
+  // Upload PDF and trigger AI analysis
+  async function handlePdfUploadAndAnalyze(file: File) {
+    setPdfUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const key = `payroll/payslip-${Date.now()}-${file.name}`;
+      formData.append("key", key);
+      const res = await fetch("/api/upload-receipt", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const json = await res.json();
+      const url = json.url as string;
+      setField("payslipUrl", url);
+      setPdfUploading(false);
+      // Now run AI analysis
+      setAnalyzing(true);
+      analyzePayslip.mutate({ fileUrl: url, mimeType: file.type });
+    } catch (err) {
+      setPdfUploading(false);
+      toast.error("PDF upload failed");
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="page-header">
@@ -50,7 +163,7 @@ export default function Payroll() {
           <p className="page-subtitle">{isAdmin ? "Staff payslips and salary management" : "Your payslips"}</p>
         </div>
         {isAdmin && (
-          <Button size="sm" onClick={() => setNewOpen(true)}>
+          <Button size="sm" onClick={() => { setFields(EMPTY_FIELDS); setPdfFile(null); setAnalyzedName(null); setNewOpen(true); }}>
             <Plus className="h-4 w-4 mr-2" /> Add Payroll Record
           </Button>
         )}
@@ -144,7 +257,12 @@ export default function Payroll() {
                   </td>
                   <td>
                     {r.payslipUrl ? (
-                      <a href={r.payslipUrl} target="_blank" rel="noopener noreferrer" className="text-primary text-xs hover:underline flex items-center gap-1">
+                      <a
+                        href={r.payslipUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary text-xs hover:underline flex items-center gap-1"
+                      >
                         <FileText className="h-3 w-3" /> View
                       </a>
                     ) : <span className="text-muted-foreground text-xs">—</span>}
@@ -156,61 +274,186 @@ export default function Payroll() {
         </CardContent>
       </Card>
 
-      {/* Add Payroll Dialog */}
+      {/* ── Add Payroll Dialog ── */}
       {isAdmin && (
-        <Dialog open={newOpen} onOpenChange={setNewOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Add Payroll Record</DialogTitle></DialogHeader>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              const gross = parseFloat(fd.get("grossPay") as string);
-              const tax = parseFloat(fd.get("incomeTax") as string || "0");
-              const ni = parseFloat(fd.get("nationalInsurance") as string || "0");
-              const pension = parseFloat(fd.get("pensionContribution") as string || "0");
-              const other = parseFloat(fd.get("otherDeductions") as string || "0");
-              const net = (gross - tax - ni - pension - other).toFixed(2);
-              createRecord.mutate({
-                userId: parseInt(fd.get("userId") as string),
-                month: parseInt(fd.get("month") as string),
-                year: parseInt(fd.get("year") as string),
-                grossPay: gross.toFixed(2),
-                incomeTax: tax.toFixed(2),
-                nationalInsurance: ni.toFixed(2),
-                pensionContribution: pension.toFixed(2),
-                otherDeductions: other.toFixed(2),
-                netPay: net,
-                paymentMethod: fd.get("paymentMethod") as string,
-                notes: fd.get("notes") as string || undefined,
-              });
-            }} className="space-y-4">
+        <Dialog open={newOpen} onOpenChange={(open) => { setNewOpen(open); if (!open) { setPdfFile(null); setAnalyzedName(null); } }}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add Payroll Record</DialogTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Upload a payslip PDF to auto-populate fields, or fill in manually.
+              </p>
+            </DialogHeader>
+
+            {/* PDF Upload + AI Analysis */}
+            <div className="space-y-2">
+              <Label>Upload Payslip (PDF or image)</Label>
+              <div
+                className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+                  pdfUploading || analyzing
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                }`}
+                onClick={() => !pdfUploading && !analyzing && fileInputRef.current?.click()}
+              >
+                {pdfUploading ? (
+                  <div className="flex items-center justify-center gap-2 text-sm text-primary">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Uploading payslip...</span>
+                  </div>
+                ) : analyzing ? (
+                  <div className="flex items-center justify-center gap-2 text-sm text-primary">
+                    <Sparkles className="h-4 w-4 animate-pulse" />
+                    <span>AI analysing payslip...</span>
+                  </div>
+                ) : pdfFile ? (
+                  <div className="flex items-center justify-center gap-2 text-sm">
+                    <FileText className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{pdfFile.name}</span>
+                    {analyzedName && (
+                      <span className="text-xs text-green-700 ml-2">✓ {analyzedName}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setPdfFile(null); setField("payslipUrl", ""); setAnalyzedName(null); }}
+                      className="text-muted-foreground hover:text-destructive ml-1 text-xs"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-muted-foreground text-sm">
+                    <Upload className="h-5 w-5 mx-auto mb-1 opacity-50" />
+                    <span>Tap to upload payslip PDF or image</span>
+                    <p className="text-xs mt-0.5">AI will extract and fill in the fields automatically</p>
+                  </div>
+                )}
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setPdfFile(file);
+                    handlePdfUploadAndAnalyze(file);
+                  }
+                }}
+              />
+            </div>
+
+            {/* Manual fields */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createRecord.mutate({
+                  userId: parseInt(fields.userId),
+                  month: parseInt(fields.month),
+                  year: parseInt(fields.year),
+                  grossPay: parseFloat(fields.grossPay || "0").toFixed(2),
+                  incomeTax: parseFloat(fields.incomeTax || "0").toFixed(2),
+                  nationalInsurance: parseFloat(fields.nationalInsurance || "0").toFixed(2),
+                  pensionContribution: parseFloat(fields.pensionContribution || "0").toFixed(2),
+                  otherDeductions: parseFloat(fields.otherDeductions || "0").toFixed(2),
+                  netPay: computedNet || "0",
+                  paymentMethod: fields.paymentMethod,
+                  payslipUrl: fields.payslipUrl || undefined,
+                  notes: fields.notes || undefined,
+                });
+              }}
+              className="space-y-4 mt-2"
+            >
               <div className="grid grid-cols-2 gap-3">
+                {/* Employee */}
                 <div className="col-span-2">
-                  <Label>Employee ID *</Label>
-                  <Input name="userId" type="number" required placeholder="User ID" />
+                  <Label>Employee *</Label>
+                  {staffList.length > 0 ? (
+                    <Select value={fields.userId} onValueChange={(v) => setField("userId", v)} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder={analyzedName ? `Detected: ${analyzedName}` : "Select employee..."} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {staffList.map((s: any) => (
+                          <SelectItem key={s.id} value={s.id.toString()}>
+                            {s.name ?? s.email} ({s.role})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      type="number"
+                      value={fields.userId}
+                      onChange={(e) => setField("userId", e.target.value)}
+                      required
+                      placeholder="User ID"
+                    />
+                  )}
+                  {analyzedName && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      AI detected: <strong>{analyzedName}</strong> — please select the matching employee above
+                    </p>
+                  )}
                 </div>
+
+                {/* Period */}
                 <div>
                   <Label>Month *</Label>
-                  <Select name="month" defaultValue={(new Date().getMonth() + 1).toString()}>
+                  <Select value={fields.month} onValueChange={(v) => setField("month", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{MONTHS.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label>Year *</Label>
-                  <Select name="year" defaultValue={new Date().getFullYear().toString()}>
+                  <Select value={fields.year} onValueChange={(v) => setField("year", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>{years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="col-span-2"><Label>Gross Pay (£) *</Label><Input name="grossPay" type="number" step="0.01" required /></div>
-                <div><Label>Income Tax (£)</Label><Input name="incomeTax" type="number" step="0.01" defaultValue="0" /></div>
-                <div><Label>National Insurance (£)</Label><Input name="nationalInsurance" type="number" step="0.01" defaultValue="0" /></div>
-                <div><Label>Pension (£)</Label><Input name="pensionContribution" type="number" step="0.01" defaultValue="0" /></div>
-                <div><Label>Other Deductions (£)</Label><Input name="otherDeductions" type="number" step="0.01" defaultValue="0" /></div>
+
+                {/* Pay figures */}
+                <div className="col-span-2">
+                  <Label>Gross Pay (£) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={fields.grossPay}
+                    onChange={(e) => setField("grossPay", e.target.value)}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label>Income Tax (£)</Label>
+                  <Input type="number" step="0.01" value={fields.incomeTax} onChange={(e) => setField("incomeTax", e.target.value)} />
+                </div>
+                <div>
+                  <Label>National Insurance (£)</Label>
+                  <Input type="number" step="0.01" value={fields.nationalInsurance} onChange={(e) => setField("nationalInsurance", e.target.value)} />
+                </div>
+                <div>
+                  <Label>Pension (£)</Label>
+                  <Input type="number" step="0.01" value={fields.pensionContribution} onChange={(e) => setField("pensionContribution", e.target.value)} />
+                </div>
+                <div>
+                  <Label>Other Deductions (£)</Label>
+                  <Input type="number" step="0.01" value={fields.otherDeductions} onChange={(e) => setField("otherDeductions", e.target.value)} />
+                </div>
+
+                {/* Net pay (computed) */}
+                {computedNet && (
+                  <div className="col-span-2 bg-primary/5 border border-primary/20 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Net Pay (calculated)</p>
+                    <p className="text-lg font-bold text-primary">£{computedNet}</p>
+                  </div>
+                )}
+
                 <div className="col-span-2">
                   <Label>Payment Method</Label>
-                  <Select name="paymentMethod" defaultValue="cheque">
+                  <Select value={fields.paymentMethod} onValueChange={(v) => setField("paymentMethod", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="cheque">Cheque</SelectItem>
@@ -219,9 +462,22 @@ export default function Payroll() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="col-span-2"><Label>Notes</Label><Textarea name="notes" rows={2} /></div>
+                <div className="col-span-2">
+                  <Label>Notes</Label>
+                  <Textarea
+                    rows={2}
+                    value={fields.notes}
+                    onChange={(e) => setField("notes", e.target.value)}
+                    placeholder="Tax code, NI number, or other notes..."
+                  />
+                </div>
               </div>
-              <Button type="submit" className="w-full" disabled={createRecord.isPending}>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={createRecord.isPending || pdfUploading || analyzing || !fields.userId || !fields.grossPay}
+              >
                 {createRecord.isPending ? "Saving..." : "Create Payroll Record"}
               </Button>
             </form>
