@@ -44,39 +44,39 @@
 
 :root {
   --radius: 0.5rem;
-  /* Clean professional business theme: slate/navy */
-  --background: oklch(0.975 0.003 240);
-  --foreground: oklch(0.18 0.025 240);
+  /* AQ Society Brand: Deep Forest Green + Antique Gold + Ivory */
+  --background: oklch(0.975 0.006 130);
+  --foreground: oklch(0.14 0.04 155);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.025 240);
+  --card-foreground: oklch(0.14 0.04 155);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.025 240);
-  --primary: oklch(0.32 0.12 245);
-  --primary-foreground: oklch(0.97 0.005 240);
-  --secondary: oklch(0.94 0.01 240);
-  --secondary-foreground: oklch(0.25 0.04 240);
-  --muted: oklch(0.94 0.01 240);
-  --muted-foreground: oklch(0.50 0.02 240);
-  --accent: oklch(0.94 0.01 240);
-  --accent-foreground: oklch(0.25 0.04 240);
-  --destructive: oklch(0.55 0.22 27);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.88 0.01 240);
-  --input: oklch(0.88 0.01 240);
-  --ring: oklch(0.32 0.12 245);
-  --chart-1: oklch(0.52 0.18 245);
-  --chart-2: oklch(0.62 0.18 160);
-  --chart-3: oklch(0.68 0.18 55);
-  --chart-4: oklch(0.58 0.18 300);
-  --chart-5: oklch(0.60 0.18 20);
-  --sidebar: oklch(0.19 0.04 245);
-  --sidebar-foreground: oklch(0.92 0.01 240);
-  --sidebar-primary: oklch(0.65 0.15 200);
-  --sidebar-primary-foreground: oklch(0.10 0.02 240);
-  --sidebar-accent: oklch(0.27 0.04 245);
-  --sidebar-accent-foreground: oklch(0.92 0.01 240);
-  --sidebar-border: oklch(0.27 0.04 245);
-  --sidebar-ring: oklch(0.65 0.15 200);
+  --popover-foreground: oklch(0.14 0.04 155);
+  --primary: oklch(0.30 0.10 155);
+  --primary-foreground: oklch(0.97 0.005 120);
+  --secondary: oklch(0.94 0.02 130);
+  --secondary-foreground: oklch(0.22 0.06 155);
+  --muted: oklch(0.94 0.015 130);
+  --muted-foreground: oklch(0.50 0.03 150);
+  --accent: oklch(0.70 0.13 78);
+  --accent-foreground: oklch(0.14 0.04 155);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.87 0.02 130);
+  --input: oklch(0.87 0.02 130);
+  --ring: oklch(0.30 0.10 155);
+  --chart-1: oklch(0.30 0.10 155);
+  --chart-2: oklch(0.70 0.13 78);
+  --chart-3: oklch(0.55 0.14 200);
+  --chart-4: oklch(0.65 0.18 50);
+  --chart-5: oklch(0.48 0.12 280);
+  --sidebar: oklch(0.22 0.08 155);
+  --sidebar-foreground: oklch(0.94 0.01 120);
+  --sidebar-primary: oklch(0.70 0.13 78);
+  --sidebar-primary-foreground: oklch(0.14 0.04 155);
+  --sidebar-accent: oklch(0.28 0.08 155);
+  --sidebar-accent-foreground: oklch(0.94 0.01 120);
+  --sidebar-border: oklch(0.28 0.08 155);
+  --sidebar-ring: oklch(0.70 0.13 78);
 }
 
 .dark {
@@ -175,5 +175,55 @@
       padding-right: 2rem;
       max-width: 1280px; /* Standard content width */
     }
+  }
+}
+/* ─── AQ Society Utility Classes ─────────────────────────────────────────── */
+
+@layer components {
+  /* Page layout helpers */
+  .page-header {
+    @apply flex items-center justify-between flex-wrap gap-4;
+  }
+  .page-title {
+    @apply text-2xl font-bold text-foreground;
+  }
+  .page-subtitle {
+    @apply text-sm text-muted-foreground mt-0.5;
+  }
+
+  /* Stat cards */
+  .stat-card {
+    @apply bg-card rounded-xl border border-border p-4 shadow-sm;
+  }
+
+  /* Data tables */
+  .data-table {
+    @apply text-sm;
+  }
+  .data-table thead tr {
+    @apply border-b border-border bg-muted/40;
+  }
+  .data-table thead th {
+    @apply text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide px-4 py-3;
+  }
+  .data-table tbody tr {
+    @apply border-b border-border/50 hover:bg-muted/20 transition-colors;
+  }
+  .data-table tbody td {
+    @apply px-4 py-3 text-sm;
+  }
+
+  /* Status badges */
+  .badge-approved {
+    @apply bg-green-100 text-green-800 border border-green-200;
+  }
+  .badge-pending {
+    @apply bg-amber-100 text-amber-800 border border-amber-200;
+  }
+  .badge-rejected {
+    @apply bg-red-100 text-red-800 border border-red-200;
+  }
+  .badge-info {
+    @apply bg-blue-100 text-blue-800 border border-blue-200;
   }
 }

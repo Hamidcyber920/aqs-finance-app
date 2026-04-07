@@ -51,16 +51,15 @@ export const localAuthRouter = router({
       }
 
       const passwordHash = await bcrypt.hash(input.password, 12);
-      const userId = await createLocalUser({
+      const user = await createLocalUser({
         name: input.name,
         email: input.email.toLowerCase(),
         passwordHash,
       });
 
-      const user = await getUserById(userId);
       if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create account" });
 
-      const token = await createLocalSession(userId, user.email!, user.name ?? "");
+      const token = await createLocalSession(user.id, user.email!, user.name ?? "");
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 

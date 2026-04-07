@@ -1,51 +1,71 @@
-# Receipt Scanner - Project TODO
+# AQ Society Financial Management System — TODO
 
-## Database & Backend
-- [x] Add receipts table to drizzle schema (id, userId, vendor, date, amount, tax, category, status, imageUrl, thumbnailUrl, rawText, lineItems, notes, createdAt)
-- [x] Add expense_categories table (id, name, color, icon)
-- [x] Generate and apply DB migration
-- [x] Add receipt query helpers in server/db.ts
-- [x] Add receipt CRUD tRPC procedures (create, list, get, update, delete)
-- [x] Add file upload endpoint (multipart form via multer, store to S3, return url)
-- [x] Add AI OCR procedure: send image/PDF to LLM, extract structured data (vendor, date, amount, tax, items, category suggestion)
-- [x] Add export procedure: generate CSV and PDF report
-- [x] Add owner notification on receipt processed and monthly threshold exceeded
+## Phase 1: Architecture & Secrets
+- [x] Write full system architecture document
+- [x] Request Gmail API credentials (GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, GMAIL_FROM_EMAIL)
+- [x] Request Google Drive credentials (GOOGLE_DRIVE_CLIENT_ID, GOOGLE_DRIVE_CLIENT_SECRET, GOOGLE_DRIVE_REFRESH_TOKEN, GOOGLE_DRIVE_PAYROLL_FOLDER_ID)
+- [x] Update todo.md with all features
 
-## Frontend
-- [x] Design system: clean business theme (navy/slate), index.css tokens
-- [x] DashboardLayout with sidebar nav (Capture, Dashboard, Receipts, Reports)
-- [x] Camera capture page: live camera preview, capture button, retake, confirm & process
-- [x] Drag-and-drop upload page: file picker, preview, upload progress, AI processing status
-- [x] Dashboard page: summary stats cards, category pie/bar chart, recent receipts table
-- [x] Receipts list page: filterable table (date range, category, vendor, status), pagination
-- [x] Receipt detail page: image viewer, extracted data fields, manual edit form, save
-- [x] Export page/modal: date range picker, format selector (CSV/PDF), download button
-- [x] Month-based filter (March 2026 preset + custom range)
-- [x] Loading/empty/error states throughout
+## Phase 2: Database Schema
+- [x] Extend users table: role enum (superadmin, trustee, manager, assistant, volunteer), status (pending, active, suspended), approvedBy, approvedAt, delegateApproverId
+- [x] Create permissions table: per-user module toggles (expenses, payroll, fundraising, loans, income, donors, staff, reports)
+- [x] Create departments table: Mosque, Restaurant/Bistro, Ramadan, Staff/Payroll
+- [x] Create expense_categories table: per-department categories
+- [x] Create receipts table: extend with departmentId, categoryId, chequeImageUrl, chequeAmount
+- [x] Create loan_applications table: borrowerName, borrowerEmail, amount, term, purpose, status, pdfUrl, chairSignatureUrl, trusteeSignatureUrl, managerSignatureUrl
+- [x] Create fundraising_campaigns table: name, targetAmount, currentAmount, description
+- [x] Create fundraising_donations table: campaignId, donorName, amount, paymentMethod, evidenceUrl
+- [x] Create income_categories table: StudentAccommodation, Stalls, OfficeRental, CoffeeShop, HallHire, FridayCollection
+- [x] Create income_records table: categoryId, tenantName, roomNumber, amount, period, paymentStatus, notes
+- [x] Create donors table: name, email, phone, address, donorboxId, isRegular, totalGiven, lastGiftDate, notes
+- [x] Create email_campaigns table: name, type (email/sms), subject, body, scheduledAt, status, sentCount
+- [x] Create payroll_records table: userId, month, grossPay, taxCode, niNumber, paymentMethod (cheque/bank), chequeImageUrl, payslipUrl, totalDeductions, netPay
+- [x] Create staff_profiles table: userId, niNumber, taxCode, bankDetails, startDate, contractType
+- [x] Generate and apply all migrations
 
-## Testing
-- [x] Vitest: receipt CRUD procedures
-- [x] Vitest: upload validation (size, type)
-- [x] Vitest: export CSV generation
-- [x] Vitest: category totals
-- [x] Vitest: auth logout (existing)
+## Phase 3: Backend — Auth, Permissions, Expenses, Loans, Income
+- [x] User approval workflow: register → pending → notify superadmin + delegate → approve/reject → activate
+- [x] Delegate approval: superadmin can assign a manager as temporary approver
+- [x] Granular permissions: per-user module access toggles stored in permissions table
+- [x] Expense procedures: create/list/update/delete with department + category
+- [x] Qarde Hasan loan procedures: create, list, update status, upload evidence
+- [x] Loan PDF generation: pull borrower data into standard template, generate signed PDF
+- [x] Signature upload: chair, trustee, manager signature image upload to S3
+- [x] Income/rental procedures: create, list, update, delete income records
+- [x] Fundraising procedures: create campaign, add donation, update totals
+- [x] Friday collection: manual entry for bucket + card terminal totals
 
-## Auth & Admin (Phase 2)
-- [x] Add passwordHash, resetToken, resetTokenExpiry fields to users table
-- [x] Generate and apply DB migration for auth fields
-- [x] Backend: POST /api/auth/register (name, email, password)
-- [x] Backend: POST /api/auth/login (email, password → JWT session cookie)
-- [x] Backend: POST /api/auth/logout (clear cookie)
-- [x] Backend: POST /api/auth/forgot-password (send reset email via notification)
-- [x] Backend: POST /api/auth/reset-password (token + new password)
-- [x] Backend: GET /api/auth/me (return current user from session)
-- [x] Admin tRPC procedures: listAllUsers, updateUserRole, suspendUser, listAllReceipts
-- [x] Frontend: Login page (email + password form)
-- [x] Frontend: Register page (name + email + password)
-- [x] Frontend: Forgot Password page (email input)
-- [x] Frontend: Reset Password page (token from URL + new password)
-- [x] Frontend: Admin Panel page (user management table + all-receipts view)
-- [x] Guard all receipt procedures: regular users see only their own; admins see all
-- [x] Replace Manus OAuth login button with email/password form
-- [x] Vitest: register, login, forgot-password, reset-password procedures
-- [x] Vitest: admin-only procedures reject non-admin users
+## Phase 4: Backend — Payroll, Donors, Email
+- [x] Google Drive integration: OAuth2 client, list files in payroll folder
+- [x] Scheduled payroll sync: cron job on 25th of each month to pull PDFs from Google Drive
+- [x] Payroll totals: parse/store gross pay, deductions, net pay per employee per month
+- [x] Cheque scan: upload cheque image, AI extracts amount + payee, store against payroll record
+- [x] Donor management: CRUD for donors, link to donations
+- [x] Email campaign: create campaign, schedule send, Gmail API send to donor list
+- [x] Thank-you email: triggered on new regular donor
+
+## Phase 5: Frontend — Theme & All Module Pages
+- [x] Redesign index.css: Deep Green, Gold, White palette with Inter font
+- [x] Update DashboardLayout: new sidebar with all module nav items, role-gated visibility
+- [x] Home redirect: auth → /capture, unauth → /login
+- [x] Utility CSS classes: stat-card, page-header, data-table, badges
+- [x] Fundraising page: campaign cards with progress bars, donation entry
+- [x] Loans page + LoanDetail: loan application form, loan registry, PDF preview + signature upload
+- [x] Income page: income ledger with category filter and payment status
+- [x] Payroll page: staff list, monthly payslip view, cheque scan upload, totals table
+- [x] Donors page: donor list, add/edit donor
+- [x] Email Campaigns page: compose, schedule, send history
+
+## Phase 6: Frontend — Role Gates, Approval Flow, Permissions UI
+- [x] Role-based sidebar: only show nav items the user has access to
+- [x] Admin approval queue: superadmin sees pending users, approve/reject
+- [x] Per-user permission toggles: admin can grant/revoke individual module access
+
+## Phase 7: Testing & Delivery
+- [x] Vitest: receipt procedures (11 tests)
+- [x] Vitest: auth logout (1 test)
+- [x] Vitest: local auth register/login/forgot/reset (13 tests)
+- [x] Vitest: Gmail + Google Drive credential validation (5 tests)
+- [x] TypeScript check: 0 errors
+- [ ] Save checkpoint
+- [ ] Deliver to user

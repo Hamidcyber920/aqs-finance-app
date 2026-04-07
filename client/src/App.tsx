@@ -15,8 +15,14 @@ import RegisterPage from "./pages/Register";
 import ForgotPasswordPage from "./pages/ForgotPassword";
 import ResetPasswordPage from "./pages/ResetPassword";
 import AdminPanelPage from "./pages/AdminPanel";
+import FundraisingPage from "./pages/Fundraising";
+import LoansPage from "./pages/Loans";
+import LoanDetailPage from "./pages/LoanDetail";
+import IncomePage from "./pages/Income";
+import PayrollPage from "./pages/Payroll";
+import DonorsPage from "./pages/Donors";
+import CampaignsPage from "./pages/Campaigns";
 
-// Public routes that don't need the dashboard shell
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
 function Router() {
@@ -44,6 +50,13 @@ function Router() {
         <Route path="/receipts" component={ReceiptsPage} />
         <Route path="/receipts/:id" component={ReceiptDetailPage} />
         <Route path="/reports" component={ReportsPage} />
+        <Route path="/fundraising" component={FundraisingPage} />
+        <Route path="/loans" component={LoansPage} />
+        <Route path="/loans/:id">{(params) => <LoanDetailPage id={parseInt((params as { id: string }).id)} />}</Route>
+        <Route path="/income" component={IncomePage} />
+        <Route path="/payroll" component={PayrollPage} />
+        <Route path="/donors" component={DonorsPage} />
+        <Route path="/campaigns" component={CampaignsPage} />
         <Route path="/admin" component={AdminPanelPage} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
