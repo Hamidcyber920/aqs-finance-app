@@ -482,19 +482,24 @@ export const appRouter = router({
     list: adminProcedure.input(z.object({ userId: z.number().optional(), year: z.number().optional(), month: z.number().optional() })).query(({ input }) => getPayrollRecords(input.userId, input.year, input.month)),
     myPayslips: protectedProcedure.query(({ ctx }) => getPayrollRecords(ctx.user.id)),
 
-    analyzePayslip: adminProcedure
+    analyzePayslipBulk: adminProcedure
       .input(z.object({ fileUrl: z.string(), mimeType: z.string().default("application/pdf") }))
       .mutation(async ({ input }) => {
         const contentType = input.mimeType.startsWith("application/pdf") ? "file_url" : "image_url";
-        const prompt = `You are a UK payroll document parser. Extract all payroll data from this payslip and return structured JSON.
+        const prompt = `You are a UK payroll document parser. This document may contain payslips for MULTIPLE employees (one per page or section).
+Extract ALL employees and return a JSON array called "employees".
+
+CRITICAL RULE FOR MONTH/YEAR: Use the PAYMENT DATE (e.g. "Paid on 31/01/2026") to determine month and year — NOT any internal month number like "Month 10". If the payment date says 31/01/2026 then month=1 and year=2026.
+
+For each employee return:
 {
   "employeeName": "string or null",
   "employeeId": "string or null",
   "taxCode": "string or null",
   "niNumber": "string or null",
-  "period": "string or null (e.g. April 2026)",
-  "month": number or null (1-12),
-  "year": number or null,
+  "period": "string or null (e.g. January 2026)",
+  "month": number 1-12 (from payment date, NOT internal month number),
+  "year": number (from payment date),
   "grossPay": number or null,
   "incomeTax": number or null,
   "nationalInsurance": number or null,
@@ -502,7 +507,9 @@ export const appRouter = router({
   "otherDeductions": number or null,
   "netPay": number or null,
   "paymentMethod": "bank_transfer|cheque|cash or null"
-}`;
+}
+
+Return: { "employees": [ ...array of employee objects... ] }`;
         const userContent = contentType === "image_url"
           ? [{ type: "image_url" as const, image_url: { url: input.fileUrl } }]
           : [{ type: "file_url" as const, file_url: { url: input.fileUrl, mime_type: "application/pdf" as const } }];
@@ -511,30 +518,85 @@ export const appRouter = router({
             { role: "system", content: prompt },
             { role: "user", content: userContent },
           ],
-          response_format: { type: "json_schema", json_schema: { name: "payslip_data", strict: true, schema: { type: "object", properties: { employeeName: { type: ["string", "null"] }, employeeId: { type: ["string", "null"] }, taxCode: { type: ["string", "null"] }, niNumber: { type: ["string", "null"] }, period: { type: ["string", "null"] }, month: { type: ["number", "null"] }, year: { type: ["number", "null"] }, grossPay: { type: ["number", "null"] }, incomeTax: { type: ["number", "null"] }, nationalInsurance: { type: ["number", "null"] }, pensionContribution: { type: ["number", "null"] }, otherDeductions: { type: ["number", "null"] }, netPay: { type: ["number", "null"] }, paymentMethod: { type: ["string", "null"] } }, required: ["employeeName", "employeeId", "taxCode", "niNumber", "period", "month", "year", "grossPay", "incomeTax", "nationalInsurance", "pensionContribution", "otherDeductions", "netPay", "paymentMethod"], additionalProperties: false } } },
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "bulk_payslip_data",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  employees: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        employeeName: { type: ["string", "null"] },
+                        employeeId: { type: ["string", "null"] },
+                        taxCode: { type: ["string", "null"] },
+                        niNumber: { type: ["string", "null"] },
+                        period: { type: ["string", "null"] },
+                        month: { type: ["number", "null"] },
+                        year: { type: ["number", "null"] },
+                        grossPay: { type: ["number", "null"] },
+                        incomeTax: { type: ["number", "null"] },
+                        nationalInsurance: { type: ["number", "null"] },
+                        pensionContribution: { type: ["number", "null"] },
+                        otherDeductions: { type: ["number", "null"] },
+                        netPay: { type: ["number", "null"] },
+                        paymentMethod: { type: ["string", "null"] },
+                      },
+                      required: ["employeeName", "employeeId", "taxCode", "niNumber", "period", "month", "year", "grossPay", "incomeTax", "nationalInsurance", "pensionContribution", "otherDeductions", "netPay", "paymentMethod"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["employees"],
+                additionalProperties: false,
+              },
+            },
+          },
         });
-        const content = llmResponse.choices[0]?.message?.content ?? "{}";
-        let parsed: Record<string, unknown>;
-        try {
-          parsed = typeof content === "string" ? JSON.parse(content) : content;
-        } catch {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI returned malformed data — please try again or fill fields manually" });
-        }
-        return parsed as {
+        const content = llmResponse.choices[0]?.message?.content ?? '{"employees":[]}';
+        let parsed: { employees: Array<{
           employeeName: string | null; employeeId: string | null; taxCode: string | null; niNumber: string | null;
           period: string | null; month: number | null; year: number | null;
           grossPay: number | null; incomeTax: number | null; nationalInsurance: number | null;
           pensionContribution: number | null; otherDeductions: number | null; netPay: number | null;
           paymentMethod: string | null;
-        };
+        }> };
+        try {
+          parsed = typeof content === "string" ? JSON.parse(content) : content;
+          if (!parsed.employees) parsed = { employees: [] };
+        } catch {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI returned malformed data \u2014 please try again or fill fields manually" });
+        }
+        return parsed;
+      }),
+
+    // Keep single-employee alias for backward compat
+    analyzePayslip: adminProcedure
+      .input(z.object({ fileUrl: z.string(), mimeType: z.string().default("application/pdf") }))
+      .mutation(async ({ input, ctx }) => {
+        // delegate to bulk, return first employee
+        const bulk = await appRouter.createCaller(ctx).payroll.analyzePayslipBulk(input);
+        return bulk.employees[0] ?? null;
       }),
 
     create: adminProcedure
-      .input(z.object({ userId: z.number(), month: z.number(), year: z.number(), grossPay: z.string(), incomeTax: z.string().default("0"), nationalInsurance: z.string().default("0"), pensionContribution: z.string().default("0"), otherDeductions: z.string().default("0"), netPay: z.string(), paymentMethod: z.string().default("bank_transfer"), payslipUrl: z.string().optional(), notes: z.string().optional() }))
+      .input(z.object({
+        userId: z.number().default(0),
+        employeeName: z.string().optional(), // free-text name when no user account
+        month: z.number(), year: z.number(), grossPay: z.string(),
+        incomeTax: z.string().default("0"), nationalInsurance: z.string().default("0"),
+        pensionContribution: z.string().default("0"), otherDeductions: z.string().default("0"),
+        netPay: z.string(), paymentMethod: z.string().default("bank_transfer"),
+        payslipUrl: z.string().optional(), notes: z.string().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const totalDeductions = (parseFloat(input.incomeTax) + parseFloat(input.nationalInsurance) + parseFloat(input.pensionContribution) + parseFloat(input.otherDeductions)).toFixed(2);
-        const { userId, month, year, grossPay, incomeTax, nationalInsurance, pensionContribution, otherDeductions, netPay, paymentMethod, payslipUrl, notes } = input;
-        return createPayrollRecord({ userId, month, year, grossPay, incomeTax: incomeTax ?? "0", nationalInsurance: nationalInsurance ?? "0", pensionContribution: pensionContribution ?? "0", otherDeductions: otherDeductions ?? "0", totalDeductions, netPay, paymentMethod: (paymentMethod as any) ?? "bank_transfer", payslipUrl, notes });
+        const { userId, employeeName, month, year, grossPay, incomeTax, nationalInsurance, pensionContribution, otherDeductions, netPay, paymentMethod, payslipUrl, notes } = input;
+        return createPayrollRecord({ userId: userId ?? 0, employeeName, month, year, grossPay, incomeTax: incomeTax ?? "0", nationalInsurance: nationalInsurance ?? "0", pensionContribution: pensionContribution ?? "0", otherDeductions: otherDeductions ?? "0", totalDeductions, netPay, paymentMethod: (paymentMethod as any) ?? "bank_transfer", payslipUrl, notes });
       }),
     update: adminProcedure
       .input(z.object({ id: z.number(), paymentStatus: z.string().optional(), chequeImageUrl: z.string().optional(), chequeNumber: z.string().optional(), chequeAmount: z.string().optional(), paidAt: z.date().optional(), notes: z.string().optional() }))

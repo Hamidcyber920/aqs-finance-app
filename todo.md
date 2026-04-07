@@ -97,3 +97,9 @@
 - [x] Loans: add payment evidence upload (file/image) to record proof of repayment
 - [x] Payroll: add PDF upload with AI auto-analysis to auto-populate payroll fields
 - [x] Vitest: payroll.analyzePayslip (3 tests) + loan evidence repayment (2 tests) — 45/45 passing
+
+## Payroll AI Fixes (Apr 7 2026 — round 2)
+- [x] Fix month extraction: use payment date (e.g. "Paid on 31/01/2026") not internal month number
+- [x] Employee field: free-text name input when no staff list, with toggle to switch to User ID
+- [x] Multi-employee PDF: extract all employees separately, show review card per employee before saving
+- [x] Vitest: analyzePayslipBulk (5 tests) + payroll.create with employeeName (1 test) — 48/48 passing

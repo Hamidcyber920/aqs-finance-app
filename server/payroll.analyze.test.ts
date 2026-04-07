@@ -152,41 +152,63 @@ function makeCtx(user: User | null = adminUser): TrpcContext {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
-describe("payroll.analyzePayslip", () => {
+describe("payroll.analyzePayslipBulk", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("returns extracted payslip data from LLM for admin user", async () => {
+  it("returns array of employees from multi-employee PDF", async () => {
+    const { invokeLLM } = await import("./_core/llm");
+    vi.mocked(invokeLLM).mockResolvedValueOnce({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            employees: [
+              { employeeName: "Farid Ahmed", employeeId: "A002", taxCode: "1257L", niNumber: "SN138587D", period: "January 2026", month: 1, year: 2026, grossPay: 1591.57, incomeTax: 108.80, nationalInsurance: 43.48, pensionContribution: 42.87, otherDeductions: 0, netPay: 1396.42, paymentMethod: "bank_transfer" },
+              { employeeName: "Sara Khan", employeeId: "A003", taxCode: "1257L", niNumber: "AB123456C", period: "January 2026", month: 1, year: 2026, grossPay: 2000.00, incomeTax: 200.00, nationalInsurance: 100.00, pensionContribution: 50.00, otherDeductions: 0, netPay: 1650.00, paymentMethod: "bank_transfer" },
+            ],
+          }),
+        },
+      }],
+    } as any);
+
     const caller = appRouter.createCaller(makeCtx());
-    const result = await caller.payroll.analyzePayslip({
-      fileUrl: "https://cdn.example.com/payslip.pdf",
+    const result = await caller.payroll.analyzePayslipBulk({
+      fileUrl: "https://cdn.example.com/payroll-jan-26.pdf",
       mimeType: "application/pdf",
     });
 
-    expect(result.employeeName).toBe("John Smith");
-    expect(result.grossPay).toBe(2500);
-    expect(result.incomeTax).toBe(300);
-    expect(result.nationalInsurance).toBe(200);
-    expect(result.pensionContribution).toBe(100);
-    expect(result.netPay).toBe(1900);
-    expect(result.month).toBe(4);
-    expect(result.year).toBe(2026);
-    expect(result.taxCode).toBe("1257L");
-    expect(result.paymentMethod).toBe("bank_transfer");
+    expect(result.employees).toHaveLength(2);
+    expect(result.employees[0].employeeName).toBe("Farid Ahmed");
+    // Month should be 1 (January) from payment date, NOT 10 (internal month number)
+    expect(result.employees[0].month).toBe(1);
+    expect(result.employees[0].year).toBe(2026);
+    expect(result.employees[0].grossPay).toBe(1591.57);
+    expect(result.employees[0].netPay).toBe(1396.42);
+    expect(result.employees[1].employeeName).toBe("Sara Khan");
+  });
+
+  it("returns empty employees array when LLM finds nothing", async () => {
+    const { invokeLLM } = await import("./_core/llm");
+    vi.mocked(invokeLLM).mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ employees: [] }) } }],
+    } as any);
+    const caller = appRouter.createCaller(makeCtx());
+    const result = await caller.payroll.analyzePayslipBulk({ fileUrl: "https://cdn.example.com/blank.pdf" });
+    expect(result.employees).toHaveLength(0);
   });
 
   it("rejects unauthenticated callers", async () => {
     const caller = appRouter.createCaller(makeCtx(null));
     await expect(
-      caller.payroll.analyzePayslip({ fileUrl: "https://cdn.example.com/payslip.pdf" })
+      caller.payroll.analyzePayslipBulk({ fileUrl: "https://cdn.example.com/payslip.pdf" })
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 
   it("rejects non-admin callers", async () => {
     const caller = appRouter.createCaller(makeCtx({ ...adminUser, role: "user" as any }));
     await expect(
-      caller.payroll.analyzePayslip({ fileUrl: "https://cdn.example.com/payslip.pdf" })
+      caller.payroll.analyzePayslipBulk({ fileUrl: "https://cdn.example.com/payslip.pdf" })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
@@ -197,8 +219,35 @@ describe("payroll.analyzePayslip", () => {
     } as any);
     const caller = appRouter.createCaller(makeCtx());
     await expect(
-      caller.payroll.analyzePayslip({ fileUrl: "https://cdn.example.com/payslip.pdf" })
+      caller.payroll.analyzePayslipBulk({ fileUrl: "https://cdn.example.com/payslip.pdf" })
     ).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+  });
+});
+
+describe("payroll.create with employeeName", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("creates record with free-text employee name (no user account)", async () => {
+    const { createPayrollRecord } = await import("./db");
+    vi.mocked(createPayrollRecord).mockResolvedValueOnce({ id: 99 } as any);
+    const caller = appRouter.createCaller(makeCtx());
+    const result = await caller.payroll.create({
+      userId: 0,
+      employeeName: "Farid Ahmed",
+      month: 1,
+      year: 2026,
+      grossPay: "1591.57",
+      incomeTax: "108.80",
+      nationalInsurance: "43.48",
+      pensionContribution: "42.87",
+      otherDeductions: "0",
+      netPay: "1396.42",
+      paymentMethod: "bank_transfer",
+    });
+    expect(createPayrollRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ employeeName: "Farid Ahmed", month: 1, year: 2026 })
+    );
+    expect(result).toMatchObject({ id: 99 });
   });
 });
 

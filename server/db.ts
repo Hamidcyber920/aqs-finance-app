@@ -613,12 +613,46 @@ export async function getPayrollRecords(userId?: number, year?: number, month?: 
   const db = await getDb();
   if (!db) return [];
   const conditions = [];
-  if (userId) conditions.push(eq(payrollRecords.userId, userId));
+  // userId > 0 means filter by specific user; userId=0 means unlinked records (skip filter)
+  if (userId && userId > 0) conditions.push(eq(payrollRecords.userId, userId));
   if (year) conditions.push(eq(payrollRecords.year, year));
   if (month) conditions.push(eq(payrollRecords.month, month));
-  const query = db.select().from(payrollRecords);
-  if (conditions.length > 0) query.where(and(...conditions));
-  return query.orderBy(desc(payrollRecords.year), desc(payrollRecords.month));
+  const rows = await db
+    .select({
+      id: payrollRecords.id,
+      userId: payrollRecords.userId,
+      employeeName: payrollRecords.employeeName,
+      month: payrollRecords.month,
+      year: payrollRecords.year,
+      grossPay: payrollRecords.grossPay,
+      incomeTax: payrollRecords.incomeTax,
+      nationalInsurance: payrollRecords.nationalInsurance,
+      pensionContribution: payrollRecords.pensionContribution,
+      otherDeductions: payrollRecords.otherDeductions,
+      totalDeductions: payrollRecords.totalDeductions,
+      netPay: payrollRecords.netPay,
+      paymentMethod: payrollRecords.paymentMethod,
+      paymentStatus: payrollRecords.paymentStatus,
+      payslipUrl: payrollRecords.payslipUrl,
+      chequeImageUrl: payrollRecords.chequeImageUrl,
+      chequeNumber: payrollRecords.chequeNumber,
+      chequeAmount: payrollRecords.chequeAmount,
+      paidAt: payrollRecords.paidAt,
+      notes: payrollRecords.notes,
+      createdAt: payrollRecords.createdAt,
+      updatedAt: payrollRecords.updatedAt,
+      userName: users.name,
+    })
+    .from(payrollRecords)
+    .leftJoin(users, eq(payrollRecords.userId, users.id))
+    .$dynamic()
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(payrollRecords.year), desc(payrollRecords.month));
+  // Merge: prefer employeeName over userName for display
+  return rows.map(r => ({
+    ...r,
+    displayName: r.employeeName ?? r.userName ?? `User #${r.userId}`,
+  }));
 }
 
 export async function createPayrollRecord(data: InsertPayrollRecord) {

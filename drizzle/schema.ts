@@ -371,7 +371,8 @@ export type StaffProfile = typeof staffProfiles.$inferSelect;
 
 export const payrollRecords = mysqlTable("payroll_records", {
   id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
+  userId: int("userId").notNull().default(0), // 0 = unlinked (name-only record)
+  employeeName: varchar("employeeName", { length: 200 }), // free-text name when no user account
   month: int("month").notNull(), // 1-12
   year: int("year").notNull(),
   grossPay: decimal("grossPay", { precision: 10, scale: 2 }).notNull(),
