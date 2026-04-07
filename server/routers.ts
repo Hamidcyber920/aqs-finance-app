@@ -122,7 +122,20 @@ async function sendGmail(to: string, name: string, subject: string, htmlBody: st
   oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
   const gmail = google.gmail({ version: "v1", auth: oauth2Client });
   const fromEmail = process.env.GMAIL_FROM_EMAIL ?? "noreply@example.com";
-  const message = [`From: Abdullah Quilliam Society <${fromEmail}>`, `To: ${name} <${to}>`, `Subject: ${subject}`, "MIME-Version: 1.0", "Content-Type: text/html; charset=utf-8", "", htmlBody].join("\n");
+  // RFC 2047 encoded-word encoding for non-ASCII characters in headers
+  const encodeHeader = (s: string) => `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
+  const encodedSubject = encodeHeader(subject);
+  const encodedFrom = `=?UTF-8?B?${Buffer.from("Abdullah Quilliam Society", "utf8").toString("base64")}?= <${fromEmail}>`;
+  const encodedTo = name ? `=?UTF-8?B?${Buffer.from(name, "utf8").toString("base64")}?= <${to}>` : to;
+  const message = [
+    `From: ${encodedFrom}`,
+    `To: ${encodedTo}`,
+    `Subject: ${encodedSubject}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/html; charset=UTF-8",
+    "",
+    htmlBody,
+  ].join("\r\n");
   const encoded = Buffer.from(message).toString("base64url");
   await gmail.users.messages.send({ userId: "me", requestBody: { raw: encoded } });
 }
@@ -590,7 +603,7 @@ export const appRouter = router({
               <p style="color:#fff;margin:4px 0 0;font-size:13px">Payment Confirmation</p>
             </div>
             <div style="padding:24px;background:#fff">
-              <p>Dear ${input.recipientName},</p>
+              <p>Assalamu Alaikum, ${input.recipientName.split(' ')[0]},</p>
               <p>We are pleased to confirm that the following payment has been made to you:</p>
               <table style="width:100%;border-collapse:collapse;margin:16px 0">
                 <tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Description</td><td style="padding:8px">${input.description}</td></tr>

@@ -134,3 +134,8 @@
 - [x] Add "Accountants Office Hire" to income categories with rental period tab (Daily / Weekly / Monthly)
 - [x] Dynamic period tabs per category (Daily/Weekly/Monthly/One-off based on allowedPeriods)
 - [x] All 68 tests passing
+
+## Email Fix (Apr 7 2026)
+- [x] Fix subject line encoding: RFC 2047 base64 encoded-word for all headers — £ now renders correctly
+- [x] Fix greeting: uses first name from recipientName (e.g. "Assalamu Alaikum, Farid,")
+- [x] Changed salutation from "Dear" to "Assalamu Alaikum" — 68 tests passing
