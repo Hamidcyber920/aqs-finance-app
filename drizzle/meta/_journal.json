@@ -57,6 +57,13 @@
       "when": 1775598646045,
       "tag": "0007_great_maximus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1775599976543,
+      "tag": "0008_supreme_shockwave",
+      "breakpoints": true
     }
   ]
 }

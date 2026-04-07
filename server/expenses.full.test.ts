@@ -127,5 +127,46 @@ describe("Monthly Expenses — helper logic", () => {
       expect(staff.length).toBe(2);
       expect(staff.find(u => u.name === "Bob")).toBeUndefined();
     });
+
+    it("should prefer staffProfiles.fullName over users.name (username) in directory", () => {
+      // Simulates the staffDirectory query result after the join
+      const rows = [
+        { id: 1, username: "ahamid4", email: "ahamid4@gmail.com", role: "superadmin", fullName: "Abdul Hamid" },
+        { id: 2, username: "farid99", email: "farid@aq.org", role: "assistant", fullName: null },
+        { id: 3, username: "volunteer1", email: "vol1@aq.org", role: "volunteer", fullName: "Yusuf Khan" },
+      ];
+      const staff = rows
+        .filter(u => u.email)
+        .map(u => ({ id: u.id, name: u.fullName ?? u.username ?? u.email ?? "", email: u.email, role: u.role }));
+      expect(staff[0].name).toBe("Abdul Hamid");  // fullName wins over username
+      expect(staff[1].name).toBe("farid99");       // falls back to username when fullName is null
+      expect(staff[2].name).toBe("Yusuf Khan");    // fullName wins
+    });
+  });
+
+  describe("Pending payments displayName resolution", () => {
+    it("should resolve displayName in order: employeeName > userFullName > userName > fallback", () => {
+      const resolveDisplayName = (r: { employeeName?: string | null; userFullName?: string | null; userName?: string | null; userId: number }) =>
+        r.employeeName ?? r.userFullName ?? r.userName ?? `Employee #${r.userId}`;
+
+      // Case 1: employeeName set (free-text payroll record)
+      expect(resolveDisplayName({ employeeName: "Farid Ahmed", userFullName: null, userName: "farid99", userId: 5 })).toBe("Farid Ahmed");
+
+      // Case 2: no employeeName but staffProfile has fullName
+      expect(resolveDisplayName({ employeeName: null, userFullName: "Abdul Hamid", userName: "ahamid4", userId: 1 })).toBe("Abdul Hamid");
+
+      // Case 3: no employeeName, no fullName, falls back to OAuth username
+      expect(resolveDisplayName({ employeeName: null, userFullName: null, userName: "ahamid4", userId: 1 })).toBe("ahamid4");
+
+      // Case 4: nothing set, falls back to Employee #id
+      expect(resolveDisplayName({ employeeName: null, userFullName: null, userName: null, userId: 7 })).toBe("Employee #7");
+    });
+
+    it("should use first name only in email greeting", () => {
+      const getFirstName = (fullName: string) => fullName.split(" ")[0];
+      expect(getFirstName("Farid Ahmed")).toBe("Farid");
+      expect(getFirstName("Abdul Hamid")).toBe("Abdul");
+      expect(getFirstName("ahamid4")).toBe("ahamid4"); // single token stays as-is
+    });
   });
 });

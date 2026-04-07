@@ -367,6 +367,7 @@ export type InsertCampaign = typeof campaigns.$inferInsert;
 export const staffProfiles = mysqlTable("staff_profiles", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().unique(),
+  fullName: varchar("fullName", { length: 200 }), // Display name (separate from OAuth username)
   niNumber: varchar("niNumber", { length: 20 }),
   taxCode: varchar("taxCode", { length: 20 }),
   bankName: varchar("bankName", { length: 100 }),

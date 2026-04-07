@@ -465,14 +465,21 @@ export default function MonthlyExpenses() {
               <button className={"flex-1 text-xs py-1.5 rounded-md border transition-colors " + (useCustomEmail ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border")} onClick={() => setUseCustomEmail(true)}>Enter Manually</button>
             </div>
             {!useCustomEmail ? (
-              <div>
-                <Label className="text-xs">Select Recipient</Label>
-                <Select value={emailRecipient} onValueChange={v => { setEmailRecipient(v); const f = (staffDir ?? []).find((s: any) => s.email === v); if (f) setEmailName((f as any).name); }}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Choose staff member…" /></SelectTrigger>
-                  <SelectContent>
-                    {(staffDir ?? []).map((s: any) => <SelectItem key={s.id} value={s.email}>{s.name} — {s.email}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Select Recipient</Label>
+                  <Select value={emailRecipient} onValueChange={v => { setEmailRecipient(v); const f = (staffDir ?? []).find((s: any) => s.email === v); if (f) setEmailName((f as any).name); }}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Choose staff member…" /></SelectTrigger>
+                    <SelectContent>
+                      {(staffDir ?? []).map((s: any) => <SelectItem key={s.id} value={s.email}>{s.name} — {s.email}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs">Recipient Name (editable)</Label>
+                  <Input value={emailName} onChange={e => setEmailName(e.target.value)} placeholder="Full name as it should appear in email" className="mt-1" />
+                  <p className="text-xs text-muted-foreground mt-1">Edit this if the name shown is a username rather than a full name.</p>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">

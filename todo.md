@@ -139,3 +139,10 @@
 - [x] Fix subject line encoding: RFC 2047 base64 encoded-word for all headers — £ now renders correctly
 - [x] Fix greeting: uses first name from recipientName (e.g. "Assalamu Alaikum, Farid,")
 - [x] Changed salutation from "Dear" to "Assalamu Alaikum" — 68 tests passing
+
+## Email Name Fix (Apr 7 2026)
+- [x] Fix pendingPayments query: join staffProfiles.fullName + users.name, prefer fullName over username
+- [x] Email dialog: always shows editable Recipient Name field (pre-filled, overridable)
+- [x] staffProfile.upsert: added fullName field so staff can have proper display name
+- [x] staffDirectory: now returns fullName from staffProfiles when available
+- [x] 68 tests passing

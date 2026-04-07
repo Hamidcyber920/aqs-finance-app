@@ -465,10 +465,12 @@ export const appRouter = router({
         const endDate = new Date(filterYear, filterMonth, 0, 23, 59, 59);
 
         // Payroll: cheque or cash payments for the month
+        const { staffProfiles } = await import("../drizzle/schema");
         const payrollRows = await db
-          .select({ id: payrollRecords.id, employeeName: payrollRecords.employeeName, userId: payrollRecords.userId, month: payrollRecords.month, year: payrollRecords.year, netPay: payrollRecords.netPay, paymentMethod: payrollRecords.paymentMethod, paymentStatus: payrollRecords.paymentStatus, chequeNumber: payrollRecords.chequeNumber, chequeImageUrl: payrollRecords.chequeImageUrl, chequeIssuedAt: payrollRecords.chequeIssuedAt, bankingStatus: payrollRecords.bankingStatus, bankedAt: payrollRecords.bankedAt, paidAt: payrollRecords.paidAt, notes: payrollRecords.notes, userName: users.name })
+          .select({ id: payrollRecords.id, employeeName: payrollRecords.employeeName, userId: payrollRecords.userId, month: payrollRecords.month, year: payrollRecords.year, netPay: payrollRecords.netPay, paymentMethod: payrollRecords.paymentMethod, paymentStatus: payrollRecords.paymentStatus, chequeNumber: payrollRecords.chequeNumber, chequeImageUrl: payrollRecords.chequeImageUrl, chequeIssuedAt: payrollRecords.chequeIssuedAt, bankingStatus: payrollRecords.bankingStatus, bankedAt: payrollRecords.bankedAt, paidAt: payrollRecords.paidAt, notes: payrollRecords.notes, userName: users.name, userFullName: staffProfiles.fullName, userEmail: users.email })
           .from(payrollRecords)
           .leftJoin(users, eq(payrollRecords.userId, users.id))
+          .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
           .where(and(
             inArray(payrollRecords.paymentMethod, ["cheque", "cash"]),
             eq(payrollRecords.month, filterMonth),
@@ -499,7 +501,7 @@ export const appRouter = router({
           + receiptRows.filter(r => r.bankingStatus === "unbanked" && r.status === "approved").reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
 
         return {
-          payroll: payrollRows.map(r => ({ ...r, displayName: r.employeeName ?? r.userName ?? `Employee #${r.userId}`, type: "payroll" as const })),
+          payroll: payrollRows.map(r => ({ ...r, displayName: r.employeeName ?? r.userFullName ?? r.userName ?? `Employee #${r.userId}`, type: "payroll" as const })),
           receipts: receiptRows.map(r => ({ ...r, type: "receipt" as const })),
           summary: { totalPending, totalPaid, unbankedCash, unbankedCheques },
         };
@@ -637,11 +639,24 @@ export const appRouter = router({
 
     // Staff + volunteer directory for email recipient dropdown
     staffDirectory: adminProcedure.query(async () => {
-      const { rows } = await listAllUsers(500);
-      const staff = rows
+      const db = await (await import("./db")).getDb();
+      if (!db) return [];
+      const { users: usersTable, staffProfiles: staffProfilesTable } = await import("../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const rows = await db
+        .select({ id: usersTable.id, username: usersTable.name, email: usersTable.email, role: usersTable.role, fullName: staffProfilesTable.fullName })
+        .from(usersTable)
+        .leftJoin(staffProfilesTable, eq(usersTable.id, staffProfilesTable.userId))
+        .where((await import("drizzle-orm")).isNotNull(usersTable.email));
+      return rows
         .filter((u: any) => u.email)
-        .map((u: any) => ({ id: u.id, name: u.name ?? u.email ?? "", email: u.email ?? "", role: u.role, type: "user" as const }));
-      return staff;
+        .map((u: any) => ({
+          id: u.id,
+          name: u.fullName ?? u.username ?? u.email ?? "",  // prefer fullName over username
+          email: u.email ?? "",
+          role: u.role,
+          type: "user" as const,
+        }));
     }),
 
     // Income balance summary for the selected month
@@ -957,7 +972,7 @@ Return: { "employees": [ ...array of employee objects... ] }`;
       get: protectedProcedure.query(({ ctx }) => getStaffProfile(ctx.user.id)),
       getByUser: adminProcedure.input(z.object({ userId: z.number() })).query(({ input }) => getStaffProfile(input.userId)),
       upsert: adminProcedure
-        .input(z.object({ userId: z.number(), niNumber: z.string().optional(), taxCode: z.string().optional(), bankName: z.string().optional(), bankAccountNumber: z.string().optional(), bankSortCode: z.string().optional(), startDate: z.date().optional(), contractType: z.string().optional(), paymentMethod: z.string().optional(), annualSalary: z.string().optional(), hourlyRate: z.string().optional() }))
+        .input(z.object({ userId: z.number(), fullName: z.string().optional(), niNumber: z.string().optional(), taxCode: z.string().optional(), bankName: z.string().optional(), bankAccountNumber: z.string().optional(), bankSortCode: z.string().optional(), startDate: z.date().optional(), contractType: z.string().optional(), paymentMethod: z.string().optional(), annualSalary: z.string().optional(), hourlyRate: z.string().optional() }))
         .mutation(async ({ input }) => { const { userId, ...data } = input; await upsertStaffProfile(userId, data as any); return { success: true }; }),
     }),
   }),
