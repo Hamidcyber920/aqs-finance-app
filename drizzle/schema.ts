@@ -273,6 +273,10 @@ export const incomeCategories = mysqlTable("income_categories", {
   name: varchar("name", { length: 100 }).notNull().unique(),
   description: text("description"),
   color: varchar("color", { length: 20 }).default("#C9A84C").notNull(),
+  // Comma-separated allowed periods: "daily,weekly,monthly,one_off" — null means all
+  allowedPeriods: varchar("allowedPeriods", { length: 100 }),
+  // Whether this category requires a free-text specification (e.g. Community Hire)
+  requiresSpecification: boolean("requiresSpecification").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

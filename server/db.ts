@@ -270,19 +270,30 @@ export async function seedDepartmentsAndCategories() {
       .where(and(eq(expenseCategories.name, cat.name), eq(expenseCategories.departmentId, cat.departmentId))).limit(1);
     if (existing.length === 0) await db.insert(expenseCategories).values(cat);
   }
-  // Income categories
+  // Income categories — full list
   const incCats = [
-    { name: "Student Accommodation", description: "Weekly/monthly student room payments", color: "#1B4332" },
-    { name: "Internal Stalls", description: "Internal market stall rentals", color: "#C9A84C" },
-    { name: "External Stalls", description: "External market stall rentals", color: "#40916C" },
-    { name: "Office Rental", description: "Office space rentals", color: "#2D6A4F" },
-    { name: "Coffee Shop Rental", description: "Coffee shop and restaurant area rentals", color: "#6F4E37" },
-    { name: "Hall Hire", description: "Hall hire for weddings, birthdays, bazaars", color: "#7209B7" },
-    { name: "Friday Collection", description: "Friday prayer donation collections", color: "#F4A261" },
+    { name: "Events", description: "General event hire", color: "#7209B7", allowedPeriods: "one_off", requiresSpecification: false },
+    { name: "Weddings", description: "Wedding venue hire", color: "#C9A84C", allowedPeriods: "one_off", requiresSpecification: false },
+    { name: "Nikah", description: "Nikah ceremony hire", color: "#2D6A4F", allowedPeriods: "one_off", requiresSpecification: false },
+    { name: "Birthday", description: "Birthday party hire", color: "#F4A261", allowedPeriods: "one_off", requiresSpecification: false },
+    { name: "Community Hire", description: "Community hall hire — specify purpose", color: "#40916C", allowedPeriods: "daily,one_off", requiresSpecification: true },
+    { name: "Bazaar", description: "Bazaar / market event hire", color: "#1B4332", allowedPeriods: "one_off", requiresSpecification: false },
+    { name: "Office Hire", description: "Office space hire", color: "#2D6A4F", allowedPeriods: "daily,weekly,monthly", requiresSpecification: false },
+    { name: "Room Hire", description: "Room hire", color: "#6F4E37", allowedPeriods: "daily,weekly,monthly", requiresSpecification: false },
+    { name: "Student Accommodation", description: "Student room rental", color: "#1B4332", allowedPeriods: "weekly,monthly", requiresSpecification: false },
+    { name: "Stall Hire Outside", description: "External market stall hire", color: "#C9A84C", allowedPeriods: "daily,one_off", requiresSpecification: false },
+    { name: "Stall Hire Inside", description: "Internal market stall hire", color: "#40916C", allowedPeriods: "daily,one_off", requiresSpecification: false },
+    { name: "Restaurant Hire", description: "Restaurant / bistro hire", color: "#6F4E37", allowedPeriods: "daily,one_off", requiresSpecification: false },
+    { name: "Coffee Shop Hire", description: "Coffee shop hire", color: "#6F4E37", allowedPeriods: "daily,one_off", requiresSpecification: false },
+    { name: "Madrasah Room Hire", description: "Madrasah room hire", color: "#2D6A4F", allowedPeriods: "daily,weekly,monthly", requiresSpecification: false },
+    { name: "Dar Al Zahra Rent", description: "Dar Al Zahra property rent", color: "#1B4332", allowedPeriods: "weekly,monthly", requiresSpecification: false },
+    { name: "Accountants Office Hire", description: "Accountants office hire", color: "#2D6A4F", allowedPeriods: "daily,weekly,monthly", requiresSpecification: false },
+    { name: "Friday Collection", description: "Friday prayer donation collections", color: "#F4A261", allowedPeriods: "one_off", requiresSpecification: false },
   ];
   for (const cat of incCats) {
     const existing = await db.select().from(incomeCategories).where(eq(incomeCategories.name, cat.name)).limit(1);
     if (existing.length === 0) await db.insert(incomeCategories).values(cat);
+    else await db.update(incomeCategories).set({ description: cat.description, color: cat.color, allowedPeriods: cat.allowedPeriods, requiresSpecification: cat.requiresSpecification }).where(eq(incomeCategories.name, cat.name));
   }
 }
 

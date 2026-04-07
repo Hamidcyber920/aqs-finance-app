@@ -114,16 +114,23 @@
 - [x] Vitest: expenses pane procedures (8 tests) — 56/56 passing
 
 ## Monthly Expenses Full Rebuild (Apr 7 2026 — round 2)
-- [ ] Income summary bar: pull total from Income & Rentals, Fundraising, Friday Collections for selected month
-- [ ] Show available balance = income minus paid expenses
-- [ ] Volunteer cash payments: new table + CRUD (separate from staff payroll)
-- [ ] Volunteer expenses: dedicated section in expenses pane
-- [ ] Withheld button: hold cheque/payment with amber badge until funds allow
-- [ ] Now Paid button: record date/time stamp when payment is made
-- [ ] Upload cheque photo + invoice/receipt evidence per payment
-- [ ] Email recipient button: shown after payment marked paid
-- [ ] Email recipient dropdown: pulls staff + volunteers from staff directory with emails
-- [ ] Free-text email entry for temporary staff/volunteers not in system
-- [ ] Pre-filled payment confirmation email via Gmail API
-- [ ] Staff directory: volunteer cash payment records feed into staff profiles
-- [ ] Vitest: new procedures (withheld, nowPaid, sendPaymentEmail, volunteerPayments)
+- [x] Income summary bar: pull total from Income & Rentals, Fundraising, Friday Collections for selected month
+- [x] Show available balance = income minus paid expenses
+- [x] Volunteer cash payments: new table + CRUD (separate from staff payroll)
+- [x] Volunteer expenses: dedicated section in expenses pane
+- [x] Withheld button: hold cheque/payment with amber badge until funds allow
+- [x] Now Paid button: record date/time stamp when payment is made
+- [x] Upload cheque photo + invoice/receipt evidence per payment
+- [x] Email recipient button: shown after payment marked paid
+- [x] Email recipient dropdown: pulls staff + volunteers from staff directory with emails
+- [x] Free-text email entry for temporary staff/volunteers not in system
+- [x] Pre-filled payment confirmation email via Gmail API
+- [x] Staff directory: volunteer cash payment records feed into staff profiles
+- [x] Vitest: new procedures (withheld, nowPaid, sendPaymentEmail, volunteerPayments) — 68/68 passing
+
+## Income Category Fix (Apr 7 2026)
+- [x] Replace income_categories with correct 17-item list including Accountants Office Hire and Friday Collection
+- [x] Add "specify" free-text field when Community Hire is selected
+- [x] Add "Accountants Office Hire" to income categories with rental period tab (Daily / Weekly / Monthly)
+- [x] Dynamic period tabs per category (Daily/Weekly/Monthly/One-off based on allowedPeriods)
+- [x] All 68 tests passing

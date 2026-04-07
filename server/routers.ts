@@ -777,8 +777,8 @@ export const appRouter = router({
       .input(z.object({ categoryId: z.number().optional(), paymentStatus: z.string().optional(), startDate: z.date().optional(), endDate: z.date().optional(), limit: z.number().default(100), offset: z.number().default(0) }))
       .query(({ input }) => getIncomeRecords(input)),
     create: adminProcedure
-      .input(z.object({ categoryId: z.number(), description: z.string(), amount: z.string(), paymentStatus: z.string().default("paid"), payerName: z.string().optional(), payerEmail: z.string().optional(), payerPhone: z.string().optional(), reference: z.string().optional(), periodStart: z.date().optional(), periodEnd: z.date().optional(), receiptUrl: z.string().optional(), notes: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => createIncomeRecord({ ...input, tenantName: input.payerName ?? "", paymentStatus: input.paymentStatus as any, recordedById: ctx.user.id })),
+      .input(z.object({ categoryId: z.number(), description: z.string(), amount: z.string(), paymentStatus: z.string().default("paid"), period: z.enum(["daily", "weekly", "monthly", "one_off", "annual"]).default("monthly"), payerName: z.string().optional(), payerEmail: z.string().optional(), payerPhone: z.string().optional(), reference: z.string().optional(), periodStart: z.date().optional(), periodEnd: z.date().optional(), receiptUrl: z.string().optional(), notes: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => createIncomeRecord({ ...input, tenantName: input.payerName ?? "", paymentStatus: input.paymentStatus as any, period: input.period as any, recordedById: ctx.user.id })),
     update: adminProcedure
       .input(z.object({ id: z.number(), paymentStatus: z.string().optional(), amount: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ input }) => { const { id, ...data } = input; await updateIncomeRecord(id, data as any); return { success: true }; }),
