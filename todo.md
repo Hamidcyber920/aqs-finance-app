@@ -80,3 +80,6 @@
 - [ ] Add first-login password setup flow for legacy users with no passwordHash (avoid manual DB scripts)
 - [ ] Use status as single source of truth (remove isActive/status duplication)
 - [ ] Add vitest coverage for: first-user auto-approval, pending login rejection, suspended login rejection
+- [x] Fix Loans: PDF auto-generation — pdfkit server-side, uploaded to S3, browser download triggered
+- [x] Fix Loans: auto-email not sending via Gmail API on loan creation/approval — fixed, auto-sends on create + approve
+- [x] Test PDF download and email end-to-end in Loans module — 30/30 tests passing

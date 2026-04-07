@@ -75,7 +75,7 @@ describe("localAuth.register", () => {
 
   it("creates a new user and sets a session cookie", async () => {
     vi.mocked(db.getUserByEmail).mockResolvedValue(undefined);
-    const newUser = { ...regularUser, id: 10, email: "new@aq.org", name: "New User" } as any;
+    const newUser = { ...regularUser, id: 10, email: "new@aq.org", name: "New User", status: "active", isActive: true } as any;
     vi.mocked(db.createLocalUser).mockResolvedValue(newUser);
 
     const ctx = makeCtx();

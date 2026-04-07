@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { generateLoanPdf } from "./loanPdf";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -353,10 +354,25 @@ export const appRouter = router({
     }),
     create: adminProcedure
       .input(z.object({ applicantName: z.string(), applicantEmail: z.string().optional(), applicantPhone: z.string().optional(), applicantAddress: z.string().optional(), purpose: z.string(), amount: z.string(), repaymentPeriodMonths: z.number(), monthlyRepayment: z.string().optional(), startDate: z.date().optional(), notes: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => createLoan({ borrowerName: input.applicantName, borrowerEmail: input.applicantEmail, borrowerPhone: input.applicantPhone, borrowerAddress: input.applicantAddress, purpose: input.purpose, amount: input.amount, termMonths: input.repaymentPeriodMonths, monthlyRepayment: input.monthlyRepayment, startDate: input.startDate, notes: input.notes } as any)),
+      .mutation(async ({ ctx, input }) => {
+        const loan = await createLoan({ borrowerName: input.applicantName, borrowerEmail: input.applicantEmail, borrowerPhone: input.applicantPhone, borrowerAddress: input.applicantAddress, purpose: input.purpose, amount: input.amount, termMonths: input.repaymentPeriodMonths, monthlyRepayment: input.monthlyRepayment, startDate: input.startDate, notes: input.notes } as any);
+        if (input.applicantEmail) {
+          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Application</p></div><div style="padding:24px;background:#fff"><p>Dear ${input.applicantName},</p><p>Thank you for submitting your Qarde Hasan (interest-free loan) application. We have received your application and it is currently under review by our trustees.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount Requested</td><td style="padding:8px">&pound;${parseFloat(input.amount).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Purpose</td><td style="padding:8px">${input.purpose}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${input.repaymentPeriodMonths} months</td></tr></table><p>You will be notified once your application has been reviewed. If you have any questions, please contact us directly.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
+          await sendGmail(input.applicantEmail, input.applicantName, "Qarde Hasan Loan Application Received — Abdullah Quilliam Society", html).catch(() => {});
+        }
+        return loan;
+      }),
     approve: adminProcedure
       .input(z.object({ id: z.number(), chairSignatureUrl: z.string().optional(), trusteeSignatureUrl: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => { await updateLoan(input.id, { status: "approved", approvedAt: new Date(), chairSignatureUrl: input.chairSignatureUrl, trusteeSignatureUrl: input.trusteeSignatureUrl } as any); return { success: true }; }),
+      .mutation(async ({ ctx, input }) => {
+        await updateLoan(input.id, { status: "approved", approvedAt: new Date(), chairSignatureUrl: input.chairSignatureUrl, trusteeSignatureUrl: input.trusteeSignatureUrl } as any);
+        const loan = await getLoanById(input.id);
+        if (loan?.borrowerEmail) {
+          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan &mdash; Approved</p></div><div style="padding:24px;background:#fff"><p>Dear ${loan.borrowerName},</p><p>We are pleased to inform you that your Qarde Hasan loan application has been <strong style="color:#1a4731">approved</strong> by the Abdullah Quilliam Society trustees.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Loan Amount</td><td style="padding:8px">&pound;${parseFloat(String(loan.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Monthly Repayment</td><td style="padding:8px">&pound;${loan.monthlyRepayment ? parseFloat(String(loan.monthlyRepayment)).toFixed(2) : "TBC"}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${loan.termMonths} months</td></tr></table><p>Please contact us to arrange collection of funds and to sign your loan agreement document.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, "Your Qarde Hasan Loan Has Been Approved — Abdullah Quilliam Society", html).catch(() => {});
+        }
+        return { success: true };
+      }),
     reject: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => { await updateLoan(input.id, { status: "rejected" }); return { success: true }; }),
     recordRepayment: adminProcedure
       .input(z.object({ loanId: z.number(), amount: z.string(), paymentMethod: z.string().default("bank_transfer"), evidenceUrl: z.string().optional(), notes: z.string().optional() }))
@@ -367,6 +383,50 @@ export const appRouter = router({
           await updateLoan(input.loanId, { status: "completed" });
         }
         return repayment;
+      }),
+    generatePdf: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const loan = await getLoanById(input.id);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        const pdfBuffer = await generateLoanPdf({
+          id: loan.id, borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail,
+          borrowerAddress: loan.borrowerAddress, borrowerPhone: loan.borrowerPhone,
+          purpose: loan.purpose, amount: loan.amount, termMonths: loan.termMonths,
+          monthlyRepayment: loan.monthlyRepayment, startDate: loan.startDate,
+          createdAt: loan.createdAt, status: loan.status,
+          chairSignatureUrl: loan.chairSignatureUrl, trusteeSignatureUrl: loan.trusteeSignatureUrl, notes: loan.notes,
+        });
+        const fileKey = `loans/agreement-${loan.id}-${Date.now()}.pdf`;
+        const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+        return { url, filename: `AQS-Loan-Agreement-${String(loan.id).padStart(4, "0")}.pdf` };
+      }),
+    sendEmail: adminProcedure
+      .input(z.object({ id: z.number(), type: z.enum(["application_received", "approved", "reminder", "custom"]), customSubject: z.string().optional(), customBody: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const loan = await getLoanById(input.id);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        if (!loan.borrowerEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "Borrower has no email address on file" });
+        const baseStyle = `font-family:Arial,sans-serif;max-width:600px;margin:0 auto`;
+        const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan</p></div>`;
+        const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>`;
+        let subject = ""; let htmlBody = "";
+        if (input.type === "application_received") {
+          subject = "Qarde Hasan Loan Application Received — Abdullah Quilliam Society";
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear ${loan.borrowerName},</p><p>Your loan application for <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> has been received and is under review.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+        } else if (input.type === "approved") {
+          subject = "Your Qarde Hasan Loan Has Been Approved — Abdullah Quilliam Society";
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear ${loan.borrowerName},</p><p>Your Qarde Hasan loan of <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> has been <strong style="color:#1a4731">approved</strong>. Please contact us to arrange collection.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+        } else if (input.type === "reminder") {
+          const remaining = parseFloat(String(loan.amount)) - parseFloat(String(loan.totalRepaid ?? 0));
+          subject = "Qarde Hasan Loan Repayment Reminder — Abdullah Quilliam Society";
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear ${loan.borrowerName},</p><p>This is a friendly reminder that your outstanding balance is <strong>&pound;${remaining.toFixed(2)}</strong>. If you have any difficulties, please contact us.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+        } else if (input.type === "custom" && input.customSubject && input.customBody) {
+          subject = input.customSubject;
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px">${input.customBody}</div>${footer}</div>`;
+        } else { throw new TRPCError({ code: "BAD_REQUEST", message: "Custom email requires subject and body" }); }
+        await sendGmail(loan.borrowerEmail, loan.borrowerName, subject, htmlBody);
+        return { success: true, sentTo: loan.borrowerEmail };
       }),
   }),
 
