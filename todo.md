@@ -105,10 +105,25 @@
 - [x] Vitest: analyzePayslipBulk (5 tests) + payroll.create with employeeName (1 test) — 48/48 passing
 
 ## Monthly Expenses Pane & Reports (Apr 7 2026)
-- [ ] New "Monthly Expenses" sidebar item under FINANCE
-- [ ] Aggregate pending cheque/cash payments from payroll, receipts, and department expenses
-- [ ] Cheque issuance: mark as paid with date/time stamp and tick
-- [ ] Upload photo of written cheque per payment (payroll and expenses)
-- [ ] Unbanked payments tally: cash + cheques not yet banked vs this month's income balance
-- [ ] Reports: auto-generate monthly income & expenses document summary (PDF/printable)
-- [ ] Vitest: expenses pane procedures
+- [x] New "Monthly Expenses" sidebar item under FINANCE
+- [x] Aggregate pending cheque/cash payments from payroll, receipts, and department expenses
+- [x] Cheque issuance: mark as paid with date/time stamp and tick
+- [x] Upload photo of written cheque per payment (payroll and expenses)
+- [x] Unbanked payments tally: cash + cheques not yet banked vs this month's income balance
+- [x] Reports: auto-generate monthly income & expenses document summary (PDF/printable)
+- [x] Vitest: expenses pane procedures (8 tests) — 56/56 passing
+
+## Monthly Expenses Full Rebuild (Apr 7 2026 — round 2)
+- [ ] Income summary bar: pull total from Income & Rentals, Fundraising, Friday Collections for selected month
+- [ ] Show available balance = income minus paid expenses
+- [ ] Volunteer cash payments: new table + CRUD (separate from staff payroll)
+- [ ] Volunteer expenses: dedicated section in expenses pane
+- [ ] Withheld button: hold cheque/payment with amber badge until funds allow
+- [ ] Now Paid button: record date/time stamp when payment is made
+- [ ] Upload cheque photo + invoice/receipt evidence per payment
+- [ ] Email recipient button: shown after payment marked paid
+- [ ] Email recipient dropdown: pulls staff + volunteers from staff directory with emails
+- [ ] Free-text email entry for temporary staff/volunteers not in system
+- [ ] Pre-filled payment confirmation email via Gmail API
+- [ ] Staff directory: volunteer cash payment records feed into staff profiles
+- [ ] Vitest: new procedures (withheld, nowPaid, sendPaymentEmail, volunteerPayments)

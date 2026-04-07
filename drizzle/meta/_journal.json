@@ -43,6 +43,13 @@
       "when": 1775559381252,
       "tag": "0005_naive_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1775596869316,
+      "tag": "0006_melodic_phalanx",
+      "breakpoints": true
     }
   ]
 }

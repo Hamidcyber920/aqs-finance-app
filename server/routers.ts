@@ -532,6 +532,184 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // Withheld: put a payment on hold
+    withholdPayment: adminProcedure
+      .input(z.object({ type: z.enum(["payroll", "receipt", "volunteer"]), id: z.number(), reason: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const now = new Date();
+        if (input.type === "payroll") {
+          await updatePayrollRecord(input.id, { paymentStatus: "withheld" as any, withheldAt: now, withheldReason: input.reason } as any);
+        } else if (input.type === "receipt") {
+          await updateReceipt(input.id, { paymentHeld: true, heldAt: now, heldReason: input.reason } as any);
+        } else {
+          const db = await (await import("./db")).getDb();
+          if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+          const { eq } = await import("drizzle-orm");
+          const { volunteerPayments } = await import("../drizzle/schema");
+          await db.update(volunteerPayments).set({ paymentStatus: "withheld", withheldAt: now, withheldReason: input.reason, updatedAt: now }).where(eq(volunteerPayments.id, input.id));
+        }
+        return { success: true, withheldAt: now };
+      }),
+
+    // Now Paid: record payment with timestamp
+    nowPaid: adminProcedure
+      .input(z.object({ type: z.enum(["payroll", "receipt", "volunteer"]), id: z.number(), chequeNumber: z.string().optional(), chequeImageUrl: z.string().optional(), invoiceUrl: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const now = new Date();
+        if (input.type === "payroll") {
+          await updatePayrollRecord(input.id, { paymentStatus: "paid" as any, paidAt: now, chequeIssuedAt: now, chequeNumber: input.chequeNumber, chequeImageUrl: input.chequeImageUrl, invoiceUrl: input.invoiceUrl } as any);
+        } else if (input.type === "receipt") {
+          await updateReceipt(input.id, { status: "approved" as any, paidAt: now, chequeIssuedAt: now, chequeNumber: input.chequeNumber, chequeImageUrl: input.chequeImageUrl, invoiceUrl: input.invoiceUrl } as any);
+        } else {
+          const db = await (await import("./db")).getDb();
+          if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+          const { eq } = await import("drizzle-orm");
+          const { volunteerPayments } = await import("../drizzle/schema");
+          await db.update(volunteerPayments).set({ paymentStatus: "paid", paidAt: now, chequeNumber: input.chequeNumber, chequeImageUrl: input.chequeImageUrl, invoiceUrl: input.invoiceUrl, updatedAt: now }).where(eq(volunteerPayments.id, input.id));
+        }
+        return { success: true, paidAt: now };
+      }),
+
+    // Send payment confirmation email to recipient
+    sendPaymentEmail: adminProcedure
+      .input(z.object({
+        type: z.enum(["payroll", "receipt", "volunteer"]),
+        id: z.number(),
+        recipientEmail: z.string().email(),
+        recipientName: z.string(),
+        amount: z.string(),
+        description: z.string(),
+        paidAt: z.date().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const dateStr = input.paidAt ? new Date(input.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }) : new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+            <div style="background:#1B4332;padding:20px;text-align:center">
+              <h1 style="color:#C9A84C;margin:0;font-size:22px">Abdullah Quilliam Society</h1>
+              <p style="color:#fff;margin:4px 0 0;font-size:13px">Payment Confirmation</p>
+            </div>
+            <div style="padding:24px;background:#fff">
+              <p>Dear ${input.recipientName},</p>
+              <p>We are pleased to confirm that the following payment has been made to you:</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0">
+                <tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Description</td><td style="padding:8px">${input.description}</td></tr>
+                <tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount</td><td style="padding:8px;font-size:18px;color:#1B4332"><strong>\u00a3${parseFloat(input.amount).toFixed(2)}</strong></td></tr>
+                <tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Date Paid</td><td style="padding:8px">${dateStr}</td></tr>
+              </table>
+              <p style="color:#666;font-size:13px">If you have any questions about this payment, please contact the finance team.</p>
+              <p>JazakAllahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p>
+            </div>
+            <div style="background:#f0f0f0;padding:12px;text-align:center;font-size:11px;color:#999">
+              Abdullah Quilliam Society &middot; Liverpool &middot; finance@abdullahquilliam.com
+            </div>
+          </div>`;
+        await sendGmail(input.recipientEmail, input.recipientName, `Payment Confirmation — \u00a3${parseFloat(input.amount).toFixed(2)}`, html);
+        // Record email sent timestamp
+        const now = new Date();
+        if (input.type === "payroll") {
+          await updatePayrollRecord(input.id, { emailSentAt: now, emailSentTo: input.recipientEmail } as any);
+        } else if (input.type === "receipt") {
+          await updateReceipt(input.id, { emailSentAt: now, emailSentTo: input.recipientEmail } as any);
+        } else {
+          const db = await (await import("./db")).getDb();
+          if (db) {
+            const { eq } = await import("drizzle-orm");
+            const { volunteerPayments } = await import("../drizzle/schema");
+            await db.update(volunteerPayments).set({ emailSentAt: now, emailSentTo: input.recipientEmail, updatedAt: now }).where(eq(volunteerPayments.id, input.id));
+          }
+        }
+        return { success: true, sentAt: now };
+      }),
+
+    // Staff + volunteer directory for email recipient dropdown
+    staffDirectory: adminProcedure.query(async () => {
+      const { rows } = await listAllUsers(500);
+      const staff = rows
+        .filter((u: any) => u.email)
+        .map((u: any) => ({ id: u.id, name: u.name ?? u.email ?? "", email: u.email ?? "", role: u.role, type: "user" as const }));
+      return staff;
+    }),
+
+    // Income balance summary for the selected month
+    incomeBalance: adminProcedure
+      .input(z.object({ month: z.number(), year: z.number() }))
+      .query(async ({ input }) => {
+        const { month, year } = input;
+        const db = await (await import("./db")).getDb();
+        if (!db) return { totalIncome: 0, totalPaidExpenses: 0, availableBalance: 0, breakdown: [] as any[] };
+        const { and, gte, lte, eq } = await import("drizzle-orm");
+        const { incomeRecords, fridayCollections, fundraisingDonations, payrollRecords, receipts: receiptsTable, volunteerPayments } = await import("../drizzle/schema");
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59);
+
+        const incomeRows = await db.select().from(incomeRecords).where(and(gte(incomeRecords.createdAt, startDate), lte(incomeRecords.createdAt, endDate)));
+        const fridayRows = await db.select().from(fridayCollections).where(and(gte(fridayCollections.createdAt, startDate), lte(fridayCollections.createdAt, endDate)));
+        const donationRows = await db.select().from(fundraisingDonations).where(and(gte(fundraisingDonations.createdAt, startDate), lte(fundraisingDonations.createdAt, endDate)));
+
+        const incomeTotal = incomeRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const fridayTotal = fridayRows.reduce((s, r) => s + parseFloat(String(r.totalAmount ?? 0)), 0);
+        const donationTotal = donationRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const totalIncome = incomeTotal + fridayTotal + donationTotal;
+
+        const payrollRows = await db.select().from(payrollRecords).where(and(eq(payrollRecords.month, month), eq(payrollRecords.year, year)));
+        const receiptRows = await db.select().from(receiptsTable).where(and(gte(receiptsTable.createdAt, startDate), lte(receiptsTable.createdAt, endDate)));
+        const volunteerRows = await db.select().from(volunteerPayments).where(and(eq(volunteerPayments.month, month), eq(volunteerPayments.year, year)));
+
+        const paidPayroll = payrollRows.filter(r => r.paymentStatus === "paid").reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0);
+        const paidReceipts = receiptRows.filter(r => r.status === "approved").reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const paidVolunteers = volunteerRows.filter(r => r.paymentStatus === "paid").reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const totalPaidExpenses = paidPayroll + paidReceipts + paidVolunteers;
+
+        return {
+          totalIncome,
+          totalPaidExpenses,
+          availableBalance: totalIncome - totalPaidExpenses,
+          breakdown: [
+            { label: "Income & Rentals", amount: incomeTotal },
+            { label: "Friday Collections", amount: fridayTotal },
+            { label: "Fundraising Donations", amount: donationTotal },
+          ],
+        };
+      }),
+
+    // Volunteer payments CRUD
+    volunteerPayments: router({
+      list: adminProcedure
+        .input(z.object({ month: z.number().optional(), year: z.number().optional() }))
+        .query(async ({ input }) => {
+          const db = await (await import("./db")).getDb();
+          if (!db) return [];
+          const { and, eq, desc } = await import("drizzle-orm");
+          const { volunteerPayments } = await import("../drizzle/schema");
+          const now = new Date();
+          const month = input.month ?? now.getMonth() + 1;
+          const year = input.year ?? now.getFullYear();
+          return db.select().from(volunteerPayments)
+            .where(and(eq(volunteerPayments.month, month), eq(volunteerPayments.year, year)))
+            .orderBy(desc(volunteerPayments.createdAt));
+        }),
+      create: adminProcedure
+        .input(z.object({ recipientName: z.string(), recipientEmail: z.string().optional(), userId: z.number().optional(), month: z.number(), year: z.number(), amount: z.string(), description: z.string().optional(), paymentMethod: z.enum(["cash", "cheque", "bank_transfer"]).default("cash"), notes: z.string().optional() }))
+        .mutation(async ({ ctx, input }) => {
+          const db = await (await import("./db")).getDb();
+          if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+          const { volunteerPayments } = await import("../drizzle/schema");
+          const [result] = await db.insert(volunteerPayments).values({ ...input, createdById: ctx.user.id });
+          return { id: (result as any).insertId, success: true };
+        }),
+      delete: adminProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ input }) => {
+          const db = await (await import("./db")).getDb();
+          if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+          const { eq } = await import("drizzle-orm");
+          const { volunteerPayments } = await import("../drizzle/schema");
+          await db.delete(volunteerPayments).where(eq(volunteerPayments.id, input.id));
+          return { success: true };
+        }),
+    }),
+
     // Monthly income vs expenses summary for reports
     monthlySummary: adminProcedure
       .input(z.object({ month: z.number(), year: z.number() }))
@@ -574,7 +752,7 @@ export const appRouter = router({
           income: {
             total: totalIncome,
             breakdown: [
-              ...incomeRows.map(r => ({ label: r.description ?? "Income", amount: parseFloat(String(r.amount ?? 0)), category: r.categoryName ?? "General", paymentMethod: r.paymentMethod })),
+              ...incomeRows.map(r => ({ label: (r as any).description ?? r.tenantName ?? "Income", amount: parseFloat(String(r.amount ?? 0)), category: r.categoryName ?? "General", paymentMethod: r.paymentMethod })),
               ...fridayRows.map(r => ({ label: `Friday Collection ${r.collectionDate}`, amount: parseFloat(String(r.totalAmount ?? 0)), category: "Friday Collection", paymentMethod: "cash" })),
             ],
           },

@@ -125,6 +125,13 @@ export const receipts = mysqlTable("receipts", {
   chequeIssuedAt: timestamp("chequeIssuedAt"),
   bankingStatus: mysqlEnum("bankingStatus", ["unbanked", "banked"]).default("unbanked"),
   bankedAt: timestamp("bankedAt"),
+  paymentHeld: boolean("paymentHeld").default(false),
+  heldAt: timestamp("heldAt"),
+  heldReason: text("heldReason"),
+  paidAt: timestamp("paidAt"),
+  emailSentAt: timestamp("emailSentAt"),
+  emailSentTo: varchar("emailSentTo", { length: 320 }),
+  invoiceUrl: text("invoiceUrl"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -386,7 +393,7 @@ export const payrollRecords = mysqlTable("payroll_records", {
   totalDeductions: decimal("totalDeductions", { precision: 10, scale: 2 }).default("0"),
   netPay: decimal("netPay", { precision: 10, scale: 2 }).notNull(),
   paymentMethod: mysqlEnum("paymentMethod", ["bank_transfer", "cheque", "cash"]).default("bank_transfer"),
-  paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid"]).default("pending").notNull(),
+  paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "withheld"]).default("pending").notNull(),
   payslipUrl: text("payslipUrl"), // Google Drive PDF URL
   driveFileId: varchar("driveFileId", { length: 200 }), // Google Drive file ID
   chequeImageUrl: text("chequeImageUrl"),
@@ -396,6 +403,11 @@ export const payrollRecords = mysqlTable("payroll_records", {
   bankingStatus: mysqlEnum("bankingStatus", ["unbanked", "banked"]).default("unbanked"),
   bankedAt: timestamp("bankedAt"),
   paidAt: timestamp("paidAt"),
+  withheldAt: timestamp("withheldAt"),
+  withheldReason: text("withheldReason"),
+  emailSentAt: timestamp("emailSentAt"),
+  emailSentTo: varchar("emailSentTo", { length: 320 }),
+  invoiceUrl: text("invoiceUrl"),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -403,3 +415,41 @@ export const payrollRecords = mysqlTable("payroll_records", {
 
 export type PayrollRecord = typeof payrollRecords.$inferSelect;
 export type InsertPayrollRecord = typeof payrollRecords.$inferInsert;
+
+// ─── VOLUNTEER PAYMENTS ───────────────────────────────────────────────────────
+
+export const volunteerPayments = mysqlTable("volunteer_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  // Recipient — either a linked user or a free-text name
+  userId: int("userId"), // nullable — not all volunteers have accounts
+  recipientName: varchar("recipientName", { length: 200 }).notNull(),
+  recipientEmail: varchar("recipientEmail", { length: 320 }),
+  // Payment details
+  month: int("month").notNull(), // 1-12
+  year: int("year").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  description: text("description"),
+  paymentMethod: mysqlEnum("paymentMethod", ["cash", "cheque", "bank_transfer"]).default("cash").notNull(),
+  // Status workflow
+  paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "withheld"]).default("pending").notNull(),
+  paidAt: timestamp("paidAt"),
+  withheldAt: timestamp("withheldAt"),
+  withheldReason: text("withheldReason"),
+  // Evidence
+  chequeNumber: varchar("chequeNumber", { length: 50 }),
+  chequeImageUrl: text("chequeImageUrl"),
+  invoiceUrl: text("invoiceUrl"),
+  // Banking
+  bankingStatus: mysqlEnum("bankingStatus", ["unbanked", "banked"]).default("unbanked"),
+  bankedAt: timestamp("bankedAt"),
+  // Email
+  emailSentAt: timestamp("emailSentAt"),
+  emailSentTo: varchar("emailSentTo", { length: 320 }),
+  notes: text("notes"),
+  createdById: int("createdById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type VolunteerPayment = typeof volunteerPayments.$inferSelect;
+export type InsertVolunteerPayment = typeof volunteerPayments.$inferInsert;

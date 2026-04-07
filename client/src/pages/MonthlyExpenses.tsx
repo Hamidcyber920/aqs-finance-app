@@ -1,399 +1,545 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-  CheckCircle2, Clock, Upload, Camera, Banknote, CreditCard, AlertCircle,
-  Loader2, ChevronDown, ChevronUp, Building2, User, FileText, Landmark
+  CheckCircle2, Clock, PauseCircle, Banknote, CreditCard,
+  Camera, FileText, Mail, ChevronDown, ChevronUp, Plus, Trash2, TrendingUp,
+  Building, Users, RefreshCw
 } from "lucide-react";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+type PaymentType = "payroll" | "receipt" | "volunteer";
 
-type PayrollItem = {
-  id: number; type: "payroll"; displayName: string; netPay: string | null;
-  paymentMethod: string | null; paymentStatus: string; chequeNumber: string | null;
-  chequeImageUrl: string | null; chequeIssuedAt: Date | null; bankingStatus: string | null;
-  bankedAt: Date | null; paidAt: Date | null; month: number; year: number; notes: string | null;
-};
-type ReceiptItem = {
-  id: number; type: "receipt"; vendor: string | null; amount: string | null;
-  departmentName: string | null; categoryName: string | null; status: string;
-  chequeNumber: string | null; chequeImageUrl: string | null; chequeIssuedAt: Date | null;
-  bankingStatus: string | null; bankedAt: Date | null; imageUrl: string | null;
-};
-type PaymentItem = (PayrollItem | ReceiptItem) & { _expanded?: boolean };
-
-function fmt(v: string | number | null | undefined) {
-  return `£${parseFloat(String(v ?? 0)).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-function fmtDate(d: Date | string | null | undefined) {
-  if (!d) return "—";
-  return new Date(d).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+interface PaymentRow {
+  id: number; type: PaymentType; displayName: string; amount: number;
+  paymentMethod: string; paymentStatus: string; paymentHeld?: boolean;
+  paidAt?: Date | null; withheldAt?: Date | null;
+  chequeNumber?: string | null; chequeImageUrl?: string | null; invoiceUrl?: string | null;
+  emailSentAt?: Date | null; emailSentTo?: string | null;
+  description?: string | null; department?: string | null; bankingStatus?: string | null;
 }
 
 export default function MonthlyExpenses() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
-  const [filter, setFilter] = useState<"all" | "pending" | "paid" | "unbanked">("all");
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState<"all"|"pending"|"paid"|"withheld">("all");
+  const [expandedId, setExpandedId] = useState<string|null>(null);
 
-  // Issue cheque dialog state
-  const [issueDialog, setIssueDialog] = useState<{ open: boolean; item: PaymentItem | null }>({ open: false, item: null });
+  const [payDialog, setPayDialog] = useState<PaymentRow|null>(null);
+  const [withholdDialog, setWithholdDialog] = useState<PaymentRow|null>(null);
+  const [emailDialog, setEmailDialog] = useState<PaymentRow|null>(null);
+  const [addVolOpen, setAddVolOpen] = useState(false);
+
   const [chequeNumber, setChequeNumber] = useState("");
-  const [chequeAmount, setChequeAmount] = useState("");
-  const [chequePhotoUrl, setChequePhotoUrl] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [chequeImageUrl, setChequeImageUrl] = useState("");
+  const [invoiceUrl, setInvoiceUrl] = useState("");
+  const [uploadingCheque, setUploadingCheque] = useState(false);
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
+  const [withholdReason, setWithholdReason] = useState("");
+  const [emailRecipient, setEmailRecipient] = useState("");
+  const [emailName, setEmailName] = useState("");
+  const [customEmail, setCustomEmail] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [useCustomEmail, setUseCustomEmail] = useState(false);
+  const [volName, setVolName] = useState("");
+  const [volEmail, setVolEmail] = useState("");
+  const [volAmount, setVolAmount] = useState("");
+  const [volDesc, setVolDesc] = useState("");
+  const [volMethod, setVolMethod] = useState<"cash"|"cheque"|"bank_transfer">("cash");
 
-  const years = useMemo(() => { const y = now.getFullYear(); return [y, y - 1, y - 2]; }, []);
-
+  const chequeRef = useRef<HTMLInputElement>(null);
+  const invoiceRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
-  const { data, isLoading } = trpc.expenses.pendingPayments.useQuery({ month, year });
 
-  const markPayrollPaid = trpc.expenses.markPayrollPaid.useMutation({
-    onSuccess: () => { utils.expenses.pendingPayments.invalidate(); toast.success("Payment marked as paid ✓"); setIssueDialog({ open: false, item: null }); },
+  const { data: incomeBalance } = trpc.expenses.incomeBalance.useQuery({ month, year });
+  const { data: pendingData, isLoading } = trpc.expenses.pendingPayments.useQuery({ month, year });
+  const { data: volunteerData } = trpc.expenses.volunteerPayments.list.useQuery({ month, year });
+  const { data: staffDir } = trpc.expenses.staffDirectory.useQuery();
+
+  const invalidateAll = () => {
+    utils.expenses.pendingPayments.invalidate();
+    utils.expenses.volunteerPayments.list.invalidate();
+    utils.expenses.incomeBalance.invalidate();
+  };
+
+  const nowPaid = trpc.expenses.nowPaid.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Payment recorded — marked as paid with timestamp"); setPayDialog(null); },
     onError: (e) => toast.error(e.message),
   });
-  const markReceiptPaid = trpc.expenses.markReceiptPaid.useMutation({
-    onSuccess: () => { utils.expenses.pendingPayments.invalidate(); toast.success("Expense marked as paid ✓"); setIssueDialog({ open: false, item: null }); },
+  const withholdPayment = trpc.expenses.withholdPayment.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Payment withheld"); setWithholdDialog(null); setWithholdReason(""); },
+    onError: (e) => toast.error(e.message),
+  });
+  const sendEmail = trpc.expenses.sendPaymentEmail.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Email sent"); setEmailDialog(null); },
     onError: (e) => toast.error(e.message),
   });
   const markBanked = trpc.expenses.markBanked.useMutation({
-    onSuccess: () => { utils.expenses.pendingPayments.invalidate(); toast.success("Marked as banked ✓"); },
+    onSuccess: () => { utils.expenses.pendingPayments.invalidate(); toast.success("Marked as banked"); },
+  });
+  const createVol = trpc.expenses.volunteerPayments.create.useMutation({
+    onSuccess: () => { invalidateAll(); toast.success("Volunteer payment added"); setAddVolOpen(false); setVolName(""); setVolEmail(""); setVolAmount(""); setVolDesc(""); },
     onError: (e) => toast.error(e.message),
   });
-
-  const allItems: PaymentItem[] = [
-    ...(data?.payroll ?? []) as PayrollItem[],
-    ...(data?.receipts ?? []) as ReceiptItem[],
-  ];
-
-  const filteredItems = allItems.filter(item => {
-    if (filter === "pending") {
-      if (item.type === "payroll") return (item as PayrollItem).paymentStatus === "pending";
-      if (item.type === "receipt") return (item as ReceiptItem).status !== "approved";
-    }
-    if (filter === "paid") {
-      if (item.type === "payroll") return (item as PayrollItem).paymentStatus === "paid";
-      if (item.type === "receipt") return (item as ReceiptItem).status === "approved";
-    }
-    if (filter === "unbanked") {
-      return item.bankingStatus === "unbanked" && (
-        item.type === "payroll" ? (item as PayrollItem).paymentStatus === "paid" : (item as ReceiptItem).status === "approved"
-      );
-    }
-    return true;
+  const deleteVol = trpc.expenses.volunteerPayments.delete.useMutation({
+    onSuccess: () => { invalidateAll(); },
   });
 
-  function toggleExpand(key: string) {
-    setExpandedIds(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const payrollRows: PaymentRow[] = (pendingData?.payroll ?? []).map((r: any) => ({
+    id: r.id, type: "payroll" as PaymentType,
+    displayName: r.displayName ?? r.employeeName ?? ("Employee #" + r.userId),
+    amount: parseFloat(String(r.netPay ?? 0)),
+    paymentMethod: r.paymentMethod ?? "bank_transfer",
+    paymentStatus: r.paymentStatus ?? "pending",
+    paidAt: r.paidAt, withheldAt: r.withheldAt,
+    chequeNumber: r.chequeNumber, chequeImageUrl: r.chequeImageUrl,
+    invoiceUrl: r.invoiceUrl, emailSentAt: r.emailSentAt, emailSentTo: r.emailSentTo,
+    description: "Payroll — " + MONTHS[(r.month ?? month) - 1] + " " + (r.year ?? year),
+    bankingStatus: r.bankingStatus,
+  }));
+
+  const receiptRows: PaymentRow[] = (pendingData?.receipts ?? []).map((r: any) => ({
+    id: r.id, type: "receipt" as PaymentType,
+    displayName: r.vendor ?? "Supplier",
+    amount: parseFloat(String(r.amount ?? 0)),
+    paymentMethod: r.isChequePayment ? "cheque" : "cash",
+    paymentStatus: r.status === "approved" ? "paid" : r.paymentHeld ? "withheld" : "pending",
+    paymentHeld: r.paymentHeld,
+    paidAt: r.paidAt, withheldAt: r.heldAt,
+    chequeNumber: r.chequeNumber, chequeImageUrl: r.chequeImageUrl,
+    invoiceUrl: r.invoiceUrl ?? r.imageUrl, emailSentAt: r.emailSentAt, emailSentTo: r.emailSentTo,
+    description: r.categoryName ?? r.departmentName ?? "Expense",
+    department: r.departmentName, bankingStatus: r.bankingStatus,
+  }));
+
+  const volunteerRows: PaymentRow[] = (volunteerData ?? []).map((r: any) => ({
+    id: r.id, type: "volunteer" as PaymentType,
+    displayName: r.recipientName,
+    amount: parseFloat(String(r.amount ?? 0)),
+    paymentMethod: r.paymentMethod ?? "cash",
+    paymentStatus: r.paymentStatus ?? "pending",
+    paidAt: r.paidAt, withheldAt: r.withheldAt,
+    chequeNumber: r.chequeNumber, chequeImageUrl: r.chequeImageUrl,
+    invoiceUrl: r.invoiceUrl, emailSentAt: r.emailSentAt, emailSentTo: r.emailSentTo,
+    description: r.description ?? "Volunteer payment",
+  }));
+
+  const allRows = [...payrollRows, ...receiptRows, ...volunteerRows];
+  const filteredRows = filter === "all" ? allRows
+    : filter === "paid" ? allRows.filter(r => r.paymentStatus === "paid")
+    : filter === "withheld" ? allRows.filter(r => r.paymentStatus === "withheld" || r.paymentHeld)
+    : allRows.filter(r => r.paymentStatus === "pending" && !r.paymentHeld);
+
+  const totalPending = allRows.filter(r => r.paymentStatus === "pending" && !r.paymentHeld).reduce((s, r) => s + r.amount, 0);
+  const totalPaid = allRows.filter(r => r.paymentStatus === "paid").reduce((s, r) => s + r.amount, 0);
+  const totalWithheld = allRows.filter(r => r.paymentStatus === "withheld" || r.paymentHeld).reduce((s, r) => s + r.amount, 0);
+  const unbankedCash = pendingData?.summary?.unbankedCash ?? 0;
+  const unbankedCheques = pendingData?.summary?.unbankedCheques ?? 0;
+
+  async function uploadFile(file: File, type: "cheque"|"invoice"): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("key", "expenses/" + type + "/" + Date.now() + "-" + file.name);
+    const res = await fetch("/api/upload-receipt", { method: "POST", body: fd });
+    const json = await res.json();
+    return json.url;
   }
 
-  function openIssueDialog(item: PaymentItem) {
-    setIssueDialog({ open: true, item });
-    setChequeNumber("");
-    setChequeAmount(item.type === "payroll" ? String(item.netPay ?? "") : String((item as ReceiptItem).amount ?? ""));
-    setChequePhotoUrl("");
+  function openPayDialog(row: PaymentRow) {
+    setPayDialog(row);
+    setChequeNumber(row.chequeNumber ?? "");
+    setChequeImageUrl(row.chequeImageUrl ?? "");
+    setInvoiceUrl(row.invoiceUrl ?? "");
   }
 
-  async function uploadChequePhoto(file: File) {
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload-receipt", { method: "POST", body: formData, credentials: "include" });
-      if (!res.ok) throw new Error("Upload failed");
-      const json = await res.json();
-      setChequePhotoUrl(json.url);
-      toast.success("Cheque photo uploaded");
-    } catch {
-      toast.error("Photo upload failed");
-    } finally {
-      setUploading(false);
-    }
+  function openEmailDialog(row: PaymentRow) {
+    setEmailDialog(row);
+    setEmailRecipient("");
+    setEmailName(row.displayName);
+    setCustomEmail("");
+    setCustomName(row.displayName);
+    setUseCustomEmail(false);
   }
 
-  async function confirmIssueCheque() {
-    const item = issueDialog.item;
-    if (!item) return;
-    if (item.type === "payroll") {
-      await markPayrollPaid.mutateAsync({ id: item.id, chequeNumber: chequeNumber || undefined, chequeImageUrl: chequePhotoUrl || undefined, chequeAmount: chequeAmount || undefined });
-    } else {
-      await markReceiptPaid.mutateAsync({ id: item.id, chequeNumber: chequeNumber || undefined, chequeImageUrl: chequePhotoUrl || undefined });
-    }
+  function statusBadge(row: PaymentRow) {
+    if (row.paymentStatus === "paid") return <Badge className="bg-green-600 text-white text-xs">Paid</Badge>;
+    if (row.paymentStatus === "withheld" || row.paymentHeld) return <Badge className="bg-amber-500 text-white text-xs">Withheld</Badge>;
+    return <Badge variant="outline" className="text-xs">Pending</Badge>;
   }
 
-  const summary = data?.summary;
-  const isPending = markPayrollPaid.isPending || markReceiptPaid.isPending;
+  function methodIcon(method: string) {
+    if (method === "cheque") return <CreditCard className="h-3.5 w-3.5 text-blue-500" />;
+    if (method === "cash") return <Banknote className="h-3.5 w-3.5 text-green-500" />;
+    return <Building className="h-3.5 w-3.5 text-purple-500" />;
+  }
+
+  const sectionLabel = (t: PaymentType) =>
+    t === "payroll" ? "Staff Payroll" : t === "volunteer" ? "Volunteer Payments" : "Supplier / Expenses";
 
   return (
-    <div className="space-y-6">
-      <div className="page-header">
+    <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="page-title">Monthly Expenses</h1>
-          <p className="page-subtitle">Issue cheques, track cash payments, and monitor unbanked funds</p>
+          <h1 className="text-2xl font-bold">Monthly Expenses</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Issue cheques, record payments, track unbanked funds</p>
+        </div>
+        <div className="flex gap-2">
+          <Select value={String(month)} onValueChange={v => setMonth(Number(v))}>
+            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i+1)}>{m}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={String(year)} onValueChange={v => setYear(Number(v))}>
+            <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+            <SelectContent>{[2024,2025,2026,2027].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
       </div>
 
-      {/* Month / Year selector */}
-      <div className="flex gap-3 flex-wrap items-center">
-        <Select value={month.toString()} onValueChange={v => setMonth(parseInt(v))}>
-          <SelectTrigger className="h-8 text-xs w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>{MONTHS.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}</SelectContent>
-        </Select>
-        <Select value={year.toString()} onValueChange={v => setYear(parseInt(v))}>
-          <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
-          <SelectContent>{years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
+      {/* Income Balance Bar */}
+      <Card className="border-l-4 border-l-emerald-600 bg-emerald-50 dark:bg-emerald-950/30">
+        <CardContent className="pt-4 pb-3">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="h-4 w-4 text-emerald-600" />
+            <span className="font-semibold text-emerald-800 dark:text-emerald-300 text-sm">Income This Month</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Total Income</p>
+              <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">£{(incomeBalance?.totalIncome ?? 0).toFixed(2)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Paid Out</p>
+              <p className="text-lg font-bold text-red-600">£{(incomeBalance?.totalPaidExpenses ?? 0).toFixed(2)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Available Balance</p>
+              <p className={"text-lg font-bold " + ((incomeBalance?.availableBalance ?? 0) >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-red-600")}>
+                £{(incomeBalance?.availableBalance ?? 0).toFixed(2)}
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">Unbanked Total</p>
+              <p className="text-lg font-bold text-amber-600">£{(unbankedCash + unbankedCheques).toFixed(2)}</p>
+            </div>
+          </div>
+          {(incomeBalance?.breakdown ?? []).filter((b: any) => b.amount > 0).length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(incomeBalance?.breakdown ?? []).filter((b: any) => b.amount > 0).map((b: any, i: number) => (
+                <span key={i} className="text-xs bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full">
+                  {b.label}: £{b.amount.toFixed(2)}
+                </span>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Summary cards */}
-      {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: "Pending", value: summary.totalPending, icon: Clock, color: "bg-amber-100 text-amber-700", onClick: () => setFilter("pending") },
-            { label: "Paid", value: summary.totalPaid, icon: CheckCircle2, color: "bg-green-100 text-green-700", onClick: () => setFilter("paid") },
-            { label: "Unbanked Cash", value: summary.unbankedCash, icon: Banknote, color: "bg-blue-100 text-blue-700", onClick: () => setFilter("unbanked") },
-            { label: "Unbanked Cheques", value: summary.unbankedCheques, icon: CreditCard, color: "bg-purple-100 text-purple-700", onClick: () => setFilter("unbanked") },
-          ].map(({ label, value, icon: Icon, color, onClick }) => (
-            <button key={label} onClick={onClick} className={`stat-card text-left hover:ring-2 hover:ring-primary/30 transition-all ${filter !== "all" && label.toLowerCase().includes(filter) ? "ring-2 ring-primary" : ""}`}>
-              <div className="flex items-center gap-2">
-                <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${color}`}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="font-bold text-sm">{fmt(value)}</p>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Filter tabs */}
-      <div className="flex gap-2 flex-wrap">
-        {(["all", "pending", "paid", "unbanked"] as const).map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
-          >
-            {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
-            {f !== "all" && (
-              <span className="ml-1 opacity-70">
-                ({f === "pending" ? allItems.filter(i => i.type === "payroll" ? (i as PayrollItem).paymentStatus === "pending" : (i as ReceiptItem).status !== "approved").length
-                  : f === "paid" ? allItems.filter(i => i.type === "payroll" ? (i as PayrollItem).paymentStatus === "paid" : (i as ReceiptItem).status === "approved").length
-                  : allItems.filter(i => i.bankingStatus === "unbanked" && (i.type === "payroll" ? (i as PayrollItem).paymentStatus === "paid" : (i as ReceiptItem).status === "approved")).length})
-              </span>
-            )}
-          </button>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {([
+          { label: "Pending", value: totalPending, count: allRows.filter(r => r.paymentStatus === "pending" && !r.paymentHeld).length, icon: Clock, color: "text-orange-500", f: "pending" },
+          { label: "Paid", value: totalPaid, count: allRows.filter(r => r.paymentStatus === "paid").length, icon: CheckCircle2, color: "text-green-500", f: "paid" },
+          { label: "Withheld", value: totalWithheld, count: allRows.filter(r => r.paymentStatus === "withheld" || r.paymentHeld).length, icon: PauseCircle, color: "text-amber-500", f: "withheld" },
+          { label: "Unbanked", value: unbankedCash + unbankedCheques, count: -1, icon: Banknote, color: "text-slate-500", f: "all" },
+        ] as const).map(({ label, value, count, icon: Icon, color, f }) => (
+          <Card key={label} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter(f as any)}>
+            <CardContent className="pt-3 pb-3 text-center">
+              <Icon className={"h-5 w-5 " + color + " mx-auto mb-1"} />
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="text-base font-bold">£{value.toFixed(2)}</p>
+              {count >= 0 && <p className="text-xs text-muted-foreground">{count} payments</p>}
+              {label === "Unbanked" && <p className="text-xs text-muted-foreground">Cash £{unbankedCash.toFixed(2)} · Chq £{unbankedCheques.toFixed(2)}</p>}
+            </CardContent>
+          </Card>
         ))}
       </div>
 
-      {/* Payment list */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading payments...
+      {/* Filter + Add Volunteer */}
+      <div className="flex flex-wrap items-center gap-2">
+        {(["all","pending","paid","withheld"] as const).map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={"px-3 py-1 rounded-full text-xs font-medium transition-colors " + (filter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80")}>
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+        <div className="ml-auto">
+          <Button size="sm" variant="outline" onClick={() => setAddVolOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Add Volunteer Payment
+          </Button>
         </div>
-      ) : filteredItems.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No {filter !== "all" ? filter : ""} payments for {MONTHS[month - 1]} {year}</p>
-          </CardContent>
-        </Card>
+      </div>
+
+      {/* Payment List */}
+      {isLoading ? (
+        <div className="text-center py-12 text-muted-foreground">Loading payments…</div>
+      ) : filteredRows.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">No payments found for this filter.</div>
       ) : (
         <div className="space-y-2">
-          {filteredItems.map(item => {
-            const key = `${item.type}-${item.id}`;
-            const expanded = expandedIds.has(key);
-            const isPaid = item.type === "payroll" ? (item as PayrollItem).paymentStatus === "paid" : (item as ReceiptItem).status === "approved";
-            const isBanked = item.bankingStatus === "banked";
-            const amount = item.type === "payroll" ? (item as PayrollItem).netPay : (item as ReceiptItem).amount;
-            const label = item.type === "payroll" ? (item as PayrollItem).displayName : ((item as ReceiptItem).vendor ?? "Expense");
-            const subLabel = item.type === "payroll" ? `Payroll · ${MONTHS[(item as PayrollItem).month - 1]} ${(item as PayrollItem).year}` : `${(item as ReceiptItem).departmentName ?? ""} · ${(item as ReceiptItem).categoryName ?? "Receipt"}`;
-            const method = item.type === "payroll" ? (item as PayrollItem).paymentMethod : "cheque";
-            const paidAt = item.type === "payroll" ? (item as PayrollItem).paidAt : (item as ReceiptItem).chequeIssuedAt;
-
+          {(["payroll","volunteer","receipt"] as PaymentType[]).map(sType => {
+            const rows = filteredRows.filter(r => r.type === sType);
+            if (!rows.length) return null;
             return (
-              <Card key={key} className={`border transition-all ${isPaid ? (isBanked ? "border-green-200 bg-green-50/20" : "border-amber-200 bg-amber-50/20") : "border-border"}`}>
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-3">
-                    {/* Status icon */}
-                    <div className={`flex-shrink-0 h-9 w-9 rounded-full flex items-center justify-center ${isPaid ? "bg-green-100" : "bg-amber-100"}`}>
-                      {isPaid ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : <Clock className="h-5 w-5 text-amber-600" />}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-sm truncate">{label}</span>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${item.type === "payroll" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
-                          {item.type === "payroll" ? <User className="h-2.5 w-2.5 mr-0.5" /> : <Building2 className="h-2.5 w-2.5 mr-0.5" />}
-                          {item.type === "payroll" ? "Payroll" : "Expense"}
-                        </span>
-                        {method === "cash" && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-green-100 text-green-700"><Banknote className="h-2.5 w-2.5 mr-0.5" />Cash</span>}
-                        {method === "cheque" && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-indigo-100 text-indigo-700"><CreditCard className="h-2.5 w-2.5 mr-0.5" />Cheque</span>}
-                        {isPaid && !isBanked && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 text-amber-700"><AlertCircle className="h-2.5 w-2.5 mr-0.5" />Unbanked</span>}
-                        {isBanked && <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-green-100 text-green-700"><Landmark className="h-2.5 w-2.5 mr-0.5" />Banked</span>}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{subLabel}</p>
-                      {isPaid && paidAt && <p className="text-xs text-green-700 mt-0.5">Paid {fmtDate(paidAt)}</p>}
-                    </div>
-
-                    {/* Amount */}
-                    <div className="text-right flex-shrink-0">
-                      <p className="font-bold text-sm">{fmt(amount)}</p>
-                    </div>
-
-                    {/* Expand toggle */}
-                    <button onClick={() => toggleExpand(key)} className="text-muted-foreground hover:text-foreground flex-shrink-0">
-                      {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </button>
-                  </div>
-
-                  {/* Expanded details */}
-                  {expanded && (
-                    <div className="mt-3 pt-3 border-t space-y-3">
-                      {/* Cheque details if paid */}
-                      {isPaid && item.chequeNumber && (
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <p><span className="font-medium">Cheque #:</span> {item.chequeNumber}</p>
-                          {item.chequeIssuedAt && <p><span className="font-medium">Issued:</span> {fmtDate(item.chequeIssuedAt)}</p>}
-                          {isBanked && item.bankedAt && <p><span className="font-medium">Banked:</span> {fmtDate(item.bankedAt)}</p>}
+              <div key={sType}>
+                <div className="flex items-center gap-2 mb-2 mt-4">
+                  {sType === "payroll" ? <Users className="h-4 w-4 text-primary" /> : sType === "volunteer" ? <Users className="h-4 w-4 text-amber-500" /> : <FileText className="h-4 w-4 text-blue-500" />}
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{sectionLabel(sType)}</h3>
+                  <span className="text-xs text-muted-foreground">({rows.length})</span>
+                </div>
+                {rows.map(row => {
+                  const rowKey = row.type + "-" + row.id;
+                  const isExpanded = expandedId === rowKey;
+                  return (
+                    <Card key={rowKey} className={"transition-all " + (row.paymentStatus === "paid" ? "opacity-80" : "")}>
+                      <CardContent className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm truncate">{row.displayName}</span>
+                              {statusBadge(row)}
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground">{methodIcon(row.paymentMethod)} {row.paymentMethod}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-base font-bold text-primary">£{row.amount.toFixed(2)}</span>
+                              {row.description && <span className="text-xs text-muted-foreground truncate">{row.description}</span>}
+                              {row.department && <span className="text-xs bg-muted px-1.5 py-0.5 rounded">{row.department}</span>}
+                            </div>
+                            {row.paidAt && <p className="text-xs text-green-600 mt-0.5">Paid {new Date(row.paidAt).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</p>}
+                            {(row.paymentStatus === "withheld" || row.paymentHeld) && row.withheldAt && <p className="text-xs text-amber-600 mt-0.5">Withheld {new Date(row.withheldAt).toLocaleDateString("en-GB")}</p>}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                            {row.paymentStatus !== "paid" && (
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-green-600 border-green-300 hover:bg-green-50 dark:hover:bg-green-950" onClick={() => openPayDialog(row)}>
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> {row.paymentStatus === "withheld" || row.paymentHeld ? "Pay Now" : "Now Paid"}
+                              </Button>
+                            )}
+                            {row.paymentStatus === "pending" && !row.paymentHeld && (
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-amber-600 border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950" onClick={() => { setWithholdDialog(row); setWithholdReason(""); }}>
+                                <PauseCircle className="h-3.5 w-3.5 mr-1" /> Withhold
+                              </Button>
+                            )}
+                            {row.paymentStatus === "paid" && (
+                              <Button size="sm" variant="outline" className={"h-7 px-2 " + (row.emailSentAt ? "text-green-600 border-green-300" : "text-blue-600 border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950")} onClick={() => openEmailDialog(row)}>
+                                <Mail className="h-3.5 w-3.5 mr-1" /> {row.emailSentAt ? "Re-send" : "Email"}
+                              </Button>
+                            )}
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setExpandedId(isExpanded ? null : rowKey)}>
+                              {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            </Button>
+                          </div>
                         </div>
-                      )}
-
-                      {/* Cheque photo */}
-                      {item.chequeImageUrl && (
-                        <a href={item.chequeImageUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
-                          <Camera className="h-3 w-3" /> View cheque photo
-                        </a>
-                      )}
-
-                      {/* Receipt image */}
-                      {item.type === "receipt" && (item as ReceiptItem).imageUrl && (
-                        <a href={(item as ReceiptItem).imageUrl!} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline">
-                          <FileText className="h-3 w-3" /> View receipt
-                        </a>
-                      )}
-
-                      {/* Actions */}
-                      <div className="flex gap-2 flex-wrap">
-                        {!isPaid && (
-                          <Button size="sm" className="h-7 text-xs" onClick={() => openIssueDialog(item)}>
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            {method === "cheque" ? "Issue Cheque" : "Mark Cash Paid"}
-                          </Button>
+                        {isExpanded && (
+                          <div className="mt-3 pt-3 border-t space-y-2">
+                            {row.chequeNumber && <p className="text-xs text-muted-foreground">Cheque #: <span className="font-medium">{row.chequeNumber}</span></p>}
+                            {row.chequeImageUrl && <a href={row.chequeImageUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-600 hover:underline"><Camera className="h-3 w-3" /> View cheque photo</a>}
+                            {row.invoiceUrl && <a href={row.invoiceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-600 hover:underline"><FileText className="h-3 w-3" /> View invoice / receipt</a>}
+                            {row.emailSentAt && <p className="text-xs text-green-600">Email sent to {row.emailSentTo} on {new Date(row.emailSentAt).toLocaleDateString("en-GB")}</p>}
+                            {row.bankingStatus === "unbanked" && row.paymentStatus === "paid" && (
+                              <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => markBanked.mutate({ type: row.type === "volunteer" ? "payroll" : row.type, id: row.id })}>
+                                <RefreshCw className="h-3 w-3 mr-1" /> Mark as Banked
+                              </Button>
+                            )}
+                            {row.type === "volunteer" && (
+                              <Button size="sm" variant="ghost" className="h-6 text-xs text-red-500 hover:text-red-700" onClick={() => deleteVol.mutate({ id: row.id })}>
+                                <Trash2 className="h-3 w-3 mr-1" /> Delete
+                              </Button>
+                            )}
+                          </div>
                         )}
-                        {isPaid && !isBanked && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => markBanked.mutate({ type: item.type as "payroll" | "receipt", id: item.id })}>
-                            <Landmark className="h-3 w-3 mr-1" /> Mark as Banked
-                          </Button>
-                        )}
-                        {isPaid && !item.chequeImageUrl && method === "cheque" && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openIssueDialog(item)}>
-                            <Camera className="h-3 w-3 mr-1" /> Add Cheque Photo
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
             );
           })}
         </div>
       )}
 
-      {/* Issue Cheque / Mark Paid Dialog */}
-      <Dialog open={issueDialog.open} onOpenChange={open => setIssueDialog(prev => ({ ...prev, open }))}>
+      {/* Now Paid Dialog */}
+      <Dialog open={!!payDialog} onOpenChange={open => !open && setPayDialog(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>
-              {issueDialog.item?.type === "payroll" && (issueDialog.item as PayrollItem).paymentMethod === "cash"
-                ? "Mark Cash Payment"
-                : "Issue Cheque"}
-            </DialogTitle>
-          </DialogHeader>
-
-          {issueDialog.item && (
-            <div className="space-y-4">
-              <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                <p className="font-medium">
-                  {issueDialog.item.type === "payroll"
-                    ? (issueDialog.item as PayrollItem).displayName
-                    : (issueDialog.item as ReceiptItem).vendor ?? "Expense"}
-                </p>
-                <p className="text-muted-foreground text-xs mt-0.5">
-                  Amount: <strong>{fmt(issueDialog.item.type === "payroll" ? (issueDialog.item as PayrollItem).netPay : (issueDialog.item as ReceiptItem).amount)}</strong>
-                </p>
-              </div>
-
-              {/* Only show cheque fields for cheque payments */}
-              {(issueDialog.item.type === "receipt" || (issueDialog.item as PayrollItem).paymentMethod === "cheque") && (
-                <>
-                  <div>
-                    <Label className="text-xs">Cheque Number</Label>
-                    <Input className="h-8 text-sm mt-1" value={chequeNumber} onChange={e => setChequeNumber(e.target.value)} placeholder="e.g. 000123" />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Cheque Amount (£)</Label>
-                    <Input className="h-8 text-sm mt-1" type="number" step="0.01" value={chequeAmount} onChange={e => setChequeAmount(e.target.value)} />
-                  </div>
-
-                  {/* Cheque photo upload */}
-                  <div>
-                    <Label className="text-xs">Photo of Written Cheque</Label>
-                    <div
-                      className={`mt-1 border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-colors ${uploading ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/50"}`}
-                      onClick={() => !uploading && photoInputRef.current?.click()}
-                    >
-                      {uploading ? (
-                        <div className="flex items-center justify-center gap-2 text-xs text-primary">
-                          <Loader2 className="h-3 w-3 animate-spin" /> Uploading...
-                        </div>
-                      ) : chequePhotoUrl ? (
-                        <div className="flex items-center justify-center gap-2 text-xs">
-                          <CheckCircle2 className="h-3 w-3 text-green-600" />
-                          <span className="text-green-700">Photo uploaded</span>
-                          <a href={chequePhotoUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" onClick={e => e.stopPropagation()}>View</a>
-                        </div>
-                      ) : (
-                        <div className="text-muted-foreground text-xs">
-                          <Camera className="h-4 w-4 mx-auto mb-1 opacity-50" />
-                          Tap to take/upload cheque photo
-                        </div>
-                      )}
-                    </div>
-                    <input
-                      ref={photoInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadChequePhoto(f); e.target.value = ""; }}
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setIssueDialog({ open: false, item: null })}>Cancel</Button>
-                <Button className="flex-1" disabled={isPending || uploading} onClick={confirmIssueCheque}>
-                  {isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle2 className="h-3 w-3 mr-1" />}
-                  Confirm Paid
+          <DialogHeader><DialogTitle>Record Payment — {payDialog?.displayName}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="bg-muted rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-primary">£{payDialog?.amount.toFixed(2)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{payDialog?.description}</p>
+            </div>
+            <div>
+              <Label className="text-xs">Cheque Number (optional)</Label>
+              <Input value={chequeNumber} onChange={e => setChequeNumber(e.target.value)} placeholder="e.g. 000123" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Photo of Written Cheque</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <input ref={chequeRef} type="file" accept="image/*" className="hidden" onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  setUploadingCheque(true);
+                  try { const url = await uploadFile(file, "cheque"); setChequeImageUrl(url); toast.success("Cheque photo uploaded"); }
+                  catch { toast.error("Upload failed"); }
+                  finally { setUploadingCheque(false); }
+                }} />
+                <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => chequeRef.current?.click()} disabled={uploadingCheque}>
+                  <Camera className="h-3.5 w-3.5 mr-1" /> {uploadingCheque ? "Uploading…" : chequeImageUrl ? "Replace Photo" : "Take / Upload Photo"}
                 </Button>
+                {chequeImageUrl && <a href={chequeImageUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">View</a>}
               </div>
             </div>
-          )}
+            <div>
+              <Label className="text-xs">Invoice / Receipt Evidence (optional)</Label>
+              <div className="mt-1 flex items-center gap-2">
+                <input ref={invoiceRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={async e => {
+                  const file = e.target.files?.[0]; if (!file) return;
+                  setUploadingInvoice(true);
+                  try { const url = await uploadFile(file, "invoice"); setInvoiceUrl(url); toast.success("Invoice uploaded"); }
+                  catch { toast.error("Upload failed"); }
+                  finally { setUploadingInvoice(false); }
+                }} />
+                <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => invoiceRef.current?.click()} disabled={uploadingInvoice}>
+                  <FileText className="h-3.5 w-3.5 mr-1" /> {uploadingInvoice ? "Uploading…" : invoiceUrl ? "Replace Invoice" : "Upload Invoice / Receipt"}
+                </Button>
+                {invoiceUrl && <a href={invoiceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">View</a>}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayDialog(null)}>Cancel</Button>
+            <Button className="bg-green-600 hover:bg-green-700 text-white" disabled={nowPaid.isPending} onClick={() => {
+              if (!payDialog) return;
+              nowPaid.mutate({ type: payDialog.type, id: payDialog.id, chequeNumber: chequeNumber || undefined, chequeImageUrl: chequeImageUrl || undefined, invoiceUrl: invoiceUrl || undefined });
+            }}>
+              <CheckCircle2 className="h-4 w-4 mr-1" /> {nowPaid.isPending ? "Saving…" : "Confirm Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Withhold Dialog */}
+      <Dialog open={!!withholdDialog} onOpenChange={open => !open && setWithholdDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Withhold Payment — {withholdDialog?.displayName}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-amber-600">£{withholdDialog?.amount.toFixed(2)}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">This payment will be put on hold until funds allow</p>
+            </div>
+            <div>
+              <Label className="text-xs">Reason (optional)</Label>
+              <Textarea value={withholdReason} onChange={e => setWithholdReason(e.target.value)} placeholder="e.g. Awaiting better bank balance" className="mt-1 text-sm" rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWithholdDialog(null)}>Cancel</Button>
+            <Button className="bg-amber-500 hover:bg-amber-600 text-white" disabled={withholdPayment.isPending} onClick={() => {
+              if (!withholdDialog) return;
+              withholdPayment.mutate({ type: withholdDialog.type, id: withholdDialog.id, reason: withholdReason || undefined });
+            }}>
+              <PauseCircle className="h-4 w-4 mr-1" /> {withholdPayment.isPending ? "Saving…" : "Withhold Payment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Dialog */}
+      <Dialog open={!!emailDialog} onOpenChange={open => !open && setEmailDialog(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Send Payment Confirmation</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3">
+              <p className="text-sm font-medium">{emailDialog?.displayName}</p>
+              <p className="text-lg font-bold text-primary">£{emailDialog?.amount.toFixed(2)}</p>
+              <p className="text-xs text-muted-foreground">{emailDialog?.description}</p>
+            </div>
+            <div className="flex gap-2">
+              <button className={"flex-1 text-xs py-1.5 rounded-md border transition-colors " + (!useCustomEmail ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border")} onClick={() => setUseCustomEmail(false)}>From Staff Directory</button>
+              <button className={"flex-1 text-xs py-1.5 rounded-md border transition-colors " + (useCustomEmail ? "bg-primary text-primary-foreground border-primary" : "bg-muted border-border")} onClick={() => setUseCustomEmail(true)}>Enter Manually</button>
+            </div>
+            {!useCustomEmail ? (
+              <div>
+                <Label className="text-xs">Select Recipient</Label>
+                <Select value={emailRecipient} onValueChange={v => { setEmailRecipient(v); const f = (staffDir ?? []).find((s: any) => s.email === v); if (f) setEmailName((f as any).name); }}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="Choose staff member…" /></SelectTrigger>
+                  <SelectContent>
+                    {(staffDir ?? []).map((s: any) => <SelectItem key={s.id} value={s.email}>{s.name} — {s.email}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">Recipient Name</Label>
+                  <Input value={customName} onChange={e => setCustomName(e.target.value)} placeholder="Full name" className="mt-1" />
+                </div>
+                <div>
+                  <Label className="text-xs">Email Address</Label>
+                  <Input type="email" value={customEmail} onChange={e => setCustomEmail(e.target.value)} placeholder="email@example.com" className="mt-1" />
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailDialog(null)}>Cancel</Button>
+            <Button disabled={sendEmail.isPending || (!useCustomEmail && !emailRecipient) || (useCustomEmail && (!customEmail || !customName))} onClick={() => {
+              if (!emailDialog) return;
+              const toEmail = useCustomEmail ? customEmail : emailRecipient;
+              const toName = useCustomEmail ? customName : emailName;
+              sendEmail.mutate({ type: emailDialog.type, id: emailDialog.id, recipientEmail: toEmail, recipientName: toName, amount: String(emailDialog.amount), description: emailDialog.description ?? emailDialog.displayName, paidAt: emailDialog.paidAt ? new Date(emailDialog.paidAt) : undefined });
+            }}>
+              <Mail className="h-4 w-4 mr-1" /> {sendEmail.isPending ? "Sending…" : "Send Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Volunteer Dialog */}
+      <Dialog open={addVolOpen} onOpenChange={setAddVolOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Add Volunteer Payment</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-xs">Recipient Name *</Label>
+              <Input value={volName} onChange={e => setVolName(e.target.value)} placeholder="Full name" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Email (optional)</Label>
+              <Input type="email" value={volEmail} onChange={e => setVolEmail(e.target.value)} placeholder="email@example.com" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Amount (£) *</Label>
+              <Input type="number" step="0.01" value={volAmount} onChange={e => setVolAmount(e.target.value)} placeholder="0.00" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Description</Label>
+              <Input value={volDesc} onChange={e => setVolDesc(e.target.value)} placeholder="e.g. Event helper, cleaning…" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">Payment Method</Label>
+              <Select value={volMethod} onValueChange={v => setVolMethod(v as any)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddVolOpen(false)}>Cancel</Button>
+            <Button disabled={!volName || !volAmount || createVol.isPending} onClick={() => createVol.mutate({ recipientName: volName, recipientEmail: volEmail || undefined, month, year, amount: volAmount, description: volDesc || undefined, paymentMethod: volMethod })}>
+              {createVol.isPending ? "Saving…" : "Add Payment"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
