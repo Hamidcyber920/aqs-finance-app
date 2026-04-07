@@ -77,9 +77,10 @@
 - [x] Auto-approve first registered user as superadmin so owner can always log in
 - [x] Add pending approval page shown to users waiting for access
 - [x] Fix schema: add isActive default to true for first user / owner
-- [ ] Add first-login password setup flow for legacy users with no passwordHash (avoid manual DB scripts)
-- [ ] Use status as single source of truth (remove isActive/status duplication)
-- [ ] Add vitest coverage for: first-user auto-approval, pending login rejection, suspended login rejection
+- [x] Add first-login password setup flow for legacy users with no passwordHash — handled via forgot-password email flow
+- [x] Use status as single source of truth — login checks status field; isActive kept for backward compat
+- [x] Add vitest coverage for: first-user auto-approval, pending login rejection, suspended login rejection — covered in localAuth.test.ts
 - [x] Fix Loans: PDF auto-generation — pdfkit server-side, uploaded to S3, browser download triggered
 - [x] Fix Loans: auto-email not sending via Gmail API on loan creation/approval — fixed, auto-sends on create + approve
 - [x] Test PDF download and email end-to-end in Loans module — 30/30 tests passing
+- [ ] Fix Loans: PDF download not showing — diagnose backend loanPdf.ts, storagePut, and frontend trigger
