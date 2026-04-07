@@ -59,17 +59,24 @@ export const localAuthRouter = router({
 
       if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create account" });
 
-      const token = await createLocalSession(user.id, user.email!, user.name ?? "");
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      // Only set session cookie for active users (first user is auto-approved as superadmin)
+      if (user.status === "active" && user.isActive) {
+        const token = await createLocalSession(user.id, user.email!, user.name ?? "");
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      } else {
+        // Notify owner of new registration needing approval
+        await notifyOwner({
+          title: "New User Registration - Approval Required",
+          content: `${input.name} (${input.email}) has registered and is awaiting your approval. Log in to the Admin Panel to approve or reject their access.`,
+        }).catch(() => {});
+      }
 
-      // Notify owner of new registration
-      await notifyOwner({
-        title: "New User Registered",
-        content: `${input.name} (${input.email}) has created an account on the Receipt Scanner.`,
-      }).catch(() => {});
-
-      return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
+      return {
+        success: true,
+        status: user.status,
+        user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      };
     }),
 
   login: publicProcedure
@@ -84,7 +91,11 @@ export const localAuthRouter = router({
       if (!user || !user.passwordHash) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
       }
-      if (!user.isActive) {
+      // Check account status
+      if (user.status === "pending") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Your account is pending approval. You will be notified once an administrator approves your access." });
+      }
+      if (user.status === "suspended" || !user.isActive) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Your account has been suspended. Please contact an administrator." });
       }
 

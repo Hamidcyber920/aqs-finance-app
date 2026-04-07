@@ -73,3 +73,10 @@
 ## Bug Fixes
 - [x] Create Profile & Settings page (was missing, causing 404)
 - [x] Register /profile and /settings routes in App.tsx
+- [x] Fix login: distinguish "pending approval" from "suspended" with correct error message
+- [x] Auto-approve first registered user as superadmin so owner can always log in
+- [x] Add pending approval page shown to users waiting for access
+- [x] Fix schema: add isActive default to true for first user / owner
+- [ ] Add first-login password setup flow for legacy users with no passwordHash (avoid manual DB scripts)
+- [ ] Use status as single source of truth (remove isActive/status duplication)
+- [ ] Add vitest coverage for: first-user auto-approval, pending login rejection, suspended login rejection

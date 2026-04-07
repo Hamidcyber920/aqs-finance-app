@@ -74,10 +74,18 @@ export async function getUserById(id: number) {
 export async function createLocalUser(data: { name: string; email: string; passwordHash: string; role?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // Check if this is the very first user — auto-approve as superadmin
+  const existingCount = await db.select({ id: users.id }).from(users).limit(2);
+  const isFirstUser = existingCount.length === 0;
+
   await db.insert(users).values({
     name: data.name, email: data.email, passwordHash: data.passwordHash,
-    loginMethod: "local", role: (data.role as any) ?? "assistant",
-    status: "pending", isActive: false, lastSignedIn: new Date(),
+    loginMethod: "local",
+    role: isFirstUser ? "superadmin" : ((data.role as any) ?? "assistant"),
+    status: isFirstUser ? "active" : "pending",
+    isActive: isFirstUser,
+    lastSignedIn: new Date(),
   });
   return (await getUserByEmail(data.email))!;
 }

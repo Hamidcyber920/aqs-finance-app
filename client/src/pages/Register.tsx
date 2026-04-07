@@ -19,10 +19,20 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const registerMutation = trpc.localAuth.register.useMutation({
-    onSuccess: async () => {
-      toast.success("Account created! Welcome aboard.");
-      await utils.auth.me.invalidate();
-      setLocation("/");
+    onSuccess: async (data) => {
+      if (data.status === "active") {
+        // First user (superadmin) — log them in immediately
+        toast.success("Account created! Welcome to AQ Society Finance.");
+        await utils.auth.me.invalidate();
+        setLocation("/");
+      } else {
+        // Pending approval — redirect to a waiting page
+        toast.success("Registration submitted!", {
+          description: "Your account is pending approval. You will be notified once an administrator approves your access.",
+          duration: 8000,
+        });
+        setLocation("/pending-approval");
+      }
     },
     onError: (err) => {
       toast.error("Registration failed", { description: err.message });

@@ -23,8 +23,9 @@ import PayrollPage from "./pages/Payroll";
 import DonorsPage from "./pages/Donors";
 import CampaignsPage from "./pages/Campaigns";
 import ProfileSettingsPage from "./pages/ProfileSettings";
+import PendingApprovalPage from "./pages/PendingApproval";
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval"];
 
 function Router() {
   const path = window.location.pathname;
@@ -59,6 +60,7 @@ function Router() {
         <Route path="/donors" component={DonorsPage} />
         <Route path="/campaigns" component={CampaignsPage} />
         <Route path="/admin" component={AdminPanelPage} />
+        <Route path="/pending-approval" component={PendingApprovalPage} />
         <Route path="/profile" component={ProfileSettingsPage} />
         <Route path="/settings" component={ProfileSettingsPage} />
         <Route path="/404" component={NotFound} />
