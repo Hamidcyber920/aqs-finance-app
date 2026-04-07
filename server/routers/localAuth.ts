@@ -143,6 +143,27 @@ export const localAuthRouter = router({
 
       return { success: true };
     }),
+
+  changePassword: protectedProcedure
+    .input(
+      z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(8, "Password must be at least 8 characters"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserById(ctx.user.id);
+      if (!user || !user.passwordHash) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot change password for this account type" });
+      }
+      const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
+      if (!valid) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Current password is incorrect" });
+      }
+      const passwordHash = await bcrypt.hash(input.newPassword, 12);
+      await updateUserPassword(ctx.user.id, passwordHash);
+      return { success: true };
+    }),
 });
 
 // Admin-only procedures

@@ -22,6 +22,7 @@ import IncomePage from "./pages/Income";
 import PayrollPage from "./pages/Payroll";
 import DonorsPage from "./pages/Donors";
 import CampaignsPage from "./pages/Campaigns";
+import ProfileSettingsPage from "./pages/ProfileSettings";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -58,6 +59,8 @@ function Router() {
         <Route path="/donors" component={DonorsPage} />
         <Route path="/campaigns" component={CampaignsPage} />
         <Route path="/admin" component={AdminPanelPage} />
+        <Route path="/profile" component={ProfileSettingsPage} />
+        <Route path="/settings" component={ProfileSettingsPage} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

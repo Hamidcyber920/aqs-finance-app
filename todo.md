@@ -67,5 +67,9 @@
 - [x] Vitest: local auth register/login/forgot/reset (13 tests)
 - [x] Vitest: Gmail + Google Drive credential validation (5 tests)
 - [x] TypeScript check: 0 errors
-- [ ] Save checkpoint
-- [ ] Deliver to user
+- [x] Save checkpoint
+- [x] Deliver to user
+
+## Bug Fixes
+- [x] Create Profile & Settings page (was missing, causing 404)
+- [x] Register /profile and /settings routes in App.tsx
