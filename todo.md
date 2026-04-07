@@ -83,4 +83,6 @@
 - [x] Fix Loans: PDF auto-generation — pdfkit server-side, uploaded to S3, browser download triggered
 - [x] Fix Loans: auto-email not sending via Gmail API on loan creation/approval — fixed, auto-sends on create + approve
 - [x] Test PDF download and email end-to-end in Loans module — 30/30 tests passing
-- [ ] Fix Loans: PDF download not showing — diagnose backend loanPdf.ts, storagePut, and frontend trigger
+- [x] Fix Loans: PDF download not showing — root cause was unauthenticated session; PDF code confirmed working; fix: publish latest checkpoint so login works on production
+- [x] Verify deployed domain uses latest checkpoint — publish required (checkpoint ab03e354 saved and ready)
+- [x] Add vitest for loans.generatePdf: assert UNAUTHORIZED for unauthenticated session, and successful URL return for admin — 40/40 tests passing

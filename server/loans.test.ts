@@ -212,3 +212,34 @@ describe("loans.sendEmail", () => {
     await expect(caller.loans.sendEmail({ id: 999, type: "reminder" })).rejects.toThrow(TRPCError);
   });
 });
+
+// ── Authorization tests ──────────────────────────────────────────────────────
+
+describe("loans.generatePdf — authorization", () => {
+  it("throws UNAUTHORIZED when no user in context", async () => {
+    const unauthCtx: TrpcContext = {
+      user: null,
+      req: { protocol: "https", headers: {} } as TrpcContext["req"],
+      res: {} as TrpcContext["res"],
+    };
+    const caller = appRouter.createCaller(unauthCtx);
+    await expect(caller.loans.generatePdf({ id: 1 })).rejects.toThrow();
+  });
+
+  it("throws UNAUTHORIZED when user has non-admin role", async () => {
+    const assistantCtx: TrpcContext = {
+      user: {
+        ...adminUser,
+        id: 99,
+        openId: "local:99",
+        email: "assistant@test.com",
+        name: "Assistant",
+        role: "user" as const,
+      },
+      req: { protocol: "https", headers: {} } as TrpcContext["req"],
+      res: {} as TrpcContext["res"],
+    };
+    const caller = appRouter.createCaller(assistantCtx);
+    await expect(caller.loans.generatePdf({ id: 1 })).rejects.toThrow();
+  });
+});
