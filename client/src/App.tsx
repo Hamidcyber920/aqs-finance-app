@@ -24,6 +24,7 @@ import DonorsPage from "./pages/Donors";
 import CampaignsPage from "./pages/Campaigns";
 import ProfileSettingsPage from "./pages/ProfileSettings";
 import PendingApprovalPage from "./pages/PendingApproval";
+import MonthlyExpensesPage from "./pages/MonthlyExpenses";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval"];
 
@@ -57,6 +58,7 @@ function Router() {
         <Route path="/loans/:id">{(params) => <LoanDetailPage id={parseInt((params as { id: string }).id)} />}</Route>
         <Route path="/income" component={IncomePage} />
         <Route path="/payroll" component={PayrollPage} />
+        <Route path="/monthly-expenses" component={MonthlyExpensesPage} />
         <Route path="/donors" component={DonorsPage} />
         <Route path="/campaigns" component={CampaignsPage} />
         <Route path="/admin" component={AdminPanelPage} />

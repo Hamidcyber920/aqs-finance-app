@@ -28,6 +28,7 @@ import {
   BookOpen,
   Building2,
   Camera,
+  ClipboardList,
   DollarSign,
   HandHeart,
   LayoutDashboard,
@@ -66,6 +67,7 @@ const financeItems = [
   { icon: BookOpen, label: "Qarde Hasan Loans", path: "/loans" },
   { icon: DollarSign, label: "Income & Rentals", path: "/income" },
   { icon: Wallet, label: "Payroll", path: "/payroll" },
+  { icon: ClipboardList, label: "Monthly Expenses", path: "/monthly-expenses" },
 ];
 
 const orgItems = [

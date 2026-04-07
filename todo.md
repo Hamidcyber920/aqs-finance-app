@@ -103,3 +103,12 @@
 - [x] Employee field: free-text name input when no staff list, with toggle to switch to User ID
 - [x] Multi-employee PDF: extract all employees separately, show review card per employee before saving
 - [x] Vitest: analyzePayslipBulk (5 tests) + payroll.create with employeeName (1 test) — 48/48 passing
+
+## Monthly Expenses Pane & Reports (Apr 7 2026)
+- [ ] New "Monthly Expenses" sidebar item under FINANCE
+- [ ] Aggregate pending cheque/cash payments from payroll, receipts, and department expenses
+- [ ] Cheque issuance: mark as paid with date/time stamp and tick
+- [ ] Upload photo of written cheque per payment (payroll and expenses)
+- [ ] Unbanked payments tally: cash + cheques not yet banked vs this month's income balance
+- [ ] Reports: auto-generate monthly income & expenses document summary (PDF/printable)
+- [ ] Vitest: expenses pane procedures

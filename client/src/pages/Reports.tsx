@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { Download, FileText, FileSpreadsheet, BarChart3, Calendar, TrendingDown, TrendingUp } from "lucide-react";
+import { Download, FileText, FileSpreadsheet, BarChart3, Calendar, TrendingDown, TrendingUp, Printer, ArrowUpCircle, ArrowDownCircle, Banknote, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,14 @@ export default function ReportsPage() {
   const [dateTo, setDateTo] = useState("2026-03-31");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isExporting, setIsExporting] = useState(false);
+
+  // Monthly summary: derive month/year from dateFrom
+  const [summaryMonth, setSummaryMonth] = useState(now.getMonth() + 1);
+  const [summaryYear, setSummaryYear] = useState(now.getFullYear());
+  const { data: monthlySummary, isLoading: summaryLoading } = trpc.expenses.monthlySummary.useQuery(
+    { month: summaryMonth, year: summaryYear },
+    { staleTime: 30_000 }
+  );
 
   const dateRange = useMemo(() => ({
     dateFrom: dateFrom || undefined,
@@ -325,25 +333,190 @@ export default function ReportsPage() {
           <CardDescription>Download the filtered data in your preferred format.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <Button
-            onClick={handleExportCsv}
-            disabled={isExporting}
-            className="gap-2"
-            variant="outline"
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            Export as CSV
+          <Button onClick={handleExportCsv} disabled={isExporting} className="gap-2" variant="outline">
+            <FileSpreadsheet className="h-4 w-4" /> Export as CSV
           </Button>
-          <Button
-            onClick={handleExportPdf}
-            disabled={isExporting}
-            className="gap-2"
-          >
-            <FileText className="h-4 w-4" />
-            Export as PDF
+          <Button onClick={handleExportPdf} disabled={isExporting} className="gap-2">
+            <FileText className="h-4 w-4" /> Export as PDF
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* ── Monthly Income & Expenses Summary ── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <CardTitle className="text-base">Monthly Income & Expenses Summary</CardTitle>
+              <CardDescription>Full income vs expenses document for the selected month</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select value={summaryMonth.toString()} onValueChange={v => setSummaryMonth(parseInt(v))}>
+                <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>{["January","February","March","April","May","June","July","August","September","October","November","December"].map((m,i) => <SelectItem key={i} value={(i+1).toString()}>{m}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={summaryYear.toString()} onValueChange={v => setSummaryYear(parseInt(v))}>
+                <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
+                <SelectContent>{[now.getFullYear(), now.getFullYear()-1, now.getFullYear()-2].map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}</SelectContent>
+              </Select>
+              <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => printMonthlySummary(monthlySummary, summaryMonth, summaryYear)} disabled={!monthlySummary}>
+                <Printer className="h-3 w-3" /> Print
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {summaryLoading ? (
+            <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-8 bg-muted animate-pulse rounded" />)}</div>
+          ) : !monthlySummary ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No data for this period</p>
+          ) : (
+            <div className="space-y-4">
+              {/* Income vs Expenses headline */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                  <ArrowUpCircle className="h-5 w-5 text-green-600 mx-auto mb-1" />
+                  <p className="text-xs text-muted-foreground">Total Income</p>
+                  <p className="font-bold text-green-700">£{monthlySummary.income.total.toFixed(2)}</p>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                  <ArrowDownCircle className="h-5 w-5 text-red-600 mx-auto mb-1" />
+                  <p className="text-xs text-muted-foreground">Total Expenses</p>
+                  <p className="font-bold text-red-700">£{monthlySummary.expenses.total.toFixed(2)}</p>
+                </div>
+                <div className={`border rounded-lg p-3 text-center ${monthlySummary.netBalance >= 0 ? "bg-blue-50 border-blue-200" : "bg-amber-50 border-amber-200"}`}>
+                  <BarChart3 className={`h-5 w-5 mx-auto mb-1 ${monthlySummary.netBalance >= 0 ? "text-blue-600" : "text-amber-600"}`} />
+                  <p className="text-xs text-muted-foreground">Net Balance</p>
+                  <p className={`font-bold ${monthlySummary.netBalance >= 0 ? "text-blue-700" : "text-amber-700"}`}>{monthlySummary.netBalance >= 0 ? "+" : ""}£{monthlySummary.netBalance.toFixed(2)}</p>
+                </div>
+              </div>
+
+              {/* Unbanked tally */}
+              {(monthlySummary.unbankedCash > 0 || monthlySummary.unbankedCheques > 0) && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-2">⚠ Unbanked Payments</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-1"><Banknote className="h-3 w-3 text-amber-600" /> Cash: <strong>£{monthlySummary.unbankedCash.toFixed(2)}</strong></div>
+                    <div className="flex items-center gap-1"><CreditCard className="h-3 w-3 text-amber-600" /> Cheques: <strong>£{monthlySummary.unbankedCheques.toFixed(2)}</strong></div>
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1">Total unbanked: <strong>£{monthlySummary.unbankedTotal.toFixed(2)}</strong></p>
+                </div>
+              )}
+
+              {/* Income breakdown */}
+              {monthlySummary.income.breakdown.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Income Breakdown</p>
+                  <div className="divide-y border rounded-lg overflow-hidden">
+                    {monthlySummary.income.breakdown.map((item, i) => (
+                      <div key={i} className="flex justify-between items-center px-3 py-2 text-sm">
+                        <div>
+                          <span className="font-medium">{item.label}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{item.category}</span>
+                        </div>
+                        <span className="font-semibold text-green-700">+£{item.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Payroll breakdown */}
+              {monthlySummary.expenses.payroll.records.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Payroll (£{monthlySummary.expenses.payroll.total.toFixed(2)})</p>
+                  <div className="divide-y border rounded-lg overflow-hidden">
+                    {monthlySummary.expenses.payroll.records.map((r, i) => (
+                      <div key={i} className="flex justify-between items-center px-3 py-2 text-sm">
+                        <div>
+                          <span className="font-medium">{r.name}</span>
+                          <span className={`text-xs ml-2 px-1.5 py-0.5 rounded ${r.status === "paid" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>{r.status}</span>
+                        </div>
+                        <span className="font-semibold text-red-700">-£{r.net.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Receipts/expenses breakdown */}
+              {monthlySummary.expenses.receipts.records.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Department Expenses (£{monthlySummary.expenses.receipts.total.toFixed(2)})</p>
+                  <div className="divide-y border rounded-lg overflow-hidden">
+                    {monthlySummary.expenses.receipts.records.map((r, i) => (
+                      <div key={i} className="flex justify-between items-center px-3 py-2 text-sm">
+                        <div>
+                          <span className="font-medium">{r.vendor}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{r.department} · {r.category}</span>
+                        </div>
+                        <span className="font-semibold text-red-700">-£{r.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function printMonthlySummary(summary: any, month: number, year: number) {
+  if (!summary) return;
+  const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const monthName = MONTHS[month - 1];
+  const fmt = (v: number) => "\u00a3" + v.toLocaleString("en-GB", { minimumFractionDigits: 2 });
+  const incomeRows = summary.income.breakdown.map((r: any) =>
+    "<tr><td>" + r.label + "</td><td>" + r.category + "</td><td style='text-align:right;color:#16a34a'>" + fmt(r.amount) + "</td></tr>"
+  ).join("");
+  const payrollRows = summary.expenses.payroll.records.map((r: any) =>
+    "<tr><td>" + r.name + "</td><td>Payroll \u00b7 " + r.method + " \u00b7 " + r.status + "</td><td style='text-align:right;color:#dc2626'>" + fmt(r.net) + "</td></tr>"
+  ).join("");
+  const receiptRows = summary.expenses.receipts.records.map((r: any) =>
+    "<tr><td>" + r.vendor + "</td><td>" + r.department + " \u00b7 " + r.category + "</td><td style='text-align:right;color:#dc2626'>" + fmt(r.amount) + "</td></tr>"
+  ).join("");
+  const balColor = summary.netBalance >= 0 ? "#1d4ed8" : "#d97706";
+  const balSign = summary.netBalance >= 0 ? "+" : "";
+  const unbankedHtml = summary.unbankedTotal > 0
+    ? "<div class='warn'>\u26a0 Unbanked payments: Cash " + fmt(summary.unbankedCash) + " \u00b7 Cheques " + fmt(summary.unbankedCheques) + " \u00b7 Total " + fmt(summary.unbankedTotal) + "</div>"
+    : "";
+  const parts = [
+    "<!DOCTYPE html><html><head><title>Monthly Summary \u2014 " + monthName + " " + year + "</title>",
+    "<style>body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:24px}",
+    "h1{font-size:20px;margin-bottom:2px}h2{font-size:13px;margin:18px 0 6px;color:#1a4731}",
+    "table{width:100%;border-collapse:collapse;margin-bottom:12px}",
+    "th{background:#1a4731;color:#fff;padding:6px 10px;text-align:left;font-size:11px}",
+    "td{padding:5px 10px;border-bottom:1px solid #eee}tr:nth-child(even)td{background:#f9fafb}",
+    ".summary{display:flex;gap:16px;margin:16px 0}.stat{background:#f5f7fa;padding:10px 16px;border-radius:8px;flex:1}",
+    ".stat-val{font-size:18px;font-weight:bold}.stat-lbl{font-size:10px;color:#666;margin-top:2px}",
+    ".warn{background:#fffbeb;border:1px solid #fcd34d;padding:10px 16px;border-radius:8px;margin-bottom:16px}",
+    "@media print{body{margin:0}}</style></head><body>",
+    "<h1>Monthly Income &amp; Expenses Summary</h1>",
+    "<p style='color:#666;margin-bottom:16px'>Abdullah Quilliam Society &middot; " + monthName + " " + year + "</p>",
+    "<div class='summary'>",
+    "<div class='stat'><div class='stat-val' style='color:#16a34a'>" + fmt(summary.income.total) + "</div><div class='stat-lbl'>Total Income</div></div>",
+    "<div class='stat'><div class='stat-val' style='color:#dc2626'>" + fmt(summary.expenses.total) + "</div><div class='stat-lbl'>Total Expenses</div></div>",
+    "<div class='stat'><div class='stat-val' style='color:" + balColor + "'>" + balSign + fmt(summary.netBalance) + "</div><div class='stat-lbl'>Net Balance</div></div>",
+    "</div>",
+    unbankedHtml,
+    "<h2>Income</h2>",
+    "<table><thead><tr><th>Description</th><th>Category</th><th style='text-align:right'>Amount</th></tr></thead>",
+    "<tbody>" + (incomeRows || "<tr><td colspan=3>No income records</td></tr>") + "</tbody>",
+    "<tfoot><tr><td colspan='2' style='font-weight:bold;padding:6px 10px'>Total Income</td><td style='font-weight:bold;text-align:right;padding:6px 10px;color:#16a34a'>" + fmt(summary.income.total) + "</td></tr></tfoot></table>",
+    "<h2>Payroll</h2>",
+    "<table><thead><tr><th>Employee</th><th>Details</th><th style='text-align:right'>Net Pay</th></tr></thead>",
+    "<tbody>" + (payrollRows || "<tr><td colspan=3>No payroll records</td></tr>") + "</tbody>",
+    "<tfoot><tr><td colspan='2' style='font-weight:bold;padding:6px 10px'>Total Payroll</td><td style='font-weight:bold;text-align:right;padding:6px 10px;color:#dc2626'>" + fmt(summary.expenses.payroll.total) + "</td></tr></tfoot></table>",
+    "<h2>Department Expenses</h2>",
+    "<table><thead><tr><th>Vendor</th><th>Department \u00b7 Category</th><th style='text-align:right'>Amount</th></tr></thead>",
+    "<tbody>" + (receiptRows || "<tr><td colspan=3>No expense records</td></tr>") + "</tbody>",
+    "<tfoot><tr><td colspan='2' style='font-weight:bold;padding:6px 10px'>Total Expenses</td><td style='font-weight:bold;text-align:right;padding:6px 10px;color:#dc2626'>" + fmt(summary.expenses.receipts.total) + "</td></tr></tfoot></table>",
+    "</body></html>",
+  ];
+  const html = parts.join("");
+  const win = window.open("", "_blank");
+  if (win) { win.document.write(html); win.document.close(); win.print(); }
 }

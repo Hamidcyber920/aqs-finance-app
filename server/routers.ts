@@ -430,6 +430,167 @@ export const appRouter = router({
       }),
   }),
 
+  // ─── MONTHLY EXPENSES PANE ──────────────────────────────────────────────────
+
+  expenses: router({
+    // Aggregate all pending cheque/cash payments from payroll + receipts
+    pendingPayments: adminProcedure
+      .input(z.object({ month: z.number().optional(), year: z.number().optional() }))
+      .query(async ({ input }) => {
+        const { month, year } = input;
+        const db = await (await import("./db")).getDb();
+        if (!db) return { payroll: [], receipts: [], summary: { totalPending: 0, totalPaid: 0, unbankedCash: 0, unbankedCheques: 0 } };
+        const { eq, and, or, inArray, isNull, gte, lte } = await import("drizzle-orm");
+        const { payrollRecords, receipts: receiptsTable, users } = await import("../drizzle/schema");
+        const { desc } = await import("drizzle-orm");
+
+        // Date range filter for receipts
+        const now = new Date();
+        const filterMonth = month ?? now.getMonth() + 1;
+        const filterYear = year ?? now.getFullYear();
+        const startDate = new Date(filterYear, filterMonth - 1, 1);
+        const endDate = new Date(filterYear, filterMonth, 0, 23, 59, 59);
+
+        // Payroll: cheque or cash payments for the month
+        const payrollRows = await db
+          .select({ id: payrollRecords.id, employeeName: payrollRecords.employeeName, userId: payrollRecords.userId, month: payrollRecords.month, year: payrollRecords.year, netPay: payrollRecords.netPay, paymentMethod: payrollRecords.paymentMethod, paymentStatus: payrollRecords.paymentStatus, chequeNumber: payrollRecords.chequeNumber, chequeImageUrl: payrollRecords.chequeImageUrl, chequeIssuedAt: payrollRecords.chequeIssuedAt, bankingStatus: payrollRecords.bankingStatus, bankedAt: payrollRecords.bankedAt, paidAt: payrollRecords.paidAt, notes: payrollRecords.notes, userName: users.name })
+          .from(payrollRecords)
+          .leftJoin(users, eq(payrollRecords.userId, users.id))
+          .where(and(
+            inArray(payrollRecords.paymentMethod, ["cheque", "cash"]),
+            eq(payrollRecords.month, filterMonth),
+            eq(payrollRecords.year, filterYear)
+          ))
+          .orderBy(desc(payrollRecords.createdAt));
+
+        // Receipts: cheque payments in the month
+        const receiptRows = await db
+          .select({ id: receiptsTable.id, vendor: receiptsTable.vendor, amount: receiptsTable.amount, departmentName: receiptsTable.departmentName, categoryName: receiptsTable.categoryName, status: receiptsTable.status, isChequePayment: receiptsTable.isChequePayment, chequeNumber: receiptsTable.chequeNumber, chequeImageUrl: receiptsTable.chequeImageUrl, chequeIssuedAt: receiptsTable.chequeIssuedAt, bankingStatus: receiptsTable.bankingStatus, bankedAt: receiptsTable.bankedAt, receiptDate: receiptsTable.receiptDate, notes: receiptsTable.notes, imageUrl: receiptsTable.imageUrl })
+          .from(receiptsTable)
+          .where(and(
+            eq(receiptsTable.isChequePayment, true),
+            gte(receiptsTable.createdAt, startDate),
+            lte(receiptsTable.createdAt, endDate)
+          ))
+          .orderBy(desc(receiptsTable.createdAt));
+
+        // Summary tallies
+        const pendingPayroll = payrollRows.filter(r => r.paymentStatus === "pending");
+        const paidPayroll = payrollRows.filter(r => r.paymentStatus === "paid");
+        const totalPending = pendingPayroll.reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0)
+          + receiptRows.filter(r => r.status !== "approved").reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const totalPaid = paidPayroll.reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0)
+          + receiptRows.filter(r => r.status === "approved").reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const unbankedCash = payrollRows.filter(r => r.paymentMethod === "cash" && r.paymentStatus === "paid" && r.bankingStatus === "unbanked").reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0);
+        const unbankedCheques = payrollRows.filter(r => r.paymentMethod === "cheque" && r.paymentStatus === "paid" && r.bankingStatus === "unbanked").reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0)
+          + receiptRows.filter(r => r.bankingStatus === "unbanked" && r.status === "approved").reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+
+        return {
+          payroll: payrollRows.map(r => ({ ...r, displayName: r.employeeName ?? r.userName ?? `Employee #${r.userId}`, type: "payroll" as const })),
+          receipts: receiptRows.map(r => ({ ...r, type: "receipt" as const })),
+          summary: { totalPending, totalPaid, unbankedCash, unbankedCheques },
+        };
+      }),
+
+    // Mark payroll payment as paid (with optional cheque photo)
+    markPayrollPaid: adminProcedure
+      .input(z.object({ id: z.number(), chequeNumber: z.string().optional(), chequeImageUrl: z.string().optional(), chequeAmount: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        await updatePayrollRecord(input.id, {
+          paymentStatus: "paid" as any,
+          paidAt: new Date(),
+          chequeIssuedAt: new Date(),
+          chequeNumber: input.chequeNumber,
+          chequeImageUrl: input.chequeImageUrl,
+          chequeAmount: input.chequeAmount,
+        } as any);
+        return { success: true, paidAt: new Date() };
+      }),
+
+    // Mark receipt/expense as paid (cheque issued)
+    markReceiptPaid: adminProcedure
+      .input(z.object({ id: z.number(), chequeNumber: z.string().optional(), chequeImageUrl: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        await updateReceipt(input.id, {
+          status: "approved" as any,
+          chequeIssuedAt: new Date(),
+          chequeNumber: input.chequeNumber,
+          chequeImageUrl: input.chequeImageUrl,
+        } as any);
+        return { success: true, paidAt: new Date() };
+      }),
+
+    // Mark payment as banked
+    markBanked: adminProcedure
+      .input(z.object({ type: z.enum(["payroll", "receipt"]), id: z.number() }))
+      .mutation(async ({ input }) => {
+        if (input.type === "payroll") {
+          await updatePayrollRecord(input.id, { bankingStatus: "banked" as any, bankedAt: new Date() } as any);
+        } else {
+          await updateReceipt(input.id, { bankingStatus: "banked" as any, bankedAt: new Date() } as any);
+        }
+        return { success: true };
+      }),
+
+    // Monthly income vs expenses summary for reports
+    monthlySummary: adminProcedure
+      .input(z.object({ month: z.number(), year: z.number() }))
+      .query(async ({ input }) => {
+        const { month, year } = input;
+        const db = await (await import("./db")).getDb();
+        if (!db) return null;
+        const { eq, and, gte, lte, sum } = await import("drizzle-orm");
+        const { payrollRecords, receipts: receiptsTable, incomeRecords, fridayCollections } = await import("../drizzle/schema");
+
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59);
+
+        // Income: income records for the month
+        const incomeRows = await db.select().from(incomeRecords)
+          .where(and(gte(incomeRecords.createdAt, startDate), lte(incomeRecords.createdAt, endDate)));
+        const fridayRows = await db.select().from(fridayCollections)
+          .where(and(gte(fridayCollections.createdAt, startDate), lte(fridayCollections.createdAt, endDate)));
+
+        // Expenses: payroll net pay for the month
+        const payrollRows = await db.select().from(payrollRecords)
+          .where(and(eq(payrollRecords.month, month), eq(payrollRecords.year, year)));
+
+        // Expenses: approved receipts for the month
+        const receiptRows = await db.select().from(receiptsTable)
+          .where(and(gte(receiptsTable.createdAt, startDate), lte(receiptsTable.createdAt, endDate)));
+
+        const totalIncome = incomeRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0)
+          + fridayRows.reduce((s, r) => s + parseFloat(String(r.totalAmount ?? 0)), 0);
+        const totalPayroll = payrollRows.reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0);
+        const totalReceipts = receiptRows.filter(r => r.status === "approved").reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const totalExpenses = totalPayroll + totalReceipts;
+        const netBalance = totalIncome - totalExpenses;
+
+        const unbankedCash = payrollRows.filter(r => r.paymentMethod === "cash" && r.paymentStatus === "paid" && r.bankingStatus === "unbanked").reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0);
+        const unbankedCheques = payrollRows.filter(r => r.paymentMethod === "cheque" && r.paymentStatus === "paid" && r.bankingStatus === "unbanked").reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0);
+
+        return {
+          month, year,
+          income: {
+            total: totalIncome,
+            breakdown: [
+              ...incomeRows.map(r => ({ label: r.description ?? "Income", amount: parseFloat(String(r.amount ?? 0)), category: r.categoryName ?? "General", paymentMethod: r.paymentMethod })),
+              ...fridayRows.map(r => ({ label: `Friday Collection ${r.collectionDate}`, amount: parseFloat(String(r.totalAmount ?? 0)), category: "Friday Collection", paymentMethod: "cash" })),
+            ],
+          },
+          expenses: {
+            total: totalExpenses,
+            payroll: { total: totalPayroll, records: payrollRows.map(r => ({ name: r.employeeName ?? `Employee #${r.userId}`, net: parseFloat(String(r.netPay ?? 0)), method: r.paymentMethod, status: r.paymentStatus })) },
+            receipts: { total: totalReceipts, records: receiptRows.filter(r => r.status === "approved").map(r => ({ vendor: r.vendor ?? "Unknown", amount: parseFloat(String(r.amount ?? 0)), category: r.categoryName ?? "General", department: r.departmentName ?? "" })) },
+          },
+          netBalance,
+          unbankedCash,
+          unbankedCheques,
+          unbankedTotal: unbankedCash + unbankedCheques,
+        };
+      }),
+  }),
+
   // ─── INCOME & RENTALS ─────────────────────────────────────────────────────
 
   income: router({
