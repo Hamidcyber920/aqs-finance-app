@@ -152,3 +152,18 @@
 - [x] Loan emails: Assalamu Alaikum greeting + fullName lookup (same fix as payment emails)
 - [x] Admin Panel: Full Name field visible and editable in staff profile form (pencil icon inline edit)
 - [x] 68 application tests passing (3 credential tests failing due to expired OAuth tokens — not a code issue)
+
+## Month-End Reconciliation Module (May 2026)
+- [x] DB: reconciliation_sessions table (month, year, bankBalance, closingBalance, status, notes, createdAt)
+- [x] Backend: createOrGetSession, saveBankBalance, aggregateAllPayments (payroll + loans + expenses + volunteers)
+- [x] Backend: markPaymentPaid, withholdPayment, uploadChequePhoto, uploadInvoicePhoto per reconciliation row
+- [x] Backend: reconciliationSummary (opening balance, all rows, closing balance, unreconciled items)
+- [x] Frontend: bank balance input at top, editable
+- [x] Frontend: 25th deadline indicator (days remaining / overdue)
+- [x] Frontend: prioritised payment rows (Payroll → Qarde Hasan → Invoices → Volunteers)
+- [x] Frontend: running balance tally (bank - paid - committed = remaining), red when overdrawn
+- [x] Frontend: Withhold button (non-payroll only) with reason, Pay Now button
+- [x] Frontend: cheque photo + invoice photo upload per row
+- [x] Frontend: printable reconciliation summary (open in browser tab)
+- [x] Sidebar: add "Reconciliation" nav item under FINANCE (admin-only)
+- [x] Vitest: reconciliation procedures (8 tests) — 76/79 passing (3 credential tests = expired OAuth tokens, not code)

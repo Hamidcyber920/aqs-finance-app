@@ -458,3 +458,22 @@ export const volunteerPayments = mysqlTable("volunteer_payments", {
 
 export type VolunteerPayment = typeof volunteerPayments.$inferSelect;
 export type InsertVolunteerPayment = typeof volunteerPayments.$inferInsert;
+
+// ─── RECONCILIATION SESSIONS ──────────────────────────────────────────────────
+
+export const reconciliationSessions = mysqlTable("reconciliation_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  month: int("month").notNull(), // 1-12
+  year: int("year").notNull(),
+  bankBalance: decimal("bankBalance", { precision: 12, scale: 2 }).default("0").notNull(),
+  status: mysqlEnum("status", ["draft", "finalised"]).default("draft").notNull(),
+  notes: text("notes"),
+  finalisedAt: timestamp("finalisedAt"),
+  finalisedById: int("finalisedById"),
+  createdById: int("createdById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ReconciliationSession = typeof reconciliationSessions.$inferSelect;
+export type InsertReconciliationSession = typeof reconciliationSessions.$inferInsert;

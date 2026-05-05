@@ -25,6 +25,7 @@ import CampaignsPage from "./pages/Campaigns";
 import ProfileSettingsPage from "./pages/ProfileSettings";
 import PendingApprovalPage from "./pages/PendingApproval";
 import MonthlyExpensesPage from "./pages/MonthlyExpenses";
+import ReconciliationPage from "./pages/Reconciliation";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval"];
 
@@ -59,6 +60,7 @@ function Router() {
         <Route path="/income" component={IncomePage} />
         <Route path="/payroll" component={PayrollPage} />
         <Route path="/monthly-expenses" component={MonthlyExpensesPage} />
+        <Route path="/reconciliation" component={ReconciliationPage} />
         <Route path="/donors" component={DonorsPage} />
         <Route path="/campaigns" component={CampaignsPage} />
         <Route path="/admin" component={AdminPanelPage} />

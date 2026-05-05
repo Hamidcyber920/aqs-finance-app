@@ -1011,6 +1011,174 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         .mutation(async ({ input }) => { const { userId, ...data } = input; await upsertStaffProfile(userId, data as any); return { success: true }; }),
     }),
   }),
+
+  // ─── RECONCILIATION ────────────────────────────────────────────────────────
+  reconciliation: router({
+
+    getOrCreate: adminProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { reconciliationSessions } = await import('../drizzle/schema');
+        const db = await import('./db').then(m => m.getDb());
+        const existing = await db.select().from(reconciliationSessions)
+          .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)))
+          .limit(1);
+        if (existing[0]) return existing[0];
+        const [result] = await db.insert(reconciliationSessions).values({
+          month: input.month, year: input.year, bankBalance: '0',
+          status: 'draft', createdById: ctx.user.id,
+        });
+        const [session] = await db.select().from(reconciliationSessions)
+          .where(eq(reconciliationSessions.id, (result as any).insertId)).limit(1);
+        return session;
+      }),
+
+    updateBankBalance: adminProcedure
+      .input(z.object({ month: z.number(), year: z.number(), bankBalance: z.string() }))
+      .mutation(async ({ input }) => {
+        const { reconciliationSessions } = await import('../drizzle/schema');
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return { success: true };
+        await db.update(reconciliationSessions)
+          .set({ bankBalance: input.bankBalance })
+          .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));
+        return { success: true };
+      }),
+
+    allPayments: adminProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const { payrollRecords, loanRepayments, loanApplications, receipts, volunteerPayments, staffProfiles, reconciliationSessions } = await import('../drizzle/schema');
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return { payroll: [], loans: [], expenses: [], volunteers: [], session: null };
+
+        const sessions = await db.select().from(reconciliationSessions)
+          .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)))
+          .limit(1);
+        const session = sessions[0] ?? null;
+
+        const payroll = await db.select({
+          id: payrollRecords.id, type: sql`'payroll'`,
+          payee: sql`COALESCE(${staffProfiles.fullName}, ${payrollRecords.employeeName}, ${users.name}, 'Employee')`,
+          amount: payrollRecords.netPay,
+          paymentMethod: payrollRecords.paymentMethod,
+          paymentStatus: payrollRecords.paymentStatus,
+          chequeImageUrl: payrollRecords.chequeImageUrl,
+          invoiceUrl: payrollRecords.invoiceUrl,
+          paidAt: payrollRecords.paidAt,
+          withheldAt: payrollRecords.withheldAt,
+          withheldReason: payrollRecords.withheldReason,
+          notes: payrollRecords.notes,
+          priority: sql`1`,
+        }).from(payrollRecords)
+          .leftJoin(users, eq(payrollRecords.userId, users.id))
+          .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
+          .where(and(eq(payrollRecords.month, input.month), eq(payrollRecords.year, input.year)));
+
+        const loans = await db.select({
+          id: loanRepayments.id, type: sql`'loan'`,
+          payee: loanApplications.borrowerName,
+          amount: loanRepayments.amount,
+          paymentMethod: sql`'cheque'`,
+          paymentStatus: loanRepayments.status,
+          chequeImageUrl: loanRepayments.evidenceUrl,
+          invoiceUrl: sql`NULL`,
+          paidAt: loanRepayments.paidAt,
+          withheldAt: sql`NULL`,
+          withheldReason: sql`NULL`,
+          notes: loanRepayments.notes,
+          priority: sql`2`,
+        }).from(loanRepayments)
+          .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
+          .where(and(eq(loanRepayments.month, input.month), eq(loanRepayments.year, input.year)));
+
+        const expenses = await db.select({
+          id: receipts.id, type: sql`'expense'`,
+          payee: sql`COALESCE(${receipts.vendor}, 'Supplier')`,
+          amount: receipts.totalAmount,
+          paymentMethod: receipts.paymentMethod,
+          paymentStatus: receipts.paymentStatus,
+          chequeImageUrl: receipts.chequeImageUrl,
+          invoiceUrl: receipts.imageUrl,
+          paidAt: receipts.paidAt,
+          withheldAt: receipts.withheldAt,
+          withheldReason: receipts.withheldReason,
+          notes: receipts.notes,
+          priority: sql`3`,
+        }).from(receipts)
+          .where(and(
+            sql`MONTH(${receipts.receiptDate}) = ${input.month}`,
+            sql`YEAR(${receipts.receiptDate}) = ${input.year}`,
+            sql`${receipts.paymentMethod} IN ('cheque', 'cash')`,
+          ));
+
+        const volunteers = await db.select({
+          id: volunteerPayments.id, type: sql`'volunteer'`,
+          payee: volunteerPayments.recipientName,
+          amount: volunteerPayments.amount,
+          paymentMethod: volunteerPayments.paymentMethod,
+          paymentStatus: volunteerPayments.paymentStatus,
+          chequeImageUrl: volunteerPayments.chequeImageUrl,
+          invoiceUrl: volunteerPayments.invoiceUrl,
+          paidAt: volunteerPayments.paidAt,
+          withheldAt: volunteerPayments.withheldAt,
+          withheldReason: volunteerPayments.withheldReason,
+          notes: volunteerPayments.notes,
+          priority: sql`4`,
+        }).from(volunteerPayments)
+          .where(and(eq(volunteerPayments.month, input.month), eq(volunteerPayments.year, input.year)));
+
+        return { payroll, loans, expenses, volunteers, session };
+      }),
+
+    withholdPayment: adminProcedure
+      .input(z.object({ type: z.enum(['loan', 'expense', 'volunteer']), id: z.number(), reason: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const { loanRepayments, receipts, volunteerPayments } = await import('../drizzle/schema');
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return { success: true };
+        const now = new Date();
+        if (input.type === 'loan') {
+          await db.update(loanRepayments).set({ status: 'withheld', withheldAt: now, withheldReason: input.reason ?? null } as any).where(eq(loanRepayments.id, input.id));
+        } else if (input.type === 'expense') {
+          await db.update(receipts).set({ paymentStatus: 'withheld', withheldAt: now, withheldReason: input.reason ?? null } as any).where(eq(receipts.id, input.id));
+        } else {
+          await db.update(volunteerPayments).set({ paymentStatus: 'withheld', withheldAt: now, withheldReason: input.reason ?? null } as any).where(eq(volunteerPayments.id, input.id));
+        }
+        return { success: true };
+      }),
+
+    markPaid: adminProcedure
+      .input(z.object({ type: z.enum(['payroll', 'loan', 'expense', 'volunteer']), id: z.number(), chequeImageUrl: z.string().optional(), invoiceUrl: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const { payrollRecords, loanRepayments, receipts, volunteerPayments } = await import('../drizzle/schema');
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return { success: true };
+        const now = new Date();
+        if (input.type === 'payroll') {
+          await db.update(payrollRecords).set({ paymentStatus: 'paid', paidAt: now, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { invoiceUrl: input.invoiceUrl } : {}) } as any).where(eq(payrollRecords.id, input.id));
+        } else if (input.type === 'loan') {
+          await db.update(loanRepayments).set({ status: 'paid', paidAt: now, ...(input.chequeImageUrl ? { evidenceUrl: input.chequeImageUrl } : {}) } as any).where(eq(loanRepayments.id, input.id));
+        } else if (input.type === 'expense') {
+          await db.update(receipts).set({ paymentStatus: 'paid', paidAt: now, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { imageUrl: input.invoiceUrl } : {}) } as any).where(eq(receipts.id, input.id));
+        } else {
+          await db.update(volunteerPayments).set({ paymentStatus: 'paid', paidAt: now, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { invoiceUrl: input.invoiceUrl } : {}) } as any).where(eq(volunteerPayments.id, input.id));
+        }
+        return { success: true };
+      }),
+
+    finalise: adminProcedure
+      .input(z.object({ month: z.number(), year: z.number(), notes: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const { reconciliationSessions } = await import('../drizzle/schema');
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return { success: true };
+        await db.update(reconciliationSessions)
+          .set({ status: 'finalised', finalisedAt: new Date(), finalisedById: ctx.user.id, notes: input.notes ?? null })
+          .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

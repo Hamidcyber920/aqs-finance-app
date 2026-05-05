@@ -29,6 +29,7 @@ import {
   Building2,
   Camera,
   ClipboardList,
+  Scale,
   DollarSign,
   HandHeart,
   LayoutDashboard,
@@ -68,6 +69,7 @@ const financeItems = [
   { icon: DollarSign, label: "Income & Rentals", path: "/income" },
   { icon: Wallet, label: "Payroll", path: "/payroll" },
   { icon: ClipboardList, label: "Monthly Expenses", path: "/monthly-expenses" },
+  { icon: Scale, label: "Reconciliation", path: "/reconciliation" },
 ];
 
 const orgItems = [
@@ -136,6 +138,7 @@ function DashboardLayoutContent({
 
   const visibleFinanceItems = financeItems.filter(item => {
     if (item.path === "/payroll") return showPayroll;
+    if (item.path === "/reconciliation") return showAdmin;
     return showFinance;
   });
 

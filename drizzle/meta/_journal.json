@@ -64,6 +64,13 @@
       "when": 1775599976543,
       "tag": "0008_supreme_shockwave",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1778012466847,
+      "tag": "0009_wide_patch",
+      "breakpoints": true
     }
   ]
 }
