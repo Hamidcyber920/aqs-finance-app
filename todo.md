@@ -196,3 +196,20 @@
 - [x] Frontend: Reconciliation balance = bank balance - total pending outgoings
 - [x] Frontend: Carry-forward panel — items from previous month shown with "Prev Month" badge
 - [x] Frontend: Pay/Withhold per item with camera photo or file upload evidence
+
+## Monthly Expenses Rebuild (May 2026)
+- [ ] Schema: add authorisedById, authorisedAt, authorisedByName to payrollRecords, receipts, volunteerPayments, loanRepayments
+- [ ] Schema: add rejectedById, rejectedAt, rejectionComment, deferredToMonth, deferredToYear to same tables
+- [ ] Backend: extractChequeData procedure — upload image, use LLM vision to extract cheque number, date, amount
+- [ ] Backend: authorise procedure — stamp authorisedById/At on any item type
+- [ ] Backend: reject procedure — stamp rejectedById/At + comment, set deferredToMonth/Year
+- [ ] Backend: monthlyExpenses.list — return all 4 types (payroll, receipts, volunteers, loans) for a month
+- [ ] Frontend: month/year selector at top
+- [ ] Frontend: four collapsible sections: Payroll, Invoices/Receipts, Volunteer Payments, Qarde Hasan
+- [ ] Frontend: each item shows evidence upload (camera + file), cheque photo upload with AI extraction
+- [ ] Frontend: cheque upload auto-populates cheque number, date, amount fields
+- [ ] Frontend: green tick (✓) authorise button — stamps authorisedBy + datetime
+- [ ] Frontend: red X reject button — opens comment dialog, marks red, defers to next month
+- [ ] Frontend: authorised items show "Authorised by [Name] at [datetime]" badge in green
+- [ ] Frontend: rejected items shown in red with comment, labelled "Deferred to [next month]"
+- [ ] Frontend: add new expense entry form (for invoices and ad-hoc items)

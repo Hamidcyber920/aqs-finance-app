@@ -804,6 +804,188 @@ export const appRouter = router({
         }),
     }),
 
+    // ── AUTHORISATION WORKFLOW ─────────────────────────────────────────────────
+
+    // Authorise a payment item (green tick) — stamps authorisedBy + datetime
+    authorise: adminProcedure
+      .input(z.object({
+        type: z.enum(["payroll", "receipt", "volunteer", "loan"]),
+        id: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import("./db")).getDb();
+        if (!db) return { success: true };
+        const { eq } = await import("drizzle-orm");
+        const { payrollRecords, receipts: receiptsTable, volunteerPayments, loanRepayments } = await import("../drizzle/schema");
+        const now = new Date();
+        const authorName = ctx.user.name ?? "Admin";
+        if (input.type === "payroll") {
+          await db.update(payrollRecords).set({ authorisedById: ctx.user.id, authorisedByName: authorName, authorisedAt: now, rejectedById: null, rejectedAt: null, rejectionComment: null, deferredToMonth: null, deferredToYear: null } as any).where(eq(payrollRecords.id, input.id));
+        } else if (input.type === "receipt") {
+          await db.update(receiptsTable).set({ authorisedById: ctx.user.id, authorisedByName: authorName, authorisedAt: now, rejectedById: null, rejectedAt: null, rejectionComment: null, deferredToMonth: null, deferredToYear: null } as any).where(eq(receiptsTable.id, input.id));
+        } else if (input.type === "volunteer") {
+          await db.update(volunteerPayments).set({ authorisedById: ctx.user.id, authorisedByName: authorName, authorisedAt: now, rejectedById: null, rejectedAt: null, rejectionComment: null, deferredToMonth: null, deferredToYear: null, updatedAt: now } as any).where(eq(volunteerPayments.id, input.id));
+        } else {
+          await db.update(loanRepayments).set({ authorisedById: ctx.user.id, authorisedByName: authorName, authorisedAt: now, rejectedById: null, rejectedAt: null, rejectionComment: null, deferredToMonth: null, deferredToYear: null } as any).where(eq(loanRepayments.id, input.id));
+        }
+        return { success: true, authorisedAt: now, authorisedByName: authorName };
+      }),
+
+    // Reject a payment item (red X) — adds comment and defers to next month
+    reject: adminProcedure
+      .input(z.object({
+        type: z.enum(["payroll", "receipt", "volunteer", "loan"]),
+        id: z.number(),
+        comment: z.string().optional(),
+        month: z.number(),
+        year: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import("./db")).getDb();
+        if (!db) return { success: true };
+        const { eq } = await import("drizzle-orm");
+        const { payrollRecords, receipts: receiptsTable, volunteerPayments, loanRepayments } = await import("../drizzle/schema");
+        const now = new Date();
+        const rejectorName = ctx.user.name ?? "Admin";
+        // Defer to next month
+        const nextMonth = input.month === 12 ? 1 : input.month + 1;
+        const nextYear = input.month === 12 ? input.year + 1 : input.year;
+        const fields = { rejectedById: ctx.user.id, rejectedByName: rejectorName, rejectedAt: now, rejectionComment: input.comment ?? "", deferredToMonth: nextMonth, deferredToYear: nextYear, authorisedById: null, authorisedAt: null };
+        if (input.type === "payroll") {
+          await db.update(payrollRecords).set({ ...fields, paymentStatus: "withheld", withheldAt: now, withheldReason: input.comment } as any).where(eq(payrollRecords.id, input.id));
+        } else if (input.type === "receipt") {
+          await db.update(receiptsTable).set({ ...fields, paymentStatus: "withheld", withheldAt: now, withheldReason: input.comment } as any).where(eq(receiptsTable.id, input.id));
+        } else if (input.type === "volunteer") {
+          await db.update(volunteerPayments).set({ ...fields, paymentStatus: "withheld", withheldAt: now, withheldReason: input.comment, updatedAt: now } as any).where(eq(volunteerPayments.id, input.id));
+        } else {
+          await db.update(loanRepayments).set({ ...fields, status: "withheld", withheldAt: now, withheldReason: input.comment } as any).where(eq(loanRepayments.id, input.id));
+        }
+        return { success: true, rejectedAt: now, deferredToMonth: nextMonth, deferredToYear: nextYear };
+      }),
+
+    // Extract cheque data from uploaded image using LLM vision
+    extractChequeData: adminProcedure
+      .input(z.object({ imageUrl: z.string() }))
+      .mutation(async ({ input }) => {
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "You are a cheque data extraction assistant. Extract data from cheque images and return structured JSON only." },
+              { role: "user", content: [
+                { type: "image_url", image_url: { url: input.imageUrl, detail: "high" } },
+                { type: "text", text: "Extract the following fields from this cheque image: chequeNumber (the cheque/check number, usually 6 digits in the bottom right), date (the date written on the cheque in ISO format YYYY-MM-DD), amount (the numeric amount, as a decimal string like '1250.00'), payee (the name on the 'Pay' line). Return JSON with keys: chequeNumber, date, amount, payee. If a field is not visible or unclear, use null." },
+              ]},
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "cheque_data",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    chequeNumber: { type: ["string", "null"] },
+                    date: { type: ["string", "null"] },
+                    amount: { type: ["string", "null"] },
+                    payee: { type: ["string", "null"] },
+                  },
+                  required: ["chequeNumber", "date", "amount", "payee"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          });
+          const content = response?.choices?.[0]?.message?.content;
+          const parsed = typeof content === "string" ? JSON.parse(content) : content;
+          return { success: true, data: parsed };
+        } catch (e) {
+          return { success: false, data: { chequeNumber: null, date: null, amount: null, payee: null } };
+        }
+      }),
+
+    // All items for a month across all 4 types — for the Monthly Expenses page
+    allItems: adminProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const { month, year } = input;
+        const db = await (await import("./db")).getDb();
+        if (!db) return { payroll: [], receipts: [], volunteers: [], loans: [] };
+        const { eq, and, gte, lte, desc } = await import("drizzle-orm");
+        const { payrollRecords, receipts: receiptsTable, volunteerPayments, loanRepayments, loanApplications, users: usersTable, staffProfiles } = await import("../drizzle/schema");
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59);
+
+        const payroll = await db.select({
+          id: payrollRecords.id, employeeName: payrollRecords.employeeName,
+          netPay: payrollRecords.netPay, grossPay: payrollRecords.grossPay,
+          paymentMethod: payrollRecords.paymentMethod, paymentStatus: payrollRecords.paymentStatus,
+          chequeNumber: payrollRecords.chequeNumber, chequeImageUrl: payrollRecords.chequeImageUrl,
+          chequeIssuedAt: payrollRecords.chequeIssuedAt, invoiceUrl: payrollRecords.invoiceUrl,
+          paidAt: payrollRecords.paidAt, withheldAt: payrollRecords.withheldAt, withheldReason: payrollRecords.withheldReason,
+          authorisedById: payrollRecords.authorisedById, authorisedByName: payrollRecords.authorisedByName, authorisedAt: payrollRecords.authorisedAt,
+          rejectedById: payrollRecords.rejectedById, rejectedByName: payrollRecords.rejectedByName, rejectedAt: payrollRecords.rejectedAt,
+          rejectionComment: payrollRecords.rejectionComment, deferredToMonth: payrollRecords.deferredToMonth, deferredToYear: payrollRecords.deferredToYear,
+          notes: payrollRecords.notes, month: payrollRecords.month, year: payrollRecords.year,
+          fullName: staffProfiles.fullName,
+        }).from(payrollRecords)
+          .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
+          .where(and(eq(payrollRecords.month, month), eq(payrollRecords.year, year)))
+          .orderBy(desc(payrollRecords.createdAt));
+
+        const receipts = await db.select({
+          id: receiptsTable.id, vendor: receiptsTable.vendor,
+          amount: receiptsTable.amount, totalAmount: receiptsTable.totalAmount,
+          categoryName: receiptsTable.categoryName, departmentName: receiptsTable.departmentName,
+          paymentMethod: receiptsTable.isChequePayment,
+          paymentStatus: receiptsTable.paymentStatus, status: receiptsTable.status,
+          chequeNumber: receiptsTable.chequeNumber, chequeImageUrl: receiptsTable.chequeImageUrl,
+          chequeIssuedAt: receiptsTable.chequeIssuedAt, invoiceUrl: receiptsTable.invoiceUrl,
+          imageUrl: receiptsTable.imageUrl, paidAt: receiptsTable.paidAt,
+          authorisedById: receiptsTable.authorisedById, authorisedByName: receiptsTable.authorisedByName, authorisedAt: receiptsTable.authorisedAt,
+          rejectedById: receiptsTable.rejectedById, rejectedByName: receiptsTable.rejectedByName, rejectedAt: receiptsTable.rejectedAt,
+          rejectionComment: receiptsTable.rejectionComment, deferredToMonth: receiptsTable.deferredToMonth, deferredToYear: receiptsTable.deferredToYear,
+          notes: receiptsTable.notes, receiptDate: receiptsTable.receiptDate,
+          submitterName: usersTable.name,
+        }).from(receiptsTable)
+          .leftJoin(usersTable, eq(receiptsTable.userId, usersTable.id))
+          .where(and(gte(receiptsTable.createdAt, startDate), lte(receiptsTable.createdAt, endDate)))
+          .orderBy(desc(receiptsTable.createdAt));
+
+        const volunteers = await db.select({
+          id: volunteerPayments.id, recipientName: volunteerPayments.recipientName,
+          recipientEmail: volunteerPayments.recipientEmail,
+          amount: volunteerPayments.amount, description: volunteerPayments.description,
+          paymentMethod: volunteerPayments.paymentMethod, paymentStatus: volunteerPayments.paymentStatus,
+          chequeNumber: volunteerPayments.chequeNumber, chequeImageUrl: volunteerPayments.chequeImageUrl,
+          invoiceUrl: volunteerPayments.invoiceUrl, paidAt: volunteerPayments.paidAt,
+          withheldAt: volunteerPayments.withheldAt, withheldReason: volunteerPayments.withheldReason,
+          authorisedById: volunteerPayments.authorisedById, authorisedByName: volunteerPayments.authorisedByName, authorisedAt: volunteerPayments.authorisedAt,
+          rejectedById: volunteerPayments.rejectedById, rejectedByName: volunteerPayments.rejectedByName, rejectedAt: volunteerPayments.rejectedAt,
+          rejectionComment: volunteerPayments.rejectionComment, deferredToMonth: volunteerPayments.deferredToMonth, deferredToYear: volunteerPayments.deferredToYear,
+          notes: volunteerPayments.notes, month: volunteerPayments.month, year: volunteerPayments.year,
+        }).from(volunteerPayments)
+          .where(and(eq(volunteerPayments.month, month), eq(volunteerPayments.year, year)))
+          .orderBy(desc(volunteerPayments.createdAt));
+
+        const loans = await db.select({
+          id: loanRepayments.id, amount: loanRepayments.amount,
+          paymentMethod: loanRepayments.paymentMethod, status: loanRepayments.status,
+          evidenceUrl: loanRepayments.evidenceUrl, chequeNumber: loanRepayments.chequeNumber,
+          chequeImageUrl: loanRepayments.chequeImageUrl, invoiceUrl: loanRepayments.invoiceUrl,
+          paidAt: loanRepayments.paidAt, withheldAt: loanRepayments.withheldAt, withheldReason: loanRepayments.withheldReason,
+          authorisedById: loanRepayments.authorisedById, authorisedByName: loanRepayments.authorisedByName, authorisedAt: loanRepayments.authorisedAt,
+          rejectedById: loanRepayments.rejectedById, rejectedByName: loanRepayments.rejectedByName, rejectedAt: loanRepayments.rejectedAt,
+          rejectionComment: loanRepayments.rejectionComment, deferredToMonth: loanRepayments.deferredToMonth, deferredToYear: loanRepayments.deferredToYear,
+          notes: loanRepayments.notes, month: loanRepayments.month, year: loanRepayments.year,
+          borrowerName: loanApplications.borrowerName,
+        }).from(loanRepayments)
+          .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
+          .where(and(eq(loanRepayments.month, month), eq(loanRepayments.year, year)))
+          .orderBy(desc(loanRepayments.createdAt));
+
+        return { payroll, receipts, volunteers, loans };
+      }),
+
     // Monthly income vs expenses summary for reports
     monthlySummary: adminProcedure
       .input(z.object({ month: z.number(), year: z.number() }))
