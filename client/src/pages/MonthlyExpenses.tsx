@@ -503,7 +503,8 @@ function AddInvoiceDialog({ open, onClose, month, year }: { open: boolean; onClo
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cheque" | "bank_transfer" | "cash">("cheque");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
-  const [chequeFile, setChequeFile] = useState<File | null>(n  const [chequeNumber, setChequeNumber] = useState(item?.chequeNumber ?? "");
+  const [chequeFile, setChequeFile] = useState<File | null>(null);
+  const [chequeNumber, setChequeNumber] = useState(item?.chequeNumber ?? "");
   const [chequeDate, setChequeDate] = useState("");
   const [chequeAmount, setChequeAmount] = useState("");
   const [extractedVendor, setExtractedVendor] = useState("");
@@ -511,7 +512,8 @@ function AddInvoiceDialog({ open, onClose, month, year }: { open: boolean; onClo
   const [extractedDescription, setExtractedDescription] = useState("");
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
-  const [extractedFields, setExtractedFields] = useState<Record<string, string | null>>({});eRef = useRef<HTMLInputElement>(null);
+  const [extractedFields, setExtractedFields] = useState<Record<string, string | null>>({});
+  const evidenceRef = useRef<HTMLInputElement>(null);
   const chequeRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
 
