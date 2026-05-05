@@ -129,6 +129,9 @@ function EvidenceDialog({
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractedFields, setExtractedFields] = useState<Record<string, string | null>>({});
+  const [extractedVendor, setExtractedVendor] = useState("");
+  const [extractedInvoiceNumber, setExtractedInvoiceNumber] = useState("");
+  const [extractedDescription, setExtractedDescription] = useState("");
   const chequeRef = useRef<HTMLInputElement>(null);
   const invoiceRef = useRef<HTMLInputElement>(null);
   const utils = trpc.useUtils();
