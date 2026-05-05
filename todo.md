@@ -167,3 +167,9 @@
 - [x] Frontend: printable reconciliation summary (open in browser tab)
 - [x] Sidebar: add "Reconciliation" nav item under FINANCE (admin-only)
 - [x] Vitest: reconciliation procedures (8 tests) — 76/79 passing (3 credential tests = expired OAuth tokens, not code)
+
+## Sidebar Finance Restructure (May 2026)
+- [x] Split FINANCE section into three sub-sections: INCOME, EXPENSES, RECONCILIATION
+- [x] INCOME sub-section: Fundraising, Qarde Hasan Loans, Income & Rentals
+- [x] EXPENSES sub-section: Payroll, Monthly Expenses
+- [x] RECONCILIATION sub-section: Reconciliation (standalone)

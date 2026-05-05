@@ -63,12 +63,21 @@ const coreItems = [
   { icon: Receipt, label: "My Expenses", path: "/receipts" },
 ];
 
-const financeItems = [
+// INCOME sub-section
+const incomeItems = [
   { icon: HandHeart, label: "Fundraising", path: "/fundraising" },
   { icon: BookOpen, label: "Qarde Hasan Loans", path: "/loans" },
   { icon: DollarSign, label: "Income & Rentals", path: "/income" },
+];
+
+// EXPENSES sub-section
+const expenseItems = [
   { icon: Wallet, label: "Payroll", path: "/payroll" },
   { icon: ClipboardList, label: "Monthly Expenses", path: "/monthly-expenses" },
+];
+
+// RECONCILIATION sub-section
+const reconciliationItems = [
   { icon: Scale, label: "Reconciliation", path: "/reconciliation" },
 ];
 
@@ -136,11 +145,13 @@ function DashboardLayoutContent({
   const showPayroll = isAdmin(role) || perms?.canManagePayroll || perms?.canViewOwnPayslip;
   const showAdmin = isAdmin(role);
 
-  const visibleFinanceItems = financeItems.filter(item => {
+  // Visible items per sub-section
+  const visibleIncomeItems = incomeItems.filter(() => showFinance);
+  const visibleExpenseItems = expenseItems.filter(item => {
     if (item.path === "/payroll") return showPayroll;
-    if (item.path === "/reconciliation") return showAdmin;
-    return showFinance;
+    return showFinance || showPayroll;
   });
+  const visibleReconciliationItems = reconciliationItems.filter(() => showAdmin);
 
   useEffect(() => {
     if (isCollapsed) setIsResizing(false);
@@ -225,16 +236,44 @@ function DashboardLayoutContent({
               </SidebarMenu>
             </SidebarGroup>
 
-            {/* Finance */}
-            {(showFinance || showPayroll) && visibleFinanceItems.length > 0 && (
+            {/* INCOME sub-section */}
+            {visibleIncomeItems.length > 0 && (
               <SidebarGroup>
                 {!isCollapsed && (
                   <SidebarGroupLabel className="text-sidebar-foreground/40 text-xs px-4 py-1 uppercase tracking-wider">
-                    Finance
+                    Income
                   </SidebarGroupLabel>
                 )}
                 <SidebarMenu className="px-2">
-                  {visibleFinanceItems.map(item => <NavItem key={item.path} {...item} />)}
+                  {visibleIncomeItems.map(item => <NavItem key={item.path} {...item} />)}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
+
+            {/* EXPENSES sub-section */}
+            {visibleExpenseItems.length > 0 && (
+              <SidebarGroup>
+                {!isCollapsed && (
+                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-xs px-4 py-1 uppercase tracking-wider">
+                    Expenses
+                  </SidebarGroupLabel>
+                )}
+                <SidebarMenu className="px-2">
+                  {visibleExpenseItems.map(item => <NavItem key={item.path} {...item} />)}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
+
+            {/* RECONCILIATION sub-section */}
+            {visibleReconciliationItems.length > 0 && (
+              <SidebarGroup>
+                {!isCollapsed && (
+                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-xs px-4 py-1 uppercase tracking-wider">
+                    Reconciliation
+                  </SidebarGroupLabel>
+                )}
+                <SidebarMenu className="px-2">
+                  {visibleReconciliationItems.map(item => <NavItem key={item.path} {...item} />)}
                 </SidebarMenu>
               </SidebarGroup>
             )}
