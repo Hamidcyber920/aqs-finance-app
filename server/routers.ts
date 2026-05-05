@@ -1180,20 +1180,21 @@ Return: { "employees": [ ...array of employee objects... ] }`;
       }),
 
     markPaid: adminProcedure
-      .input(z.object({ type: z.enum(['payroll', 'loan', 'expense', 'volunteer']), id: z.number(), chequeImageUrl: z.string().optional(), invoiceUrl: z.string().optional() }))
+      .input(z.object({ type: z.enum(['payroll', 'loan', 'expense', 'volunteer']), id: z.number(), chequeImageUrl: z.string().optional(), invoiceUrl: z.string().optional(), paymentMethod: z.string().optional() }))
       .mutation(async ({ input }) => {
         const { payrollRecords, loanRepayments, receipts, volunteerPayments } = await import('../drizzle/schema');
         const db = await import('./db').then(m => m.getDb());
         if (!db) return { success: true };
         const now = new Date();
+        const methodUpdate = input.paymentMethod ? { paymentMethod: input.paymentMethod } : {};
         if (input.type === 'payroll') {
-          await db.update(payrollRecords).set({ paymentStatus: 'paid', paidAt: now, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { invoiceUrl: input.invoiceUrl } : {}) } as any).where(eq(payrollRecords.id, input.id));
+          await db.update(payrollRecords).set({ paymentStatus: 'paid', paidAt: now, ...methodUpdate, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { invoiceUrl: input.invoiceUrl } : {}) } as any).where(eq(payrollRecords.id, input.id));
         } else if (input.type === 'loan') {
           await db.update(loanRepayments).set({ status: 'paid', paidAt: now, ...(input.chequeImageUrl ? { evidenceUrl: input.chequeImageUrl } : {}) } as any).where(eq(loanRepayments.id, input.id));
         } else if (input.type === 'expense') {
-          await db.update(receipts).set({ paymentStatus: 'paid', paidAt: now, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { imageUrl: input.invoiceUrl } : {}) } as any).where(eq(receipts.id, input.id));
+          await db.update(receipts).set({ paymentStatus: 'paid', paidAt: now, ...methodUpdate, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { imageUrl: input.invoiceUrl } : {}) } as any).where(eq(receipts.id, input.id));
         } else {
-          await db.update(volunteerPayments).set({ paymentStatus: 'paid', paidAt: now, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { invoiceUrl: input.invoiceUrl } : {}) } as any).where(eq(volunteerPayments.id, input.id));
+          await db.update(volunteerPayments).set({ paymentStatus: 'paid', paidAt: now, ...methodUpdate, ...(input.chequeImageUrl ? { chequeImageUrl: input.chequeImageUrl } : {}), ...(input.invoiceUrl ? { invoiceUrl: input.invoiceUrl } : {}) } as any).where(eq(volunteerPayments.id, input.id));
         }
         return { success: true };
       }),
@@ -1208,6 +1209,182 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           .set({ status: 'finalised', finalisedAt: new Date(), finalisedById: ctx.user.id, notes: input.notes ?? null })
           .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));
         return { success: true };
+      }),
+
+    // Full month-end financial statement: income + all expenditure with payment method breakdown
+    fullStatement: adminProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const { month, year } = input;
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return null;
+        const {
+          payrollRecords, receipts: receiptsTable, incomeRecords, fridayCollections,
+          fundraisingDonations, loanRepayments, loanApplications, volunteerPayments,
+          staffProfiles, reconciliationSessions, users: usersTable,
+        } = await import('../drizzle/schema');
+
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59);
+
+        // ── SESSION ──
+        const sessions = await db.select().from(reconciliationSessions)
+          .where(and(eq(reconciliationSessions.month, month), eq(reconciliationSessions.year, year))).limit(1);
+        const session = sessions[0] ?? null;
+
+        // ── INCOME ──
+        const incomeRows = await db.select().from(incomeRecords)
+          .where(and(gte(incomeRecords.createdAt, startDate), lte(incomeRecords.createdAt, endDate)));
+        const fridayRows = await db.select().from(fridayCollections)
+          .where(and(gte(fridayCollections.createdAt, startDate), lte(fridayCollections.createdAt, endDate)));
+        const donationRows = await db.select().from(fundraisingDonations)
+          .where(and(gte(fundraisingDonations.donatedAt, startDate), lte(fundraisingDonations.donatedAt, endDate)));
+
+        const incomeBreakdown = [
+          ...incomeRows.map(r => ({ id: r.id, label: r.tenantName ?? 'Income', category: r.categoryName ?? 'Rental/Income', amount: parseFloat(String(r.amount ?? 0)), paymentMethod: r.paymentMethod ?? 'bank_transfer', source: 'income' as const })),
+          ...fridayRows.map(r => ({ id: r.id, label: `Friday Collection ${r.collectionDate}`, category: 'Friday Collection', amount: parseFloat(String(r.totalAmount ?? 0)), paymentMethod: 'cash' as const, source: 'friday' as const })),
+          ...donationRows.map(r => ({ id: r.id, label: r.donorName, category: 'Fundraising Donation', amount: parseFloat(String(r.amount ?? 0)), paymentMethod: r.paymentMethod ?? 'bank_transfer', source: 'donation' as const })),
+        ];
+        const totalIncome = incomeBreakdown.reduce((s, r) => s + r.amount, 0);
+
+        // ── EXPENDITURE ──
+        // Payroll
+        const payrollRows = await db.select({
+          id: payrollRecords.id, employeeName: payrollRecords.employeeName,
+          netPay: payrollRecords.netPay, paymentMethod: payrollRecords.paymentMethod,
+          paymentStatus: payrollRecords.paymentStatus, paidAt: payrollRecords.paidAt,
+          withheldAt: payrollRecords.withheldAt, withheldReason: payrollRecords.withheldReason,
+          chequeImageUrl: payrollRecords.chequeImageUrl, invoiceUrl: payrollRecords.invoiceUrl,
+          notes: payrollRecords.notes, userId: payrollRecords.userId,
+          fullName: staffProfiles.fullName,
+        }).from(payrollRecords)
+          .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
+          .where(and(eq(payrollRecords.month, month), eq(payrollRecords.year, year)));
+
+        // All receipts (all users, all payment methods)
+        const receiptRows = await db.select({
+          id: receiptsTable.id, vendor: receiptsTable.vendor,
+          amount: receiptsTable.totalAmount, paymentMethod: receiptsTable.paymentMethod,
+          paymentStatus: receiptsTable.paymentStatus, paidAt: receiptsTable.paidAt,
+          withheldAt: receiptsTable.withheldAt, withheldReason: receiptsTable.withheldReason,
+          chequeImageUrl: receiptsTable.chequeImageUrl, invoiceUrl: receiptsTable.imageUrl,
+          notes: receiptsTable.notes, categoryName: receiptsTable.categoryName,
+          departmentName: receiptsTable.departmentName, userId: receiptsTable.userId,
+          submitterName: usersTable.name,
+        }).from(receiptsTable)
+          .leftJoin(usersTable, eq(receiptsTable.userId, usersTable.id))
+          .where(and(
+            sql`MONTH(${receiptsTable.receiptDate}) = ${month}`,
+            sql`YEAR(${receiptsTable.receiptDate}) = ${year}`,
+          ));
+
+        // Qarde Hasan repayments
+        const loanRows = await db.select({
+          id: loanRepayments.id, borrowerName: loanApplications.borrowerName,
+          amount: loanRepayments.amount, paymentMethod: sql`'cheque'`,
+          paymentStatus: loanRepayments.status, paidAt: loanRepayments.paidAt,
+          evidenceUrl: loanRepayments.evidenceUrl, notes: loanRepayments.notes,
+        }).from(loanRepayments)
+          .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
+          .where(and(eq(loanRepayments.month, month), eq(loanRepayments.year, year)));
+
+        // Volunteer payments
+        const volunteerRows = await db.select().from(volunteerPayments)
+          .where(and(eq(volunteerPayments.month, month), eq(volunteerPayments.year, year)));
+
+        // Also load carried-forward items from previous month (withheld)
+        const prevMonth = month === 1 ? 12 : month - 1;
+        const prevYear = month === 1 ? year - 1 : year;
+        // Carry-forward: load all unpaid (pending OR withheld) items from previous month
+        const carriedPayroll = await db.select({
+          id: payrollRecords.id, employeeName: payrollRecords.employeeName,
+          netPay: payrollRecords.netPay, paymentMethod: payrollRecords.paymentMethod,
+          paymentStatus: payrollRecords.paymentStatus, paidAt: payrollRecords.paidAt,
+          withheldAt: payrollRecords.withheldAt, withheldReason: payrollRecords.withheldReason,
+          chequeImageUrl: payrollRecords.chequeImageUrl, invoiceUrl: payrollRecords.invoiceUrl,
+          notes: payrollRecords.notes, userId: payrollRecords.userId,
+          fullName: staffProfiles.fullName,
+        }).from(payrollRecords)
+          .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
+          .where(and(
+            eq(payrollRecords.month, prevMonth), eq(payrollRecords.year, prevYear),
+            sql`${payrollRecords.paymentStatus} IN ('pending', 'withheld')`,
+          ));
+        const carriedReceipts = await db.select({
+          id: receiptsTable.id, vendor: receiptsTable.vendor,
+          amount: receiptsTable.totalAmount, paymentMethod: receiptsTable.paymentMethod,
+          paymentStatus: receiptsTable.paymentStatus, paidAt: receiptsTable.paidAt,
+          withheldAt: receiptsTable.withheldAt, withheldReason: receiptsTable.withheldReason,
+          chequeImageUrl: receiptsTable.chequeImageUrl, invoiceUrl: receiptsTable.imageUrl,
+          notes: receiptsTable.notes, categoryName: receiptsTable.categoryName,
+          departmentName: receiptsTable.departmentName, userId: receiptsTable.userId,
+          submitterName: usersTable.name,
+        }).from(receiptsTable)
+          .leftJoin(usersTable, eq(receiptsTable.userId, usersTable.id))
+          .where(and(
+            sql`MONTH(${receiptsTable.receiptDate}) = ${prevMonth}`,
+            sql`YEAR(${receiptsTable.receiptDate}) = ${prevYear}`,
+            sql`${receiptsTable.paymentStatus} IN ('pending', 'withheld')`,
+          ));
+        const carriedLoans = await db.select({
+          id: loanRepayments.id, borrowerName: loanApplications.borrowerName,
+          amount: loanRepayments.amount, paymentMethod: sql`'cheque'`,
+          paymentStatus: loanRepayments.status, paidAt: loanRepayments.paidAt,
+          evidenceUrl: loanRepayments.evidenceUrl, notes: loanRepayments.notes,
+        }).from(loanRepayments)
+          .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
+          .where(and(
+            eq(loanRepayments.month, prevMonth), eq(loanRepayments.year, prevYear),
+            sql`${loanRepayments.status} IN ('pending', 'withheld', 'approved')`,
+          ));
+        const carriedVolunteers = await db.select().from(volunteerPayments)
+          .where(and(
+            eq(volunteerPayments.month, prevMonth), eq(volunteerPayments.year, prevYear),
+            sql`${volunteerPayments.paymentStatus} IN ('pending', 'withheld')`,
+          ));
+
+        // Totals
+        const totalPayroll = payrollRows.reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0);
+        const totalReceipts = receiptRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const totalLoans = loanRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const totalVolunteers = volunteerRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const totalCarried = [
+          ...carriedPayroll.map(r => parseFloat(String(r.netPay ?? 0))),
+          ...carriedReceipts.map(r => parseFloat(String(r.amount ?? 0))),
+          ...carriedLoans.map(r => parseFloat(String(r.amount ?? 0))),
+          ...carriedVolunteers.map(r => parseFloat(String(r.amount ?? 0))),
+        ].reduce((s, v) => s + v, 0);
+        const totalExpenditure = totalPayroll + totalReceipts + totalLoans + totalVolunteers + totalCarried;
+
+        const bankBalance = parseFloat(String(session?.bankBalance ?? 0));
+        const totalPaid = [
+          ...payrollRows.filter(r => r.paymentStatus === 'paid').map(r => parseFloat(String(r.netPay ?? 0))),
+          ...receiptRows.filter(r => r.paymentStatus === 'paid').map(r => parseFloat(String(r.amount ?? 0))),
+          ...loanRows.filter(r => r.paymentStatus === 'paid').map(r => parseFloat(String(r.amount ?? 0))),
+          ...volunteerRows.filter(r => r.paymentStatus === 'paid').map(r => parseFloat(String(r.amount ?? 0))),
+        ].reduce((s, v) => s + v, 0);
+        const totalPending = totalExpenditure - totalPaid;
+        const reconciliationBalance = bankBalance - totalPending;
+
+        return {
+          session,
+          income: { total: totalIncome, breakdown: incomeBreakdown },
+          expenditure: {
+            total: totalExpenditure,
+            payroll: payrollRows.map(r => ({ ...r, type: 'payroll' as const, payee: r.fullName ?? r.employeeName ?? `Employee #${r.userId}`, amount: String(r.netPay ?? '0'), carriedFrom: null })),
+            receipts: receiptRows.map(r => ({ ...r, type: 'expense' as const, payee: r.vendor ?? r.submitterName ?? 'Supplier', amount: String(r.amount ?? '0'), carriedFrom: null })),
+            loans: loanRows.map(r => ({ ...r, type: 'loan' as const, payee: r.borrowerName ?? 'Borrower', amount: String(r.amount ?? '0'), paymentMethod: 'cheque', chequeImageUrl: r.evidenceUrl ?? null, invoiceUrl: null, withheldAt: null, withheldReason: null, carriedFrom: null })),
+            volunteers: volunteerRows.map(r => ({ ...r, type: 'volunteer' as const, payee: r.recipientName ?? 'Volunteer', amount: String(r.amount ?? '0'), carriedFrom: null })),
+            carried: [
+              ...carriedPayroll.map(r => ({ ...r, type: 'payroll' as const, payee: r.fullName ?? r.employeeName ?? `Employee #${r.userId}`, amount: String(r.netPay ?? '0'), carriedFrom: { month: prevMonth, year: prevYear } })),
+              ...carriedReceipts.map(r => ({ ...r, type: 'expense' as const, payee: r.vendor ?? r.submitterName ?? 'Supplier', amount: String(r.amount ?? '0'), carriedFrom: { month: prevMonth, year: prevYear } })),
+              ...carriedLoans.map(r => ({ ...r, type: 'loan' as const, payee: r.borrowerName ?? 'Borrower', amount: String(r.amount ?? '0'), paymentMethod: 'cheque', chequeImageUrl: r.evidenceUrl ?? null, invoiceUrl: null, withheldAt: null, withheldReason: null, carriedFrom: { month: prevMonth, year: prevYear } })),
+              ...carriedVolunteers.map(r => ({ ...r, type: 'volunteer' as const, payee: r.recipientName ?? 'Volunteer', amount: String(r.amount ?? '0'), carriedFrom: { month: prevMonth, year: prevYear } })),
+            ],
+          },
+          totals: { totalIncome, totalExpenditure, totalPaid, totalPending, reconciliationBalance },
+          prevMonth: { month: prevMonth, year: prevYear },
+        };
       }),
   }),
 });

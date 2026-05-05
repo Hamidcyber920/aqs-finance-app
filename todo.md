@@ -181,3 +181,18 @@
 - [x] Dashboard: user filter dropdown (All Users + individual users)
 - [x] Dashboard: expense table with columns: User, Date, Category, Amount, Status, Description
 - [x] Dashboard: summary stats (total spend, number of receipts, pending approvals) across all users
+
+## Reconciliation Rebuild (May 2026)
+- [x] Schema: carry-forward handled via withheld status (no new columns needed)
+- [x] Schema: payment evidence already in chequeImageUrl/invoiceUrl columns
+- [x] Backend: pull total income (incomeRecords + fridayCollections + fundraisingDonations)
+- [x] Backend: pull total expenditure (receipts all users + payrollRecords + loanRepayments + volunteers)
+- [x] Backend: group expenditure by payment method (cash / cheque / bank transfer)
+- [x] Backend: carry-forward — withheld items from prev month auto-loaded into current month
+- [x] Backend: auto-carry-forward query — loads prev month withheld items with carriedFrom tag
+- [x] Frontend: Income section — total with breakdown by source
+- [x] Frontend: Expenditure section — total with breakdown (payroll, receipts, qarde hasan, volunteers)
+- [x] Frontend: Payment method tabs (Cash / Cheque / Bank Transfer) each with photo evidence upload
+- [x] Frontend: Reconciliation balance = bank balance - total pending outgoings
+- [x] Frontend: Carry-forward panel — items from previous month shown with "Prev Month" badge
+- [x] Frontend: Pay/Withhold per item with camera photo or file upload evidence
