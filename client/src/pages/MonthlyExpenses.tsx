@@ -507,7 +507,7 @@ function AddInvoiceDialog({ open, onClose, month, year }: { open: boolean; onClo
   const [paymentMethod, setPaymentMethod] = useState<"cheque" | "bank_transfer" | "cash">("cheque");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [chequeFile, setChequeFile] = useState<File | null>(null);
-  const [chequeNumber, setChequeNumber] = useState(item?.chequeNumber ?? "");
+  const [chequeNumber, setChequeNumber] = useState("");
   const [chequeDate, setChequeDate] = useState("");
   const [chequeAmount, setChequeAmount] = useState("");
   const [extractedVendor, setExtractedVendor] = useState("");
