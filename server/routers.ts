@@ -370,7 +370,8 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const loan = await createLoan({ borrowerName: input.applicantName, borrowerEmail: input.applicantEmail, borrowerPhone: input.applicantPhone, borrowerAddress: input.applicantAddress, purpose: input.purpose, amount: input.amount, termMonths: input.repaymentPeriodMonths, monthlyRepayment: input.monthlyRepayment, startDate: input.startDate, notes: input.notes } as any);
         if (input.applicantEmail) {
-          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Application</p></div><div style="padding:24px;background:#fff"><p>Dear ${input.applicantName},</p><p>Thank you for submitting your Qarde Hasan (interest-free loan) application. We have received your application and it is currently under review by our trustees.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount Requested</td><td style="padding:8px">&pound;${parseFloat(input.amount).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Purpose</td><td style="padding:8px">${input.purpose}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${input.repaymentPeriodMonths} months</td></tr></table><p>You will be notified once your application has been reviewed. If you have any questions, please contact us directly.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
+          const firstName1 = input.applicantName.split(' ')[0];
+          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Application</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName1},</p><p>Thank you for submitting your Qarde Hasan (interest-free loan) application. We have received your application and it is currently under review by our trustees.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount Requested</td><td style="padding:8px">&pound;${parseFloat(input.amount).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Purpose</td><td style="padding:8px">${input.purpose}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${input.repaymentPeriodMonths} months</td></tr></table><p>You will be notified once your application has been reviewed. If you have any questions, please contact us directly.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
           await sendGmail(input.applicantEmail, input.applicantName, "Qarde Hasan Loan Application Received — Abdullah Quilliam Society", html).catch(() => {});
         }
         return loan;
@@ -381,7 +382,8 @@ export const appRouter = router({
         await updateLoan(input.id, { status: "approved", approvedAt: new Date(), chairSignatureUrl: input.chairSignatureUrl, trusteeSignatureUrl: input.trusteeSignatureUrl } as any);
         const loan = await getLoanById(input.id);
         if (loan?.borrowerEmail) {
-          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan &mdash; Approved</p></div><div style="padding:24px;background:#fff"><p>Dear ${loan.borrowerName},</p><p>We are pleased to inform you that your Qarde Hasan loan application has been <strong style="color:#1a4731">approved</strong> by the Abdullah Quilliam Society trustees.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Loan Amount</td><td style="padding:8px">&pound;${parseFloat(String(loan.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Monthly Repayment</td><td style="padding:8px">&pound;${loan.monthlyRepayment ? parseFloat(String(loan.monthlyRepayment)).toFixed(2) : "TBC"}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${loan.termMonths} months</td></tr></table><p>Please contact us to arrange collection of funds and to sign your loan agreement document.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
+          const firstName2 = (loan.borrowerName ?? '').split(' ')[0];
+          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan &mdash; Approved</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName2},</p><p>We are pleased to inform you that your Qarde Hasan loan application has been <strong style="color:#1a4731">approved</strong> by the Abdullah Quilliam Society trustees.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Loan Amount</td><td style="padding:8px">&pound;${parseFloat(String(loan.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Monthly Repayment</td><td style="padding:8px">&pound;${loan.monthlyRepayment ? parseFloat(String(loan.monthlyRepayment)).toFixed(2) : "TBC"}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${loan.termMonths} months</td></tr></table><p>Please contact us to arrange collection of funds and to sign your loan agreement document.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
           await sendGmail(loan.borrowerEmail, loan.borrowerName, "Your Qarde Hasan Loan Has Been Approved — Abdullah Quilliam Society", html).catch(() => {});
         }
         return { success: true };
@@ -426,14 +428,17 @@ export const appRouter = router({
         let subject = ""; let htmlBody = "";
         if (input.type === "application_received") {
           subject = "Qarde Hasan Loan Application Received — Abdullah Quilliam Society";
-          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear ${loan.borrowerName},</p><p>Your loan application for <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> has been received and is under review.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+          const fn1 = (loan.borrowerName ?? '').split(' ')[0];
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum, ${fn1},</p><p>Your loan application for <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> has been received and is under review.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
         } else if (input.type === "approved") {
           subject = "Your Qarde Hasan Loan Has Been Approved — Abdullah Quilliam Society";
-          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear ${loan.borrowerName},</p><p>Your Qarde Hasan loan of <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> has been <strong style="color:#1a4731">approved</strong>. Please contact us to arrange collection.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+          const fn2 = (loan.borrowerName ?? '').split(' ')[0];
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum, ${fn2},</p><p>Your Qarde Hasan loan of <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> has been <strong style="color:#1a4731">approved</strong>. Please contact us to arrange collection.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
         } else if (input.type === "reminder") {
           const remaining = parseFloat(String(loan.amount)) - parseFloat(String(loan.totalRepaid ?? 0));
           subject = "Qarde Hasan Loan Repayment Reminder — Abdullah Quilliam Society";
-          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear ${loan.borrowerName},</p><p>This is a friendly reminder that your outstanding balance is <strong>&pound;${remaining.toFixed(2)}</strong>. If you have any difficulties, please contact us.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+          const fn3 = (loan.borrowerName ?? '').split(' ')[0];
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum, ${fn3},</p><p>This is a friendly reminder that your outstanding balance is <strong>&pound;${remaining.toFixed(2)}</strong>. If you have any difficulties, please contact us.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
         } else if (input.type === "custom" && input.customSubject && input.customBody) {
           subject = input.customSubject;
           htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px">${input.customBody}</div>${footer}</div>`;
@@ -635,6 +640,36 @@ export const appRouter = router({
           }
         }
         return { success: true, sentAt: now };
+      }),
+
+    // Bulk mark all pending payroll as paid for a given month/year
+    bulkMarkAllPaid: adminProcedure
+      .input(z.object({ month: z.number(), year: z.number() }))
+      .mutation(async ({ input }) => {
+        const { month, year } = input;
+        const db = await (await import("./db")).getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const { eq, and, inArray } = await import("drizzle-orm");
+        const { payrollRecords, volunteerPayments } = await import("../drizzle/schema");
+        const now = new Date();
+        // Mark all pending payroll cheque/cash payments as paid
+        const payrollResult = await db.update(payrollRecords)
+          .set({ paymentStatus: "paid", paidAt: now, chequeIssuedAt: now, updatedAt: now } as any)
+          .where(and(
+            eq(payrollRecords.paymentStatus, "pending"),
+            inArray(payrollRecords.paymentMethod, ["cheque", "cash"]),
+            eq(payrollRecords.month, month),
+            eq(payrollRecords.year, year)
+          ));
+        // Mark all pending volunteer payments as paid
+        const volunteerResult = await db.update(volunteerPayments)
+          .set({ paymentStatus: "paid", paidAt: now, updatedAt: now })
+          .where(and(
+            eq(volunteerPayments.paymentStatus, "pending"),
+            eq(volunteerPayments.month, month),
+            eq(volunteerPayments.year, year)
+          ));
+        return { success: true, paidAt: now, payrollUpdated: (payrollResult as any)[0]?.affectedRows ?? 0, volunteerUpdated: (volunteerResult as any)[0]?.affectedRows ?? 0 };
       }),
 
     // Staff + volunteer directory for email recipient dropdown

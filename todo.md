@@ -146,3 +146,9 @@
 - [x] staffProfile.upsert: added fullName field so staff can have proper display name
 - [x] staffDirectory: now returns fullName from staffProfiles when available
 - [x] 68 tests passing
+
+## Three Improvements (Apr 7 2026)
+- [x] Monthly Expenses: Bulk "Save All" button to mark all pending payroll as paid at once
+- [x] Loan emails: Assalamu Alaikum greeting + fullName lookup (same fix as payment emails)
+- [x] Admin Panel: Full Name field visible and editable in staff profile form (pencil icon inline edit)
+- [x] 68 application tests passing (3 credential tests failing due to expired OAuth tokens — not a code issue)

@@ -3,11 +3,12 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   Users, Receipt, ShieldCheck, ShieldOff, Crown, UserX, UserCheck,
-  TrendingUp, CheckCircle, Clock, AlertCircle,
+  TrendingUp, CheckCircle, Clock, AlertCircle, Pencil, Check, X,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -31,9 +32,14 @@ export default function AdminPanelPage() {
     suspend?: boolean;
   } | null>(null);
 
+  const [editingFullName, setEditingFullName] = useState<{ userId: number; value: string } | null>(null);
   const { data: stats, isLoading: statsLoading } = trpc.admin.stats.useQuery();
   const { data: usersData, isLoading: usersLoading } = trpc.admin.listUsers.useQuery({ limit: 100, offset: 0 });
   const { data: receiptsData, isLoading: receiptsLoading } = trpc.admin.allReceipts.useQuery({ limit: 50, offset: 0 });
+  const upsertStaffProfile = trpc.staffProfile.upsert.useMutation({
+    onSuccess: () => { toast.success("Full name saved"); utils.admin.listUsers.invalidate(); setEditingFullName(null); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const updateRoleMutation = trpc.admin.updateUserRole.useMutation({
     onSuccess: () => {
@@ -169,10 +175,35 @@ export default function AdminPanelPage() {
                   </div>
                   {usersData.rows.map((u) => {
                     const isSelf = u.id === user?.id;
+                    const isEditingThis = editingFullName?.userId === u.id;
                     return (
                       <div key={u.id} className="grid grid-cols-[1fr_160px_100px_80px_140px] gap-4 px-4 py-3 border-b last:border-0 items-center">
                         <div className="min-w-0">
-                          <p className="font-medium text-sm truncate">{u.name ?? "—"}</p>
+                          <div className="flex items-center gap-1">
+                            {isEditingThis ? (
+                              <>
+                                <Input
+                                  className="h-6 text-sm py-0 px-1 w-36"
+                                  value={editingFullName.value}
+                                  onChange={e => setEditingFullName({ userId: u.id, value: e.target.value })}
+                                  onKeyDown={e => {
+                                    if (e.key === "Enter") upsertStaffProfile.mutate({ userId: u.id, fullName: editingFullName.value });
+                                    if (e.key === "Escape") setEditingFullName(null);
+                                  }}
+                                  autoFocus
+                                  placeholder="Full name…"
+                                />
+                                <button className="text-green-600 hover:text-green-700" onClick={() => upsertStaffProfile.mutate({ userId: u.id, fullName: editingFullName.value })}><Check className="h-3.5 w-3.5" /></button>
+                                <button className="text-muted-foreground hover:text-foreground" onClick={() => setEditingFullName(null)}><X className="h-3.5 w-3.5" /></button>
+                              </>
+                            ) : (
+                              <>
+                                <p className="font-medium text-sm truncate">{u.fullName ?? u.name ?? "—"}</p>
+                                {u.fullName && <span className="text-xs text-muted-foreground">(username: {u.name})</span>}
+                                <button className="text-muted-foreground hover:text-primary ml-1 opacity-50 hover:opacity-100" title="Set full name for emails" onClick={() => setEditingFullName({ userId: u.id, value: u.fullName ?? u.name ?? "" })}><Pencil className="h-3 w-3" /></button>
+                              </>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                         </div>
                         <span className="text-xs text-muted-foreground">

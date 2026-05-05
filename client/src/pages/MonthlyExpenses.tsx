@@ -93,6 +93,14 @@ export default function MonthlyExpenses() {
   const deleteVol = trpc.expenses.volunteerPayments.delete.useMutation({
     onSuccess: () => { invalidateAll(); },
   });
+  const bulkMarkAllPaid = trpc.expenses.bulkMarkAllPaid.useMutation({
+    onSuccess: (data) => {
+      invalidateAll();
+      const total = (data.payrollUpdated ?? 0) + (data.volunteerUpdated ?? 0);
+      toast.success(`${total} payment${total !== 1 ? 's' : ''} marked as paid`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const payrollRows: PaymentRow[] = (pendingData?.payroll ?? []).map((r: any) => ({
     id: r.id, type: "payroll" as PaymentType,
@@ -272,7 +280,19 @@ export default function MonthlyExpenses() {
             {f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
         ))}
-        <div className="ml-auto">
+        <div className="ml-auto flex gap-2">
+          {allRows.filter(r => r.paymentStatus === "pending" && !r.paymentHeld && (r.paymentMethod === "cheque" || r.paymentMethod === "cash")).length > 0 && (
+            <Button size="sm" variant="default" className="bg-emerald-700 hover:bg-emerald-800 text-white"
+              disabled={bulkMarkAllPaid.isPending}
+              onClick={() => {
+                if (confirm(`Mark all ${allRows.filter(r => r.paymentStatus === 'pending' && !r.paymentHeld && (r.paymentMethod === 'cheque' || r.paymentMethod === 'cash')).length} pending cheque/cash payments as paid for ${MONTHS[month-1]} ${year}?`)) {
+                  bulkMarkAllPaid.mutate({ month, year });
+                }
+              }}>
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+              Save All ({allRows.filter(r => r.paymentStatus === "pending" && !r.paymentHeld && (r.paymentMethod === "cheque" || r.paymentMethod === "cash")).length})
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={() => setAddVolOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1" /> Add Volunteer Payment
           </Button>

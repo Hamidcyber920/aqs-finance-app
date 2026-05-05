@@ -141,7 +141,14 @@ export async function listAllUsers(limit = 100, offset = 0) {
   const db = await getDb();
   if (!db) return { rows: [], total: 0 };
   const [rows, countResult] = await Promise.all([
-    db.select().from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset),
+    db.select({
+      id: users.id, name: users.name, email: users.email, role: users.role,
+      isActive: users.isActive, status: users.status, createdAt: users.createdAt,
+      fullName: staffProfiles.fullName,
+    })
+      .from(users)
+      .leftJoin(staffProfiles, eq(users.id, staffProfiles.userId))
+      .orderBy(desc(users.createdAt)).limit(limit).offset(offset),
     db.select({ count: sql<number>`count(*)` }).from(users),
   ]);
   return { rows, total: Number(countResult[0]?.count ?? 0) };
