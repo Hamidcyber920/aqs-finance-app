@@ -213,3 +213,34 @@
 - [x] Frontend: authorised items show "Authorised by [Name] at [datetime]" badge in green
 - [x] Frontend: rejected items shown in red with comment, labelled "Deferred to [next month]"
 - [x] Frontend: add new expense entry form (for invoices and ad-hoc items via volunteer payments)
+
+## Monthly Expenses — Invoices Tab (May 2026)
+- [x] Schema: create invoices table with category, subCategory, description, amount, vendor, evidenceUrl, chequeImageUrl, chequeNumber, chequeDate, chequeAmount, paymentMethod, paymentStatus, authorisation and rejection fields, month, year
+- [x] Backend: invoices.list procedure (by month/year, includes deferred from prev month)
+- [x] Backend: invoices.create procedure
+- [x] Backend: invoices.authorise procedure
+- [x] Backend: invoices.reject procedure (defers to next month)
+- [x] Backend: invoices.markPaid procedure
+- [x] Frontend: Invoices tab in Monthly Expenses page
+- [x] Frontend: category dropdown with sub-categories (restaurant, cleaning, events, wholesale, temp staff, travel, trustees, maintenance x3, uniforms, accommodation)
+- [x] Frontend: custom description field + vendor + amount
+- [x] Frontend: evidence upload (camera + file)
+- [x] Frontend: cheque photo upload with AI extraction (auto-fills cheque number, date, amount)
+- [x] Frontend: green tick authorise + red X reject with comment + defer to next month
+- [x] Frontend: authorised badge shows name + datetime
+- [x] Frontend: deferred items from prev month shown with "Prev Month" badge
+
+## Monthly Expenses — Invoices Tab + Universal AI Extraction (May 2026)
+- [x] Schema: create invoices table with category, subCategory, description, amount, vendor, invoiceNumber, evidenceUrl, chequeImageUrl, chequeNumber, chequeDate, chequeAmount, paymentMethod, paymentStatus, authorisation/rejection fields, month, year
+- [x] Backend: invoices.list (by month/year, includes deferred from prev month)
+- [x] Backend: invoices.create
+- [x] Backend: invoices.authorise
+- [x] Backend: invoices.reject (defers to next month)
+- [x] Backend: invoices.markPaid
+- [x] Backend: expenses.extractEvidence — universal AI extraction procedure for any uploaded evidence image (returns vendor, amount, date, chequeNumber, invoiceNumber, description)
+- [x] Frontend: Invoices tab in Monthly Expenses
+- [x] Frontend: category dropdown with sub-categories (restaurant, cleaning, events, wholesale, temp staff, travel, trustees, maintenance x3, uniforms, accommodation)
+- [x] Frontend: custom description + vendor + amount fields
+- [x] Frontend: evidence upload with AI extraction on ALL sections (Invoices, Payroll, Receipts, Volunteers, Qarde Hasan)
+- [x] Frontend: AI extraction auto-fills vendor, amount, date, cheque/invoice number, description on upload
+- [x] Frontend: green tick authorise + red X reject with comment + defer to next month

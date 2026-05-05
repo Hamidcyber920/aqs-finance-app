@@ -531,3 +531,50 @@ export const reconciliationSessions = mysqlTable("reconciliation_sessions", {
 
 export type ReconciliationSession = typeof reconciliationSessions.$inferSelect;
 export type InsertReconciliationSession = typeof reconciliationSessions.$inferInsert;
+
+// ─── INVOICES ─────────────────────────────────────────────────────────────────
+export const invoices = mysqlTable("invoices", {
+  id: int("id").autoincrement().primaryKey(),
+  month: int("month").notNull(),
+  year: int("year").notNull(),
+  // Category / sub-category
+  category: varchar("category", { length: 100 }).notNull(),
+  subCategory: varchar("subCategory", { length: 100 }),
+  // Description & vendor
+  vendor: varchar("vendor", { length: 200 }),
+  description: text("description"),
+  invoiceNumber: varchar("invoiceNumber", { length: 100 }),
+  invoiceDate: date("invoiceDate"),
+  // Amount
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  // Payment
+  paymentMethod: mysqlEnum("paymentMethod", ["cheque", "bank_transfer", "cash"]).default("cheque"),
+  paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "withheld"]).default("pending").notNull(),
+  paidAt: timestamp("paidAt"),
+  withheldAt: timestamp("withheldAt"),
+  withheldReason: text("withheldReason"),
+  // Cheque details (AI-extracted)
+  chequeNumber: varchar("chequeNumber", { length: 50 }),
+  chequeDate: date("chequeDate"),
+  chequeAmount: decimal("chequeAmount", { precision: 12, scale: 2 }),
+  chequeImageUrl: text("chequeImageUrl"),
+  // Evidence
+  evidenceUrl: text("evidenceUrl"),
+  // Authorisation
+  authorisedById: int("authorisedById"),
+  authorisedByName: varchar("authorisedByName", { length: 200 }),
+  authorisedAt: timestamp("authorisedAt"),
+  // Rejection / deferral
+  rejectedById: int("rejectedById"),
+  rejectedByName: varchar("rejectedByName", { length: 200 }),
+  rejectedAt: timestamp("rejectedAt"),
+  rejectionComment: text("rejectionComment"),
+  deferredToMonth: int("deferredToMonth"),
+  deferredToYear: int("deferredToYear"),
+  // Audit
+  createdById: int("createdById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = typeof invoices.$inferInsert;

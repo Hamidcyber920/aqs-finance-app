@@ -906,6 +906,49 @@ export const appRouter = router({
         }
       }),
 
+    // Universal evidence extraction — works for invoices, receipts, cheques, and any financial document
+    extractEvidence: adminProcedure
+      .input(z.object({ imageUrl: z.string(), documentType: z.enum(["invoice", "cheque", "receipt", "auto"]).default("auto") }))
+      .mutation(async ({ input }) => {
+        try {
+          const response = await invokeLLM({
+            messages: [
+              { role: "system", content: "You are a financial document extraction assistant. Extract structured data from invoices, cheques, receipts, and expense documents. Return JSON only." },
+              { role: "user", content: [
+                { type: "image_url", image_url: { url: input.imageUrl, detail: "high" } },
+                { type: "text", text: `Analyse this financial document image and extract all available fields. Document type hint: ${input.documentType}. Extract: vendor (supplier/payee name), amount (total amount as decimal string e.g. '125.50'), date (document date as YYYY-MM-DD), chequeNumber (if cheque: 6-digit number from bottom), invoiceNumber (if invoice: invoice/ref number), description (brief description of goods/services), category (best guess: restaurant/cleaning/events/wholesale/temp_staff/travel/maintenance/uniforms/accommodation/other). Return JSON with keys: vendor, amount, date, chequeNumber, invoiceNumber, description, category. Use null for any field not found.` },
+              ]},
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "evidence_data",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    vendor: { type: ["string", "null"] },
+                    amount: { type: ["string", "null"] },
+                    date: { type: ["string", "null"] },
+                    chequeNumber: { type: ["string", "null"] },
+                    invoiceNumber: { type: ["string", "null"] },
+                    description: { type: ["string", "null"] },
+                    category: { type: ["string", "null"] },
+                  },
+                  required: ["vendor", "amount", "date", "chequeNumber", "invoiceNumber", "description", "category"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          });
+          const content = response?.choices?.[0]?.message?.content;
+          const parsed = typeof content === "string" ? JSON.parse(content) : content;
+          return { success: true, data: parsed };
+        } catch (e) {
+          return { success: false, data: { vendor: null, amount: null, date: null, chequeNumber: null, invoiceNumber: null, description: null, category: null } };
+        }
+      }),
+
     // All items for a month across all 4 types — for the Monthly Expenses page
     allItems: adminProcedure
       .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
@@ -1605,6 +1648,109 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         };
       }),
   }),
-});
+  system: systemRouter,
 
+  // ─── INVOICES ────────────────────────────────────────────────────────────────
+  invoices: router({
+    list: adminProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const { month, year } = input;
+        const db = await (await import("./db")).getDb();
+        if (!db) return [];
+        const { eq, and, desc } = await import("drizzle-orm");
+        const { invoices } = await import("../drizzle/schema");
+        const current = await db.select().from(invoices)
+          .where(and(eq(invoices.month, month), eq(invoices.year, year)))
+          .orderBy(desc(invoices.createdAt));
+        const deferred = await db.select().from(invoices)
+          .where(and(eq(invoices.deferredToMonth, month), eq(invoices.deferredToYear, year)))
+          .orderBy(desc(invoices.createdAt));
+        const ids = new Set(current.map(r => r.id));
+        return [...current, ...deferred.filter(r => !ids.has(r.id))];
+      }),
+
+    create: adminProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12),
+        year: z.number(),
+        category: z.string(),
+        subCategory: z.string().optional(),
+        vendor: z.string().optional(),
+        description: z.string().optional(),
+        invoiceNumber: z.string().optional(),
+        invoiceDate: z.string().optional(),
+        amount: z.string(),
+        paymentMethod: z.enum(["cheque", "bank_transfer", "cash"]).default("cheque"),
+        evidenceUrl: z.string().optional(),
+        chequeImageUrl: z.string().optional(),
+        chequeNumber: z.string().optional(),
+        chequeDate: z.string().optional(),
+        chequeAmount: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import("./db")).getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const { invoices } = await import("../drizzle/schema");
+        const [result] = await db.insert(invoices).values({
+          month: input.month,
+          year: input.year,
+          category: input.category,
+          subCategory: input.subCategory ?? null,
+          vendor: input.vendor ?? null,
+          description: input.description ?? null,
+          invoiceNumber: input.invoiceNumber ?? null,
+          invoiceDate: input.invoiceDate ? new Date(input.invoiceDate) : null,
+          amount: input.amount,
+          paymentMethod: input.paymentMethod,
+          paymentStatus: "pending",
+          evidenceUrl: input.evidenceUrl ?? null,
+          chequeImageUrl: input.chequeImageUrl ?? null,
+          chequeNumber: input.chequeNumber ?? null,
+          chequeDate: input.chequeDate ? new Date(input.chequeDate) : null,
+          chequeAmount: input.chequeAmount ?? null,
+          createdById: ctx.user.id,
+        } as any);
+        return { success: true, id: (result as any)?.insertId };
+      }),
+
+    authorise: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import("./db")).getDb();
+        if (!db) return { success: true };
+        const { eq } = await import("drizzle-orm");
+        const { invoices } = await import("../drizzle/schema");
+        const now = new Date();
+        await db.update(invoices).set({ authorisedById: ctx.user.id, authorisedByName: ctx.user.name ?? "Admin", authorisedAt: now, rejectedById: null, rejectedAt: null, rejectionComment: null, deferredToMonth: null, deferredToYear: null } as any).where(eq(invoices.id, input.id));
+        return { success: true, authorisedAt: now, authorisedByName: ctx.user.name ?? "Admin" };
+      }),
+
+    reject: adminProcedure
+      .input(z.object({ id: z.number(), comment: z.string().optional(), month: z.number(), year: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import("./db")).getDb();
+        if (!db) return { success: true };
+        const { eq } = await import("drizzle-orm");
+        const { invoices } = await import("../drizzle/schema");
+        const now = new Date();
+        const nextMonth = input.month === 12 ? 1 : input.month + 1;
+        const nextYear = input.month === 12 ? input.year + 1 : input.year;
+        await db.update(invoices).set({ rejectedById: ctx.user.id, rejectedByName: ctx.user.name ?? "Admin", rejectedAt: now, rejectionComment: input.comment ?? "", deferredToMonth: nextMonth, deferredToYear: nextYear, paymentStatus: "withheld", withheldAt: now, withheldReason: input.comment ?? "", authorisedById: null, authorisedAt: null } as any).where(eq(invoices.id, input.id));
+        return { success: true, rejectedAt: now, deferredToMonth: nextMonth, deferredToYear: nextYear };
+      }),
+
+    markPaid: adminProcedure
+      .input(z.object({ id: z.number(), chequeNumber: z.string().optional(), chequeImageUrl: z.string().optional(), evidenceUrl: z.string().optional(), paymentMethod: z.enum(["cheque", "bank_transfer", "cash"]).optional() }))
+      .mutation(async ({ input }) => {
+        const db = await (await import("./db")).getDb();
+        if (!db) return { success: true };
+        const { eq } = await import("drizzle-orm");
+        const { invoices } = await import("../drizzle/schema");
+        const now = new Date();
+        await db.update(invoices).set({ paymentStatus: "paid", paidAt: now, chequeNumber: input.chequeNumber ?? null, chequeImageUrl: input.chequeImageUrl ?? null, evidenceUrl: input.evidenceUrl ?? null, paymentMethod: input.paymentMethod ?? "cheque" } as any).where(eq(invoices.id, input.id));
+        return { success: true, paidAt: now };
+      }),
+  }),
+});
 export type AppRouter = typeof appRouter;
