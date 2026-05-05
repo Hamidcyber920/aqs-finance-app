@@ -1648,7 +1648,6 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         };
       }),
   }),
-  system: systemRouter,
 
   // ─── INVOICES ────────────────────────────────────────────────────────────────
   invoices: router({

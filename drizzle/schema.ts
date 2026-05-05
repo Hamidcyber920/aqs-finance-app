@@ -143,7 +143,6 @@ export const receipts = mysqlTable("receipts", {
   deferredToMonth: int("deferredToMonth"),
   deferredToYear: int("deferredToYear"),
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "withheld"]).default("pending"),
-  paidAt: timestamp("paidAt"),
   withheldAt: timestamp("withheldAt"),
   withheldReason: text("withheldReason"),
   chequeAmount: decimal("chequeAmount", { precision: 10, scale: 2 }),
