@@ -48,6 +48,17 @@ function buildRepaymentSchedule(amount: number, termMonths: number, startDate: D
   });
 }
 
+/** Format a loan's term for display, preferring termValue+termUnit if available */
+function formatTerm(loan: { termMonths?: number | null; termValue?: number | null; termUnit?: string | null }) {
+  if (loan.termValue && loan.termUnit) {
+    return `${loan.termValue} ${loan.termUnit}`;
+  }
+  if (loan.termMonths) {
+    return `${loan.termMonths} months`;
+  }
+  return "—";
+}
+
 export default function Loans() {
   const [view, setView] = useState<"dashboard" | "list">("dashboard");
   const [newLoanOpen, setNewLoanOpen] = useState(false);
@@ -55,6 +66,9 @@ export default function Loans() {
   const [purposePreset, setPurposePreset] = useState<string>("");
   const [customPurpose, setCustomPurpose] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
+  const [termValue, setTermValue] = useState<string>("6");
+  const [termUnit, setTermUnit] = useState<"months" | "years">("months");
+  const [termNotes, setTermNotes] = useState("");
   const [, setLocation] = useLocation();
 
   const { data: loans = [], refetch } = trpc.loans.list.useQuery(
@@ -68,6 +82,9 @@ export default function Loans() {
       setPurposePreset("");
       setCustomPurpose("");
       setLoanAmount("");
+      setTermValue("6");
+      setTermUnit("months");
+      setTermNotes("");
       refetch();
     },
     onError: (e) => toast.error(e.message),
@@ -115,13 +132,19 @@ export default function Loans() {
     [loans]
   );
 
-  // ─── Computed monthly repayment ───────────────────────────────────────────
+  // ─── Computed monthly repayment (based on termValue + termUnit) ───────────
+
+  const computedTermMonths = useMemo(() => {
+    const tv = parseInt(termValue, 10);
+    if (!tv || isNaN(tv) || tv <= 0) return 0;
+    return termUnit === "years" ? tv * 12 : tv;
+  }, [termValue, termUnit]);
 
   const computedMonthly = useMemo(() => {
     const amt = parseFloat(loanAmount);
-    if (!amt || isNaN(amt)) return "";
-    return (amt / 6).toFixed(2);
-  }, [loanAmount]);
+    if (!amt || isNaN(amt) || computedTermMonths <= 0) return "";
+    return (amt / computedTermMonths).toFixed(2);
+  }, [loanAmount, computedTermMonths]);
 
   // ─── Purpose value ────────────────────────────────────────────────────────
 
@@ -303,8 +326,15 @@ export default function Loans() {
                             <span>All repayments complete</span>
                           )}
                         </div>
-                        <span className="text-muted-foreground">{l.termMonths} months</span>
+                        <span className="text-muted-foreground">{formatTerm(l)}</span>
                       </div>
+
+                      {/* Term notes if present */}
+                      {(l as any).termNotes && (
+                        <p className="text-xs text-muted-foreground italic border-t pt-2">
+                          Note: {(l as any).termNotes}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 );
@@ -393,7 +423,7 @@ export default function Loans() {
                       <td className="font-medium">{l.borrowerName}</td>
                       <td className="text-muted-foreground max-w-[200px] truncate">{l.purpose}</td>
                       <td>£{parseFloat(l.amount?.toString() ?? "0").toFixed(2)}</td>
-                      <td>{l.termMonths} months</td>
+                      <td>{formatTerm(l)}</td>
                       <td>£{parseFloat(l.totalRepaid?.toString() ?? "0").toFixed(2)}</td>
                       <td>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[l.status ?? "pending_review"] ?? "badge-pending"}`}>
@@ -435,7 +465,9 @@ export default function Loans() {
                 ? customPurpose
                 : purposePreset;
               const amount = fd.get("amount") as string;
-              const monthly = (parseFloat(amount) / 6).toFixed(2);
+              const tv = parseInt(termValue, 10) || 6;
+              const termMonthsCalc = termUnit === "years" ? tv * 12 : tv;
+              const monthly = (parseFloat(amount) / termMonthsCalc).toFixed(2);
               createLoan.mutate({
                 applicantName: fd.get("applicantName") as string,
                 applicantEmail: fd.get("applicantEmail") as string || undefined,
@@ -443,7 +475,9 @@ export default function Loans() {
                 applicantAddress: fd.get("applicantAddress") as string || undefined,
                 purpose,
                 amount,
-                repaymentPeriodMonths: 6,
+                termValue: tv,
+                termUnit,
+                termNotes: termNotes || undefined,
                 monthlyRepayment: monthly,
                 notes: fd.get("notes") as string || undefined,
               });
@@ -506,25 +540,75 @@ export default function Loans() {
                 </div>
               )}
 
-              {/* Amount + auto-computed monthly */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Amount Lent (£) *</Label>
+              {/* Amount */}
+              <div>
+                <Label>Amount Lent (£) *</Label>
+                <Input
+                  name="amount"
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  required
+                  value={loanAmount}
+                  onChange={(e) => setLoanAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+
+              {/* Repayment term: number + months/years toggle */}
+              <div>
+                <Label>Repayment Term *</Label>
+                <div className="flex gap-2 mt-1">
                   <Input
-                    name="amount"
                     type="number"
-                    step="0.01"
                     min="1"
+                    max="120"
+                    value={termValue}
+                    onChange={(e) => setTermValue(e.target.value)}
+                    className="w-24"
+                    placeholder="6"
                     required
-                    value={loanAmount}
-                    onChange={(e) => setLoanAmount(e.target.value)}
-                    placeholder="0.00"
                   />
+                  {/* Months / Years toggle */}
+                  <div className="flex rounded-md border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setTermUnit("months")}
+                      className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                        termUnit === "months"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-background text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      Months
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTermUnit("years")}
+                      className={`px-3 py-1.5 text-sm font-medium transition-colors border-l ${
+                        termUnit === "years"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-background text-foreground hover:bg-muted"
+                      }`}
+                    >
+                      Years
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <Label>Repayment Term</Label>
-                  <Input value="6 months (fixed)" readOnly className="bg-muted text-muted-foreground" />
-                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {computedTermMonths > 0 ? `= ${computedTermMonths} months total` : ""}
+                </p>
+              </div>
+
+              {/* Term notes */}
+              <div>
+                <Label>Repayment Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                <Textarea
+                  value={termNotes}
+                  onChange={(e) => setTermNotes(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Repayment to start after Ramadan, or flexible schedule agreed..."
+                />
               </div>
 
               {/* Monthly repayment preview */}
@@ -533,7 +617,7 @@ export default function Loans() {
                   <p className="text-xs text-muted-foreground">Monthly repayment (auto-calculated)</p>
                   <p className="text-lg font-bold text-primary">£{computedMonthly} / month</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    6 equal payments of £{computedMonthly} over 6 months
+                    {computedTermMonths} equal payments of £{computedMonthly} over {termValue} {termUnit}
                   </p>
                 </div>
               )}

@@ -397,12 +397,25 @@ export const appRouter = router({
       return { ...loan, repayments };
     }),
     create: adminProcedure
-      .input(z.object({ applicantName: z.string(), applicantEmail: z.string().optional(), applicantPhone: z.string().optional(), applicantAddress: z.string().optional(), purpose: z.string(), amount: z.string(), repaymentPeriodMonths: z.number(), monthlyRepayment: z.string().optional(), startDate: z.date().optional(), notes: z.string().optional() }))
+      .input(z.object({
+        applicantName: z.string(), applicantEmail: z.string().optional(),
+        applicantPhone: z.string().optional(), applicantAddress: z.string().optional(),
+        purpose: z.string(), amount: z.string(),
+        repaymentPeriodMonths: z.number().optional(),
+        termValue: z.number().optional(),
+        termUnit: z.enum(["months", "years"]).optional().default("months"),
+        termNotes: z.string().optional(),
+        monthlyRepayment: z.string().optional(), startDate: z.date().optional(), notes: z.string().optional()
+      }))
       .mutation(async ({ ctx, input }) => {
-        const loan = await createLoan({ borrowerName: input.applicantName, borrowerEmail: input.applicantEmail, borrowerPhone: input.applicantPhone, borrowerAddress: input.applicantAddress, purpose: input.purpose, amount: input.amount, termMonths: input.repaymentPeriodMonths, monthlyRepayment: input.monthlyRepayment, startDate: input.startDate, notes: input.notes } as any);
+        // Compute termMonths: if years, multiply by 12; fallback to repaymentPeriodMonths
+        const tv = input.termValue ?? input.repaymentPeriodMonths ?? 6;
+        const termMonths = (input.termUnit === "years") ? tv * 12 : tv;
+        const termLabel = `${tv} ${input.termUnit ?? "months"}`;
+        const loan = await createLoan({ borrowerName: input.applicantName, borrowerEmail: input.applicantEmail, borrowerPhone: input.applicantPhone, borrowerAddress: input.applicantAddress, purpose: input.purpose, amount: input.amount, termMonths, termValue: tv, termUnit: input.termUnit ?? "months", termNotes: input.termNotes, monthlyRepayment: input.monthlyRepayment, startDate: input.startDate, notes: input.notes } as any);
         if (input.applicantEmail) {
           const firstName1 = input.applicantName.split(' ')[0];
-          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Application</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName1},</p><p>Thank you for submitting your Qarde Hasan (interest-free loan) application. We have received your application and it is currently under review by our trustees.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount Requested</td><td style="padding:8px">&pound;${parseFloat(input.amount).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Purpose</td><td style="padding:8px">${input.purpose}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${input.repaymentPeriodMonths} months</td></tr></table><p>You will be notified once your application has been reviewed. If you have any questions, please contact us directly.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
+          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Application</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName1},</p><p>Thank you for submitting your Qarde Hasan (interest-free loan) application. We have received your application and it is currently under review by our trustees.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount Requested</td><td style="padding:8px">&pound;${parseFloat(input.amount).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Purpose</td><td style="padding:8px">${input.purpose}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${termLabel}</td></tr></table><p>You will be notified once your application has been reviewed. If you have any questions, please contact us directly.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
           await sendGmail(input.applicantEmail, input.applicantName, "Qarde Hasan Loan Application Received — Abdullah Quilliam Society", html).catch(() => {});
         }
         return loan;

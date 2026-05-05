@@ -244,3 +244,12 @@
 - [x] Frontend: evidence upload with AI extraction on ALL sections (Invoices, Payroll, Receipts, Volunteers, Qarde Hasan)
 - [x] Frontend: AI extraction auto-fills vendor, amount, date, cheque/invoice number, description on upload
 - [x] Frontend: green tick authorise + red X reject with comment + defer to next month
+
+## Qarde Hasan Repayment Term Enhancement (May 2026)
+- [x] Schema: add termValue (int), termUnit (varchar months/years), termNotes (text) columns to loanApplications table
+- [x] Migration: drizzle/0012_worried_mulholland_black.sql generated and applied to database
+- [x] Backend: loans.create procedure updated — accepts termValue, termUnit, termNotes; computes termMonths (years × 12); email shows human-readable term label
+- [x] Frontend: Loans.tsx form — replaced fixed "6 months" field with: number input + Months/Years toggle button group + optional term notes textarea
+- [x] Frontend: computedMonthly useMemo updated to use termValue × (12 if years else 1) for correct monthly calculation
+- [x] Frontend: loan cards and list view show human-readable term via formatTerm() helper (e.g. "2 years" or "18 months")
+- [x] Frontend: term notes shown on loan card if present
