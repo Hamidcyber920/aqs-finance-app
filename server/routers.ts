@@ -12,7 +12,7 @@ import { nanoid } from "nanoid";
 import { localAuthRouter, adminRouter } from "./routers/localAuth";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
-  getReceiptById, listReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
+  getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
   getDepartments, getExpenseCategories, seedDepartmentsAndCategories,
   getUserPermissions, upsertUserPermissions,
   listAllUsers, updateUserRole, setUserActive, getPendingUsers, approveUser, rejectUser, setDelegateApprover,
@@ -182,6 +182,37 @@ export const appRouter = router({
         const userId = isAdmin(ctx.user.role) && input.userId ? input.userId : isAdmin(ctx.user.role) && !input.userId ? undefined : ctx.user.id;
         return listReceipts({ ...input, userId, dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined, dateTo: input.dateTo ? new Date(input.dateTo) : undefined });
       }),
+
+    // Admin-only: list all receipts across all users with submitter info
+    adminList: adminProcedure
+      .input(z.object({
+        userId: z.number().optional(),
+        dateFrom: z.string().optional(), dateTo: z.string().optional(),
+        status: z.string().optional(), categoryName: z.string().optional(),
+        limit: z.number().min(1).max(200).default(100), offset: z.number().min(0).default(0),
+      }))
+      .query(async ({ input }) => {
+        return listAllReceipts({
+          allUsers: true,
+          userId: input.userId,
+          dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+          dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+          status: input.status,
+          categoryName: input.categoryName,
+          limit: input.limit,
+          offset: input.offset,
+        });
+      }),
+
+    // Admin-only: list all active users (for filter dropdown)
+    adminUserList: adminProcedure.query(async () => {
+      const { rows } = await listAllUsers(200, 0);
+      return rows.filter(u => u.status === 'active').map(u => ({
+        id: u.id,
+        displayName: u.fullName ?? u.name ?? `User #${u.id}`,
+        role: u.role,
+      }));
+    }),
 
     get: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
       const receipt = await getReceiptById(input.id);

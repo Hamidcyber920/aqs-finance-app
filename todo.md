@@ -173,3 +173,11 @@
 - [x] INCOME sub-section: Fundraising, Qarde Hasan Loans, Income & Rentals
 - [x] EXPENSES sub-section: Payroll, Monthly Expenses
 - [x] RECONCILIATION sub-section: Reconciliation (standalone)
+
+## Superadmin Dashboard — All Users Expenses (May 2026)
+- [x] Backend: add admin procedure to list all receipts with submitter name, role, and department
+- [x] Backend: support optional userId filter param so admin can drill into one user
+- [x] Dashboard: show "All Users Expenses" section for superadmin/trustee/manager roles
+- [x] Dashboard: user filter dropdown (All Users + individual users)
+- [x] Dashboard: expense table with columns: User, Date, Category, Amount, Status, Description
+- [x] Dashboard: summary stats (total spend, number of receipts, pending approvals) across all users

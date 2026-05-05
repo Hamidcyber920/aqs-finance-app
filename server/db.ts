@@ -357,6 +357,49 @@ export async function listReceipts(filter: ReceiptFilter = {}) {
   return { rows, total: Number(countResult[0]?.count ?? 0) };
 }
 
+export async function listAllReceipts(filter: ReceiptFilter & { allUsers?: boolean } = {}) {
+  const db = await getDb();
+  if (!db) return { rows: [], total: 0 };
+  const conditions = [];
+  if (!filter.allUsers && filter.userId) conditions.push(eq(receipts.userId, filter.userId));
+  if (filter.allUsers && filter.userId) conditions.push(eq(receipts.userId, filter.userId));
+  if (filter.categoryName) conditions.push(eq(receipts.categoryName, filter.categoryName));
+  if (filter.vendor) conditions.push(like(receipts.vendor, `%${filter.vendor}%`));
+  if (filter.dateFrom) conditions.push(gte(receipts.receiptDate, filter.dateFrom));
+  if (filter.dateTo) conditions.push(lte(receipts.receiptDate, filter.dateTo));
+  if (filter.status) conditions.push(eq(receipts.status, filter.status as Receipt["status"]));
+  if (filter.departmentId) conditions.push(eq(receipts.departmentId, filter.departmentId));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const [rows, countResult] = await Promise.all([
+    db.select({
+      id: receipts.id,
+      userId: receipts.userId,
+      vendor: receipts.vendor,
+      amount: receipts.amount,
+      categoryName: receipts.categoryName,
+      departmentName: receipts.departmentName,
+      status: receipts.status,
+      receiptDate: receipts.receiptDate,
+      notes: receipts.notes,
+      imageUrl: receipts.imageUrl,
+      createdAt: receipts.createdAt,
+      // submitter info
+      submitterName: users.name,
+      submitterRole: users.role,
+      submitterFullName: staffProfiles.fullName,
+    })
+      .from(receipts)
+      .leftJoin(users, eq(receipts.userId, users.id))
+      .leftJoin(staffProfiles, eq(receipts.userId, staffProfiles.userId))
+      .where(where)
+      .orderBy(desc(receipts.createdAt))
+      .limit(filter.limit ?? 100)
+      .offset(filter.offset ?? 0),
+    db.select({ count: sql<number>`count(*)` }).from(receipts).where(where),
+  ]);
+  return { rows, total: Number(countResult[0]?.count ?? 0) };
+}
+
 export async function getCategoryTotals(userId: number, dateFrom?: Date, dateTo?: Date) {
   const db = await getDb();
   if (!db) return [];
