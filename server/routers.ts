@@ -604,17 +604,20 @@ export const appRouter = router({
 
     // Now Paid: record payment with timestamp
     nowPaid: adminProcedure
-      .input(z.object({ type: z.enum(["payroll", "receipt", "volunteer"]), id: z.number(), chequeNumber: z.string().optional(), chequeImageUrl: z.string().optional(), invoiceUrl: z.string().optional() }))
+      .input(z.object({ type: z.enum(["payroll", "receipt", "volunteer", "loan"]), id: z.number(), chequeNumber: z.string().optional(), chequeImageUrl: z.string().optional(), invoiceUrl: z.string().optional() }))
       .mutation(async ({ input }) => {
         const now = new Date();
+        const db = await (await import("./db")).getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const { eq } = await import("drizzle-orm");
         if (input.type === "payroll") {
           await updatePayrollRecord(input.id, { paymentStatus: "paid" as any, paidAt: now, chequeIssuedAt: now, chequeNumber: input.chequeNumber, chequeImageUrl: input.chequeImageUrl, invoiceUrl: input.invoiceUrl } as any);
         } else if (input.type === "receipt") {
           await updateReceipt(input.id, { status: "approved" as any, paidAt: now, chequeIssuedAt: now, chequeNumber: input.chequeNumber, chequeImageUrl: input.chequeImageUrl, invoiceUrl: input.invoiceUrl } as any);
+        } else if (input.type === "loan") {
+          const { loanRepayments } = await import("../drizzle/schema");
+          await db.update(loanRepayments).set({ status: "paid", paidAt: now, chequeNumber: input.chequeNumber, chequeImageUrl: input.chequeImageUrl, invoiceUrl: input.invoiceUrl, updatedAt: now } as any).where(eq(loanRepayments.id, input.id));
         } else {
-          const db = await (await import("./db")).getDb();
-          if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-          const { eq } = await import("drizzle-orm");
           const { volunteerPayments } = await import("../drizzle/schema");
           await db.update(volunteerPayments).set({ paymentStatus: "paid", paidAt: now, chequeNumber: input.chequeNumber, chequeImageUrl: input.chequeImageUrl, invoiceUrl: input.invoiceUrl, updatedAt: now }).where(eq(volunteerPayments.id, input.id));
         }
@@ -915,7 +918,11 @@ export const appRouter = router({
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 0, 23, 59, 59);
 
-        const payroll = await db.select({
+        // Deferred items from previous month that point to this month
+        const prevMonth = month === 1 ? 12 : month - 1;
+        const prevYear = month === 1 ? year - 1 : year;
+
+        const payrollFields = {
           id: payrollRecords.id, employeeName: payrollRecords.employeeName,
           netPay: payrollRecords.netPay, grossPay: payrollRecords.grossPay,
           paymentMethod: payrollRecords.paymentMethod, paymentStatus: payrollRecords.paymentStatus,
@@ -927,12 +934,20 @@ export const appRouter = router({
           rejectionComment: payrollRecords.rejectionComment, deferredToMonth: payrollRecords.deferredToMonth, deferredToYear: payrollRecords.deferredToYear,
           notes: payrollRecords.notes, month: payrollRecords.month, year: payrollRecords.year,
           fullName: staffProfiles.fullName,
-        }).from(payrollRecords)
+        };
+        const payrollCurrent = await db.select(payrollFields).from(payrollRecords)
           .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
           .where(and(eq(payrollRecords.month, month), eq(payrollRecords.year, year)))
           .orderBy(desc(payrollRecords.createdAt));
+        const payrollDeferred = await db.select(payrollFields).from(payrollRecords)
+          .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
+          .where(and(eq(payrollRecords.deferredToMonth, month), eq(payrollRecords.deferredToYear, year)))
+          .orderBy(desc(payrollRecords.createdAt));
+        // Deduplicate by id
+        const payrollIds = new Set(payrollCurrent.map(r => r.id));
+        const payroll = [...payrollCurrent, ...payrollDeferred.filter(r => !payrollIds.has(r.id))];
 
-        const receipts = await db.select({
+        const receiptFields = {
           id: receiptsTable.id, vendor: receiptsTable.vendor,
           amount: receiptsTable.amount, totalAmount: receiptsTable.totalAmount,
           categoryName: receiptsTable.categoryName, departmentName: receiptsTable.departmentName,
@@ -946,12 +961,20 @@ export const appRouter = router({
           rejectionComment: receiptsTable.rejectionComment, deferredToMonth: receiptsTable.deferredToMonth, deferredToYear: receiptsTable.deferredToYear,
           notes: receiptsTable.notes, receiptDate: receiptsTable.receiptDate,
           submitterName: usersTable.name,
-        }).from(receiptsTable)
+        };
+        const { or } = await import("drizzle-orm");
+        const receiptsCurrent = await db.select(receiptFields).from(receiptsTable)
           .leftJoin(usersTable, eq(receiptsTable.userId, usersTable.id))
           .where(and(gte(receiptsTable.createdAt, startDate), lte(receiptsTable.createdAt, endDate)))
           .orderBy(desc(receiptsTable.createdAt));
+        const receiptsDeferred = await db.select(receiptFields).from(receiptsTable)
+          .leftJoin(usersTable, eq(receiptsTable.userId, usersTable.id))
+          .where(and(eq(receiptsTable.deferredToMonth, month), eq(receiptsTable.deferredToYear, year)))
+          .orderBy(desc(receiptsTable.createdAt));
+        const receiptIds = new Set(receiptsCurrent.map(r => r.id));
+        const receipts = [...receiptsCurrent, ...receiptsDeferred.filter(r => !receiptIds.has(r.id))];
 
-        const volunteers = await db.select({
+        const volunteerFields = {
           id: volunteerPayments.id, recipientName: volunteerPayments.recipientName,
           recipientEmail: volunteerPayments.recipientEmail,
           amount: volunteerPayments.amount, description: volunteerPayments.description,
@@ -963,11 +986,17 @@ export const appRouter = router({
           rejectedById: volunteerPayments.rejectedById, rejectedByName: volunteerPayments.rejectedByName, rejectedAt: volunteerPayments.rejectedAt,
           rejectionComment: volunteerPayments.rejectionComment, deferredToMonth: volunteerPayments.deferredToMonth, deferredToYear: volunteerPayments.deferredToYear,
           notes: volunteerPayments.notes, month: volunteerPayments.month, year: volunteerPayments.year,
-        }).from(volunteerPayments)
+        };
+        const volunteersCurrent = await db.select(volunteerFields).from(volunteerPayments)
           .where(and(eq(volunteerPayments.month, month), eq(volunteerPayments.year, year)))
           .orderBy(desc(volunteerPayments.createdAt));
+        const volunteersDeferred = await db.select(volunteerFields).from(volunteerPayments)
+          .where(and(eq(volunteerPayments.deferredToMonth, month), eq(volunteerPayments.deferredToYear, year)))
+          .orderBy(desc(volunteerPayments.createdAt));
+        const volunteerIds = new Set(volunteersCurrent.map(r => r.id));
+        const volunteers = [...volunteersCurrent, ...volunteersDeferred.filter(r => !volunteerIds.has(r.id))];
 
-        const loans = await db.select({
+        const loanFields = {
           id: loanRepayments.id, amount: loanRepayments.amount,
           paymentMethod: loanRepayments.paymentMethod, status: loanRepayments.status,
           evidenceUrl: loanRepayments.evidenceUrl, chequeNumber: loanRepayments.chequeNumber,
@@ -978,10 +1007,17 @@ export const appRouter = router({
           rejectionComment: loanRepayments.rejectionComment, deferredToMonth: loanRepayments.deferredToMonth, deferredToYear: loanRepayments.deferredToYear,
           notes: loanRepayments.notes, month: loanRepayments.month, year: loanRepayments.year,
           borrowerName: loanApplications.borrowerName,
-        }).from(loanRepayments)
+        };
+        const loansCurrent = await db.select(loanFields).from(loanRepayments)
           .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
           .where(and(eq(loanRepayments.month, month), eq(loanRepayments.year, year)))
           .orderBy(desc(loanRepayments.createdAt));
+        const loansDeferred = await db.select(loanFields).from(loanRepayments)
+          .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
+          .where(and(eq(loanRepayments.deferredToMonth, month), eq(loanRepayments.deferredToYear, year)))
+          .orderBy(desc(loanRepayments.createdAt));
+        const loanIds = new Set(loansCurrent.map(r => r.id));
+        const loans = [...loansCurrent, ...loansDeferred.filter(r => !loanIds.has(r.id))];
 
         return { payroll, receipts, volunteers, loans };
       }),

@@ -117,15 +117,14 @@ function EvidenceDialog({
   });
 
   const uploadFile = async (file: File, folder: string): Promise<string | undefined> => {
-    const res = await fetch("/api/storage/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: `monthly-expenses/${folder}/${Date.now()}-${file.name}`, contentType: file.type }),
-    });
+    const form = new FormData();
+    form.append("file", file);
+    form.append("key", `monthly-expenses/${folder}/${Date.now()}-${file.name}`);
+    form.append("mimeType", file.type);
+    const res = await fetch("/api/upload-receipt", { method: "POST", body: form });
     if (!res.ok) return undefined;
-    const { uploadUrl, publicUrl } = await res.json();
-    await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-    return publicUrl as string;
+    const { url } = await res.json();
+    return url as string;
   };
 
   const handleChequeUpload = async (file: File) => {
