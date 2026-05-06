@@ -433,3 +433,9 @@
 - [x] Flag: total differs from manually entered value if record already exists for that date
 - [x] SmartUpload for Donations: upload bank statement or donation receipt → extract donor name, amount, date, reference
 - [x] Match donor name against existing donors table (fuzzy match)
+
+## SmartUpload Role Gate (May 2026)
+- [x] Backend: change documents.extract from protectedProcedure to superadmin/trustee-only procedure
+- [x] Frontend: SmartUpload component accepts optional `allowedRoles` prop; hides button if user role not in list
+- [x] Frontend: all SmartUpload usages default to allowedRoles=["superadmin","trustee"]
+- [x] Frontend: show tooltip/message "Only superadmins and trustees can import documents" for lower roles

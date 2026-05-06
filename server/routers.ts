@@ -47,6 +47,13 @@ const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+// Superadmin or Trustee only — used for AI document import and sensitive data entry
+const seniorProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "superadmin" && ctx.user.role !== "trustee")
+    throw new TRPCError({ code: "FORBIDDEN", message: "Only superadmins and trustees can perform this action" });
+  return next({ ctx });
+});
+
 // ─── Deletion policy helper ───────────────────────────────────────────────────
 // Rules:
 //   1. superadmin or trustee can always delete
@@ -2322,7 +2329,7 @@ Return: { "employees": [ ...array of employee objects... ] }`;
 
   // ─── UNIVERSAL AI DOCUMENT EXTRACTION ────────────────────────────────────
   documents: router({
-    extract: protectedProcedure
+    extract: seniorProcedure
       .input(z.object({
         fileUrl: z.string(),
         mimeType: z.string(),

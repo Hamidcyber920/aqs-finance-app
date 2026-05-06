@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +54,8 @@ interface SmartUploadProps {
   buttonVariant?: "default" | "outline" | "secondary" | "ghost";
   className?: string;
   fieldLabels?: Record<string, string>;
+  /** Roles allowed to use this button. Defaults to ["superadmin", "trustee"]. */
+  allowedRoles?: string[];
 }
 
 const DEFAULT_FIELD_LABELS: Record<string, Record<string, string>> = {
@@ -162,7 +166,11 @@ export function SmartUpload({
   buttonVariant = "outline",
   className,
   fieldLabels,
+  allowedRoles = ["superadmin", "trustee"],
 }: SmartUploadProps) {
+  const { user } = useAuth();
+  const userRole = user?.role ?? "";
+  const hasAccess = allowedRoles.includes(userRole);
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -273,6 +281,27 @@ export function SmartUpload({
   const bulkRecords = result?.isBulk
     ? ((result.extractedData as { records?: unknown[] }).records || [])
     : [];
+
+  // If user doesn't have the required role, show a disabled button with tooltip
+  if (!hasAccess) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={className}>
+              <Button variant={buttonVariant} disabled className="opacity-50 cursor-not-allowed pointer-events-none">
+                <Upload className="w-4 h-4 mr-2" />
+                {buttonLabel}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Only superadmins and trustees can import documents</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <>

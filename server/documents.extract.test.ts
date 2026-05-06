@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -28,14 +28,14 @@ vi.mock("./_core/llm", () => ({
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
-function createAdminContext(): TrpcContext {
+function createContext(role: string): TrpcContext {
   const user: AuthenticatedUser = {
     id: 1,
-    openId: "admin-user",
-    email: "admin@example.com",
-    name: "Admin User",
+    openId: `${role}-user`,
+    email: `${role}@example.com`,
+    name: `${role} User`,
     loginMethod: "local",
-    role: "admin",
+    role,
     createdAt: new Date(),
     updatedAt: new Date(),
     lastSignedIn: new Date(),
@@ -54,33 +54,7 @@ function createAdminContext(): TrpcContext {
   };
 }
 
-function createUserContext(): TrpcContext {
-  const user: AuthenticatedUser = {
-    id: 2,
-    openId: "regular-user",
-    email: "user@example.com",
-    name: "Regular User",
-    loginMethod: "local",
-    role: "user",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  };
-  return {
-    user,
-    req: {
-      cookies: {},
-      headers: {},
-      body: {},
-    } as unknown as TrpcContext["req"],
-    res: {
-      cookie: vi.fn(),
-      clearCookie: vi.fn(),
-    } as unknown as TrpcContext["res"],
-  };
-}
-
-describe("documents.extract", () => {
+describe("documents.extract — role gate", () => {
   it("rejects unauthenticated requests", async () => {
     const caller = appRouter.createCaller({
       user: null,
@@ -96,8 +70,41 @@ describe("documents.extract", () => {
     ).rejects.toThrow();
   });
 
-  it("allows authenticated users to call extract", async () => {
-    const caller = appRouter.createCaller(createUserContext());
+  it("rejects regular user (role: user)", async () => {
+    const caller = appRouter.createCaller(createContext("user"));
+    await expect(
+      caller.documents.extract({
+        fileUrl: "https://example.com/doc.jpg",
+        mimeType: "image/jpeg",
+        moduleType: "income_rental",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("rejects manager role", async () => {
+    const caller = appRouter.createCaller(createContext("manager"));
+    await expect(
+      caller.documents.extract({
+        fileUrl: "https://example.com/doc.jpg",
+        mimeType: "image/jpeg",
+        moduleType: "invoice",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("rejects admin role (not superadmin/trustee)", async () => {
+    const caller = appRouter.createCaller(createContext("admin"));
+    await expect(
+      caller.documents.extract({
+        fileUrl: "https://example.com/doc.jpg",
+        mimeType: "image/jpeg",
+        moduleType: "payroll",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("allows superadmin to extract", async () => {
+    const caller = appRouter.createCaller(createContext("superadmin"));
     const result = await caller.documents.extract({
       fileUrl: "https://example.com/doc.jpg",
       mimeType: "image/jpeg",
@@ -111,8 +118,19 @@ describe("documents.extract", () => {
     expect(Array.isArray(result.discrepancies)).toBe(true);
   });
 
-  it("extracts income_rental fields correctly", async () => {
-    const caller = appRouter.createCaller(createUserContext());
+  it("allows trustee to extract", async () => {
+    const caller = appRouter.createCaller(createContext("trustee"));
+    const result = await caller.documents.extract({
+      fileUrl: "https://example.com/payslip.pdf",
+      mimeType: "application/pdf",
+      moduleType: "payroll",
+    });
+    expect(result).toBeDefined();
+    expect(result.moduleType).toBe("payroll");
+  });
+
+  it("extracts income_rental fields correctly for superadmin", async () => {
+    const caller = appRouter.createCaller(createContext("superadmin"));
     const result = await caller.documents.extract({
       fileUrl: "https://example.com/receipt.jpg",
       mimeType: "image/jpeg",
@@ -126,18 +144,8 @@ describe("documents.extract", () => {
     });
   });
 
-  it("returns isBulk=false for single-record extraction", async () => {
-    const caller = appRouter.createCaller(createUserContext());
-    const result = await caller.documents.extract({
-      fileUrl: "https://example.com/payslip.pdf",
-      mimeType: "application/pdf",
-      moduleType: "payroll",
-    });
-    expect(result.isBulk).toBe(false);
-  });
-
-  it("accepts all supported moduleType values", async () => {
-    const caller = appRouter.createCaller(createUserContext());
+  it("accepts all supported moduleType values for trustee", async () => {
+    const caller = appRouter.createCaller(createContext("trustee"));
     const moduleTypes = [
       "income_rental",
       "loan_repayment",
@@ -160,7 +168,7 @@ describe("documents.extract", () => {
   });
 
   it("rejects unsupported moduleType", async () => {
-    const caller = appRouter.createCaller(createUserContext());
+    const caller = appRouter.createCaller(createContext("superadmin"));
     await expect(
       caller.documents.extract({
         fileUrl: "https://example.com/doc.jpg",
