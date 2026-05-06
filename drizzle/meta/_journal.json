@@ -141,6 +141,20 @@
       "when": 1778067840389,
       "tag": "0019_broad_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1778072534190,
+      "tag": "0020_past_madelyne_pryor",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1778072583867,
+      "tag": "0021_parallel_scrambler",
+      "breakpoints": true
     }
   ]
 }

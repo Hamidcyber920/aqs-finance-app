@@ -439,3 +439,17 @@
 - [x] Frontend: SmartUpload component accepts optional `allowedRoles` prop; hides button if user role not in list
 - [x] Frontend: all SmartUpload usages default to allowedRoles=["superadmin","trustee"]
 - [x] Frontend: show tooltip/message "Only superadmins and trustees can import documents" for lower roles
+
+## App Redesign & Organisation Chart (May 2026)
+- [x] Global theme: rich green/gold palette, modern typography (Inter), gradient sidebar, card shadows
+- [x] Sidebar: gradient background, active state highlight, mobile hamburger menu with slide-out drawer
+- [x] Dashboard: hero stats cards with colour accents, progress bars, modern chart styling
+- [x] Mobile-first responsive layout across all pages
+- [x] DB: org_members table (id, name, role, title, department, photoUrl, parentId, sortOrder, isActive)
+- [x] Backend: orgChart.list, orgChart.upsert, orgChart.delete procedures (seniorProcedure gated)
+- [x] Organisation Chart page under Organisation section in sidebar
+- [x] Seed default hierarchy: Trustees → Management Trustee/Super Admin → Manager → Deputy → Teams
+- [x] Tree view with collapsible/expandable nodes, photo avatars, name and title labels
+- [x] Photo upload per node (drag-drop or file picker, uploads to S3)
+- [x] Add/edit/remove node form (name, title, department, parent, photo)
+- [x] Mobile-friendly org chart (horizontal scroll or vertical stacked view)

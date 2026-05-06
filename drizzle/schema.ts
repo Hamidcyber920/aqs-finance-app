@@ -648,3 +648,20 @@ export const trustees = mysqlTable("trustees", {
 
 export type Trustee = typeof trustees.$inferSelect;
 export type InsertTrustee = typeof trustees.$inferInsert;
+
+// ─── ORGANISATION CHART ───────────────────────────────────────────────────────
+export const orgMembers = mysqlTable("org_members", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  department: varchar("department", { length: 200 }),
+  photoUrl: text("photoUrl"),
+  parentId: int("parentId"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type OrgMember = typeof orgMembers.$inferSelect;
+export type InsertOrgMember = typeof orgMembers.$inferInsert;

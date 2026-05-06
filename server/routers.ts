@@ -21,6 +21,7 @@ import {
   getCampaignItems, getCampaignDonations, createDonation, getFridayCollections, createFridayCollection,
   getLoans, getLoanById, createLoan, updateLoan, getLoanRepayments, createLoanRepayment, getLoanRepaymentsById,
   getTrustees, getTrusteeById, createTrustee, updateTrustee, deleteTrustee, getDb,
+  getOrgMembers, getOrgMemberById, createOrgMember, updateOrgMember, deleteOrgMember,
   getIncomeCategories, getIncomeRecords, createIncomeRecord, updateIncomeRecord, createIncomeCategory,
   getDonors, getDonorById, createDonor, updateDonor,
   getEmailCampaigns, getEmailCampaignById, createEmailCampaign, updateEmailCampaign,
@@ -2583,5 +2584,38 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         };
       }),
   }),
+  orgChart: router({
+    list: protectedProcedure.query(async () => {
+      return getOrgMembers();
+    }),
+    upsert: seniorProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        name: z.string().min(1),
+        title: z.string().min(1),
+        department: z.string().optional(),
+        photoUrl: z.string().optional(),
+        parentId: z.number().nullable().optional(),
+        sortOrder: z.number().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (input.id) {
+          await updateOrgMember(input.id, input);
+          return getOrgMemberById(input.id);
+        }
+        return createOrgMember({ ...input, isActive: true });
+      }),
+    remove: seniorProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await deleteOrgMember(input.id);
+        return { success: true };
+      }),
+  }),
 });
 export type AppRouter = typeof appRouter;
+// ─── ORG CHART ROUTER (appended) ─────────────────────────────────────────────
+// NOTE: This is intentionally outside the main appRouter export above.
+// It is exported separately and merged in a separate file if needed,
+// or we add it inline. Since appRouter is already closed, we export a helper.

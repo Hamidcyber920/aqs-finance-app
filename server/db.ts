@@ -11,6 +11,7 @@ import {
   campaigns, InsertCampaign,
   staffProfiles, payrollRecords, InsertPayrollRecord,
   trustees, InsertTrustee,
+  orgMembers, InsertOrgMember,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -844,4 +845,39 @@ export async function getLoanRepaymentsById(id: number) {
   if (!db) return undefined;
   const result = await db.select().from(loanRepayments).where(eq(loanRepayments.id, id)).limit(1);
   return result[0];
+}
+
+// ─── ORGANISATION CHART ───────────────────────────────────────────────────────
+
+export async function getOrgMembers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(orgMembers).where(eq(orgMembers.isActive, true)).orderBy(orgMembers.sortOrder, orgMembers.id);
+}
+
+export async function getOrgMemberById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(orgMembers).where(eq(orgMembers.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createOrgMember(data: InsertOrgMember) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(orgMembers).values(data);
+  const result = await db.select().from(orgMembers).orderBy(desc(orgMembers.id)).limit(1);
+  return result[0];
+}
+
+export async function updateOrgMember(id: number, data: Partial<InsertOrgMember>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(orgMembers).set(data).where(eq(orgMembers.id, id));
+}
+
+export async function deleteOrgMember(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(orgMembers).set({ isActive: false }).where(eq(orgMembers.id, id));
 }

@@ -33,15 +33,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
+    <div className="min-h-screen flex items-center justify-center px-4" style={{background: "linear-gradient(135deg, oklch(0.18 0.09 158) 0%, oklch(0.22 0.09 155) 40%, oklch(0.28 0.08 150) 100%)"}}>
       <div className="w-full max-w-md space-y-6">
         {/* Logo */}
         <div className="text-center">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground mb-4">
-            <Receipt className="h-7 w-7" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <img
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663490667955/FHvHfGlzuexjZVZD.PNG"
+              alt="Abdullah Quilliam Society"
+              className="h-24 w-24 rounded-full object-cover ring-4 ring-primary/20 shadow-lg bg-white"
+            />
           </div>
-          <h1 className="text-2xl font-bold">Receipt Scanner</h1>
-          <p className="text-muted-foreground text-sm mt-1">Abdullah Quilliam Society</p>
+          <h1 className="text-2xl font-bold text-white">AQS HR &amp; Finance</h1>
+          <p className="text-white/70 text-sm mt-1">Abdullah Quilliam Society · Est. 1887</p>
         </div>
 
         <Card>

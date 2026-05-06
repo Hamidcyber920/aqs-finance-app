@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -43,9 +44,9 @@
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0.75rem;
   /* AQ Society Brand: Deep Forest Green + Antique Gold + Ivory */
-  --background: oklch(0.975 0.006 130);
+  --background: oklch(0.98 0.006 130);
   --foreground: oklch(0.14 0.04 155);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.14 0.04 155);
@@ -69,13 +70,13 @@
   --chart-3: oklch(0.55 0.14 200);
   --chart-4: oklch(0.65 0.18 50);
   --chart-5: oklch(0.48 0.12 280);
-  --sidebar: oklch(0.22 0.08 155);
+  --sidebar: oklch(0.18 0.09 158);
   --sidebar-foreground: oklch(0.94 0.01 120);
   --sidebar-primary: oklch(0.70 0.13 78);
   --sidebar-primary-foreground: oklch(0.14 0.04 155);
-  --sidebar-accent: oklch(0.28 0.08 155);
+  --sidebar-accent: oklch(0.24 0.09 158);
   --sidebar-accent-foreground: oklch(0.94 0.01 120);
-  --sidebar-border: oklch(0.28 0.08 155);
+  --sidebar-border: oklch(0.24 0.09 158);
   --sidebar-ring: oklch(0.70 0.13 78);
 }
 
@@ -226,4 +227,28 @@
   .badge-info {
     @apply bg-blue-100 text-blue-800 border border-blue-200;
   }
+
+  /* Sidebar gradient override */
+  [data-sidebar="sidebar"] {
+  }
+
+  /* Colourful stat cards */
+  .stat-card-primary {
+    @apply bg-gradient-to-br from-emerald-700 to-emerald-900 rounded-2xl p-5 shadow-md text-white;
+  }
+  .stat-card-gold {
+    @apply bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl p-5 shadow-md text-white;
+  }
+  .stat-card-blue {
+    @apply bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-5 shadow-md text-white;
+  }
+  .stat-card-purple {
+    @apply bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl p-5 shadow-md text-white;
+  }
+
+  /* Card hover lift */
+  .card-lift {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg;
+  }
+
 }
