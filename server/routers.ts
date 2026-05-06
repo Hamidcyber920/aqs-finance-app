@@ -521,35 +521,75 @@ export const appRouter = router({
     reject: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => { await updateLoan(input.id, { status: "rejected" }); return { success: true }; }),
 
     // Dual approval: admin tick
+    // Upload a signature (base64 PNG) to S3 and return the URL
+    uploadSignature: adminProcedure
+      .input(z.object({ loanId: z.number(), role: z.enum(["admin", "trustee", "borrower"]), dataUrl: z.string() }))
+      .mutation(async ({ input }) => {
+        const { storagePut } = await import("./storage");
+        // Strip data URL prefix and convert to Buffer
+        const base64 = input.dataUrl.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64, "base64");
+        const suffix = Date.now().toString(36);
+        const key = `loan-signatures/${input.loanId}-${input.role}-${suffix}.png`;
+        const { url } = await storagePut(key, buffer, "image/png");
+        // Persist to the correct column
+        if (input.role === "admin") {
+          await updateLoan(input.loanId, { managerSignatureUrl: url } as any);
+        } else if (input.role === "trustee") {
+          await updateLoan(input.loanId, { trusteeSignatureUrl: url } as any);
+        } else {
+          await updateLoan(input.loanId, { chairSignatureUrl: url } as any);
+        }
+        return { url };
+      }),
+
     approveAdmin: adminProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.number(), signatureDataUrl: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
         const loan = await getLoanById(input.id);
         if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
-        await updateLoan(input.id, { adminApprovedById: ctx.user.id, adminApprovedByName: ctx.user.name ?? ctx.user.email ?? "Admin", adminApprovedAt: new Date() } as any);
+        let sigUrl: string | undefined;
+        if (input.signatureDataUrl) {
+          const { storagePut } = await import("./storage");
+          const base64 = input.signatureDataUrl.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64, "base64");
+          const key = `loan-signatures/${input.id}-admin-${Date.now().toString(36)}.png`;
+          const { url } = await storagePut(key, buffer, "image/png");
+          sigUrl = url;
+        }
+        await updateLoan(input.id, { adminApprovedById: ctx.user.id, adminApprovedByName: ctx.user.name ?? ctx.user.email ?? "Admin", adminApprovedAt: new Date(), ...(sigUrl ? { managerSignatureUrl: sigUrl } : {}) } as any);
         // Check if trustee also approved — if so, fully approve and send notifications
         const updated = await getLoanById(input.id);
         if (updated && (updated as any).trusteeApprovedAt) {
           await _fullyApproveLoan(updated as any);
         }
-        return { success: true };
+        return { success: true, signatureUrl: sigUrl };
       }),
 
     // Dual approval: trustee tick
     approveTrustee: adminProcedure
-      .input(z.object({ id: z.number(), trusteeId: z.number() }))
+      .input(z.object({ id: z.number(), trusteeId: z.number(), signatureDataUrl: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
         const loan = await getLoanById(input.id);
         if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
         const trustee = await getTrusteeById(input.trusteeId);
         if (!trustee) throw new TRPCError({ code: "NOT_FOUND", message: "Trustee not found" });
-        await updateLoan(input.id, { trusteeId: input.trusteeId, trusteeName: trustee.fullName, trusteeApprovedAt: new Date() } as any);
+        let sigUrl: string | undefined;
+        if (input.signatureDataUrl) {
+          const { storagePut } = await import("./storage");
+          const base64 = input.signatureDataUrl.replace(/^data:image\/\w+;base64,/, "");
+          const buffer = Buffer.from(base64, "base64");
+          const key = `loan-signatures/${input.id}-trustee-${Date.now().toString(36)}.png`;
+          const { url } = await storagePut(key, buffer, "image/png");
+          sigUrl = url;
+        }
+        await updateLoan(input.id, { trusteeId: input.trusteeId, trusteeName: trustee.fullName, trusteeApprovedAt: new Date(), ...(sigUrl ? { trusteeSignatureUrl: sigUrl } : {}) } as any);
         // Check if admin also approved
         const updated = await getLoanById(input.id);
         if (updated && (updated as any).adminApprovedAt) {
           await _fullyApproveLoan(updated as any);
         }
-        return { success: true };
+        return { success: true, signatureUrl: sigUrl };
       }),
 
     recordRepayment: adminProcedure

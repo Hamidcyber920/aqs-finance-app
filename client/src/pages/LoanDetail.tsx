@@ -13,6 +13,7 @@ import {
   Send, Upload, CalendarDays, AlertCircle, Paperclip, ShieldCheck, UserCheck,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { SignaturePad } from "@/components/SignaturePad";
 
 // ─── Repayment schedule ───────────────────────────────────────────────────────
 
@@ -38,6 +39,10 @@ export default function LoanDetail({ id }: { id: number }) {
 
   const [trusteeSelectId, setTrusteeSelectId] = useState<string>("");
   const [repaymentTrusteeId, setRepaymentTrusteeId] = useState<string>("");
+  const [adminSigDataUrl, setAdminSigDataUrl] = useState<string | null>(null);
+  const [trusteeSigDataUrl, setTrusteeSigDataUrl] = useState<string | null>(null);
+  const [showAdminSigPad, setShowAdminSigPad] = useState(false);
+  const [showTrusteeSigPad, setShowTrusteeSigPad] = useState(false);
 
   const { data, refetch, isLoading } = trpc.loans.get.useQuery({ id });
   const { data: trustees = [] } = trpc.trustees.listActive.useQuery();
@@ -298,15 +303,37 @@ export default function LoanDetail({ id }: { id: number }) {
                 </div>
               </div>
               {!(loan as any).adminApprovedAt && (
-                <Button
-                  size="sm"
-                  className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
-                  onClick={() => approveAdmin.mutate({ id: loan.id })}
-                  disabled={approveAdmin.isPending}
-                >
-                  <UserCheck className="h-4 w-4 mr-1" />
-                  {approveAdmin.isPending ? "Saving..." : "Approve"}
-                </Button>
+                <div className="flex flex-col gap-2 w-full mt-2">
+                  {!showAdminSigPad ? (
+                    <Button
+                      size="sm"
+                      className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white self-end"
+                      onClick={() => setShowAdminSigPad(true)}
+                    >
+                      <UserCheck className="h-4 w-4 mr-1" />
+                      Approve &amp; Sign
+                    </Button>
+                  ) : (
+                    <div className="w-full space-y-2">
+                      <SignaturePad
+                        label="Admin / Manager Signature"
+                        onSave={(dataUrl) => setAdminSigDataUrl(dataUrl)}
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button size="sm" variant="outline" onClick={() => { setShowAdminSigPad(false); setAdminSigDataUrl(null); }}>Cancel</Button>
+                        <Button
+                          size="sm"
+                          className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
+                          onClick={() => approveAdmin.mutate({ id: loan.id, signatureDataUrl: adminSigDataUrl ?? undefined })}
+                          disabled={approveAdmin.isPending}
+                        >
+                          <UserCheck className="h-4 w-4 mr-1" />
+                          {approveAdmin.isPending ? "Saving..." : "Confirm Approval"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -330,9 +357,9 @@ export default function LoanDetail({ id }: { id: number }) {
                 </div>
               </div>
               {!(loan as any).trusteeApprovedAt && (
-                <div className="flex items-center gap-2">
-                  <Select value={trusteeSelectId} onValueChange={setTrusteeSelectId}>
-                    <SelectTrigger className="w-40 h-8 text-xs">
+                <div className="w-full mt-2 space-y-2">
+                  <Select value={trusteeSelectId} onValueChange={(v) => { setTrusteeSelectId(v); setShowTrusteeSigPad(false); setTrusteeSigDataUrl(null); }}>
+                    <SelectTrigger className="w-full h-9 text-sm">
                       <SelectValue placeholder="Select trustee" />
                     </SelectTrigger>
                     <SelectContent>
@@ -341,15 +368,36 @@ export default function LoanDetail({ id }: { id: number }) {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button
-                    size="sm"
-                    className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
-                    onClick={() => trusteeSelectId && approveTrustee.mutate({ id: loan.id, trusteeId: parseInt(trusteeSelectId) })}
-                    disabled={!trusteeSelectId || approveTrustee.isPending}
-                  >
-                    <UserCheck className="h-4 w-4 mr-1" />
-                    {approveTrustee.isPending ? "Saving..." : "Co-Sign"}
-                  </Button>
+                  {trusteeSelectId && !showTrusteeSigPad && (
+                    <Button
+                      size="sm"
+                      className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white w-full"
+                      onClick={() => setShowTrusteeSigPad(true)}
+                    >
+                      <UserCheck className="h-4 w-4 mr-1" />
+                      Co-Sign
+                    </Button>
+                  )}
+                  {showTrusteeSigPad && (
+                    <div className="space-y-2">
+                      <SignaturePad
+                        label="Trustee Signature"
+                        onSave={(dataUrl) => setTrusteeSigDataUrl(dataUrl)}
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <Button size="sm" variant="outline" onClick={() => { setShowTrusteeSigPad(false); setTrusteeSigDataUrl(null); }}>Cancel</Button>
+                        <Button
+                          size="sm"
+                          className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
+                          onClick={() => approveTrustee.mutate({ id: loan.id, trusteeId: parseInt(trusteeSelectId), signatureDataUrl: trusteeSigDataUrl ?? undefined })}
+                          disabled={!trusteeSelectId || approveTrustee.isPending}
+                        >
+                          <UserCheck className="h-4 w-4 mr-1" />
+                          {approveTrustee.isPending ? "Saving..." : "Confirm Co-Sign"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

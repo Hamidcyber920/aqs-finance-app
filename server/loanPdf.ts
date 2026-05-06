@@ -18,6 +18,7 @@ export interface LoanPdfData {
   status: string;
   chairSignatureUrl?: string | null;
   trusteeSignatureUrl?: string | null;
+  managerSignatureUrl?: string | null;
   notes?: string | null;
   // Dual approval
   adminApprovedByName?: string | null;
@@ -34,6 +35,9 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
     doc.on("data", (chunk: Buffer) => buffers.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(buffers)));
     doc.on("error", reject);
+
+    // Run async PDF generation inside an IIFE so we can use await
+    (async () => {
 
     const GREEN = "#1a4731";
     const GOLD = "#c9a84c";
@@ -215,9 +219,40 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
     const col1 = 70;
     const col2 = 280;
 
+    // Helper to fetch a remote image as Buffer
+    const fetchImageBuffer = async (url: string): Promise<Buffer | null> => {
+      try {
+        const https = await import("https");
+        const http = await import("http");
+        return await new Promise((res, rej) => {
+          const mod = url.startsWith("https") ? https : http;
+          (mod as any).get(url, (resp: any) => {
+            const chunks: Buffer[] = [];
+            resp.on("data", (c: Buffer) => chunks.push(c));
+            resp.on("end", () => res(Buffer.concat(chunks)));
+            resp.on("error", rej);
+          }).on("error", rej);
+        });
+      } catch { return null; }
+    };
+
+    // Fetch signature images in parallel
+    const [borrowerSigBuf, trusteeSigBuf, adminSigBuf] = await Promise.all([
+      loan.chairSignatureUrl ? fetchImageBuffer(loan.chairSignatureUrl) : Promise.resolve(null),
+      loan.trusteeSignatureUrl ? fetchImageBuffer(loan.trusteeSignatureUrl) : Promise.resolve(null),
+      loan.managerSignatureUrl ? fetchImageBuffer(loan.managerSignatureUrl) : Promise.resolve(null),
+    ]);
+
+    const drawSigBox = (x: number, y: number, w: number, h: number, imgBuf: Buffer | null) => {
+      doc.rect(x, y, w, h).stroke(MUTED);
+      if (imgBuf) {
+        try { doc.image(imgBuf, x + 2, y + 2, { width: w - 4, height: h - 4, fit: [w - 4, h - 4] }); } catch {}
+      }
+    };
+
     // Borrower
     doc.fillColor(MUTED).fontSize(8).font("Helvetica").text("Borrower", col1, sigY);
-    doc.rect(col1, sigY + 14, 160, 45).stroke(MUTED);
+    drawSigBox(col1, sigY + 14, 160, 45, borrowerSigBuf);
     doc.fillColor(MUTED).fontSize(7).text("Signature", col1, sigY + 65);
     doc.rect(col1, sigY + 76, 160, 1).stroke(MUTED);
     doc.fillColor(MUTED).fontSize(7).text("Date", col1, sigY + 82);
@@ -226,8 +261,11 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
     const trusteeLabel = loan.trusteeName ? `Trustee: ${loan.trusteeName}` : "Trustee";
     doc.fillColor(MUTED).fontSize(8).font("Helvetica").text(trusteeLabel, col2, sigY);
     if (loan.trusteeApprovedAt) {
-      doc.fillColor(GREEN).fontSize(7).font("Helvetica-Bold").text("✓ Approved digitally", col2, sigY + 18);
-      doc.fillColor(MUTED).fontSize(7).font("Helvetica").text(new Date(loan.trusteeApprovedAt).toLocaleDateString("en-GB"), col2, sigY + 30);
+      drawSigBox(col2, sigY + 14, 160, 45, trusteeSigBuf);
+      if (!trusteeSigBuf) {
+        doc.fillColor(GREEN).fontSize(7).font("Helvetica-Bold").text("✓ Approved digitally", col2, sigY + 18);
+        doc.fillColor(MUTED).fontSize(7).font("Helvetica").text(new Date(loan.trusteeApprovedAt).toLocaleDateString("en-GB"), col2, sigY + 30);
+      }
     } else {
       doc.rect(col2, sigY + 14, 160, 45).stroke(MUTED);
     }
@@ -241,8 +279,12 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
     const adminLabel = loan.adminApprovedByName ? `Super Admin: ${loan.adminApprovedByName}` : "Super Admin / Manager";
     doc.fillColor(MUTED).fontSize(8).font("Helvetica").text(adminLabel, col1, doc.y);
     if (loan.adminApprovedAt) {
-      doc.fillColor(GREEN).fontSize(7).font("Helvetica-Bold").text("✓ Approved digitally", col1, doc.y + 4);
-      doc.fillColor(MUTED).fontSize(7).font("Helvetica").text(new Date(loan.adminApprovedAt).toLocaleDateString("en-GB"), col1, doc.y + 16);
+      const adminY = doc.y + 4;
+      drawSigBox(col1, adminY, 160, 45, adminSigBuf);
+      if (!adminSigBuf) {
+        doc.fillColor(GREEN).fontSize(7).font("Helvetica-Bold").text("✓ Approved digitally", col1, adminY + 18);
+        doc.fillColor(MUTED).fontSize(7).font("Helvetica").text(new Date(loan.adminApprovedAt).toLocaleDateString("en-GB"), col1, adminY + 30);
+      }
     } else {
       doc.rect(col1, doc.y + 14, 160, 45).stroke(MUTED);
     }
@@ -259,6 +301,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       );
 
     doc.end();
+    })().catch(reject);
   });
 }
 
