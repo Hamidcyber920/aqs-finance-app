@@ -222,7 +222,7 @@ function DashboardLayoutContent({
                   <img
                     src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663490667955/FHvHfGlzuexjZVZD.PNG"
                     alt="AQS Logo"
-                    className="h-9 w-9 rounded-full object-cover bg-white shrink-0 ring-2 ring-pink-400/60"
+                    className="h-9 w-9 rounded-lg object-contain p-0.5 bg-white shrink-0"
                   />
                   <div className="flex flex-col min-w-0">
                     <span className="font-bold tracking-tight text-sidebar-foreground text-sm truncate">
@@ -372,7 +372,7 @@ function DashboardLayoutContent({
               <img
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663490667955/FHvHfGlzuexjZVZD.PNG"
                 alt="AQS"
-                className="h-8 w-8 rounded-full object-cover bg-white ring-2 ring-pink-400/60"
+                className="h-8 w-8 rounded-lg object-contain p-0.5 bg-white"
               />
               <span className="font-semibold text-sm text-white">Abdullah Quilliam Society</span>
             </div>

@@ -41,7 +41,7 @@ export default function LoginPage() {
             <img
               src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663490667955/FHvHfGlzuexjZVZD.PNG"
               alt="Abdullah Quilliam Society"
-              className="h-24 w-24 rounded-full object-cover ring-4 ring-primary/20 shadow-lg bg-white"
+              className="h-24 w-24 rounded-2xl object-contain p-1 shadow-lg bg-white"
             />
           </div>
           <h1 className="text-2xl font-bold text-white">AQS HR &amp; Finance</h1>
