@@ -43,6 +43,7 @@ import {
   ChevronRight,
   PanelLeft,
   Menu,
+  Database,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -80,6 +81,7 @@ const orgItems = [
 const adminItems = [
   { icon: ShieldCheck, label: "Admin Panel", path: "/admin" },
   { icon: Users, label: "Trustees", path: "/trustees" },
+  { icon: Database, label: "Backups", path: "/backups" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ];
 

@@ -10,6 +10,7 @@ import { storagePut } from "./storage";
 import { notifyOwner } from "./_core/notification";
 import { nanoid } from "nanoid";
 import { localAuthRouter, adminRouter } from "./routers/localAuth";
+import { backupRouter } from "./routers/backup";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -249,6 +250,7 @@ export const appRouter = router({
   system: systemRouter,
   localAuth: localAuthRouter,
   admin: adminRouter,
+  backup: backupRouter,
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),

@@ -665,3 +665,22 @@ export const orgMembers = mysqlTable("org_members", {
 });
 export type OrgMember = typeof orgMembers.$inferSelect;
 export type InsertOrgMember = typeof orgMembers.$inferInsert;
+
+// ─── SYSTEM BACKUPS ───────────────────────────────────────────────────────────
+export const systemBackups = mysqlTable("system_backups", {
+  id: int("id").autoincrement().primaryKey(),
+  filename: varchar("filename", { length: 300 }).notNull(),
+  s3Key: varchar("s3Key", { length: 500 }).notNull(),
+  s3Url: text("s3Url").notNull(),
+  sizeBytes: int("sizeBytes").default(0).notNull(),
+  tableCount: int("tableCount").default(0).notNull(),
+  recordCount: int("recordCount").default(0).notNull(),
+  triggeredBy: varchar("triggeredBy", { length: 50 }).default("scheduled").notNull(),
+  triggeredByUserId: int("triggeredByUserId"),
+  triggeredByName: varchar("triggeredByName", { length: 200 }),
+  status: mysqlEnum("status", ["success", "failed"]).default("success").notNull(),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type SystemBackup = typeof systemBackups.$inferSelect;
+export type InsertSystemBackup = typeof systemBackups.$inferInsert;

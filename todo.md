@@ -466,3 +466,14 @@
 - [x] Org Chart: horizontal scroll on mobile (overflow-x-auto + min-w-max), cards scale down (w-44 sm:w-52)
 - [x] Global: font sizes, spacing, and padding tuned for small screens
 - [x] Global: no horizontal overflow on any page at 375px width
+
+## Daily Automated Backup System (May 2026)
+- [x] Backend: backup.create procedure — exports all 22 tables as JSON, uploads to S3 with timestamped key
+- [x] Backend: backup.list procedure — returns last 30 backup metadata records from DB (superadmin/trustee only)
+- [x] Backend: backup.download procedure — returns presigned S3 URL for a specific backup (superadmin/trustee only)
+- [x] Schema: create system_backups table (id, filename, s3Key, s3Url, sizeBytes, tableCount, recordCount, triggeredBy, status, createdAt)
+- [x] Migration: 0022_glorious_mordo.sql applied to database
+- [x] Frontend: Backups page (/backups) — last 30 backups with date, size, record count, status, download button
+- [x] Frontend: Backups nav item added to sidebar under Administration section
+- [x] Scheduled task: daily at 02:00 UTC — POST /api/scheduled/backup
+- [x] Owner notification: Manus notification sent after each successful backup
