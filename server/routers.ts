@@ -10,7 +10,7 @@ import { storagePut } from "./storage";
 import { notifyOwner } from "./_core/notification";
 import { nanoid } from "nanoid";
 import { localAuthRouter, adminRouter } from "./routers/localAuth";
-import { backupRouter } from "./routers/backup";
+import { backupRouter, triggerBackupSoon } from "./routers/backup";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,

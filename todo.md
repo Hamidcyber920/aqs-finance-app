@@ -477,3 +477,10 @@
 - [x] Frontend: Backups nav item added to sidebar under Administration section
 - [x] Scheduled task: daily at 02:00 UTC — POST /api/scheduled/backup
 - [x] Owner notification: Manus notification sent after each successful backup
+
+## Real-Time Write-Triggered Backup (May 2026)
+- [x] Backend: debounced backup queue — in-memory timer, resets on each write, fires after 5 min of inactivity
+- [x] Backend: triggerBackupSoon() helper exported from backup router
+- [x] Backend: Express middleware on /api/trpc POST intercepts all mutations and calls triggerBackupSoon() on finish
+- [x] Backend: backup metadata includes triggeredBy="realtime" to distinguish from daily scheduled backups
+- [x] Frontend: Backups page shows "Auto (data change)" label on write-triggered backups

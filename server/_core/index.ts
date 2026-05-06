@@ -10,6 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { uploadRouter } from "../uploadHandler";
 import { registerScheduledBackupRoute } from "./scheduledBackup";
+import { registerBackupOnMutationMiddleware } from "./backupMiddleware";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -44,6 +45,8 @@ async function startServer() {
   app.use(uploadRouter);
   // Scheduled backup endpoint (POST /api/scheduled/backup)
   registerScheduledBackupRoute(app);
+  // Real-time backup: fires triggerBackupSoon() after every successful tRPC mutation
+  registerBackupOnMutationMiddleware(app);
   // tRPC API
   app.use(
     "/api/trpc",

@@ -11,8 +11,28 @@ const seniorProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+// ─── Debounced real-time backup ───────────────────────────────────────────────
+// Any data write calls triggerBackupSoon(). The timer is reset on each call.
+// After 5 minutes of inactivity the backup fires automatically.
+const DEBOUNCE_MS = 5 * 60 * 1000; // 5 minutes
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function triggerBackupSoon() {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    runBackup("realtime").catch((err) =>
+      console.error("[Realtime Backup] Failed:", err?.message ?? err)
+    );
+  }, DEBOUNCE_MS);
+}
+
 // ─── Core backup logic ────────────────────────────────────────────────────────
-export async function runBackup(triggeredBy: "scheduled" | "manual", userId?: number, userName?: string) {
+export async function runBackup(
+  triggeredBy: "scheduled" | "manual" | "realtime",
+  userId?: number,
+  userName?: string
+) {
   const { getDb } = await import("../db");
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
@@ -62,12 +82,19 @@ export async function runBackup(triggeredBy: "scheduled" | "manual", userId?: nu
   const filename = `backup-${dateStr}.json`;
   const s3Key = `system-backups/${filename}`;
 
+  const triggeredByLabel =
+    triggeredBy === "realtime"
+      ? "Auto (data change)"
+      : triggeredBy === "scheduled"
+      ? "Scheduled Task"
+      : userName ?? "Manual";
+
   const payload = JSON.stringify(
     {
       exportedAt: now.toISOString(),
       triggeredBy,
       triggeredByUserId: userId ?? null,
-      triggeredByName: userName ?? "Scheduled Task",
+      triggeredByName: triggeredByLabel,
       tableCount: tables.length,
       totalRecords,
       data: backup,
@@ -90,15 +117,17 @@ export async function runBackup(triggeredBy: "scheduled" | "manual", userId?: nu
     recordCount: totalRecords,
     triggeredBy,
     triggeredByUserId: userId ?? null,
-    triggeredByName: userName ?? "Scheduled Task",
+    triggeredByName: triggeredByLabel,
     status: "success",
   });
 
-  // Notify owner
-  await notifyOwner({
-    title: `✅ Daily Backup Complete — ${now.toLocaleDateString("en-GB")}`,
-    content: `Backup completed successfully.\n\n• Tables: ${tables.length}\n• Records: ${totalRecords.toLocaleString()}\n• File size: ${(sizeBytes / 1024).toFixed(1)} KB\n• Triggered by: ${triggeredBy === "scheduled" ? "Scheduled Task" : userName ?? "Manual"}\n• File: ${filename}`,
-  }).catch(() => {});
+  // Notify owner only for scheduled and manual (not every realtime backup to avoid noise)
+  if (triggeredBy !== "realtime") {
+    await notifyOwner({
+      title: `✅ Backup Complete — ${now.toLocaleDateString("en-GB")}`,
+      content: `Backup completed successfully.\n\n• Tables: ${tables.length}\n• Records: ${totalRecords.toLocaleString()}\n• File size: ${(sizeBytes / 1024).toFixed(1)} KB\n• Triggered by: ${triggeredByLabel}\n• File: ${filename}`,
+    }).catch(() => {});
+  }
 
   return { filename, s3Key, url, sizeBytes, tableCount: tables.length, recordCount: totalRecords };
 }
