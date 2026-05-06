@@ -222,7 +222,7 @@ function DashboardLayoutContent({
                   <img
                     src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663490667955/FHvHfGlzuexjZVZD.PNG"
                     alt="AQS Logo"
-                    className="h-9 w-9 rounded-full object-cover bg-white shrink-0 ring-2 ring-sidebar-primary/40"
+                    className="h-9 w-9 rounded-full object-cover bg-white shrink-0 ring-2 ring-pink-400/60"
                   />
                   <div className="flex flex-col min-w-0">
                     <span className="font-bold tracking-tight text-sidebar-foreground text-sm truncate">
@@ -366,13 +366,13 @@ function DashboardLayoutContent({
 
       <SidebarInset>
         {isMobile && (
-          <div className="flex h-14 items-center justify-between px-4 backdrop-blur sticky top-0 z-40 border-b" style={{background: 'linear-gradient(90deg, oklch(0.18 0.09 158) 0%, oklch(0.22 0.09 158) 100%)'}}>
+          <div className="flex h-14 items-center justify-between px-4 backdrop-blur sticky top-0 z-40 border-b" style={{background: 'linear-gradient(90deg, oklch(0.22 0.09 12) 0%, oklch(0.28 0.09 12) 100%)'}}>
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-lg text-white/80 hover:bg-white/10" />
               <img
                 src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663490667955/FHvHfGlzuexjZVZD.PNG"
                 alt="AQS"
-                className="h-8 w-8 rounded-full object-cover bg-white ring-2 ring-amber-400/60"
+                className="h-8 w-8 rounded-full object-cover bg-white ring-2 ring-pink-400/60"
               />
               <span className="font-semibold text-sm text-white">Abdullah Quilliam Society</span>
             </div>
