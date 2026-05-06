@@ -211,23 +211,25 @@ function DashboardLayoutContent({
             if (sidebarIsMobile) setOpenMobile(false);
           }}
           tooltip={label}
-          className="h-10 rounded-lg transition-all"
+          className={`h-10 rounded-lg transition-all ${isActive ? "font-semibold" : ""}`}
+          style={isActive ? { background: "rgba(99,91,255,0.18)", color: "#fff" } : {}}
         >
           <Icon
-            className={`h-4 w-4 shrink-0 ${isActive ? "text-sidebar-primary" : ""}`}
+            className="h-4 w-4 shrink-0"
+            style={isActive ? { color: "#00FFC2" } : {}}
           />
-          <span className="text-sm">{label}</span>
+          <span className="text-sm tracking-tight">{label}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     );
   };
 
   const sidebarBg =
-    "linear-gradient(180deg, oklch(0.20 0.09 12) 0%, oklch(0.26 0.09 12) 60%, oklch(0.22 0.09 12) 100%)";
+    "linear-gradient(180deg, #0A192F 0%, #112240 60%, #0d1f3c 100%)";  /* Hibba Midnight Navy */
   const topBarBg =
-    "linear-gradient(90deg, oklch(0.20 0.09 12) 0%, oklch(0.26 0.09 12) 100%)";
+    "linear-gradient(90deg, #0A192F 0%, #112240 100%)";  /* Hibba Navy top bar */
   const bottomBarBg =
-    "linear-gradient(180deg, oklch(0.22 0.09 12) 0%, oklch(0.18 0.09 12) 100%)";
+    "linear-gradient(180deg, #0A192F 0%, #0d1f3c 100%)";  /* Hibba Navy bottom bar */
 
   return (
     <>
@@ -236,21 +238,25 @@ function DashboardLayoutContent({
         <Sidebar collapsible="icon" style={{ background: sidebarBg }}>
           <SidebarHeader className="p-3 border-b border-sidebar-border/30">
             <div className="flex items-center gap-3 px-1 py-1">
-              <div className="shrink-0 h-9 w-9 rounded-full bg-white flex items-center justify-center overflow-hidden shadow-sm">
-                <img
-                  src={LOGO_URL}
-                  alt="AQS Logo"
-                  className="h-8 w-8 object-contain"
-                />
+              {/* Hibba geometric gift icon */}
+              <div className="shrink-0 h-9 w-9 rounded-xl flex items-center justify-center overflow-hidden shadow-sm" style={{background: "linear-gradient(135deg, #635BFF 0%, #4f46e5 100%)", padding: 2}}>
+                <svg width="28" height="28" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="8" y="18" width="32" height="22" rx="3" fill="#635BFF" />
+                  <rect x="6" y="14" width="36" height="7" rx="2" fill="#4f46e5" />
+                  <rect x="21" y="14" width="6" height="26" rx="1.5" fill="#00FFC2" />
+                  <rect x="6" y="23" width="36" height="5" rx="1.5" fill="#00FFC2" />
+                  <path d="M24 14 C18 8, 10 8, 12 14" stroke="#00FFC2" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                  <path d="M24 14 C30 8, 38 8, 36 14" stroke="#00FFC2" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+                </svg>
               </div>
               {!isCollapsed && (
                 <>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-sidebar-foreground leading-tight truncate">
-                      Abdullah Quilliam
+                    <p className="text-sm font-bold text-sidebar-foreground leading-tight truncate tracking-tight" style={{letterSpacing: "-0.02em"}}>
+                      hibba
                     </p>
-                    <p className="text-[10px] text-sidebar-foreground/50 truncate">
-                      HR &amp; Finance
+                    <p className="text-[10px] text-sidebar-foreground/40 truncate">
+                      Finance &amp; HR OS
                     </p>
                   </div>
                   <button

@@ -505,3 +505,20 @@
 - [x] If navigationAction returned: navigate to correct page after 1.5s delay
 - [x] VoiceAgent accessible from every page via DashboardLayout
 - [x] Mobile: panel slides up above bottom nav bar, full-width on small screens
+
+## Hibba Rebrand (May 2026)
+- [x] Global: CSS variables updated to Hibba palette (Navy #0A192F, Purple #635BFF, Mint #00FFC2, Alabaster #F8F9FA)
+- [x] Global: Inter font loaded from Google Fonts CDN in index.html
+- [x] Global: border-radius tokens set to 12px (rounded-xl as default)
+- [x] Global: app title changed to "Hibba" in index.html
+- [x] Welcome screen: full-screen split layout — navy left panel with geometric gift logo + copy, white right panel with login card
+- [x] Welcome screen: "hibba" lowercase wordmark with geometric diamond gift icon in Electric Purple / Emerald Mint
+- [x] Welcome screen: headline "Administration, simplified." + sub-headline "A gift of clarity for your society's growth."
+- [x] Welcome screen: login card with Amanah quote and "Enter Portal" primary button in Electric Purple
+- [x] Welcome screen: footer "Official Platform of the Abdullah Society | Securely managed via Hibba.io"
+- [x] Sidebar: Hibba logo in top-left, navy background, purple active states, mint accent on hover
+- [x] Sidebar: section labels and nav items restyled to match Rippling/HiBob density
+- [x] Dashboard: Mizan (Balance) area chart — income vs expenditure with mint/purple gradient fills
+- [x] Dashboard: "Total Funds in Trust" and Mizan Balance in top stat cards with navy/mint gradient backgrounds
+- [x] Dashboard: HR widget — payroll alerts, staff count, pending receipts indicator
+- [x] Dashboard: footer "Official Platform of the Abdullah Quilliam Society | Securely managed via Hibba.io"
