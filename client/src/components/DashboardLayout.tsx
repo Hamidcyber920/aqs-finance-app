@@ -220,7 +220,7 @@ function DashboardLayoutContent({
               {!isCollapsed && (
                 <div className="flex items-center gap-2 min-w-0">
                   <img
-                    src="https://static.manus.space/webdev/aqs-logo-white_732e627e.png"
+                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663490667955/ExcMToduGVqDRtQnvUsVkJ/aqs-logo-white-gen-PTGRYCqd3BnJe8SJDQLiog.png"
                     alt="AQS Logo"
                     className="h-9 w-9 object-contain shrink-0"
                   />
@@ -370,7 +370,7 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-lg text-white/80 hover:bg-white/10" />
               <img
-                src="https://static.manus.space/webdev/aqs-logo-white_732e627e.png"
+                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663490667955/ExcMToduGVqDRtQnvUsVkJ/aqs-logo-white-gen-PTGRYCqd3BnJe8SJDQLiog.png"
                 alt="AQS"
                 className="h-8 w-8 object-contain"
               />

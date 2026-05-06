@@ -39,7 +39,7 @@ export default function LoginPage() {
         <div className="text-center">
           <div className="inline-flex items-center justify-center mb-4">
             <img
-              src="https://static.manus.space/webdev/aqs-logo-white_732e627e.png"
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663490667955/ExcMToduGVqDRtQnvUsVkJ/aqs-logo-white-gen-PTGRYCqd3BnJe8SJDQLiog.png"
               alt="Abdullah Quilliam Society"
               className="h-24 w-24 object-contain drop-shadow-lg"
             />
