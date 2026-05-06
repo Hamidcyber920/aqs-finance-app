@@ -453,3 +453,16 @@
 - [x] Photo upload per node (drag-drop or file picker, uploads to S3)
 - [x] Add/edit/remove node form (name, title, department, parent, photo)
 - [x] Mobile-friendly org chart (horizontal scroll or vertical stacked view)
+
+## Full Responsive / Mobile Optimisation (May 2026)
+- [x] DashboardLayout: add persistent bottom nav bar on mobile (5 key links)
+- [x] DashboardLayout: sidebar slides in as drawer on mobile, closes on nav
+- [x] DashboardLayout: mobile top bar shows logo + hamburger + user avatar
+- [x] DashboardLayout: all touch targets min 44px height
+- [x] Login page: full-screen on mobile, card fills width with padding
+- [x] Dashboard/Home: stat cards stack to 2-col grid on mobile (grid-cols-2 sm:grid-cols-4)
+- [x] Data tables: overflow-x-auto horizontal scroll on mobile (Income, Loans, Payroll, Fundraising)
+- [x] Dialogs: max-h-[90vh] overflow-y-auto applied to all dialogs
+- [x] Org Chart: horizontal scroll on mobile (overflow-x-auto + min-w-max), cards scale down (w-44 sm:w-52)
+- [x] Global: font sizes, spacing, and padding tuned for small screens
+- [x] Global: no horizontal overflow on any page at 375px width

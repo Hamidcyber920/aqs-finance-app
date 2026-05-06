@@ -356,7 +356,8 @@ function CategoryTab({
               </Button>
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Tenant / Payer</th>
@@ -393,6 +394,7 @@ function CategoryTab({
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </CardContent>
       </Card>

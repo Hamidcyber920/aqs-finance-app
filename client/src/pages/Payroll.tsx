@@ -275,7 +275,8 @@ export default function Payroll() {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          <table className="w-full data-table">
+          <div className="overflow-x-auto">
+          <table className="w-full data-table min-w-[540px]">
             <thead>
               <tr>
                 {isAdmin && <th>Employee</th>}
@@ -317,6 +318,7 @@ export default function Payroll() {
               ))}
             </tbody>
           </table>
+          </div>
         </CardContent>
       </Card>
 
