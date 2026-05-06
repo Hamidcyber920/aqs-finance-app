@@ -39,9 +39,9 @@ export default function LoginPage() {
         <div className="text-center">
           <div className="inline-flex items-center justify-center mb-4">
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663490667955/ExcMToduGVqDRtQnvUsVkJ/aqs-logo-white-gen-PTGRYCqd3BnJe8SJDQLiog.png"
+              src="/api/storage-proxy/manus-storage/aqs-logo-crop3_e642dc5f.png"
               alt="Abdullah Quilliam Society"
-              className="h-24 w-24 object-contain drop-shadow-lg"
+              className="h-24 w-24 object-contain p-2 bg-white rounded-full shadow-lg"
             />
           </div>
           <h1 className="text-2xl font-bold text-white">AQS HR &amp; Finance</h1>

@@ -220,9 +220,9 @@ function DashboardLayoutContent({
               {!isCollapsed && (
                 <div className="flex items-center gap-2 min-w-0">
                   <img
-                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663490667955/ExcMToduGVqDRtQnvUsVkJ/aqs-logo-white-gen-PTGRYCqd3BnJe8SJDQLiog.png"
+                    src="/api/storage-proxy/manus-storage/aqs-logo-crop3_e642dc5f.png"
                     alt="AQS Logo"
-                    className="h-9 w-9 object-contain shrink-0"
+                    className="h-9 w-9 object-contain p-0.5 bg-white rounded-full shrink-0"
                   />
                   <div className="flex flex-col min-w-0">
                     <span className="font-bold tracking-tight text-sidebar-foreground text-sm truncate">
@@ -370,9 +370,9 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-lg text-white/80 hover:bg-white/10" />
               <img
-                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663490667955/ExcMToduGVqDRtQnvUsVkJ/aqs-logo-white-gen-PTGRYCqd3BnJe8SJDQLiog.png"
+                src="/api/storage-proxy/manus-storage/aqs-logo-crop3_e642dc5f.png"
                 alt="AQS"
-                className="h-8 w-8 object-contain"
+                className="h-8 w-8 object-contain p-0.5 bg-white rounded-full"
               />
               <span className="font-semibold text-sm text-white">Abdullah Quilliam Society</span>
             </div>
