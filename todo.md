@@ -484,3 +484,24 @@
 - [x] Backend: Express middleware on /api/trpc POST intercepts all mutations and calls triggerBackupSoon() on finish
 - [x] Backend: backup metadata includes triggeredBy="realtime" to distinguish from daily scheduled backups
 - [x] Frontend: Backups page shows "Auto (data change)" label on write-triggered backups
+
+## AI Voice Agent (May 2026)
+
+### Backend
+- [x] server/routers/voiceAgent.ts: voiceAgent.query procedure — accepts transcript + currentPage context, uses LLM with function-calling tools to route intent
+- [x] LLM tools: get_expenses, get_income, get_payroll, get_loans, get_friday_collections, get_financial_summary, get_donors, get_staff
+- [x] LLM tools: create_payroll_record, create_income_record, create_expense, create_friday_collection, navigate_to_form
+- [x] LLM response: structured JSON with { answer, audioUrl, navigationAction, dataCreated }
+- [x] voiceAgent.transcribe procedure — accepts audioUrl, calls Whisper, returns transcript
+- [x] voiceAgent.speak procedure — accepts text, calls TTS API, returns audio URL
+
+### Frontend
+- [x] Floating voice button (bottom-right, above mobile nav bar) — Sparkles icon, pulsing animation when recording
+- [x] VoiceAgent component: hold-to-talk button, recording timer, waveform visualiser (20 animated bars)
+- [x] On release: upload audio to /api/upload, call voiceAgent.transcribe, show transcript
+- [x] Call voiceAgent.query with transcript + current page route
+- [x] Display agent text response in chat bubble overlay with message history
+- [x] Play TTS audio response automatically; replay button on each agent message
+- [x] If navigationAction returned: navigate to correct page after 1.5s delay
+- [x] VoiceAgent accessible from every page via DashboardLayout
+- [x] Mobile: panel slides up above bottom nav bar, full-width on small screens

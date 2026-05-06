@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { VoiceAgent } from "@/components/VoiceAgent";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -513,6 +514,8 @@ function DashboardLayoutContent({
           </nav>
         )}
       </SidebarInset>
+      {/* AI Voice Agent — available on every page */}
+      <VoiceAgent />
     </>
   );
 }
