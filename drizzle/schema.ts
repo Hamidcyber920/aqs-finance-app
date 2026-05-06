@@ -19,7 +19,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }).unique(),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["superadmin", "trustee", "manager", "assistant", "volunteer", "user", "admin"])
+  role: mysqlEnum("role", ["superadmin", "trustee", "manager", "deputy", "assistant", "volunteer", "user", "admin", "property_manager"])
     .default("assistant")
     .notNull(),
   // Approval workflow
@@ -32,6 +32,9 @@ export const users = mysqlTable("users", {
   resetToken: varchar("resetToken", { length: 128 }),
   resetTokenExpiry: timestamp("resetTokenExpiry"),
   isActive: boolean("isActive").default(true).notNull(),
+  // Supervision hierarchy
+  supervisedById: int("supervisedById"), // FK to users.id — who supervises this user
+  isPropertyManager: boolean("isPropertyManager").default(false).notNull(),
   // Profile
   phone: varchar("phone", { length: 30 }),
   jobTitle: varchar("jobTitle", { length: 100 }),

@@ -331,3 +331,17 @@
 - [x] Income & Rentals: new categories appear as tabs immediately after creation
 - [x] Sidebar: dynamic income category tabs link to filtered Income & Rentals view
 - [x] Reconciliation: all dynamic categories included in totals
+
+## Staff Roles, Supervision & Permissions (May 2026)
+- [x] Schema: add 'deputy' and 'property_manager' to role enum in users table
+- [x] Schema: add supervisedById (FK users) and isPropertyManager (boolean) columns to users table
+- [x] Migration: generate and apply migration for new role values + supervisedById + isPropertyManager
+- [x] Backend: create Mumin Khan account (role: manager, supervisedBy: superadmin/trustee)
+- [x] Backend: create Farid Ahmed account (role: deputy, supervisedBy: Mumin Khan, isPropertyManager: true)
+- [x] Backend: users.createStaff procedure — superadmin only, accepts name, email, role, supervisedById, isPropertyManager, tempPassword
+- [x] Backend: lock permissions.grant/revoke to superadmin and trustee only
+- [x] Frontend: Admin Panel — add "Create Staff" button (superadmin only) with full form: name, email, role, supervisor dropdown, property manager toggle, temp password
+- [x] Frontend: Admin Panel — show supervisor chain on each user row (supervised by: X)
+- [x] Frontend: Admin Panel — show "Property Manager" badge on Farid Ahmed's row
+- [x] Frontend: permissions panel — hide grant/revoke controls from manager/assistant/volunteer roles (superadmin/trustee only)
+- [x] Frontend: DashboardLayout — show property manager badge in sidebar for users with isPropertyManager = true

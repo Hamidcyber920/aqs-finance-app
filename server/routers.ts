@@ -461,7 +461,12 @@ export const appRouter = router({
     restore: adminProcedure.input(z.object({ userId: z.number() })).mutation(async ({ input }) => { await setUserActive(input.userId, true); return { success: true }; }),
     setDelegate: superAdminProcedure.input(z.object({ delegateId: z.number().nullable() })).mutation(async ({ ctx, input }) => { await setDelegateApprover(ctx.user.id, input.delegateId); return { success: true }; }),
     getPermissions: adminProcedure.input(z.object({ userId: z.number() })).query(({ input }) => getUserPermissions(input.userId)),
-    updatePermissions: adminProcedure
+    updatePermissions: protectedProcedure
+      .use(({ ctx, next }) => {
+        if (ctx.user.role !== 'superadmin' && ctx.user.role !== 'trustee' && ctx.user.role !== 'admin')
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only superadmin or trustee can change permissions' });
+        return next({ ctx });
+      })
       .input(z.object({
         userId: z.number(),
         canViewDashboard: z.boolean().optional(), canManageExpenses: z.boolean().optional(),
@@ -473,6 +478,73 @@ export const appRouter = router({
         canManageUsers: z.boolean().optional(), canExportReports: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => { const { userId, ...perms } = input; await upsertUserPermissions(userId, perms); return { success: true }; }),
+
+    createStaff: protectedProcedure
+      .use(({ ctx, next }) => {
+        if (ctx.user.role !== 'superadmin' && ctx.user.role !== 'admin')
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only superadmin can create staff accounts' });
+        return next({ ctx });
+      })
+      .input(z.object({
+        name: z.string().min(2),
+        email: z.string().email(),
+        role: z.enum(['manager', 'deputy', 'assistant', 'volunteer', 'trustee', 'property_manager']),
+        supervisedById: z.number().optional(),
+        isPropertyManager: z.boolean().default(false),
+        jobTitle: z.string().optional(),
+        department: z.string().optional(),
+        phone: z.string().optional(),
+        tempPassword: z.string().min(8),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const bcrypt = await import('bcryptjs');
+        const passwordHash = await bcrypt.hash(input.tempPassword, 10);
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { users: usersTable } = await import('../drizzle/schema');
+        // Check email not already taken
+        const existing = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.email, input.email)).limit(1);
+        if (existing.length > 0) throw new TRPCError({ code: 'CONFLICT', message: 'Email already in use' });
+        const [result] = await db.insert(usersTable).values({
+          name: input.name,
+          email: input.email,
+          loginMethod: 'local',
+          role: input.role as any,
+          status: 'active',
+          isActive: true,
+          passwordHash,
+          supervisedById: input.supervisedById ?? null,
+          isPropertyManager: input.isPropertyManager,
+          jobTitle: input.jobTitle ?? null,
+          department: input.department ?? null,
+          phone: input.phone ?? null,
+          approvedById: ctx.user.id,
+          approvedAt: new Date(),
+        });
+        // Send welcome email
+        await sendGmail(input.email, input.name, 'Your AQS Finance System Account',
+          `<h2>Welcome to AQS Finance System</h2><p>Dear ${input.name},</p><p>Your account has been created by the system administrator.</p><p><strong>Login:</strong> ${input.email}<br><strong>Temporary Password:</strong> ${input.tempPassword}</p><p>Please log in and change your password immediately.</p>`
+        ).catch(() => {});
+        return { success: true, userId: (result as any).insertId };
+      }),
+
+    updateSupervision: protectedProcedure
+      .use(({ ctx, next }) => {
+        if (ctx.user.role !== 'superadmin' && ctx.user.role !== 'admin')
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only superadmin can update supervision' });
+        return next({ ctx });
+      })
+      .input(z.object({ userId: z.number(), supervisedById: z.number().nullable(), isPropertyManager: z.boolean().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { users: usersTable } = await import('../drizzle/schema');
+        await db.update(usersTable).set({
+          supervisedById: input.supervisedById,
+          ...(input.isPropertyManager !== undefined ? { isPropertyManager: input.isPropertyManager } : {}),
+        }).where(eq(usersTable.id, input.userId));
+        return { success: true };
+      }),
   }),
 
   // ─── FUNDRAISING ──────────────────────────────────────────────────────────

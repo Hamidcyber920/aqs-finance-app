@@ -178,9 +178,16 @@ export const localAuthRouter = router({
 });
 
 // Admin-only procedures
+const ADMIN_ROLES_LOCAL = ["superadmin", "admin", "trustee", "manager"];
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") {
+  if (!ADMIN_ROLES_LOCAL.includes(ctx.user.role)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+  }
+  return next({ ctx });
+});
+const superAdminOnlyProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "superadmin" && ctx.user.role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Super admin access required" });
   }
   return next({ ctx });
 });
@@ -196,8 +203,8 @@ export const adminRouter = router({
       return listAllUsers(input.limit, input.offset);
     }),
 
-  updateUserRole: adminProcedure
-    .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
+  updateUserRole: superAdminOnlyProcedure
+    .input(z.object({ userId: z.number(), role: z.string() }))
     .mutation(async ({ input }) => {
       await updateUserRole(input.userId, input.role);
       return { success: true };
