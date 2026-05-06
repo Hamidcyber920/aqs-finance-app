@@ -318,3 +318,16 @@
 - [x] Wire into Friday Collections delete buttons
 - [x] Wire into Volunteer Payments delete buttons
 - [x] Wire into Trustees page delete buttons
+
+## Dynamic Category Tabs — Income & Expenses (May 2026)
+- [x] Audit: list all current expense departments and income categories in DB
+- [x] Monthly Expenses: add tab per expense department (Mosque, Restaurant/Bistro, Ramadan, Staff/Payroll + any custom)
+- [x] Monthly Expenses: each tab has a manual entry form (date, description, amount, payee, receipt upload)
+- [x] Monthly Expenses: "Add Department" button creates a new tab and persists to DB
+- [x] Monthly Expenses: new departments appear as tabs immediately after creation
+- [x] Income & Rentals: add tab per income category (Student Accommodation, Stalls, Office Rental, Coffee Shop, Hall Hire, Friday Collection + any custom)
+- [x] Income & Rentals: each tab has a manual entry form (date, payer, amount, reference, notes)
+- [x] Income & Rentals: "Add Category" button creates a new tab and persists to DB
+- [x] Income & Rentals: new categories appear as tabs immediately after creation
+- [x] Sidebar: dynamic income category tabs link to filtered Income & Rentals view
+- [x] Reconciliation: all dynamic categories included in totals

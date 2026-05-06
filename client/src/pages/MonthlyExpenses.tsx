@@ -802,6 +802,125 @@ function AddVolunteerDialog({ open, onClose, month, year }: { open: boolean; onC
   );
 }
 
+// ─── Invoices Category View ──────────────────────────────────────────────────
+function NewExpenseCategoryDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: (name: string) => void }) {
+  const [name, setName] = useState("");
+  const create = trpc.categories.create.useMutation({
+    onSuccess: () => { toast.success(`Category "${name}" created`); onSuccess(name); onClose(); setName(""); },
+    onError: (e) => toast.error(e.message),
+  });
+  return (
+    <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle className="flex items-center gap-2"><Plus className="h-5 w-5 text-primary" />New Expense Category</DialogTitle></DialogHeader>
+        <div className="space-y-3 py-2">
+          <div>
+            <Label>Category Name *</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Security, IT Services…" className="mt-1" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => { if (!name.trim()) { toast.error("Name required"); return; } create.mutate({ name: name.trim() }); }} disabled={create.isPending}>
+            {create.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}Create
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InvoicesCategoryView({
+  invoiceItems, isAdmin, onEvidence, onAuthorise, onReject, onAdd,
+}: {
+  invoiceItems: BaseItem[];
+  isAdmin: boolean;
+  onEvidence: (item: BaseItem) => void;
+  onAuthorise: (item: BaseItem) => void;
+  onReject: (item: BaseItem) => void;
+  onAdd: () => void;
+}) {
+  const allCategoryNames = Object.keys(INVOICE_CATEGORIES);
+  // Collect categories that have invoice items + all predefined ones
+  const usedCats = Array.from(new Set(invoiceItems.map(i => i.category ?? "Other")));
+  const allCats = Array.from(new Set([...allCategoryNames, ...usedCats]));
+  const [activeCat, setActiveCat] = useState("All");
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [extraCats, setExtraCats] = useState<string[]>([]);
+
+  const displayCats = ["All", ...allCats, ...extraCats.filter(c => !allCats.includes(c))];
+
+  const filteredItems = activeCat === "All" ? invoiceItems : invoiceItems.filter(i => (i.category ?? "Other") === activeCat);
+  const catTotal = filteredItems.reduce((s, i) => s + parseFloat(String(i.amount ?? "0")), 0);
+
+  return (
+    <div className="space-y-3">
+      {/* Summary strip */}
+      {invoiceItems.length > 0 && (
+        <div className="p-3 bg-muted/50 rounded-lg">
+          <p className="text-xs font-medium text-muted-foreground mb-2">By Category</p>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(
+              invoiceItems.reduce((acc, item) => {
+                const cat = item.category ?? "Other";
+                acc[cat] = (acc[cat] ?? 0) + parseFloat(String(item.amount ?? "0"));
+                return acc;
+              }, {} as Record<string, number>)
+            ).map(([cat, total]) => (
+              <Badge key={cat} variant="outline" className="text-xs cursor-pointer" onClick={() => setActiveCat(cat)}>
+                {cat}: {fmt(total)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Category sub-tabs */}
+      <div className="overflow-x-auto">
+        <div className="flex gap-1 min-w-max pb-1">
+          {displayCats.map(cat => {
+            const count = cat === "All" ? invoiceItems.length : invoiceItems.filter(i => (i.category ?? "Other") === cat).length;
+            return (
+              <button key={cat} type="button"
+                onClick={() => setActiveCat(cat)}
+                className={"px-3 py-1.5 rounded-md text-xs font-medium border transition-colors flex items-center gap-1 " +
+                  (activeCat === cat ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:bg-muted/80")}>
+                {cat}
+                {count > 0 && <span className="bg-background/30 rounded px-1">{count}</span>}
+              </button>
+            );
+          })}
+          <button type="button" onClick={() => setNewCatOpen(true)}
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:bg-muted/50 flex items-center gap-1">
+            <Plus className="h-3 w-3" />New Category
+          </button>
+        </div>
+      </div>
+
+      {/* Category total */}
+      {activeCat !== "All" && (
+        <div className="text-sm font-medium text-muted-foreground">
+          {activeCat}: <span className="text-foreground font-bold">{fmt(catTotal)}</span>
+          <span className="ml-2 text-xs">({filteredItems.length} items)</span>
+        </div>
+      )}
+
+      {/* Items */}
+      <Section title={activeCat === "All" ? "All Invoices" : activeCat}
+        icon={<Receipt className="h-4 w-4 text-purple-600" />}
+        items={filteredItems} isAdmin={isAdmin}
+        onEvidence={onEvidence} onAuthorise={onAuthorise} onReject={onReject}
+        onAdd={onAdd} />
+
+      <NewExpenseCategoryDialog
+        open={newCatOpen}
+        onClose={() => setNewCatOpen(false)}
+        onSuccess={(name) => setExtraCats(prev => [...prev, name])}
+      />
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function MonthlyExpenses() {
   const { user } = useAuth();
@@ -1053,31 +1172,14 @@ export default function MonthlyExpenses() {
 
         <TabsContent value="invoices">
           {invoicesLoading ? <div className="text-center py-8 text-muted-foreground flex items-center justify-center gap-2"><Loader2 className="h-5 w-5 animate-spin" />Loading…</div> : (
-            <>
-              {/* Category breakdown */}
-              {invoiceItems.length > 0 && (
-                <div className="mb-3 p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">By Category</p>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(
-                      invoiceItems.reduce((acc, item) => {
-                        const cat = item.category ?? "Other";
-                        acc[cat] = (acc[cat] ?? 0) + parseFloat(String(item.amount ?? "0"));
-                        return acc;
-                      }, {} as Record<string, number>)
-                    ).map(([cat, total]) => (
-                      <Badge key={cat} variant="outline" className="text-xs">
-                        {cat}: {fmt(total)}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <Section title="Invoices" icon={<Receipt className="h-4 w-4 text-purple-600" />}
-                items={invoiceItems} isAdmin={isAdmin}
-                onEvidence={setEvidenceItem} onAuthorise={handleAuthorise} onReject={handleReject}
-                onAdd={() => setAddInvoiceOpen(true)} />
-            </>
+            <InvoicesCategoryView
+              invoiceItems={invoiceItems}
+              isAdmin={isAdmin}
+              onEvidence={setEvidenceItem}
+              onAuthorise={handleAuthorise}
+              onReject={handleReject}
+              onAdd={() => setAddInvoiceOpen(true)}
+            />
           )}
         </TabsContent>
 

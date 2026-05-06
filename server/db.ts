@@ -201,6 +201,31 @@ export async function getDepartments() {
   return db.select().from(departments).orderBy(departments.name);
 }
 
+export async function createDepartment(data: { name: string; description?: string; color?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  await db.insert(departments).values({
+    name: data.name,
+    description: data.description ?? null,
+    color: data.color ?? '#6366f1',
+  });
+  const result = await db.select().from(departments).where(eq(departments.name, data.name)).limit(1);
+  return result[0];
+}
+
+export async function createExpenseCategory(data: { name: string; departmentId?: number; color?: string; icon?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  await db.insert(expenseCategories).values({
+    name: data.name,
+    departmentId: data.departmentId ?? null,
+    color: data.color ?? '#6366f1',
+    icon: data.icon ?? 'tag',
+  });
+  const result = await db.select().from(expenseCategories).orderBy(desc(expenseCategories.id)).limit(1);
+  return result[0];
+}
+
 export async function getExpenseCategories(departmentId?: number) {
   const db = await getDb();
   if (!db) return [];
@@ -551,6 +576,20 @@ export async function getIncomeCategories() {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(incomeCategories).orderBy(incomeCategories.name);
+}
+
+export async function createIncomeCategory(data: { name: string; description?: string; color?: string; allowedPeriods?: string; requiresSpecification?: boolean }) {
+  const db = await getDb();
+  if (!db) throw new Error('Database not available');
+  await db.insert(incomeCategories).values({
+    name: data.name,
+    description: data.description ?? null,
+    color: data.color ?? '#C9A84C',
+    allowedPeriods: data.allowedPeriods ?? 'daily,weekly,monthly,one_off',
+    requiresSpecification: data.requiresSpecification ?? false,
+  });
+  const result = await db.select().from(incomeCategories).where(eq(incomeCategories.name, data.name)).limit(1);
+  return result[0];
 }
 
 export async function getIncomeRecords(filters?: {

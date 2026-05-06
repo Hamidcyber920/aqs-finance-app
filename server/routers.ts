@@ -13,7 +13,7 @@ import { localAuthRouter, adminRouter } from "./routers/localAuth";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
-  getDepartments, getExpenseCategories, seedDepartmentsAndCategories,
+  getDepartments, getExpenseCategories, seedDepartmentsAndCategories, createDepartment, createExpenseCategory,
   getUserPermissions, upsertUserPermissions,
   listAllUsers, updateUserRole, setUserActive, getPendingUsers, approveUser, rejectUser, setDelegateApprover,
   getUserById,
@@ -21,7 +21,7 @@ import {
   getCampaignItems, getCampaignDonations, createDonation, getFridayCollections, createFridayCollection,
   getLoans, getLoanById, createLoan, updateLoan, getLoanRepayments, createLoanRepayment, getLoanRepaymentsById,
   getTrustees, getTrusteeById, createTrustee, updateTrustee, deleteTrustee, getDb,
-  getIncomeCategories, getIncomeRecords, createIncomeRecord, updateIncomeRecord,
+  getIncomeCategories, getIncomeRecords, createIncomeRecord, updateIncomeRecord, createIncomeCategory,
   getDonors, getDonorById, createDonor, updateDonor,
   getEmailCampaigns, getEmailCampaignById, createEmailCampaign, updateEmailCampaign,
   getPayrollRecords, createPayrollRecord, updatePayrollRecord, getStaffProfile, upsertStaffProfile,
@@ -257,10 +257,16 @@ export const appRouter = router({
     list: publicProcedure.query(async () => { await seedDefaultCategories(); return getAllCategories(); }),
     listByDepartment: protectedProcedure.input(z.object({ departmentId: z.number().optional() })).query(({ input }) => getExpenseCategories(input.departmentId)),
     seed: adminProcedure.mutation(async () => { await seedDepartmentsAndCategories(); return { success: true }; }),
+    create: adminProcedure
+      .input(z.object({ name: z.string().min(1), departmentId: z.number().optional(), color: z.string().optional(), icon: z.string().optional() }))
+      .mutation(({ input }) => createExpenseCategory(input)),
   }),
 
   departments: router({
     list: protectedProcedure.query(() => getDepartments()),
+    create: adminProcedure
+      .input(z.object({ name: z.string().min(1), description: z.string().optional(), color: z.string().optional() }))
+      .mutation(({ input }) => createDepartment(input)),
   }),
 
   // ─── RECEIPTS ─────────────────────────────────────────────────────────────
@@ -1442,6 +1448,9 @@ export const appRouter = router({
 
   income: router({
     categories: protectedProcedure.query(() => getIncomeCategories()),
+    createCategory: adminProcedure
+      .input(z.object({ name: z.string().min(1), description: z.string().optional(), color: z.string().optional(), allowedPeriods: z.string().optional(), requiresSpecification: z.boolean().optional() }))
+      .mutation(({ input }) => createIncomeCategory(input)),
     list: adminProcedure
       .input(z.object({ categoryId: z.number().optional(), paymentStatus: z.string().optional(), startDate: z.date().optional(), endDate: z.date().optional(), limit: z.number().default(100), offset: z.number().default(0) }))
       .query(({ input }) => getIncomeRecords(input)),

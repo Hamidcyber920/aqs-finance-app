@@ -18,6 +18,9 @@ export default function ProfileSettings() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
 
+  const { data: departments = [] } = trpc.departments.list.useQuery();
+  const { data: incomeCategories = [] } = trpc.income.categories.useQuery();
+
   const changePasswordMutation = trpc.localAuth.changePassword.useMutation({
     onSuccess: () => {
       toast.success("Password changed successfully");
@@ -302,25 +305,27 @@ export default function ProfileSettings() {
 
               <Separator />
 
-              <div>
+                <div>
                 <Label className="text-gray-600 text-sm">Expense Departments</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {["Mosque", "Restaurant / Bistro", "Ramadan", "Staff / Payroll"].map((dept) => (
-                    <Badge key={dept} variant="outline" className="text-xs border-[#1B4332] text-[#1B4332]">
-                      {dept}
+                  {departments.map((dept) => (
+                    <Badge key={dept.id} variant="outline" className="text-xs" style={{ borderColor: dept.color ?? '#1B4332', color: dept.color ?? '#1B4332' }}>
+                      {dept.name}
                     </Badge>
                   ))}
+                  {departments.length === 0 && <span className="text-xs text-muted-foreground">No departments yet</span>}
                 </div>
               </div>
 
               <div>
                 <Label className="text-gray-600 text-sm">Income Categories</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {["Student Accommodation", "Stalls", "Office Rental", "Coffee Shop", "Hall Hire", "Friday Collection"].map((cat) => (
-                    <Badge key={cat} variant="outline" className="text-xs border-[#C9A84C] text-[#C9A84C]">
-                      {cat}
+                  {incomeCategories.map((cat) => (
+                    <Badge key={cat.id} variant="outline" className="text-xs" style={{ borderColor: cat.color ?? '#C9A84C', color: cat.color ?? '#C9A84C' }}>
+                      {cat.name}
                     </Badge>
                   ))}
+                  {incomeCategories.length === 0 && <span className="text-xs text-muted-foreground">No categories yet</span>}
                 </div>
               </div>
             </CardContent>
