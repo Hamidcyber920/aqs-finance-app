@@ -277,3 +277,9 @@
 - [ ] Frontend: LoanDetail — show approval status badges (Pending Admin / Pending Trustee / Fully Approved)
 - [ ] Frontend: LoanDetail — repayment rows show "Confirm Received" button, then dual approval flow
 - [ ] Frontend: repayment confirmation shows WhatsApp link button alongside email button
+
+## SMTP Email Fix (May 2026)
+- [x] Replace Gmail OAuth with nodemailer SMTP sender
+- [x] Fix SMTP_PASSWORD — env var was being overridden by BYOK credential; added 16-char length validation with correct App Password fallback
+- [x] SMTP test passed: email sent successfully to ahamid4@gmail.com via smtp.gmail.com:587
+- [x] Production build clean (zero errors)

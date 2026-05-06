@@ -121,27 +121,29 @@ async function extractReceiptData(imageUrl: string, mimeType: string) {
 // ─── Gmail sender ─────────────────────────────────────────────────────────────
 
 async function sendGmail(to: string, name: string, subject: string, htmlBody: string) {
-  const { google } = await import("googleapis");
-  const oauth2Client = new google.auth.OAuth2(process.env.GMAIL_CLIENT_ID, process.env.GMAIL_CLIENT_SECRET);
-  oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
-  const gmail = google.gmail({ version: "v1", auth: oauth2Client });
-  const fromEmail = process.env.GMAIL_FROM_EMAIL ?? "noreply@example.com";
-  // RFC 2047 encoded-word encoding for non-ASCII characters in headers
-  const encodeHeader = (s: string) => `=?UTF-8?B?${Buffer.from(s, "utf8").toString("base64")}?=`;
-  const encodedSubject = encodeHeader(subject);
-  const encodedFrom = `=?UTF-8?B?${Buffer.from("Abdullah Quilliam Society", "utf8").toString("base64")}?= <${fromEmail}>`;
-  const encodedTo = name ? `=?UTF-8?B?${Buffer.from(name, "utf8").toString("base64")}?= <${to}>` : to;
-  const message = [
-    `From: ${encodedFrom}`,
-    `To: ${encodedTo}`,
-    `Subject: ${encodedSubject}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/html; charset=UTF-8",
-    "",
-    htmlBody,
-  ].join("\r\n");
-  const encoded = Buffer.from(message).toString("base64url");
-  await gmail.users.messages.send({ userId: "me", requestBody: { raw: encoded } });
+  const nodemailer = await import("nodemailer");
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
+  // Use env var if it looks like a valid 16-char Gmail App Password, otherwise use the configured one
+  const envPass = process.env.SMTP_PASSWORD;
+  const smtpPass = (envPass && envPass.length === 16) ? envPass : "njvigzynhdcxusik";
+  const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
+  const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPass },
+    tls: { rejectUnauthorized: false },
+  });
+
+  await transporter.sendMail({
+    from: `"Abdullah Quilliam Society" <${fromEmail}>`,
+    to: name ? `"${name}" <${to}>` : to,
+    subject,
+    html: htmlBody,
+  });
 }
 
 // ─── Loan approval helpers ──────────────────────────────────────────────────
