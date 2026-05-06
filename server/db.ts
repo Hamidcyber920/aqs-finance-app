@@ -10,6 +10,7 @@ import {
   donors, InsertDonor,
   campaigns, InsertCampaign,
   staffProfiles, payrollRecords, InsertPayrollRecord,
+  trustees, InsertTrustee,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -760,4 +761,48 @@ export async function getDashboardStats(startDate?: Date, endDate?: Date) {
     fundraisingTarget: Number(fundraisingStats[0]?.target ?? 0),
     pendingApprovals: Number(pendingUsers[0]?.count ?? 0),
   };
+}
+
+// ─── TRUSTEES ─────────────────────────────────────────────────────────────────
+
+export async function getTrustees(activeOnly = false) {
+  const db = await getDb();
+  if (!db) return [];
+  if (activeOnly) return db.select().from(trustees).where(eq(trustees.isActive, true)).orderBy(trustees.fullName);
+  return db.select().from(trustees).orderBy(trustees.fullName);
+}
+
+export async function getTrusteeById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(trustees).where(eq(trustees.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createTrustee(data: InsertTrustee) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(trustees).values(data);
+  const result = await db.select().from(trustees).orderBy(desc(trustees.createdAt)).limit(1);
+  return result[0];
+}
+
+export async function updateTrustee(id: number, data: Partial<InsertTrustee>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(trustees).set(data).where(eq(trustees.id, id));
+}
+
+export async function deleteTrustee(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  // Soft-delete by deactivating
+  await db.update(trustees).set({ isActive: false }).where(eq(trustees.id, id));
+}
+
+export async function getLoanRepaymentsById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(loanRepayments).where(eq(loanRepayments.id, id)).limit(1);
+  return result[0];
 }

@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   ArrowLeft, CheckCircle, XCircle, DollarSign, FileText, Mail,
-  Send, Upload, CalendarDays, AlertCircle, Paperclip,
+  Send, Upload, CalendarDays, AlertCircle, Paperclip, ShieldCheck, UserCheck,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -36,16 +36,40 @@ export default function LoanDetail({ id }: { id: number }) {
   const [evidenceUploading, setEvidenceUploading] = useState(false);
   const evidenceInputRef = useRef<HTMLInputElement>(null);
 
+  const [trusteeSelectId, setTrusteeSelectId] = useState<string>("");
+  const [repaymentTrusteeId, setRepaymentTrusteeId] = useState<string>("");
+
   const { data, refetch, isLoading } = trpc.loans.get.useQuery({ id });
+  const { data: trustees = [] } = trpc.trustees.listActive.useQuery();
 
   const uploadFile = trpc.upload.getUploadUrl.useMutation();
 
+  const approveAdmin = trpc.loans.approveAdmin.useMutation({
+    onSuccess: () => { toast.success("Admin approval recorded — waiting for trustee co-sign"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const approveTrustee = trpc.loans.approveTrustee.useMutation({
+    onSuccess: () => { toast.success("Trustee approval recorded — loan fully approved, PDF & email sent"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
   const approveLoan = trpc.loans.approve.useMutation({
     onSuccess: () => { toast.success("Loan approved — confirmation email sent to lender"); refetch(); },
     onError: (e) => toast.error(e.message),
   });
   const rejectLoan = trpc.loans.reject.useMutation({
     onSuccess: () => { toast.success("Loan rejected"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const confirmRepaymentReceived = trpc.loans.confirmRepaymentReceived.useMutation({
+    onSuccess: () => { toast.success("Repayment marked as received in bank"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const approveRepaymentAdmin = trpc.loans.approveRepaymentAdmin.useMutation({
+    onSuccess: () => { toast.success("Admin approval recorded for repayment"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const approveRepaymentTrustee = trpc.loans.approveRepaymentTrustee.useMutation({
+    onSuccess: () => { toast.success("Repayment fully confirmed — receipt PDF & email sent"); refetch(); },
     onError: (e) => toast.error(e.message),
   });
   const recordRepayment = trpc.loans.recordRepayment.useMutation({
@@ -241,18 +265,99 @@ export default function LoanDetail({ id }: { id: number }) {
         </CardContent>
       </Card>
 
-      {/* Review Actions */}
+      {/* Dual Approval Workflow */}
       {(loan.status === "pending_review" || loan.status === "draft") && (
-        <Card>
-          <CardHeader><CardTitle className="text-sm">Review Actions</CardTitle></CardHeader>
-          <CardContent className="flex gap-3 flex-wrap">
-            <Button onClick={() => approveLoan.mutate({ id: loan.id })} disabled={approveLoan.isPending} className="flex-1">
-              <CheckCircle className="h-4 w-4 mr-2" />
-              {approveLoan.isPending ? "Approving..." : "Approve Loan"}
-            </Button>
-            <Button variant="destructive" onClick={() => rejectLoan.mutate({ id: loan.id })} disabled={rejectLoan.isPending} className="flex-1">
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-amber-600" />
+              Dual Approval Required
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Both Super Admin and a Trustee must approve before the loan agreement PDF is generated and sent.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Admin approval */}
+            <div className="flex items-center justify-between p-3 rounded-lg border bg-white">
+              <div className="flex items-center gap-2">
+                {(loan as any).adminApprovedAt ? (
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                ) : (
+                  <div className="h-5 w-5 rounded-full border-2 border-muted-foreground" />
+                )}
+                <div>
+                  <p className="text-sm font-medium">Super Admin / Manager Approval</p>
+                  {(loan as any).adminApprovedAt ? (
+                    <p className="text-xs text-green-700">
+                      Approved by {(loan as any).adminApprovedByName} on {new Date((loan as any).adminApprovedAt).toLocaleString("en-GB")}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Pending approval</p>
+                  )}
+                </div>
+              </div>
+              {!(loan as any).adminApprovedAt && (
+                <Button
+                  size="sm"
+                  className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
+                  onClick={() => approveAdmin.mutate({ id: loan.id })}
+                  disabled={approveAdmin.isPending}
+                >
+                  <UserCheck className="h-4 w-4 mr-1" />
+                  {approveAdmin.isPending ? "Saving..." : "Approve"}
+                </Button>
+              )}
+            </div>
+
+            {/* Trustee approval */}
+            <div className="flex items-center justify-between p-3 rounded-lg border bg-white">
+              <div className="flex items-center gap-2">
+                {(loan as any).trusteeApprovedAt ? (
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                ) : (
+                  <div className="h-5 w-5 rounded-full border-2 border-muted-foreground" />
+                )}
+                <div>
+                  <p className="text-sm font-medium">Trustee Approval</p>
+                  {(loan as any).trusteeApprovedAt ? (
+                    <p className="text-xs text-green-700">
+                      Approved by {(loan as any).trusteeName} on {new Date((loan as any).trusteeApprovedAt).toLocaleString("en-GB")}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Pending trustee sign-off</p>
+                  )}
+                </div>
+              </div>
+              {!(loan as any).trusteeApprovedAt && (
+                <div className="flex items-center gap-2">
+                  <Select value={trusteeSelectId} onValueChange={setTrusteeSelectId}>
+                    <SelectTrigger className="w-40 h-8 text-xs">
+                      <SelectValue placeholder="Select trustee" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {trustees.map(t => (
+                        <SelectItem key={t.id} value={String(t.id)}>{t.fullName} ({t.role})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
+                    onClick={() => trusteeSelectId && approveTrustee.mutate({ id: loan.id, trusteeId: parseInt(trusteeSelectId) })}
+                    disabled={!trusteeSelectId || approveTrustee.isPending}
+                  >
+                    <UserCheck className="h-4 w-4 mr-1" />
+                    {approveTrustee.isPending ? "Saving..." : "Co-Sign"}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Reject */}
+            <Button variant="destructive" size="sm" onClick={() => rejectLoan.mutate({ id: loan.id })} disabled={rejectLoan.isPending}>
               <XCircle className="h-4 w-4 mr-2" />
-              {rejectLoan.isPending ? "Rejecting..." : "Reject"}
+              {rejectLoan.isPending ? "Rejecting..." : "Reject Application"}
             </Button>
           </CardContent>
         </Card>
@@ -312,48 +417,99 @@ export default function LoanDetail({ id }: { id: number }) {
       <Card>
         <CardHeader><CardTitle className="text-sm">Repayment History</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <table className="w-full data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Method</th>
-                <th>Evidence</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {repayments.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center text-muted-foreground py-6">
-                    No repayments recorded yet
-                  </td>
-                </tr>
-              ) : repayments.map(r => (
-                <tr key={r.id}>
-                  <td>{new Date(r.paidAt).toLocaleDateString("en-GB")}</td>
-                  <td className="font-medium">£{parseFloat(r.amount.toString()).toFixed(2)}</td>
-                  <td className="capitalize">{r.paymentMethod.replace(/_/g, " ")}</td>
-                  <td>
-                    {r.evidenceUrl ? (
-                      <a
-                        href={r.evidenceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Paperclip className="h-3 w-3" /> View
+          {repayments.length === 0 ? (
+            <div className="text-center text-muted-foreground py-6 text-sm">No repayments recorded yet</div>
+          ) : (
+            <div className="divide-y">
+              {repayments.map(r => (
+                <div key={r.id} className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-sm">£{parseFloat(r.amount.toString()).toFixed(2)}</span>
+                      <span className="text-xs text-muted-foreground ml-2">{new Date(r.paidAt).toLocaleDateString("en-GB")} — {r.paymentMethod.replace(/_/g, " ")}</span>
+                    </div>
+                    {r.evidenceUrl && (
+                      <a href={r.evidenceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                        <Paperclip className="h-3 w-3" /> Evidence
                       </a>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
                     )}
-                  </td>
-                  <td className="text-muted-foreground text-xs">{r.notes ?? "—"}</td>
-                </tr>
+                  </div>
+                  {/* Repayment approval steps */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {/* Step 1: Bank confirmed */}
+                    <div className="flex items-center gap-2 text-xs p-2 rounded border bg-muted/30">
+                      {(r as any).receivedConfirmedAt ? (
+                        <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                      ) : (
+                        <div className="h-4 w-4 rounded-full border-2 border-muted-foreground shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium">Received in Bank</p>
+                        {(r as any).receivedConfirmedAt ? (
+                          <p className="text-green-700 truncate">{new Date((r as any).receivedConfirmedAt).toLocaleString("en-GB")}</p>
+                        ) : (
+                          <Button size="sm" variant="outline" className="h-6 text-xs mt-1 px-2" onClick={() => confirmRepaymentReceived.mutate({ repaymentId: r.id })} disabled={confirmRepaymentReceived.isPending}>
+                            Confirm
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Step 2: Admin approval */}
+                    <div className="flex items-center gap-2 text-xs p-2 rounded border bg-muted/30">
+                      {(r as any).adminApprovedAt ? (
+                        <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                      ) : (
+                        <div className="h-4 w-4 rounded-full border-2 border-muted-foreground shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium">Admin Approved</p>
+                        {(r as any).adminApprovedAt ? (
+                          <p className="text-green-700 truncate">{(r as any).adminApprovedByName}</p>
+                        ) : (
+                          <Button size="sm" variant="outline" className="h-6 text-xs mt-1 px-2" onClick={() => approveRepaymentAdmin.mutate({ repaymentId: r.id })} disabled={approveRepaymentAdmin.isPending || !(r as any).receivedConfirmedAt}>
+                            Approve
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Step 3: Trustee approval */}
+                    <div className="flex items-center gap-2 text-xs p-2 rounded border bg-muted/30">
+                      {(r as any).trusteeApprovedAt ? (
+                        <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                      ) : (
+                        <div className="h-4 w-4 rounded-full border-2 border-muted-foreground shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium">Trustee Approved</p>
+                        {(r as any).trusteeApprovedAt ? (
+                          <p className="text-green-700 truncate">{(r as any).trusteeName}</p>
+                        ) : (
+                          <div className="flex items-center gap-1 mt-1">
+                            <Select value={repaymentTrusteeId} onValueChange={setRepaymentTrusteeId}>
+                              <SelectTrigger className="h-6 text-xs w-28"><SelectValue placeholder="Trustee" /></SelectTrigger>
+                              <SelectContent>
+                                {trustees.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.fullName}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => repaymentTrusteeId && approveRepaymentTrustee.mutate({ repaymentId: r.id, trusteeId: parseInt(repaymentTrusteeId) })} disabled={!repaymentTrusteeId || approveRepaymentTrustee.isPending || !(r as any).receivedConfirmedAt}>
+                              Sign
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Receipt PDF link */}
+                  {(r as any).confirmationPdfUrl && (
+                    <a href={(r as any).confirmationPdfUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <FileText className="h-3 w-3" /> Download Repayment Receipt PDF
+                    </a>
+                  )}
+                  {r.notes && <p className="text-xs text-muted-foreground">{r.notes}</p>}
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          )}
         </CardContent>
       </Card>
 

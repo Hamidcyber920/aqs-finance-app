@@ -580,3 +580,20 @@ export const invoices = mysqlTable("invoices", {
 });
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = typeof invoices.$inferInsert;
+
+// ─── TRUSTEES ────────────────────────────────────────────────────────────────
+
+export const trustees = mysqlTable("trustees", {
+  id: int("id").autoincrement().primaryKey(),
+  fullName: varchar("fullName", { length: 200 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 30 }),
+  role: varchar("role", { length: 100 }).default("Trustee").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Trustee = typeof trustees.$inferSelect;
+export type InsertTrustee = typeof trustees.$inferInsert;

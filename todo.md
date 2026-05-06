@@ -253,3 +253,27 @@
 - [x] Frontend: computedMonthly useMemo updated to use termValue × (12 if years else 1) for correct monthly calculation
 - [x] Frontend: loan cards and list view show human-readable term via formatTerm() helper (e.g. "2 years" or "18 months")
 - [x] Frontend: term notes shown on loan card if present
+
+## Qarde Hasan — Loan Document Workflow & Trustee Approval (May 2026)
+- [ ] Schema: create trustees table (name, email, phone, role, isActive, createdAt)
+- [ ] Schema: add trusteeId (FK trustees), trusteeApprovedAt, trusteeApprovedByName to loanApplications
+- [ ] Schema: add trusteeId, trusteeApprovedAt, trusteeApprovedByName to loanRepayments
+- [ ] Migration: generate and apply migration for trustees table + new loan columns
+- [ ] Backend: trustees.list, trustees.create, trustees.update, trustees.delete procedures
+- [ ] Backend: loans.approveTrustee procedure — trustee signs off with datetime stamp
+- [ ] Backend: loans.approveAdmin procedure — superadmin/manager signs off with datetime stamp
+- [ ] Backend: update loans.approve to require both admin + trustee approval before status → approved
+- [ ] Backend: update loan PDF to include trustee name, repayment schedule table, AQS Shariah statement
+- [ ] Backend: send WhatsApp link (wa.me) + email to borrower on full approval (both signed)
+- [ ] Backend: loanRepayments.confirmReceived — admin marks repayment received in bank, triggers dual approval flow
+- [ ] Backend: loanRepayments.approveTrustee — trustee signs off repayment confirmation
+- [ ] Backend: loanRepayments.approveAdmin — admin signs off repayment confirmation
+- [ ] Backend: send WhatsApp link + email to borrower on repayment confirmation (both signed)
+- [ ] Backend: generate repayment confirmation PDF per instalment
+- [ ] Frontend: Trustees page under Admin section — add/edit/delete trustees with name, email, phone, role
+- [ ] Frontend: Sidebar — add "Trustees" nav item under ORGANISATION (admin-only)
+- [ ] Frontend: Loans new application form — trustee dropdown (from trustees DB) for co-signer selection
+- [ ] Frontend: LoanDetail page — dual approval section: Admin tick + Trustee tick, each with datetime stamp
+- [ ] Frontend: LoanDetail — show approval status badges (Pending Admin / Pending Trustee / Fully Approved)
+- [ ] Frontend: LoanDetail — repayment rows show "Confirm Received" button, then dual approval flow
+- [ ] Frontend: repayment confirmation shows WhatsApp link button alongside email button

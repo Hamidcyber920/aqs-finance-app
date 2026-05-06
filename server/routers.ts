@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { generateLoanPdf } from "./loanPdf";
+import { generateLoanPdf, generateRepaymentPdf } from "./loanPdf";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -19,13 +19,17 @@ import {
   getUserById,
   getFundraisingCampaigns, getCampaignById, createFundraisingCampaign, updateCampaignAmount,
   getCampaignItems, getCampaignDonations, createDonation, getFridayCollections, createFridayCollection,
-  getLoans, getLoanById, createLoan, updateLoan, getLoanRepayments, createLoanRepayment,
+  getLoans, getLoanById, createLoan, updateLoan, getLoanRepayments, createLoanRepayment, getLoanRepaymentsById,
+  getTrustees, getTrusteeById, createTrustee, updateTrustee, deleteTrustee, getDb,
   getIncomeCategories, getIncomeRecords, createIncomeRecord, updateIncomeRecord,
   getDonors, getDonorById, createDonor, updateDonor,
   getEmailCampaigns, getEmailCampaignById, createEmailCampaign, updateEmailCampaign,
   getPayrollRecords, createPayrollRecord, updatePayrollRecord, getStaffProfile, upsertStaffProfile,
   getDashboardStats,
 } from "./db";
+import { eq } from "drizzle-orm";
+import { loanRepayments } from "../drizzle/schema";
+// sendGmail is defined locally in this file (line ~123)
 
 // ─── Permission helpers ───────────────────────────────────────────────────────
 
@@ -139,6 +143,71 @@ async function sendGmail(to: string, name: string, subject: string, htmlBody: st
   const encoded = Buffer.from(message).toString("base64url");
   await gmail.users.messages.send({ userId: "me", requestBody: { raw: encoded } });
 }
+
+// ─── Loan approval helpers ──────────────────────────────────────────────────
+
+async function _fullyApproveLoan(loan: any) {
+  await updateLoan(loan.id, { status: "approved" });
+  // Generate and store agreement PDF
+  try {
+    const pdfBuffer = await generateLoanPdf({
+      id: loan.id, borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail,
+      borrowerAddress: loan.borrowerAddress, borrowerPhone: loan.borrowerPhone,
+      purpose: loan.purpose, amount: loan.amount, termMonths: loan.termMonths,
+      termValue: loan.termValue, termUnit: loan.termUnit, termNotes: loan.termNotes,
+      monthlyRepayment: loan.monthlyRepayment, startDate: loan.startDate,
+      createdAt: loan.createdAt, status: "approved",
+      chairSignatureUrl: loan.chairSignatureUrl, trusteeSignatureUrl: loan.trusteeSignatureUrl,
+      notes: loan.notes, adminApprovedByName: loan.adminApprovedByName,
+      adminApprovedAt: loan.adminApprovedAt, trusteeName: loan.trusteeName, trusteeApprovedAt: loan.trusteeApprovedAt,
+    });
+    const fileKey = `loans/agreement-${loan.id}-${Date.now()}.pdf`;
+    const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+    await updateLoan(loan.id, { agreementPdfUrl: url } as any);
+    // Send email + WhatsApp to borrower
+    if (loan.borrowerEmail) {
+      const firstName = (loan.borrowerName ?? '').split(' ')[0];
+      const termLabel = loan.termValue && loan.termUnit ? `${loan.termValue} ${loan.termUnit}` : `${loan.termMonths} months`;
+      const monthlyAmt = loan.monthlyRepayment ? parseFloat(String(loan.monthlyRepayment)) : parseFloat(String(loan.amount)) / loan.termMonths;
+      const whatsappPhone = (loan.borrowerPhone ?? '').replace(/[^0-9]/g, '');
+      const waMsg = encodeURIComponent(`Assalamu Alaikum ${firstName}, your Qarde Hasan loan of £${parseFloat(String(loan.amount)).toFixed(2)} has been approved by Abdullah Quilliam Society. Please download your loan agreement: ${url}`);
+      const waLink = whatsappPhone ? `https://wa.me/${whatsappPhone}?text=${waMsg}` : `https://wa.me/?text=${waMsg}`;
+      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan &mdash; Fully Approved</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName},</p><p>Your Qarde Hasan loan application has been <strong style="color:#1a4731">fully approved</strong> by both the Super Admin and Trustee of the Abdullah Quilliam Society.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Loan Amount</td><td style="padding:8px">&pound;${parseFloat(String(loan.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${termLabel}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Monthly Repayment</td><td style="padding:8px">&pound;${monthlyAmt.toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Approved By (Admin)</td><td style="padding:8px">${loan.adminApprovedByName ?? 'N/A'}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Approved By (Trustee)</td><td style="padding:8px">${loan.trusteeName ?? 'N/A'}</td></tr></table><p><a href="${url}" style="display:inline-block;background:#1a4731;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold">Download Loan Agreement (PDF)</a></p>${whatsappPhone ? `<p style="margin-top:16px"><a href="${waLink}" style="display:inline-block;background:#25D366;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold">Open in WhatsApp</a></p>` : ''}<p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
+      await sendGmail(loan.borrowerEmail, loan.borrowerName, "Your Qarde Hasan Loan Has Been Fully Approved — Abdullah Quilliam Society", html).catch(() => {});
+    }
+  } catch (e) { console.error("[Loans] Failed to generate PDF or send email on full approval:", e); }
+}
+
+async function _fullyApproveRepayment(repayment: any) {
+  try {
+    const loan = await getLoanById(repayment.loanId);
+    if (!loan) return;
+    const pdfBuffer = await generateRepaymentPdf({
+      repaymentId: repayment.id, loanId: loan.id,
+      borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail, borrowerPhone: loan.borrowerPhone,
+      amount: repayment.amount, paymentMethod: repayment.paymentMethod,
+      paidAt: repayment.paidAt, loanAmount: loan.amount, totalRepaid: loan.totalRepaid ?? "0",
+      termMonths: loan.termMonths,
+      adminApprovedByName: repayment.adminApprovedByName, adminApprovedAt: repayment.adminApprovedAt,
+      trusteeName: repayment.trusteeName, trusteeApprovedAt: repayment.trusteeApprovedAt,
+      notes: repayment.notes,
+    });
+    const fileKey = `loans/repayment-${repayment.id}-${Date.now()}.pdf`;
+    const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+    const db = await getDb();
+    if (db) await db.update(loanRepayments).set({ confirmationPdfUrl: url, status: "approved" } as any).where(eq(loanRepayments.id, repayment.id));
+    if (loan.borrowerEmail) {
+      const firstName = (loan.borrowerName ?? '').split(' ')[0];
+      const outstanding = Math.max(0, parseFloat(String(loan.amount)) - parseFloat(String(loan.totalRepaid ?? 0)));
+      const whatsappPhone = (loan.borrowerPhone ?? '').replace(/[^0-9]/g, '');
+      const waMsg = encodeURIComponent(`Assalamu Alaikum ${firstName}, your repayment of £${parseFloat(String(repayment.amount)).toFixed(2)} to Abdullah Quilliam Society has been confirmed. Outstanding balance: £${outstanding.toFixed(2)}. Download receipt: ${url}`);
+      const waLink = whatsappPhone ? `https://wa.me/${whatsappPhone}?text=${waMsg}` : `https://wa.me/?text=${waMsg}`;
+      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan &mdash; Repayment Confirmed</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName},</p><p>Your repayment of <strong>&pound;${parseFloat(String(repayment.amount)).toFixed(2)}</strong> has been received and confirmed by the Society.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount Paid</td><td style="padding:8px">&pound;${parseFloat(String(repayment.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Outstanding Balance</td><td style="padding:8px">&pound;${outstanding.toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Confirmed By</td><td style="padding:8px">${repayment.adminApprovedByName ?? 'N/A'}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Trustee</td><td style="padding:8px">${repayment.trusteeName ?? 'N/A'}</td></tr></table><p><a href="${url}" style="display:inline-block;background:#1a4731;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold">Download Repayment Receipt (PDF)</a></p>${whatsappPhone ? `<p style="margin-top:16px"><a href="${waLink}" style="display:inline-block;background:#25D366;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold">Open in WhatsApp</a></p>` : ''}<p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
+      await sendGmail(loan.borrowerEmail, loan.borrowerName, "Qarde Hasan Repayment Confirmed — Abdullah Quilliam Society", html).catch(() => {});
+    }
+  } catch (e) { console.error("[Loans] Failed to generate repayment PDF or send email:", e); }
+}
+
 
 // ─── MAIN ROUTER ─────────────────────────────────────────────────────────────
 
@@ -386,6 +455,23 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => createFridayCollection({ collectionDate: input.collectionDate, totalAmount: input.amount, recordedById: ctx.user.id, notes: input.notes })),
   }),
 
+
+  // ─── TRUSTEES ──────────────────────────────────────────────────────────────
+
+  trustees: router({
+    list: adminProcedure.query(() => getTrustees(false)),
+    listActive: protectedProcedure.query(() => getTrustees(true)),
+    create: adminProcedure
+      .input(z.object({ fullName: z.string(), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional(), notes: z.string().optional() }))
+      .mutation(async ({ input }) => createTrustee({ fullName: input.fullName, email: input.email, phone: input.phone, role: input.role ?? "Trustee", notes: input.notes })),
+    update: adminProcedure
+      .input(z.object({ id: z.number(), fullName: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional(), isActive: z.boolean().optional(), notes: z.string().optional() }))
+      .mutation(async ({ input }) => { const { id, ...data } = input; await updateTrustee(id, data as any); return { success: true }; }),
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => { await deleteTrustee(input.id); return { success: true }; }),
+  }),
+
   // ─── LOANS (QARDE HASAN) ──────────────────────────────────────────────────
 
   loans: router({
@@ -433,6 +519,39 @@ export const appRouter = router({
         return { success: true };
       }),
     reject: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => { await updateLoan(input.id, { status: "rejected" }); return { success: true }; }),
+
+    // Dual approval: admin tick
+    approveAdmin: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const loan = await getLoanById(input.id);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+        await updateLoan(input.id, { adminApprovedById: ctx.user.id, adminApprovedByName: ctx.user.name ?? ctx.user.email ?? "Admin", adminApprovedAt: new Date() } as any);
+        // Check if trustee also approved — if so, fully approve and send notifications
+        const updated = await getLoanById(input.id);
+        if (updated && (updated as any).trusteeApprovedAt) {
+          await _fullyApproveLoan(updated as any);
+        }
+        return { success: true };
+      }),
+
+    // Dual approval: trustee tick
+    approveTrustee: adminProcedure
+      .input(z.object({ id: z.number(), trusteeId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const loan = await getLoanById(input.id);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+        const trustee = await getTrusteeById(input.trusteeId);
+        if (!trustee) throw new TRPCError({ code: "NOT_FOUND", message: "Trustee not found" });
+        await updateLoan(input.id, { trusteeId: input.trusteeId, trusteeName: trustee.fullName, trusteeApprovedAt: new Date() } as any);
+        // Check if admin also approved
+        const updated = await getLoanById(input.id);
+        if (updated && (updated as any).adminApprovedAt) {
+          await _fullyApproveLoan(updated as any);
+        }
+        return { success: true };
+      }),
+
     recordRepayment: adminProcedure
       .input(z.object({ loanId: z.number(), amount: z.string(), paymentMethod: z.string().default("bank_transfer"), evidenceUrl: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
@@ -443,6 +562,47 @@ export const appRouter = router({
         }
         return repayment;
       }),
+
+    // Confirm repayment received in bank — starts dual approval flow
+    confirmRepaymentReceived: adminProcedure
+      .input(z.object({ repaymentId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(loanRepayments).set({ receivedConfirmedAt: new Date(), receivedConfirmedById: ctx.user.id } as any).where(eq(loanRepayments.id, input.repaymentId));
+        return { success: true };
+      }),
+
+    // Repayment dual approval: admin
+    approveRepaymentAdmin: adminProcedure
+      .input(z.object({ repaymentId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(loanRepayments).set({ adminApprovedById: ctx.user.id, adminApprovedByName: ctx.user.name ?? ctx.user.email ?? "Admin", adminApprovedAt: new Date() } as any).where(eq(loanRepayments.id, input.repaymentId));
+        const repayment = await getLoanRepaymentsById(input.repaymentId);
+        if (repayment && (repayment as any).trusteeApprovedAt) {
+          await _fullyApproveRepayment(repayment as any);
+        }
+        return { success: true };
+      }),
+
+    // Repayment dual approval: trustee
+    approveRepaymentTrustee: adminProcedure
+      .input(z.object({ repaymentId: z.number(), trusteeId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const trustee = await getTrusteeById(input.trusteeId);
+        if (!trustee) throw new TRPCError({ code: "NOT_FOUND", message: "Trustee not found" });
+        await db.update(loanRepayments).set({ trusteeId: input.trusteeId, trusteeName: trustee.fullName, trusteeApprovedAt: new Date() } as any).where(eq(loanRepayments.id, input.repaymentId));
+        const repayment = await getLoanRepaymentsById(input.repaymentId);
+        if (repayment && (repayment as any).adminApprovedAt) {
+          await _fullyApproveRepayment(repayment as any);
+        }
+        return { success: true };
+      }),
+
     generatePdf: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
@@ -452,13 +612,41 @@ export const appRouter = router({
           id: loan.id, borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail,
           borrowerAddress: loan.borrowerAddress, borrowerPhone: loan.borrowerPhone,
           purpose: loan.purpose, amount: loan.amount, termMonths: loan.termMonths,
+          termValue: (loan as any).termValue, termUnit: (loan as any).termUnit, termNotes: (loan as any).termNotes,
           monthlyRepayment: loan.monthlyRepayment, startDate: loan.startDate,
           createdAt: loan.createdAt, status: loan.status,
           chairSignatureUrl: loan.chairSignatureUrl, trusteeSignatureUrl: loan.trusteeSignatureUrl, notes: loan.notes,
+          adminApprovedByName: (loan as any).adminApprovedByName, adminApprovedAt: (loan as any).adminApprovedAt,
+          trusteeName: (loan as any).trusteeName, trusteeApprovedAt: (loan as any).trusteeApprovedAt,
         });
         const fileKey = `loans/agreement-${loan.id}-${Date.now()}.pdf`;
         const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+        await updateLoan(input.id, { agreementPdfUrl: url } as any);
         return { url, filename: `AQS-Loan-Agreement-${String(loan.id).padStart(4, "0")}.pdf` };
+      }),
+
+    generateRepaymentPdf: adminProcedure
+      .input(z.object({ repaymentId: z.number() }))
+      .mutation(async ({ input }) => {
+        const repayment = await getLoanRepaymentsById(input.repaymentId);
+        if (!repayment) throw new TRPCError({ code: "NOT_FOUND" });
+        const loan = await getLoanById(repayment.loanId);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+        const pdfBuffer = await generateRepaymentPdf({
+          repaymentId: repayment.id, loanId: loan.id,
+          borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail, borrowerPhone: loan.borrowerPhone,
+          amount: repayment.amount, paymentMethod: repayment.paymentMethod,
+          paidAt: repayment.paidAt, loanAmount: loan.amount, totalRepaid: loan.totalRepaid ?? "0",
+          termMonths: loan.termMonths,
+          adminApprovedByName: (repayment as any).adminApprovedByName, adminApprovedAt: (repayment as any).adminApprovedAt,
+          trusteeName: (repayment as any).trusteeName, trusteeApprovedAt: (repayment as any).trusteeApprovedAt,
+          notes: repayment.notes,
+        });
+        const fileKey = `loans/repayment-${repayment.id}-${Date.now()}.pdf`;
+        const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+        const db = await getDb();
+        if (db) await db.update(loanRepayments).set({ confirmationPdfUrl: url } as any).where(eq(loanRepayments.id, repayment.id));
+        return { url, filename: `AQS-Repayment-${String(repayment.id).padStart(4, "0")}.pdf` };
       }),
     sendEmail: adminProcedure
       .input(z.object({ id: z.number(), type: z.enum(["application_received", "approved", "reminder", "custom"]), customSubject: z.string().optional(), customBody: z.string().optional() }))

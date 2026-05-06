@@ -89,6 +89,7 @@ const orgItems = [
 
 const adminItems = [
   { icon: ShieldCheck, label: "Admin Panel", path: "/admin" },
+  { icon: Users, label: "Trustees", path: "/trustees" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ];
 
