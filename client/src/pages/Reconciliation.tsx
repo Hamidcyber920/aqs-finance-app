@@ -42,6 +42,9 @@ import {
   CreditCard,
   ArrowRightLeft,
   History,
+  Upload,
+  Loader2,
+  ScanLine,
 } from "lucide-react";
 
 const MONTHS = [
@@ -215,6 +218,10 @@ export default function Reconciliation() {
   const [year, setYear] = useState(now.getFullYear());
   const [bankBalanceInput, setBankBalanceInput] = useState("");
   const [savingBalance, setSavingBalance] = useState(false);
+  const [scanningStatement, setScanningStatement] = useState(false);
+  const [statementScanResult, setStatementScanResult] = useState<{ closingBalance: number | null; statementDate: string | null; accountName: string | null; bankName: string | null } | null>(null);
+  const statementFileRef = useRef<HTMLInputElement>(null);
+  const extractBankStatement = trpc.bankStatement.extract.useMutation();
   const [payDialog, setPayDialog] = useState<{ row: PaymentRow } | null>(null);
   const [chequeFile, setChequeFile] = useState<File | null>(null);
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
@@ -224,6 +231,31 @@ export default function Reconciliation() {
   const [payMethod, setPayMethod] = useState("cheque");
   const chequeRef = useRef<HTMLInputElement>(null);
   const invoiceRef = useRef<HTMLInputElement>(null);
+
+  const handleScanStatement = async (file: File) => {
+    setScanningStatement(true);
+    setStatementScanResult(null);
+    try {
+      // Upload file to S3 first
+      const formData = new FormData();
+      formData.append('file', file);
+      const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      const { url } = await uploadRes.json() as { url: string };
+      const result = await extractBankStatement.mutateAsync({ fileUrl: url, mimeType: file.type });
+      setStatementScanResult(result);
+      if (result.closingBalance !== null) {
+        setBankBalanceInput(String(result.closingBalance));
+        toast.success(`AI extracted balance: £${result.closingBalance.toFixed(2)}${result.statementDate ? ` (${result.statementDate})` : ''}`);
+      } else {
+        toast.warning('Could not extract balance — please enter manually');
+      }
+    } catch (e: any) {
+      toast.error('Scan failed: ' + (e?.message ?? 'Unknown error'));
+    } finally {
+      setScanningStatement(false);
+    }
+  };
 
   const utils = trpc.useUtils();
 
@@ -453,6 +485,33 @@ ${s.rows.map(r => `<tr><td>${r.payee}</td><td>${fmt(r.amount)}</td><td>${methodL
             <div className="flex gap-1 mt-2">
               <Input placeholder="Update balance" value={bankBalanceInput} onChange={e => setBankBalanceInput(e.target.value)} className="h-7 text-xs" />
               <Button size="sm" className="h-7 text-xs px-2" onClick={handleSaveBalance} disabled={savingBalance || !bankBalanceInput}>Set</Button>
+            </div>
+            {/* Bank statement scanner */}
+            <div className="mt-2">
+              <input
+                ref={statementFileRef}
+                type="file"
+                accept="image/*,.pdf"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleScanStatement(f); e.target.value = ''; }}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs w-full gap-1"
+                onClick={() => statementFileRef.current?.click()}
+                disabled={scanningStatement}
+              >
+                {scanningStatement ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanLine className="h-3 w-3" />}
+                {scanningStatement ? 'Scanning...' : 'Scan Bank Statement'}
+              </Button>
+              {statementScanResult && statementScanResult.closingBalance !== null && (
+                <p className="text-xs text-green-600 mt-1">
+                  Extracted: £{statementScanResult.closingBalance.toFixed(2)}
+                  {statementScanResult.bankName ? ` · ${statementScanResult.bankName}` : ''}
+                  {statementScanResult.statementDate ? ` · ${statementScanResult.statementDate}` : ''}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

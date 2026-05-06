@@ -47,6 +47,30 @@ const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
+// ─── Deletion policy helper ───────────────────────────────────────────────────
+// Rules:
+//   1. superadmin or trustee can always delete
+//   2. Any user can delete their OWN entry within 10 minutes of creation
+//   3. All other deletions are forbidden
+function canDelete(userRole: string, userId: number, entryUserId: number | null | undefined, createdAt: Date | null | undefined): boolean {
+  if (userRole === 'superadmin' || userRole === 'trustee') return true;
+  if (!createdAt) return false;
+  const ageMs = Date.now() - new Date(createdAt).getTime();
+  const TEN_MIN = 10 * 60 * 1000;
+  return entryUserId === userId && ageMs <= TEN_MIN;
+}
+
+function assertCanDelete(userRole: string, userId: number, entryUserId: number | null | undefined, createdAt: Date | null | undefined) {
+  if (!canDelete(userRole, userId, entryUserId, createdAt)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: userRole === 'superadmin' || userRole === 'trustee'
+        ? 'Delete not permitted'
+        : 'Entries can only be deleted within 10 minutes of creation, or by a superadmin/trustee',
+    });
+  }
+}
+
 // ─── CSV helper ───────────────────────────────────────────────────────────────
 
 function toCSV(rows: Record<string, unknown>[]): string {
@@ -312,9 +336,19 @@ export const appRouter = router({
     delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
       const receipt = await getReceiptById(input.id);
       if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
-      if (!isAdmin(ctx.user.role) && receipt.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+      assertCanDelete(ctx.user.role, ctx.user.id, receipt.userId, receipt.createdAt);
       await deleteReceipt(input.id);
       return { success: true };
+    }),
+
+    // Returns whether the current user can delete a given receipt (for UI)
+    canDelete: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
+      const receipt = await getReceiptById(input.id);
+      if (!receipt) return { allowed: false, reason: 'Not found' };
+      const allowed = canDelete(ctx.user.role, ctx.user.id, receipt.userId, receipt.createdAt);
+      const ageMs = receipt.createdAt ? Date.now() - new Date(receipt.createdAt).getTime() : Infinity;
+      const remainingMs = Math.max(0, 10 * 60 * 1000 - ageMs);
+      return { allowed, remainingMs, isSuperAdmin: ctx.user.role === 'superadmin' || ctx.user.role === 'trustee' };
     }),
 
     categoryTotals: protectedProcedure
@@ -455,6 +489,32 @@ export const appRouter = router({
     recordFridayCollection: adminProcedure
       .input(z.object({ collectionDate: z.date(), amount: z.string(), collectedById: z.number().optional(), notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => createFridayCollection({ collectionDate: input.collectionDate, totalAmount: input.amount, recordedById: ctx.user.id, notes: input.notes })),
+    deleteDonation: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { fundraisingDonations } = await import('../drizzle/schema');
+        const rows = await db.select().from(fundraisingDonations).where(eq(fundraisingDonations.id, input.id)).limit(1);
+        if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+        assertCanDelete(ctx.user.role, ctx.user.id, null, rows[0].createdAt);
+        await db.delete(fundraisingDonations).where(eq(fundraisingDonations.id, input.id));
+        return { success: true };
+      }),
+    deleteFridayCollection: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { fridayCollections } = await import('../drizzle/schema');
+        const rows = await db.select().from(fridayCollections).where(eq(fridayCollections.id, input.id)).limit(1);
+        if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+        assertCanDelete(ctx.user.role, ctx.user.id, rows[0].recordedById, rows[0].createdAt);
+        await db.delete(fridayCollections).where(eq(fridayCollections.id, input.id));
+        return { success: true };
+      }),
   }),
 
 
@@ -469,7 +529,7 @@ export const appRouter = router({
     update: adminProcedure
       .input(z.object({ id: z.number(), fullName: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional(), isActive: z.boolean().optional(), notes: z.string().optional() }))
       .mutation(async ({ input }) => { const { id, ...data } = input; await updateTrustee(id, data as any); return { success: true }; }),
-    delete: adminProcedure
+    delete: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => { await deleteTrustee(input.id); return { success: true }; }),
   }),
@@ -1046,13 +1106,16 @@ export const appRouter = router({
           const [result] = await db.insert(volunteerPayments).values({ ...input, createdById: ctx.user.id });
           return { id: (result as any).insertId, success: true };
         }),
-      delete: adminProcedure
+      delete: protectedProcedure
         .input(z.object({ id: z.number() }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ ctx, input }) => {
           const db = await (await import("./db")).getDb();
           if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
           const { eq } = await import("drizzle-orm");
           const { volunteerPayments } = await import("../drizzle/schema");
+          const rows = await db.select().from(volunteerPayments).where(eq(volunteerPayments.id, input.id)).limit(1);
+          if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+          assertCanDelete(ctx.user.role, ctx.user.id, rows[0].createdById, rows[0].createdAt);
           await db.delete(volunteerPayments).where(eq(volunteerPayments.id, input.id));
           return { success: true };
         }),
@@ -1388,6 +1451,19 @@ export const appRouter = router({
     update: adminProcedure
       .input(z.object({ id: z.number(), paymentStatus: z.string().optional(), amount: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ input }) => { const { id, ...data } = input; await updateIncomeRecord(id, data as any); return { success: true }; }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { incomeRecords } = await import('../drizzle/schema');
+        const rows = await db.select().from(incomeRecords).where(eq(incomeRecords.id, input.id)).limit(1);
+        if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+        assertCanDelete(ctx.user.role, ctx.user.id, rows[0].recordedById, rows[0].createdAt);
+        await db.delete(incomeRecords).where(eq(incomeRecords.id, input.id));
+        return { success: true };
+      }),
   }),
 
   // ─── DONORS ───────────────────────────────────────────────────────────────
@@ -1733,7 +1809,7 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         const {
           payrollRecords, receipts: receiptsTable, incomeRecords, fridayCollections,
           fundraisingDonations, loanRepayments, loanApplications, volunteerPayments,
-          staffProfiles, reconciliationSessions, users: usersTable,
+          staffProfiles, reconciliationSessions, users: usersTable, invoices: invoicesTable,
         } = await import('../drizzle/schema');
 
         const startDate = new Date(year, month - 1, 1);
@@ -1804,6 +1880,14 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         const volunteerRows = await db.select().from(volunteerPayments)
           .where(and(eq(volunteerPayments.month, month), eq(volunteerPayments.year, year)));
 
+        // Invoices (current month + deferred to this month)
+        const invoiceCurrentRows = await db.select().from(invoicesTable)
+          .where(and(eq(invoicesTable.month, month), eq(invoicesTable.year, year)));
+        const invoiceDeferredRows = await db.select().from(invoicesTable)
+          .where(and(eq(invoicesTable.deferredToMonth, month), eq(invoicesTable.deferredToYear, year)));
+        const invoiceIds = new Set(invoiceCurrentRows.map(r => r.id));
+        const invoiceRows = [...invoiceCurrentRows, ...invoiceDeferredRows.filter(r => !invoiceIds.has(r.id))];
+
         // Also load carried-forward items from previous month (withheld)
         const prevMonth = month === 1 ? 12 : month - 1;
         const prevYear = month === 1 ? year - 1 : year;
@@ -1854,19 +1938,26 @@ Return: { "employees": [ ...array of employee objects... ] }`;
             eq(volunteerPayments.month, prevMonth), eq(volunteerPayments.year, prevYear),
             sql`${volunteerPayments.paymentStatus} IN ('pending', 'withheld')`,
           ));
+        const carriedInvoices = await db.select().from(invoicesTable)
+          .where(and(
+            eq(invoicesTable.month, prevMonth), eq(invoicesTable.year, prevYear),
+            sql`${invoicesTable.paymentStatus} IN ('pending', 'withheld')`,
+          ));
 
         // Totals
         const totalPayroll = payrollRows.reduce((s, r) => s + parseFloat(String(r.netPay ?? 0)), 0);
         const totalReceipts = receiptRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
         const totalLoans = loanRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
         const totalVolunteers = volunteerRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
+        const totalInvoices = invoiceRows.reduce((s, r) => s + parseFloat(String(r.amount ?? 0)), 0);
         const totalCarried = [
           ...carriedPayroll.map(r => parseFloat(String(r.netPay ?? 0))),
           ...carriedReceipts.map(r => parseFloat(String(r.amount ?? 0))),
           ...carriedLoans.map(r => parseFloat(String(r.amount ?? 0))),
           ...carriedVolunteers.map(r => parseFloat(String(r.amount ?? 0))),
+          ...carriedInvoices.map(r => parseFloat(String(r.amount ?? 0))),
         ].reduce((s, v) => s + v, 0);
-        const totalExpenditure = totalPayroll + totalReceipts + totalLoans + totalVolunteers + totalCarried;
+        const totalExpenditure = totalPayroll + totalReceipts + totalLoans + totalVolunteers + totalInvoices + totalCarried;
 
         const bankBalance = parseFloat(String(session?.bankBalance ?? 0));
         const totalPaid = [
@@ -1874,6 +1965,7 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           ...receiptRows.filter(r => r.paymentStatus === 'paid').map(r => parseFloat(String(r.amount ?? 0))),
           ...loanRows.filter(r => r.paymentStatus === 'paid').map(r => parseFloat(String(r.amount ?? 0))),
           ...volunteerRows.filter(r => r.paymentStatus === 'paid').map(r => parseFloat(String(r.amount ?? 0))),
+          ...invoiceRows.filter(r => r.paymentStatus === 'paid').map(r => parseFloat(String(r.amount ?? 0))),
         ].reduce((s, v) => s + v, 0);
         const totalPending = totalExpenditure - totalPaid;
         const reconciliationBalance = bankBalance - totalPending;
@@ -1887,11 +1979,13 @@ Return: { "employees": [ ...array of employee objects... ] }`;
             receipts: receiptRows.map(r => ({ ...r, type: 'expense' as const, payee: r.vendor ?? r.submitterName ?? 'Supplier', amount: String(r.amount ?? '0'), carriedFrom: null })),
             loans: loanRows.map(r => ({ ...r, type: 'loan' as const, payee: r.borrowerName ?? 'Borrower', amount: String(r.amount ?? '0'), paymentMethod: 'cheque', chequeImageUrl: r.evidenceUrl ?? null, invoiceUrl: null, withheldAt: null, withheldReason: null, carriedFrom: null })),
             volunteers: volunteerRows.map(r => ({ ...r, type: 'volunteer' as const, payee: r.recipientName ?? 'Volunteer', amount: String(r.amount ?? '0'), carriedFrom: null })),
+            invoices: invoiceRows.map(r => ({ ...r, type: 'invoice' as const, payee: r.vendor ?? 'Supplier', amount: String(r.amount ?? '0'), paymentMethod: r.paymentMethod ?? 'cheque', carriedFrom: null })),
             carried: [
               ...carriedPayroll.map(r => ({ ...r, type: 'payroll' as const, payee: r.fullName ?? r.employeeName ?? `Employee #${r.userId}`, amount: String(r.netPay ?? '0'), carriedFrom: { month: prevMonth, year: prevYear } })),
               ...carriedReceipts.map(r => ({ ...r, type: 'expense' as const, payee: r.vendor ?? r.submitterName ?? 'Supplier', amount: String(r.amount ?? '0'), carriedFrom: { month: prevMonth, year: prevYear } })),
               ...carriedLoans.map(r => ({ ...r, type: 'loan' as const, payee: r.borrowerName ?? 'Borrower', amount: String(r.amount ?? '0'), paymentMethod: 'cheque', chequeImageUrl: r.evidenceUrl ?? null, invoiceUrl: null, withheldAt: null, withheldReason: null, carriedFrom: { month: prevMonth, year: prevYear } })),
               ...carriedVolunteers.map(r => ({ ...r, type: 'volunteer' as const, payee: r.recipientName ?? 'Volunteer', amount: String(r.amount ?? '0'), carriedFrom: { month: prevMonth, year: prevYear } })),
+              ...carriedInvoices.map(r => ({ ...r, type: 'invoice' as const, payee: r.vendor ?? 'Supplier', amount: String(r.amount ?? '0'), paymentMethod: r.paymentMethod ?? 'cheque', carriedFrom: { month: prevMonth, year: prevYear } })),
             ],
           },
           totals: { totalIncome, totalExpenditure, totalPaid, totalPending, reconciliationBalance },
@@ -2000,6 +2094,81 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         const now = new Date();
         await db.update(invoices).set({ paymentStatus: "paid", paidAt: now, chequeNumber: input.chequeNumber ?? null, chequeImageUrl: input.chequeImageUrl ?? null, evidenceUrl: input.evidenceUrl ?? null, paymentMethod: input.paymentMethod ?? "cheque" } as any).where(eq(invoices.id, input.id));
         return { success: true, paidAt: now };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { invoices } = await import('../drizzle/schema');
+        const rows = await db.select().from(invoices).where(eq(invoices.id, input.id)).limit(1);
+        if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+        assertCanDelete(ctx.user.role, ctx.user.id, rows[0].createdById, rows[0].createdAt);
+        await db.delete(invoices).where(eq(invoices.id, input.id));
+        return { success: true };
+      }),
+  }),
+
+  // ─── BANK STATEMENT AI READER ─────────────────────────────────────────────
+  bankStatement: router({
+    extract: adminProcedure
+      .input(z.object({
+        fileUrl: z.string(),
+        mimeType: z.string().default('image/jpeg'),
+      }))
+      .mutation(async ({ input }) => {
+        const contentType = input.mimeType.includes('pdf') ? 'file_url' : 'image_url';
+        const prompt = `You are a UK bank statement parser. Extract the following from this bank statement image or PDF:
+- closingBalance: the closing/end balance (number, GBP)
+- statementDate: the statement date or period end date (ISO string YYYY-MM-DD)
+- accountName: the account holder name
+- sortCode: sort code (XX-XX-XX format)
+- accountNumber: account number
+- bankName: name of the bank
+
+Return ONLY valid JSON with these exact fields. If a field is not found, use null.`;
+        const userContent = contentType === 'image_url'
+          ? [{ type: 'image_url' as const, image_url: { url: input.fileUrl, detail: 'high' as const } }]
+          : [{ type: 'file_url' as const, file_url: { url: input.fileUrl, mime_type: 'application/pdf' as const } }];
+        const llmResponse = await invokeLLM({
+          messages: [
+            { role: 'system', content: prompt },
+            { role: 'user', content: userContent },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'bank_statement_data',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  closingBalance: { type: ['number', 'null'] },
+                  statementDate: { type: ['string', 'null'] },
+                  accountName: { type: ['string', 'null'] },
+                  sortCode: { type: ['string', 'null'] },
+                  accountNumber: { type: ['string', 'null'] },
+                  bankName: { type: ['string', 'null'] },
+                },
+                required: ['closingBalance', 'statementDate', 'accountName', 'sortCode', 'accountNumber', 'bankName'],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const content = llmResponse?.choices?.[0]?.message?.content;
+        if (!content) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI extraction failed' });
+        const data = typeof content === 'string' ? JSON.parse(content) : content;
+        return data as {
+          closingBalance: number | null;
+          statementDate: string | null;
+          accountName: string | null;
+          sortCode: string | null;
+          accountNumber: string | null;
+          bankName: string | null;
+        };
       }),
   }),
 });

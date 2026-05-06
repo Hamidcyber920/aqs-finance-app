@@ -218,6 +218,7 @@ export const fridayCollections = mysqlTable("friday_collections", {
   recordedById: int("recordedById").notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type FridayCollection = typeof fridayCollections.$inferSelect;
