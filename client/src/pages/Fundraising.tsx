@@ -12,18 +12,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Plus, HandHeart, TrendingUp, Calendar, Trash2, CheckCircle2, Clock, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Plus, HandHeart, TrendingUp, Calendar, Trash2, CheckCircle2, Clock, ShieldCheck, AlertTriangle, Lock, Banknote, X } from "lucide-react";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 // Roles that can authorise Friday collections
 const AUTHORISED_ROLES = ["superadmin", "admin", "trustee", "manager", "deputy"];
+// Roles that can record cash withheld (bookkeeper level)
+const BOOKKEEPER_ROLES = ["superadmin", "admin", "trustee", "manager", "deputy"];
+// Roles that can confirm cash withheld (manager/trustee level)
+const CONFIRMER_ROLES = ["superadmin", "admin", "trustee", "manager"];
 
+// ─── Authorise Confirm Dialog ─────────────────────────────────────────────────
 function AuthoriseConfirmDialog({
-  open,
-  onOpenChange,
-  collection,
-  onConfirm,
-  loading,
+  open, onOpenChange, collection, onConfirm, loading,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -32,14 +33,8 @@ function AuthoriseConfirmDialog({
   loading: boolean;
 }) {
   const [checked, setChecked] = useState(false);
-
-  const handleClose = (v: boolean) => {
-    if (!v) setChecked(false);
-    onOpenChange(v);
-  };
-
+  const handleClose = (v: boolean) => { if (!v) setChecked(false); onOpenChange(v); };
   if (!collection) return null;
-
   const total = parseFloat(String(collection.totalAmount ?? 0)).toFixed(2);
   const bucket = parseFloat(String(collection.bucketTotal ?? 0)).toFixed(2);
   const card = parseFloat(String(collection.cardTerminalTotal ?? 0)).toFixed(2);
@@ -50,63 +45,35 @@ function AuthoriseConfirmDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-            <ShieldCheck className="h-5 w-5" />
-            Authorise Friday Collection
+            <ShieldCheck className="h-5 w-5" /> Authorise Friday Collection
           </DialogTitle>
-          <DialogDescription>
-            You are about to sign off this collection as accurate and verified.
-          </DialogDescription>
+          <DialogDescription>You are about to sign off this collection as accurate and verified.</DialogDescription>
         </DialogHeader>
-
         <div className="space-y-4 py-2">
-          {/* Collection summary */}
           <div className="rounded-lg border bg-muted/30 p-4 space-y-2">
             <p className="text-sm font-semibold">{dateStr}</p>
             <div className="grid grid-cols-3 gap-2 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Bucket</p>
-                <p className="font-medium">£{bucket}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Card Terminal</p>
-                <p className="font-medium">£{card}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total</p>
-                <p className="font-semibold text-primary">£{total}</p>
-              </div>
+              <div><p className="text-xs text-muted-foreground">Bucket</p><p className="font-medium">£{bucket}</p></div>
+              <div><p className="text-xs text-muted-foreground">Card Terminal</p><p className="font-medium">£{card}</p></div>
+              <div><p className="text-xs text-muted-foreground">Total</p><p className="font-semibold text-primary">£{total}</p></div>
             </div>
           </div>
-
-          {/* Warning */}
           <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3">
             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-800 dark:text-amber-300">
               By authorising, you confirm that you have <strong>physically checked and verified</strong> these figures are correct. Your name and the current date and time will be permanently recorded.
             </p>
           </div>
-
-          {/* Confirmation checkbox */}
           <div className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer" onClick={() => setChecked(c => !c)}>
-            <Checkbox
-              id="authorise-confirm"
-              checked={checked}
-              onCheckedChange={(v) => setChecked(!!v)}
-              className="mt-0.5"
-            />
+            <Checkbox id="authorise-confirm" checked={checked} onCheckedChange={(v) => setChecked(!!v)} className="mt-0.5" />
             <label htmlFor="authorise-confirm" className="text-sm cursor-pointer leading-relaxed">
               I have checked these figures and confirm they are correct. I authorise this Friday collection record.
             </label>
           </div>
         </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
-          <Button
-            onClick={() => { onConfirm(); handleClose(false); }}
-            disabled={!checked || loading}
-            className="bg-green-600 hover:bg-green-700 text-white"
-          >
+          <Button onClick={() => { onConfirm(); handleClose(false); }} disabled={!checked || loading} className="bg-green-600 hover:bg-green-700 text-white">
             {loading ? "Signing off…" : "Confirm & Sign Off"}
           </Button>
         </DialogFooter>
@@ -115,6 +82,148 @@ function AuthoriseConfirmDialog({
   );
 }
 
+// ─── Cash Withheld Record Dialog ──────────────────────────────────────────────
+function CashWithheldDialog({
+  open, onOpenChange, collection, onSubmit, loading,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  collection: { id: number; collectionDate: string | Date; totalAmount: string | number } | null;
+  onSubmit: (amount: string, reason: string) => void;
+  loading: boolean;
+}) {
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const handleClose = (v: boolean) => { if (!v) { setAmount(""); setReason(""); } onOpenChange(v); };
+
+  if (!collection) return null;
+  const dateStr = new Date(collection.collectionDate).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
+            <Banknote className="h-5 w-5" /> Record Cash Withheld
+          </DialogTitle>
+          <DialogDescription>Record any cash withheld from this Friday collection. This requires confirmation from a manager or trustee.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+            <p className="font-semibold">{dateStr}</p>
+            <p className="text-muted-foreground">Total collected: £{parseFloat(String(collection.totalAmount ?? 0)).toFixed(2)}</p>
+          </div>
+          <div>
+            <Label htmlFor="withheld-amount">Amount Withheld (£) *</Label>
+            <Input
+              id="withheld-amount"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="withheld-reason">Reason / Comment *</Label>
+            <Textarea
+              id="withheld-reason"
+              rows={3}
+              placeholder="e.g. Petty cash for mosque supplies, change float retained, etc."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2 rounded-lg border border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/30 p-3">
+            <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-orange-800 dark:text-orange-300">
+              This entry will be recorded with your name and timestamp. A <strong>manager or trustee</strong> must separately confirm this amount before it is finalised.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+          <Button
+            onClick={() => { if (amount && reason) { onSubmit(amount, reason); handleClose(false); } }}
+            disabled={!amount || !reason || loading}
+            className="bg-orange-600 hover:bg-orange-700 text-white"
+          >
+            {loading ? "Saving…" : "Record Cash Withheld"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Cash Withheld Confirm Dialog ─────────────────────────────────────────────
+function ConfirmCashWithheldDialog({
+  open, onOpenChange, collection, onConfirm, loading,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  collection: { id: number; collectionDate: string | Date; cashWithheld?: string | number | null; cashWithheldReason?: string | null; cashWithheldRecordedByName?: string | null } | null;
+  onConfirm: () => void;
+  loading: boolean;
+}) {
+  const [checked, setChecked] = useState(false);
+  const handleClose = (v: boolean) => { if (!v) setChecked(false); onOpenChange(v); };
+  if (!collection) return null;
+  const amount = parseFloat(String(collection.cashWithheld ?? 0)).toFixed(2);
+  const dateStr = new Date(collection.collectionDate).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+            <Lock className="h-5 w-5" /> Confirm Cash Withheld
+          </DialogTitle>
+          <DialogDescription>Review and confirm the cash withheld entry recorded by the bookkeeper.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <p className="text-sm font-semibold">{dateStr}</p>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Amount Withheld</span>
+              <span className="text-lg font-bold text-orange-600 dark:text-orange-400">£{amount}</span>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Reason / Comment</p>
+              <p className="text-sm bg-muted/50 rounded p-2 italic">"{collection.cashWithheldReason}"</p>
+            </div>
+            <p className="text-xs text-muted-foreground">Recorded by: {collection.cashWithheldRecordedByName}</p>
+          </div>
+          <div className="flex gap-2 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3">
+            <AlertTriangle className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+            <p className="text-xs text-blue-800 dark:text-blue-300">
+              By confirming, you verify that you have <strong>physically checked</strong> the cash withheld amount and the reason is valid. Your name and timestamp will be permanently recorded.
+            </p>
+          </div>
+          <div className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer" onClick={() => setChecked(c => !c)}>
+            <Checkbox id="confirm-withheld" checked={checked} onCheckedChange={(v) => setChecked(!!v)} className="mt-0.5" />
+            <label htmlFor="confirm-withheld" className="text-sm cursor-pointer leading-relaxed">
+              I have verified this cash withheld amount of <strong>£{amount}</strong> and confirm the reason is accurate and authorised.
+            </label>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleClose(false)}>Cancel</Button>
+          <Button
+            onClick={() => { onConfirm(); handleClose(false); }}
+            disabled={!checked || loading}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            {loading ? "Confirming…" : "Confirm & Authorise"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function Fundraising() {
   const { user } = useAuth();
   const [newCampaignOpen, setNewCampaignOpen] = useState(false);
@@ -123,8 +232,12 @@ export default function Fundraising() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
   const [deleteCollectionId, setDeleteCollectionId] = useState<number | null>(null);
   const [authoriseTarget, setAuthoriseTarget] = useState<(typeof fridayCollections)[0] | null>(null);
+  const [cashWithheldTarget, setCashWithheldTarget] = useState<(typeof fridayCollections)[0] | null>(null);
+  const [confirmWithheldTarget, setConfirmWithheldTarget] = useState<(typeof fridayCollections)[0] | null>(null);
 
   const canAuthorise = AUTHORISED_ROLES.includes(user?.role ?? "");
+  const canRecordWithheld = BOOKKEEPER_ROLES.includes(user?.role ?? "");
+  const canConfirmWithheld = CONFIRMER_ROLES.includes(user?.role ?? "");
 
   const { data: campaigns = [], refetch } = trpc.fundraising.listCampaigns.useQuery();
   const { data: fridayCollections = [], refetch: refetchCollections } = trpc.fundraising.listFridayCollections.useQuery();
@@ -159,8 +272,24 @@ export default function Fundraising() {
     onError: (e) => toast.error(e.message),
   });
 
+  const recordCashWithheld = trpc.fundraising.recordCashWithheld.useMutation({
+    onSuccess: () => { toast.success("Cash withheld recorded — awaiting manager confirmation"); refetchCollections(); },
+    onError: (e) => toast.error("Failed: " + e.message),
+  });
+
+  const confirmCashWithheld = trpc.fundraising.confirmCashWithheld.useMutation({
+    onSuccess: () => { toast.success("Cash withheld confirmed and authorised"); refetchCollections(); },
+    onError: (e) => toast.error("Confirmation failed: " + e.message),
+  });
+
+  const removeCashWithheld = trpc.fundraising.removeCashWithheld.useMutation({
+    onSuccess: () => { toast.success("Cash withheld entry removed"); refetchCollections(); },
+    onError: (e) => toast.error(e.message),
+  });
+
   const totalRaised = campaigns.reduce((s, c) => s + parseFloat(c.currentAmount?.toString() ?? "0"), 0);
   const totalTarget = campaigns.reduce((s, c) => s + parseFloat(c.targetAmount?.toString() ?? "0"), 0);
+  const totalWithheld = fridayCollections.reduce((s, fc) => s + parseFloat(fc.cashWithheld?.toString() ?? "0"), 0);
 
   return (
     <div className="space-y-6">
@@ -183,10 +312,11 @@ export default function Fundraising() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Total Raised</p><p className="text-2xl font-bold">£{totalRaised.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Total Target</p><p className="text-2xl font-bold">£{totalTarget.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p></CardContent></Card>
         <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Campaigns</p><p className="text-2xl font-bold">{campaigns.length}</p></CardContent></Card>
+        <Card><CardContent className="pt-6"><p className="text-sm text-muted-foreground">Cash Withheld (Total)</p><p className="text-2xl font-bold text-orange-600">£{totalWithheld.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p></CardContent></Card>
       </div>
 
       {/* Campaigns */}
@@ -244,6 +374,7 @@ export default function Fundraising() {
                     <th>Bucket</th>
                     <th>Card Terminal</th>
                     <th>Total</th>
+                    <th>Cash Withheld</th>
                     <th>Recorded</th>
                     <th>Status</th>
                     <th></th>
@@ -251,12 +382,15 @@ export default function Fundraising() {
                 </thead>
                 <tbody>
                   {fridayCollections.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center text-muted-foreground py-8">No collections recorded yet</td></tr>
+                    <tr><td colSpan={8} className="text-center text-muted-foreground py-8">No collections recorded yet</td></tr>
                   ) : fridayCollections.map(fc => {
                     const isAuthorised = !!fc.authorisedAt;
                     const recordedAt = fc.createdAt ? new Date(fc.createdAt) : null;
                     const authorisedAt = fc.authorisedAt ? new Date(fc.authorisedAt) : null;
                     const isOld = recordedAt && (Date.now() - recordedAt.getTime()) > 24 * 60 * 60 * 1000;
+                    const hasWithheld = !!fc.cashWithheld && parseFloat(String(fc.cashWithheld)) > 0;
+                    const withheldConfirmed = !!fc.cashWithheldConfirmedAt;
+                    const canConfirmThisWithheld = canConfirmWithheld && hasWithheld && !withheldConfirmed && fc.cashWithheldRecordedById !== user?.id;
 
                     return (
                       <tr key={fc.id}>
@@ -264,6 +398,79 @@ export default function Fundraising() {
                         <td>£{parseFloat(fc.bucketTotal?.toString() ?? "0").toFixed(2)}</td>
                         <td>£{parseFloat(fc.cardTerminalTotal?.toString() ?? "0").toFixed(2)}</td>
                         <td className="font-semibold">£{parseFloat(fc.totalAmount?.toString() ?? "0").toFixed(2)}</td>
+
+                        {/* Cash Withheld sub-entry */}
+                        <td>
+                          {hasWithheld ? (
+                            <div className="space-y-1 min-w-[160px]">
+                              <div className="flex items-center gap-1">
+                                <span className="font-semibold text-orange-600 dark:text-orange-400">
+                                  £{parseFloat(String(fc.cashWithheld)).toFixed(2)}
+                                </span>
+                                {withheldConfirmed ? (
+                                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-green-200 text-xs flex items-center gap-0.5">
+                                    <Lock className="h-2.5 w-2.5" /> Confirmed
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-400 text-xs flex items-center gap-0.5">
+                                    <Clock className="h-2.5 w-2.5" /> Awaiting
+                                  </Badge>
+                                )}
+                              </div>
+                              {fc.cashWithheldReason && (
+                                <p className="text-xs text-muted-foreground italic truncate max-w-[160px]" title={fc.cashWithheldReason}>
+                                  "{fc.cashWithheldReason}"
+                                </p>
+                              )}
+                              <p className="text-xs text-muted-foreground">By: {fc.cashWithheldRecordedByName}</p>
+                              {withheldConfirmed && (
+                                <p className="text-xs text-green-700 dark:text-green-400">
+                                  ✓ {fc.cashWithheldConfirmedByName}
+                                  {fc.cashWithheldConfirmedAt && (
+                                    <> · {new Date(fc.cashWithheldConfirmedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</>
+                                  )}
+                                </p>
+                              )}
+                              <div className="flex gap-1 mt-1">
+                                {canConfirmThisWithheld && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs border-blue-400 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400"
+                                    onClick={() => setConfirmWithheldTarget(fc as any)}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 mr-1" /> Confirm
+                                  </Button>
+                                )}
+                                {canConfirmWithheld && (
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                    title="Remove cash withheld entry"
+                                    onClick={() => removeCashWithheld.mutate({ id: fc.id })}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            canRecordWithheld ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-xs text-muted-foreground hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                                onClick={() => setCashWithheldTarget(fc as any)}
+                              >
+                                <Banknote className="h-3 w-3 mr-1" /> Record
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )
+                          )}
+                        </td>
+
                         <td className="text-xs text-muted-foreground">
                           {recordedAt ? (
                             <span className="flex items-center gap-1">
@@ -273,16 +480,14 @@ export default function Fundraising() {
                             </span>
                           ) : "—"}
                         </td>
+
                         <td>
                           {isAuthorised ? (
                             <div className="space-y-1">
                               <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-800 flex items-center gap-1 w-fit text-xs">
-                                <CheckCircle2 className="h-3 w-3" />
-                                Authorised
+                                <CheckCircle2 className="h-3 w-3" /> Authorised
                               </Badge>
-                              <p className="text-xs text-muted-foreground">
-                                by {fc.authorisedByName}
-                              </p>
+                              <p className="text-xs text-muted-foreground">by {fc.authorisedByName}</p>
                               {authorisedAt && (
                                 <p className="text-xs text-muted-foreground">
                                   {authorisedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}{" "}
@@ -303,13 +508,13 @@ export default function Fundraising() {
                                   className="h-6 text-xs border-green-400 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-950/30"
                                   onClick={() => setAuthoriseTarget(fc as any)}
                                 >
-                                  <ShieldCheck className="h-3 w-3 mr-1" />
-                                  Authorise
+                                  <ShieldCheck className="h-3 w-3 mr-1" /> Authorise
                                 </Button>
                               )}
                             </div>
                           )}
                         </td>
+
                         <td>
                           <div className="flex gap-1">
                             {isAuthorised && canAuthorise && (
@@ -343,7 +548,9 @@ export default function Fundraising() {
         </Card>
       </div>
 
-      {/* New Campaign Dialog */}
+      {/* ── Dialogs ── */}
+
+      {/* New Campaign */}
       <Dialog open={newCampaignOpen} onOpenChange={setNewCampaignOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>New Fundraising Campaign</DialogTitle></DialogHeader>
@@ -355,14 +562,12 @@ export default function Fundraising() {
             <div><Label>Campaign Name *</Label><Input name="name" required /></div>
             <div><Label>Description</Label><Textarea name="description" rows={2} /></div>
             <div><Label>Target Amount (£) *</Label><Input name="targetAmount" type="number" step="0.01" required /></div>
-            <Button type="submit" className="w-full" disabled={createCampaign.isPending}>
-              {createCampaign.isPending ? "Creating..." : "Create Campaign"}
-            </Button>
+            <Button type="submit" className="w-full" disabled={createCampaign.isPending}>{createCampaign.isPending ? "Creating..." : "Create Campaign"}</Button>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Record Donation Dialog */}
+      {/* Record Donation */}
       <Dialog open={newDonationOpen} onOpenChange={setNewDonationOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Record Donation</DialogTitle></DialogHeader>
@@ -395,14 +600,12 @@ export default function Fundraising() {
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit" className="w-full" disabled={recordDonation.isPending}>
-              {recordDonation.isPending ? "Recording..." : "Record Donation"}
-            </Button>
+            <Button type="submit" className="w-full" disabled={recordDonation.isPending}>{recordDonation.isPending ? "Recording..." : "Record Donation"}</Button>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Friday Collection Dialog */}
+      {/* Friday Collection */}
       <Dialog open={newCollectionOpen} onOpenChange={setNewCollectionOpen}>
         <DialogContent>
           <DialogHeader>
@@ -423,14 +626,12 @@ export default function Fundraising() {
             <div className="rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-3 text-xs text-blue-800 dark:text-blue-300">
               This entry will be time-stamped and will require authorisation from a manager, deputy, or trustee before it is considered verified.
             </div>
-            <Button type="submit" className="w-full" disabled={recordCollection.isPending}>
-              {recordCollection.isPending ? "Saving..." : "Save Collection"}
-            </Button>
+            <Button type="submit" className="w-full" disabled={recordCollection.isPending}>{recordCollection.isPending ? "Saving..." : "Save Collection"}</Button>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Authorise Confirmation Dialog */}
+      {/* Authorise Collection */}
       <AuthoriseConfirmDialog
         open={!!authoriseTarget}
         onOpenChange={(v) => { if (!v) setAuthoriseTarget(null); }}
@@ -439,7 +640,25 @@ export default function Fundraising() {
         loading={authoriseCollection.isPending}
       />
 
-      {/* Delete Confirmation */}
+      {/* Record Cash Withheld */}
+      <CashWithheldDialog
+        open={!!cashWithheldTarget}
+        onOpenChange={(v) => { if (!v) setCashWithheldTarget(null); }}
+        collection={cashWithheldTarget}
+        onSubmit={(amount, reason) => cashWithheldTarget && recordCashWithheld.mutate({ id: cashWithheldTarget.id, amount, reason })}
+        loading={recordCashWithheld.isPending}
+      />
+
+      {/* Confirm Cash Withheld */}
+      <ConfirmCashWithheldDialog
+        open={!!confirmWithheldTarget}
+        onOpenChange={(v) => { if (!v) setConfirmWithheldTarget(null); }}
+        collection={confirmWithheldTarget}
+        onConfirm={() => confirmWithheldTarget && confirmCashWithheld.mutate({ id: confirmWithheldTarget.id })}
+        loading={confirmCashWithheld.isPending}
+      />
+
+      {/* Delete Collection */}
       <DeleteConfirmDialog
         open={deleteCollectionId !== null}
         onOpenChange={(v) => { if (!v) setDeleteCollectionId(null); }}

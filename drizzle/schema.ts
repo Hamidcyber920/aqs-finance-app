@@ -238,6 +238,15 @@ export const fridayCollections = mysqlTable("friday_collections", {
   authorisedById: int("authorisedById"),
   authorisedAt: timestamp("authorisedAt"),
   authorisedByName: varchar("authorisedByName", { length: 200 }),
+  // Cash withheld sub-entry (dual authority)
+  cashWithheld: decimal("cashWithheld", { precision: 10, scale: 2 }),
+  cashWithheldReason: text("cashWithheldReason"),
+  cashWithheldRecordedById: int("cashWithheldRecordedById"),
+  cashWithheldRecordedAt: timestamp("cashWithheldRecordedAt"),
+  cashWithheldRecordedByName: varchar("cashWithheldRecordedByName", { length: 200 }),
+  cashWithheldConfirmedById: int("cashWithheldConfirmedById"),
+  cashWithheldConfirmedAt: timestamp("cashWithheldConfirmedAt"),
+  cashWithheldConfirmedByName: varchar("cashWithheldConfirmedByName", { length: 200 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

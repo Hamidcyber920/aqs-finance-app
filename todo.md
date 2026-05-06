@@ -357,14 +357,26 @@
 - [x] Frontend: Admin Panel — show permission summary badge on each user row (e.g. "12/18 permissions")
 
 ## Friday Collection — Two-Step Authorisation (May 2026)
-- [ ] Schema: add authorisedById (FK users), authorisedAt (timestamp), authorisedByName (varchar) to fridayCollections table
-- [ ] Migration: generate and apply migration
-- [ ] Backend: fridayCollections.authorise procedure — role guard (manager/deputy/trustee only), stamps authorisedById/At/ByName
-- [ ] Backend: fridayCollections.unauthorise procedure — remove authorisation (same role guard)
-- [ ] Backend: fridayCollections.list — return authorisedById, authorisedAt, authorisedByName, createdAt on each row
-- [ ] Frontend: Friday Collection entries show createdAt timestamp ("Recorded: 12 May 2026 14:32")
-- [ ] Frontend: each entry has an "Authorise" tick button (green tick icon), visible only to manager/deputy/trustee
-- [ ] Frontend: clicking Authorise opens a confirmation dialog: "Have you checked and confirmed these figures are correct?" with Cancel / Confirm & Sign Off buttons
-- [ ] Frontend: after sign-off, entry shows "Authorised by [Name] at [datetime]" green badge
-- [ ] Frontend: authorised entries show a lock icon; unauthorised show amber "Pending Authorisation" badge
-- [ ] Frontend: unauthorised entries show a warning if older than 24 hours without sign-off
+- [x] Schema: add authorisedById (FK users), authorisedAt (timestamp), authorisedByName (varchar) to fridayCollections table
+- [x] Migration: generate and apply migration
+- [x] Backend: fridayCollections.authorise procedure — role guard (manager/deputy/trustee only), stamps authorisedById/At/ByName
+- [x] Backend: fridayCollections.unauthorise procedure — remove authorisation (same role guard)
+- [x] Backend: fridayCollections.list — return authorisedById, authorisedAt, authorisedByName, createdAt on each row
+- [x] Frontend: Friday Collection entries show createdAt timestamp ("Recorded: 12 May 2026 14:32")
+- [x] Frontend: each entry has an "Authorise" tick button (green tick icon), visible only to manager/deputy/trustee
+- [x] Frontend: clicking Authorise opens a confirmation dialog: "Have you checked and confirmed these figures are correct?" with Cancel / Confirm & Sign Off buttons
+- [x] Frontend: after sign-off, entry shows "Authorised by [Name] at [datetime]" green badge
+- [x] Frontend: authorised entries show a lock icon; unauthorised show amber "Pending Authorisation" badge
+- [x] Frontend: unauthorised entries show a warning if older than 24 hours without sign-off
+
+## Friday Collection — Cash Withheld Sub-Entry (May 2026)
+- [x] Schema: add cashWithheld, cashWithheldReason, cashWithheldRecordedById, cashWithheldRecordedAt, cashWithheldRecordedByName, cashWithheldConfirmedById, cashWithheldConfirmedAt, cashWithheldConfirmedByName to fridayCollections
+- [x] Migration: apply migration for new columns
+- [x] Backend: fundraising.recordCashWithheld — bookkeeper role only (Farid Ahmed / deputy), records amount + reason + timestamp
+- [x] Backend: fundraising.confirmCashWithheld — manager/trustee only (Mumin Khan / trustee), confirms with timestamp
+- [x] Frontend: Friday Collection row — "Cash Withheld" sub-entry button below each collection
+- [x] Frontend: Cash Withheld form — amount field + comment/reason box, bookkeeper-only
+- [x] Frontend: dual-authority display — shows bookkeeper entry + manager confirmation tick with timestamps
+- [x] Frontend: confirmation dialog for manager — "Have you verified this cash withheld amount?" with checkbox
+- [x] Monthly Expenses: cash withheld amounts appear as a line item under Friday Collections
+- [x] Reconciliation: cash withheld deducted from Friday Collection income total, shown as separate line

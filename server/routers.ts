@@ -594,6 +594,86 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // Cash withheld sub-entry — bookkeeper (deputy/property manager) records, manager/trustee confirms
+    recordCashWithheld: protectedProcedure
+      .input(z.object({ id: z.number(), amount: z.string(), reason: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        // Bookkeeper role: deputy, property manager, or manager
+        const BOOKKEEPER_ROLES = ['superadmin', 'admin', 'trustee', 'manager', 'deputy'];
+        if (!BOOKKEEPER_ROLES.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only authorised bookkeepers can record cash withheld.' });
+        }
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { fridayCollections } = await import('../drizzle/schema');
+        const rows = await db.select().from(fridayCollections).where(eq(fridayCollections.id, input.id)).limit(1);
+        if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+        await db.update(fridayCollections).set({
+          cashWithheld: input.amount,
+          cashWithheldReason: input.reason,
+          cashWithheldRecordedById: ctx.user.id,
+          cashWithheldRecordedAt: new Date(),
+          cashWithheldRecordedByName: ctx.user.name ?? ctx.user.email ?? 'Unknown',
+          // Clear any previous confirmation when re-recording
+          cashWithheldConfirmedById: null,
+          cashWithheldConfirmedAt: null,
+          cashWithheldConfirmedByName: null,
+        }).where(eq(fridayCollections.id, input.id));
+        return { success: true };
+      }),
+
+    confirmCashWithheld: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        // Confirmer role: manager or trustee (not the bookkeeper themselves)
+        const CONFIRMER_ROLES = ['superadmin', 'admin', 'trustee', 'manager'];
+        if (!CONFIRMER_ROLES.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only a manager or trustee can confirm cash withheld.' });
+        }
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { fridayCollections } = await import('../drizzle/schema');
+        const rows = await db.select().from(fridayCollections).where(eq(fridayCollections.id, input.id)).limit(1);
+        if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+        if (!rows[0].cashWithheld) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No cash withheld entry to confirm.' });
+        // Prevent self-confirmation: confirmer cannot be the same as recorder
+        if (rows[0].cashWithheldRecordedById === ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'You cannot confirm your own cash withheld entry. A different authorised person must confirm.' });
+        }
+        await db.update(fridayCollections).set({
+          cashWithheldConfirmedById: ctx.user.id,
+          cashWithheldConfirmedAt: new Date(),
+          cashWithheldConfirmedByName: ctx.user.name ?? ctx.user.email ?? 'Unknown',
+        }).where(eq(fridayCollections.id, input.id));
+        return { success: true };
+      }),
+
+    removeCashWithheld: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const AUTHORISED_ROLES = ['superadmin', 'admin', 'trustee', 'manager'];
+        if (!AUTHORISED_ROLES.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only a manager or trustee can remove a cash withheld entry.' });
+        }
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { fridayCollections } = await import('../drizzle/schema');
+        await db.update(fridayCollections).set({
+          cashWithheld: null,
+          cashWithheldReason: null,
+          cashWithheldRecordedById: null,
+          cashWithheldRecordedAt: null,
+          cashWithheldRecordedByName: null,
+          cashWithheldConfirmedById: null,
+          cashWithheldConfirmedAt: null,
+          cashWithheldConfirmedByName: null,
+        }).where(eq(fridayCollections.id, input.id));
+        return { success: true };
+      }),
+
     // Two-step authorisation — manager/deputy/trustee only
     authoriseFridayCollection: protectedProcedure
       .input(z.object({ id: z.number() }))
@@ -1960,6 +2040,10 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         const totalIncome = incomeBreakdown.reduce((s, r) => s + r.amount, 0);
 
         // ── EXPENDITURE ──
+        // Cash withheld from Friday collections (confirmed entries only)
+        const cashWithheldRows = fridayRows.filter(r => r.cashWithheld && parseFloat(String(r.cashWithheld)) > 0 && r.cashWithheldConfirmedAt);
+        const totalCashWithheld = cashWithheldRows.reduce((s, r) => s + parseFloat(String(r.cashWithheld ?? 0)), 0);
+
         // Payroll
         const payrollRows = await db.select({
           id: payrollRecords.id, employeeName: payrollRecords.employeeName,
@@ -2081,7 +2165,7 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           ...carriedVolunteers.map(r => parseFloat(String(r.amount ?? 0))),
           ...carriedInvoices.map(r => parseFloat(String(r.amount ?? 0))),
         ].reduce((s, v) => s + v, 0);
-        const totalExpenditure = totalPayroll + totalReceipts + totalLoans + totalVolunteers + totalInvoices + totalCarried;
+        const totalExpenditure = totalPayroll + totalReceipts + totalLoans + totalVolunteers + totalInvoices + totalCarried + totalCashWithheld;
 
         const bankBalance = parseFloat(String(session?.bankBalance ?? 0));
         const totalPaid = [
@@ -2099,6 +2183,7 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           income: { total: totalIncome, breakdown: incomeBreakdown },
           expenditure: {
             total: totalExpenditure,
+            cashWithheld: cashWithheldRows.map(r => ({ id: r.id, type: 'cash_withheld' as const, payee: 'Cash Withheld (Friday)', amount: String(r.cashWithheld ?? '0'), reason: r.cashWithheldReason, confirmedBy: r.cashWithheldConfirmedByName, confirmedAt: r.cashWithheldConfirmedAt, collectionDate: r.collectionDate, paymentMethod: 'cash', paymentStatus: 'paid', carriedFrom: null })),
             payroll: payrollRows.map(r => ({ ...r, type: 'payroll' as const, payee: r.fullName ?? r.employeeName ?? `Employee #${r.userId}`, amount: String(r.netPay ?? '0'), carriedFrom: null })),
             receipts: receiptRows.map(r => ({ ...r, type: 'expense' as const, payee: r.vendor ?? r.submitterName ?? 'Supplier', amount: String(r.amount ?? '0'), carriedFrom: null })),
             loans: loanRows.map(r => ({ ...r, type: 'loan' as const, payee: r.borrowerName ?? 'Borrower', amount: String(r.amount ?? '0'), paymentMethod: 'cheque', chequeImageUrl: r.evidenceUrl ?? null, invoiceUrl: null, withheldAt: null, withheldReason: null, carriedFrom: null })),
