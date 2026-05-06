@@ -66,6 +66,20 @@ export const userPermissions = mysqlTable("user_permissions", {
   canManageStaff: boolean("canManageStaff").default(false).notNull(),
   canManageUsers: boolean("canManageUsers").default(false).notNull(),
   canExportReports: boolean("canExportReports").default(false).notNull(),
+  // Finance & Reporting
+  canViewFinanceReports: boolean("canViewFinanceReports").default(false).notNull(),
+  canExportFinanceReports: boolean("canExportFinanceReports").default(false).notNull(),
+  canTrackFinance: boolean("canTrackFinance").default(false).notNull(),
+  canViewAllIncome: boolean("canViewAllIncome").default(false).notNull(),
+  canApproveExpenses: boolean("canApproveExpenses").default(false).notNull(),
+  canManageInvoices: boolean("canManageInvoices").default(false).notNull(),
+  // Cash & Collections
+  canManageCashCollection: boolean("canManageCashCollection").default(false).notNull(),
+  canManageFridayCollection: boolean("canManageFridayCollection").default(false).notNull(),
+  canReconcileFriday: boolean("canReconcileFriday").default(false).notNull(),
+  // Reconciliation
+  canViewReconciliation: boolean("canViewReconciliation").default(false).notNull(),
+  canManageReconciliation: boolean("canManageReconciliation").default(false).notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 

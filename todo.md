@@ -345,3 +345,13 @@
 - [x] Frontend: Admin Panel — show "Property Manager" badge on Farid Ahmed's row
 - [x] Frontend: permissions panel — hide grant/revoke controls from manager/assistant/volunteer roles (superadmin/trustee only)
 - [x] Frontend: DashboardLayout — show property manager badge in sidebar for users with isPropertyManager = true
+
+## Expanded Permissions — Manager & Deputy Access (May 2026)
+- [x] Schema: add new permission columns — canViewFinanceReports, canExportFinanceReports, canManageCashCollection, canManageFridayCollection, canReconcileFriday, canViewReconciliation, canManageReconciliation, canTrackFinance, canViewAllIncome, canViewAllExpenses, canApproveExpenses, canManageInvoices
+- [x] Migration: generate and apply migration for new permission columns
+- [x] Backend: seed default permissions for manager role (high-level access: finance reports, cash, reconciliation, tracking)
+- [x] Backend: seed default permissions for deputy role (moderate access: cash collection, Friday, income/expense view)
+- [x] Backend: update users.createStaff to auto-seed role-based default permissions on account creation
+- [x] Frontend: Permissions dialog — group permissions into categories (Finance, Cash & Collections, Reconciliation, Staff & Admin)
+- [x] Frontend: Permissions dialog — add all new permission toggles with descriptions
+- [x] Frontend: Admin Panel — show permission summary badge on each user row (e.g. "12/18 permissions")

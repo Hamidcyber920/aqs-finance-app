@@ -77,21 +77,72 @@ const ALL_ROLES_FOR_UPDATE = [
 
 // ─── Permission labels ────────────────────────────────────────────────────────
 
-const PERMISSION_LABELS: { key: string; label: string; description: string }[] = [
-  { key: "canViewDashboard", label: "View Dashboard", description: "Access the main dashboard and statistics" },
-  { key: "canManageExpenses", label: "Manage Own Expenses", description: "Submit and manage their own receipts and expenses" },
-  { key: "canViewAllExpenses", label: "View All Expenses", description: "See expenses submitted by all staff" },
-  { key: "canManageFundraising", label: "Manage Fundraising", description: "Create campaigns and record donations" },
-  { key: "canManageLoans", label: "Manage Qarde Hasan", description: "Create and manage loan applications" },
-  { key: "canSignLoans", label: "Sign Loan Documents", description: "Approve and sign loan agreements as trustee" },
-  { key: "canManageIncome", label: "Manage Income", description: "Record and manage income entries" },
-  { key: "canManagePayroll", label: "Manage Payroll", description: "Create and manage payroll records" },
-  { key: "canViewOwnPayslip", label: "View Own Payslip", description: "Access their own payslip information" },
-  { key: "canManageDonors", label: "Manage Donors", description: "Add and manage donor records" },
-  { key: "canSendCampaigns", label: "Send Email Campaigns", description: "Send fundraising email campaigns" },
-  { key: "canManageStaff", label: "Manage Staff", description: "Manage staff profiles and information" },
-  { key: "canManageUsers", label: "Manage Users", description: "Approve, suspend, and manage user accounts" },
-  { key: "canExportReports", label: "Export Reports", description: "Export financial reports and data" },
+const PERMISSION_GROUPS: { group: string; items: { key: string; label: string; description: string }[] }[] = [
+  {
+    group: "General Access",
+    items: [
+      { key: "canViewDashboard", label: "View Dashboard", description: "Access the main dashboard and statistics" },
+      { key: "canViewOwnPayslip", label: "View Own Payslip", description: "Access their own payslip information" },
+    ],
+  },
+  {
+    group: "Finance Reporting & Tracking",
+    items: [
+      { key: "canViewFinanceReports", label: "View Finance Reports", description: "Access monthly and annual financial reports" },
+      { key: "canExportFinanceReports", label: "Export Finance Reports", description: "Download and export financial reports as PDF/CSV" },
+      { key: "canExportReports", label: "Export All Reports", description: "Export any report or data from the system" },
+      { key: "canTrackFinance", label: "Finance Tracking", description: "View live income, expense, and balance tracking across all modules" },
+      { key: "canViewAllIncome", label: "View All Income", description: "See all income records across every category" },
+      { key: "canViewAllExpenses", label: "View All Expenses", description: "See expenses submitted by all staff" },
+    ],
+  },
+  {
+    group: "Cash & Collections",
+    items: [
+      { key: "canManageCashCollection", label: "Manage Cash Collection", description: "Record and manage cash collection entries" },
+      { key: "canManageFridayCollection", label: "Manage Friday Collection", description: "Enter and manage Friday prayer cash and card collections" },
+      { key: "canReconcileFriday", label: "Reconcile Friday Collection", description: "Reconcile and sign off Friday collection totals" },
+    ],
+  },
+  {
+    group: "Reconciliation",
+    items: [
+      { key: "canViewReconciliation", label: "View Reconciliation", description: "Access the monthly reconciliation module" },
+      { key: "canManageReconciliation", label: "Manage Reconciliation", description: "Create, edit, and finalise monthly reconciliation sessions" },
+    ],
+  },
+  {
+    group: "Expenses & Invoices",
+    items: [
+      { key: "canManageExpenses", label: "Manage Own Expenses", description: "Submit and manage their own receipts and expenses" },
+      { key: "canApproveExpenses", label: "Approve Expenses", description: "Authorise and approve expense submissions from other staff" },
+      { key: "canManageInvoices", label: "Manage Invoices", description: "Create, edit, and authorise invoices in Monthly Expenses" },
+    ],
+  },
+  {
+    group: "Income & Fundraising",
+    items: [
+      { key: "canManageIncome", label: "Manage Income", description: "Record and manage income entries across all categories" },
+      { key: "canManageFundraising", label: "Manage Fundraising", description: "Create campaigns and record donations" },
+      { key: "canManageDonors", label: "Manage Donors", description: "Add and manage donor records" },
+      { key: "canSendCampaigns", label: "Send Email Campaigns", description: "Send fundraising email campaigns to donors" },
+    ],
+  },
+  {
+    group: "Payroll & Loans",
+    items: [
+      { key: "canManagePayroll", label: "Manage Payroll", description: "Create and manage payroll records" },
+      { key: "canManageLoans", label: "Manage Qarde Hasan", description: "Create and manage loan applications" },
+      { key: "canSignLoans", label: "Sign Loan Documents", description: "Approve and sign loan agreements as trustee" },
+    ],
+  },
+  {
+    group: "Staff & Administration",
+    items: [
+      { key: "canManageStaff", label: "Manage Staff", description: "Manage staff profiles and information" },
+      { key: "canManageUsers", label: "Manage Users", description: "Approve, suspend, and manage user accounts" },
+    ],
+  },
 ];
 
 // ─── Create Staff Dialog ──────────────────────────────────────────────────────
@@ -269,25 +320,32 @@ function PermissionsDialog({ userId, userName, open, onClose, canEdit }: {
           </DialogDescription>
         </DialogHeader>
         {isLoading ? (
-          <div className="space-y-3 py-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
+          <div className="space-y-3 py-4">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
         ) : (
-          <div className="space-y-2 py-2">
-            {PERMISSION_LABELS.map(({ key, label, description }) => {
-              const val = (perms as any)?.[key] ?? false;
-              return (
-                <div key={key} className="flex items-center justify-between gap-3 rounded-lg border p-3 hover:bg-muted/20">
-                  <div>
-                    <p className="text-sm font-medium">{label}</p>
-                    <p className="text-xs text-muted-foreground">{description}</p>
-                  </div>
-                  <Switch
-                    checked={val}
-                    onCheckedChange={() => toggle(key, val)}
-                    disabled={!canEdit || updatePerms.isPending}
-                  />
+          <div className="space-y-5 py-2">
+            {PERMISSION_GROUPS.map(({ group, items }) => (
+              <div key={group}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 px-1">{group}</p>
+                <div className="space-y-1.5">
+                  {items.map(({ key, label, description }) => {
+                    const val = (perms as any)?.[key] ?? false;
+                    return (
+                      <div key={key} className={`flex items-center justify-between gap-3 rounded-lg border p-3 hover:bg-muted/20 transition-colors ${val ? 'border-primary/30 bg-primary/5' : ''}`}>
+                        <div>
+                          <p className="text-sm font-medium">{label}</p>
+                          <p className="text-xs text-muted-foreground">{description}</p>
+                        </div>
+                        <Switch
+                          checked={val}
+                          onCheckedChange={() => toggle(key, val)}
+                          disabled={!canEdit || updatePerms.isPending}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
         <DialogFooter>
