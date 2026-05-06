@@ -234,6 +234,10 @@ export const fridayCollections = mysqlTable("friday_collections", {
   totalAmount: decimal("totalAmount", { precision: 10, scale: 2 }).default("0").notNull(),
   recordedById: int("recordedById").notNull(),
   notes: text("notes"),
+  // Two-step authorisation
+  authorisedById: int("authorisedById"),
+  authorisedAt: timestamp("authorisedAt"),
+  authorisedByName: varchar("authorisedByName", { length: 200 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

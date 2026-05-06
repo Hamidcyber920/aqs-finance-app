@@ -355,3 +355,16 @@
 - [x] Frontend: Permissions dialog — group permissions into categories (Finance, Cash & Collections, Reconciliation, Staff & Admin)
 - [x] Frontend: Permissions dialog — add all new permission toggles with descriptions
 - [x] Frontend: Admin Panel — show permission summary badge on each user row (e.g. "12/18 permissions")
+
+## Friday Collection — Two-Step Authorisation (May 2026)
+- [ ] Schema: add authorisedById (FK users), authorisedAt (timestamp), authorisedByName (varchar) to fridayCollections table
+- [ ] Migration: generate and apply migration
+- [ ] Backend: fridayCollections.authorise procedure — role guard (manager/deputy/trustee only), stamps authorisedById/At/ByName
+- [ ] Backend: fridayCollections.unauthorise procedure — remove authorisation (same role guard)
+- [ ] Backend: fridayCollections.list — return authorisedById, authorisedAt, authorisedByName, createdAt on each row
+- [ ] Frontend: Friday Collection entries show createdAt timestamp ("Recorded: 12 May 2026 14:32")
+- [ ] Frontend: each entry has an "Authorise" tick button (green tick icon), visible only to manager/deputy/trustee
+- [ ] Frontend: clicking Authorise opens a confirmation dialog: "Have you checked and confirmed these figures are correct?" with Cancel / Confirm & Sign Off buttons
+- [ ] Frontend: after sign-off, entry shows "Authorised by [Name] at [datetime]" green badge
+- [ ] Frontend: authorised entries show a lock icon; unauthorised show amber "Pending Authorisation" badge
+- [ ] Frontend: unauthorised entries show a warning if older than 24 hours without sign-off

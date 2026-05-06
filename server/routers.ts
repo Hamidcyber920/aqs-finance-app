@@ -593,6 +593,49 @@ export const appRouter = router({
         await db.delete(fridayCollections).where(eq(fridayCollections.id, input.id));
         return { success: true };
       }),
+
+    // Two-step authorisation — manager/deputy/trustee only
+    authoriseFridayCollection: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const AUTHORISED_ROLES = ['superadmin', 'admin', 'trustee', 'manager', 'deputy'];
+        if (!AUTHORISED_ROLES.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only managers, deputies, or trustees can authorise collections.' });
+        }
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { fridayCollections } = await import('../drizzle/schema');
+        const rows = await db.select().from(fridayCollections).where(eq(fridayCollections.id, input.id)).limit(1);
+        if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+        await db.update(fridayCollections).set({
+          authorisedById: ctx.user.id,
+          authorisedAt: new Date(),
+          authorisedByName: ctx.user.name ?? ctx.user.email ?? 'Unknown',
+        }).where(eq(fridayCollections.id, input.id));
+        return { success: true };
+      }),
+
+    unauthoriseFridayCollection: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const AUTHORISED_ROLES = ['superadmin', 'admin', 'trustee', 'manager', 'deputy'];
+        if (!AUTHORISED_ROLES.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Only managers, deputies, or trustees can remove authorisation.' });
+        }
+        const db = await (await import('./db')).getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq } = await import('drizzle-orm');
+        const { fridayCollections } = await import('../drizzle/schema');
+        const rows = await db.select().from(fridayCollections).where(eq(fridayCollections.id, input.id)).limit(1);
+        if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
+        await db.update(fridayCollections).set({
+          authorisedById: null,
+          authorisedAt: null,
+          authorisedByName: null,
+        }).where(eq(fridayCollections.id, input.id));
+        return { success: true };
+      }),
   }),
 
 
