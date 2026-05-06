@@ -259,6 +259,15 @@ export const loanApplications = mysqlTable("loan_applications", {
   // Documents
   pdfUrl: text("pdfUrl"),
   evidenceUrl: text("evidenceUrl"), // bank transfer screenshot or cash receipt
+  // Dual approval workflow
+  adminApprovedById: int("adminApprovedById"),
+  adminApprovedByName: varchar("adminApprovedByName", { length: 200 }),
+  adminApprovedAt: timestamp("adminApprovedAt"),
+  trusteeId: int("trusteeId"),
+  trusteeName: varchar("trusteeName", { length: 200 }),
+  trusteeApprovedAt: timestamp("trusteeApprovedAt"),
+  agreementPdfUrl: text("agreementPdfUrl"),
+  whatsappSentAt: timestamp("whatsappSentAt"),
   // Repayments
   totalRepaid: decimal("totalRepaid", { precision: 10, scale: 2 }).default("0"),
   lastRepaymentDate: timestamp("lastRepaymentDate"),
@@ -297,6 +306,17 @@ export const loanRepayments = mysqlTable("loan_repayments", {
   rejectionComment: text("rejectionComment"),
   deferredToMonth: int("deferredToMonth"),
   deferredToYear: int("deferredToYear"),
+  // Repayment dual approval
+  receivedConfirmedAt: timestamp("receivedConfirmedAt"),
+  receivedConfirmedById: int("receivedConfirmedById"),
+  adminApprovedById: int("adminApprovedById"),
+  adminApprovedByName: varchar("adminApprovedByName", { length: 200 }),
+  adminApprovedAt: timestamp("adminApprovedAt"),
+  trusteeId: int("trusteeId"),
+  trusteeName: varchar("trusteeName", { length: 200 }),
+  trusteeApprovedAt: timestamp("trusteeApprovedAt"),
+  confirmationPdfUrl: text("confirmationPdfUrl"),
+  whatsappSentAt: timestamp("whatsappSentAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

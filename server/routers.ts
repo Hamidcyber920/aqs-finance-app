@@ -675,8 +675,16 @@ export const appRouter = router({
           subject = input.customSubject;
           htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px">${input.customBody}</div>${footer}</div>`;
         } else { throw new TRPCError({ code: "BAD_REQUEST", message: "Custom email requires subject and body" }); }
-        await sendGmail(loan.borrowerEmail, loan.borrowerName, subject, htmlBody);
-        return { success: true, sentTo: loan.borrowerEmail };
+        try {
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, subject, htmlBody);
+          return { success: true, sentTo: loan.borrowerEmail };
+        } catch (e: any) {
+          const msg = e?.message ?? String(e);
+          if (msg.includes('invalid_grant') || msg.includes('Invalid Credentials')) {
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Email failed: Gmail credentials need to be refreshed. Please contact the system administrator to re-authorise the Gmail account." });
+          }
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${msg}` });
+        }
       }),
   }),
 
