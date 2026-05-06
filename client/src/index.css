@@ -254,7 +254,7 @@
 
   /* ── Page header responsive ── */
   .page-header {
-    @apply flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 !important;
+    @apply flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5;
   }
   .page-header-actions {
     @apply flex flex-wrap items-center gap-2;
