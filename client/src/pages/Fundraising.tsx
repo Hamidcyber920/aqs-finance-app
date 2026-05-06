@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Plus, HandHeart, TrendingUp, Calendar, Trash2, CheckCircle2, Clock, ShieldCheck, AlertTriangle, Lock, Banknote, X } from "lucide-react";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { SmartUpload, type SmartUploadResult } from "@/components/SmartUpload";
 
 // Roles that can authorise Friday collections
 const AUTHORISED_ROLES = ["superadmin", "admin", "trustee", "manager", "deputy"];
@@ -230,6 +231,13 @@ export default function Fundraising() {
   const [newDonationOpen, setNewDonationOpen] = useState(false);
   const [newCollectionOpen, setNewCollectionOpen] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<number | null>(null);
+  const [donationPrefill, setDonationPrefill] = useState<Record<string, unknown> | undefined>(undefined);
+
+  function handleSmartDonationConfirm(result: SmartUploadResult) {
+    setDonationPrefill(result.extractedData);
+    setSelectedCampaignId(campaigns[0]?.id ?? null);
+    setNewDonationOpen(true);
+  }
   const [deleteCollectionId, setDeleteCollectionId] = useState<number | null>(null);
   const [authoriseTarget, setAuthoriseTarget] = useState<(typeof fridayCollections)[0] | null>(null);
   const [cashWithheldTarget, setCashWithheldTarget] = useState<(typeof fridayCollections)[0] | null>(null);
@@ -302,6 +310,12 @@ export default function Fundraising() {
           <Button variant="outline" size="sm" onClick={() => setNewCollectionOpen(true)}>
             <Calendar className="h-4 w-4 mr-2" /> Friday Collection
           </Button>
+          <SmartUpload
+            moduleType="fundraising_donation"
+            onConfirm={handleSmartDonationConfirm}
+            buttonLabel="Import Donation"
+            buttonVariant="outline"
+          />
           <Button variant="outline" size="sm" onClick={() => { setSelectedCampaignId(campaigns[0]?.id ?? null); setNewDonationOpen(true); }}>
             <HandHeart className="h-4 w-4 mr-2" /> Record Donation
           </Button>

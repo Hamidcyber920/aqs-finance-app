@@ -14,6 +14,7 @@ import {
   CalendarDays, AlertCircle, Users, LayoutDashboard, List,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { SmartUpload, type SmartUploadResult } from "@/components/SmartUpload";
 
 // ─── Loan purpose presets ────────────────────────────────────────────────────
 
@@ -70,6 +71,17 @@ export default function Loans() {
   const [termUnit, setTermUnit] = useState<"months" | "years">("months");
   const [termNotes, setTermNotes] = useState("");
   const [, setLocation] = useLocation();
+
+  function handleSmartLoanConfirm(result: SmartUploadResult) {
+    const d = result.extractedData;
+    if (d.amountRequested != null) setLoanAmount(String(d.amountRequested));
+    if (d.purpose) {
+      setPurposePreset("Other (specify below)");
+      setCustomPurpose(d.purpose as string);
+    }
+    if (d.repaymentTerm != null) setTermValue(String(d.repaymentTerm));
+    setNewLoanOpen(true);
+  }
 
   const { data: loans = [], refetch } = trpc.loans.list.useQuery(
     { status: statusFilter === "all" ? undefined : statusFilter }
@@ -173,6 +185,12 @@ export default function Loans() {
           >
             <List className="h-4 w-4 mr-1" /> All Loans
           </Button>
+          <SmartUpload
+            moduleType="loan_application"
+            onConfirm={handleSmartLoanConfirm}
+            buttonLabel="Import Application"
+            buttonVariant="outline"
+          />
           <Button size="sm" onClick={() => setNewLoanOpen(true)}>
             <Plus className="h-4 w-4 mr-1" /> New Application
           </Button>

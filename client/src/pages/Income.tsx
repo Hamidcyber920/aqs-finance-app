@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Plus, TrendingUp, Building2, DollarSign, Trash2, Loader2, FolderPlus } from "lucide-react";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { SmartUpload, type SmartUploadResult } from "@/components/SmartUpload";
 
 const PERIOD_LABELS: Record<string, string> = {
   daily: "Daily",
@@ -30,22 +31,23 @@ const STATUS_COLOURS: Record<string, string> = {
 
 // ─── Add Income Record Dialog ────────────────────────────────────────────────
 function AddIncomeDialog({
-  open, onClose, categories, preselectedCategoryId, onSuccess,
+  open, onClose, categories, preselectedCategoryId, onSuccess, prefill,
 }: {
   open: boolean;
   onClose: () => void;
   categories: Array<{ id: number; name: string; allowedPeriods?: string | null; requiresSpecification?: boolean | number }>;
   preselectedCategoryId?: number;
   onSuccess: () => void;
+  prefill?: Record<string, unknown>;
 }) {
   const [selectedCatId, setSelectedCatId] = useState<number | undefined>(preselectedCategoryId);
   const [selectedPeriod, setSelectedPeriod] = useState("monthly");
   const [communitySpec, setCommunitySpec] = useState("");
-  const [payerName, setPayerName] = useState("");
+  const [payerName, setPayerName] = useState(prefill?.tenantName as string ?? "");
   const [payerEmail, setPayerEmail] = useState("");
-  const [amount, setAmount] = useState("");
-  const [reference, setReference] = useState("");
-  const [notes, setNotes] = useState("");
+  const [amount, setAmount] = useState(prefill?.amount != null ? String(prefill.amount) : "");
+  const [reference, setReference] = useState(prefill?.reference as string ?? "");
+  const [notes, setNotes] = useState(prefill?.notes as string ?? "");
   const [paymentStatus, setPaymentStatus] = useState("paid");
 
   const selectedCat = useMemo(() => categories.find(c => c.id === selectedCatId), [categories, selectedCatId]);
@@ -77,6 +79,15 @@ function AddIncomeDialog({
     setNotes("");
     setPaymentStatus("paid");
   }
+  // Apply prefill when it changes
+  useMemo(() => {
+    if (prefill) {
+      if (prefill.tenantName) setPayerName(prefill.tenantName as string);
+      if (prefill.amount != null) setAmount(String(prefill.amount));
+      if (prefill.reference) setReference(prefill.reference as string);
+      if (prefill.notes) setNotes(prefill.notes as string);
+    }
+  }, [prefill]);
 
   function handleCatChange(id: number) {
     setSelectedCatId(id);
@@ -284,6 +295,12 @@ function CategoryTab({
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [smartPrefill, setSmartPrefill] = useState<Record<string, unknown> | undefined>(undefined);
+
+  function handleSmartConfirm(result: SmartUploadResult) {
+    setSmartPrefill(result.extractedData);
+    setAddOpen(true);
+  }
   const utils = trpc.useUtils();
 
   const records = useMemo(() => allRecords.filter(r => r.categoryId === category.id), [allRecords, category.id]);
@@ -315,7 +332,13 @@ function CategoryTab({
       </div>
 
       {/* Add button */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <SmartUpload
+          moduleType="income_rental"
+          onConfirm={handleSmartConfirm}
+          buttonLabel="Import from Document"
+          buttonVariant="outline"
+        />
         <Button size="sm" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />Add {category.name} Record
         </Button>
@@ -376,10 +399,11 @@ function CategoryTab({
 
       <AddIncomeDialog
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={() => { setAddOpen(false); setSmartPrefill(undefined); }}
         categories={categories}
         preselectedCategoryId={category.id}
         onSuccess={() => utils.income.list.invalidate()}
+        prefill={smartPrefill}
       />
 
       <DeleteConfirmDialog

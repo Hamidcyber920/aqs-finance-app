@@ -2320,6 +2320,202 @@ Return: { "employees": [ ...array of employee objects... ] }`;
       }),
   }),
 
+  // ─── UNIVERSAL AI DOCUMENT EXTRACTION ────────────────────────────────────
+  documents: router({
+    extract: protectedProcedure
+      .input(z.object({
+        fileUrl: z.string(),
+        mimeType: z.string(),
+        moduleType: z.enum([
+          'income_rental', 'loan_repayment', 'loan_application',
+          'invoice', 'payroll', 'friday_collection',
+          'fundraising_donation', 'receipt', 'bank_statement'
+        ]),
+        // Optional: existing record IDs to check for discrepancies
+        existingRecordIds: z.array(z.number()).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const isImage = input.mimeType.startsWith('image/');
+        const isPdf = input.mimeType === 'application/pdf';
+        const isCsv = input.mimeType === 'text/csv' || input.mimeType === 'application/csv';
+
+        const MODULE_PROMPTS: Record<string, string> = {
+          income_rental: `You are a UK property rental payment extractor. Extract from this document:
+- tenantName: full name of the tenant/payer
+- amount: payment amount in GBP (number)
+- paymentDate: date of payment (YYYY-MM-DD)
+- periodStart: rental period start date (YYYY-MM-DD or null)
+- periodEnd: rental period end date (YYYY-MM-DD or null)
+- propertyUnit: room, unit, or property name/number
+- paymentMethod: cash/bank_transfer/cheque/standing_order or null
+- reference: payment reference or null
+- category: best matching category from: Student Accommodation, Office Rental, Hall Hire, Coffee Shop, Stalls, Events, Weddings, Nikah, Friday Collection, or Other
+- notes: any additional notes
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          loan_repayment: `You are a Qarde Hasan (interest-free loan) repayment extractor. Extract from this document:
+- borrowerName: full name of the borrower
+- amount: repayment amount in GBP (number)
+- paymentDate: date of payment (YYYY-MM-DD)
+- reference: payment reference or null
+- paymentMethod: cash/bank_transfer/cheque or null
+- notes: any additional notes
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          loan_application: `You are a Qarde Hasan loan application extractor. Extract from this document:
+- applicantName: full name of the applicant
+- amountRequested: loan amount requested in GBP (number)
+- purpose: purpose of the loan
+- monthlyIncome: monthly income in GBP (number or null)
+- employmentStatus: employed/self-employed/unemployed/student or null
+- repaymentTerm: number of months (number or null)
+- guarantorName: guarantor full name or null
+- notes: any additional notes
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          invoice: `You are a UK invoice/expense extractor. Extract from this document:
+- vendorName: name of the supplier/vendor
+- invoiceNumber: invoice number or reference
+- amount: total amount in GBP (number)
+- vatAmount: VAT amount in GBP (number or null)
+- invoiceDate: invoice date (YYYY-MM-DD)
+- dueDate: payment due date (YYYY-MM-DD or null)
+- description: description of goods/services
+- category: best matching from: Restaurant/Bistro, Cleaning & Hygiene, Events & Activities, Wholesale & Supplies, Travel & Transport, Maintenance & Repairs, Utilities, Professional Services, IT & Technology, Printing & Stationery, Staff Welfare, Ramadan, Other
+- paymentMethod: cheque/bank_transfer/cash or null
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          payroll: `You are a UK payroll document extractor. Extract from this document:
+- employeeName: full name of the employee
+- grossPay: gross salary in GBP (number)
+- deductions: total deductions in GBP (number or null)
+- netPay: net take-home pay in GBP (number)
+- payPeriod: pay period month (1-12) or null
+- payYear: pay period year (YYYY) or null
+- niNumber: National Insurance number or null
+- taxCode: tax code or null
+- department: department name or null
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          friday_collection: `You are a Friday mosque collection extractor. Extract from this document:
+- collectionDate: date of Friday collection (YYYY-MM-DD)
+- bucketTotal: total from collection buckets in GBP (number or null)
+- cardTerminalTotal: total from card terminal in GBP (number or null)
+- totalAmount: overall total in GBP (number)
+- collectedBy: name of person who collected or null
+- notes: any additional notes
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          fundraising_donation: `You are a donation/fundraising extractor. Extract from this document:
+- donorName: full name of donor
+- amount: donation amount in GBP (number)
+- donationDate: date of donation (YYYY-MM-DD)
+- paymentMethod: cash/bank_transfer/cheque/online or null
+- reference: payment reference or null
+- campaignName: fundraising campaign name or null
+- giftAid: whether gift aid applies (true/false or null)
+- notes: any additional notes
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          receipt: `You are a UK expense receipt extractor. Extract from this document:
+- vendorName: name of the shop/vendor
+- totalAmount: total amount paid in GBP (number)
+- purchaseDate: date of purchase (YYYY-MM-DD)
+- items: brief description of items purchased
+- category: best matching from: Food & Catering, Cleaning & Hygiene, Maintenance & Repairs, IT & Technology, Printing & Stationery, Travel & Transport, Other
+- vatAmount: VAT amount in GBP (number or null)
+- paymentMethod: cash/card or null
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          bank_statement: `You are a UK bank statement parser. Extract from this document:
+- closingBalance: closing/end balance in GBP (number)
+- statementDate: statement date or period end date (YYYY-MM-DD)
+- accountName: account holder name
+- sortCode: sort code (XX-XX-XX format)
+- accountNumber: account number
+- bankName: name of the bank
+- openingBalance: opening balance in GBP (number or null)
+- transactions: array of up to 10 most recent transactions, each with {date, description, debit, credit} (or null)
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+        };
+
+        const systemPrompt = MODULE_PROMPTS[input.moduleType] || MODULE_PROMPTS['receipt'];
+
+        let extractedData: Record<string, unknown> = {};
+        let confidence = 0.8;
+        let rawText = '';
+
+        if (isCsv) {
+          // For CSV: fetch the file and parse it as text
+          const response = await fetch(input.fileUrl);
+          rawText = await response.text();
+          const csvResult = await invokeLLM({
+            messages: [
+              { role: 'system', content: systemPrompt + '\n\nThe input is CSV text. Parse all rows and return an array of records under the key "records". Each record should match the schema above.' },
+              { role: 'user', content: `CSV content:\n${rawText.slice(0, 8000)}` },
+            ],
+            response_format: { type: 'json_schema', json_schema: { name: 'csv_extraction', strict: false, schema: { type: 'object', properties: { records: { type: 'array', items: { type: 'object' } } }, required: ['records'], additionalProperties: true } } },
+          });
+          const content = csvResult?.choices?.[0]?.message?.content;
+          extractedData = typeof content === 'string' ? JSON.parse(content) : (content as Record<string, unknown>);
+          confidence = 0.9;
+        } else {
+          // Image or PDF
+          const contentType = isPdf ? 'file_url' : 'image_url';
+          const userContent = contentType === 'image_url'
+            ? [{ type: 'image_url' as const, image_url: { url: input.fileUrl, detail: 'high' as const } }]
+            : [{ type: 'file_url' as const, file_url: { url: input.fileUrl, mime_type: 'application/pdf' as const } }];
+          const llmResult = await invokeLLM({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userContent },
+            ],
+          });
+          const content = llmResult?.choices?.[0]?.message?.content;
+          if (!content) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI extraction failed — no response from model' });
+          try {
+            extractedData = typeof content === 'string' ? JSON.parse(content) : (content as Record<string, unknown>);
+          } catch {
+            // Try to extract JSON from the response
+            const match = (content as string).match(/\{[\s\S]*\}/);
+            if (match) extractedData = JSON.parse(match[0]);
+            else throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI returned non-JSON response' });
+          }
+          confidence = 0.85;
+        }
+
+        // Discrepancy detection: compare extracted values against existing DB records
+        const discrepancies: Array<{ field: string; extracted: unknown; existing: unknown; severity: 'warning' | 'error' }> = [];
+
+        if (input.existingRecordIds && input.existingRecordIds.length > 0 && input.moduleType === 'loan_repayment') {
+          // Check loan repayment amounts against scheduled instalments
+          const db = await getDb();
+          if (db) {
+            const { loanRepayments, loanApplications } = await import('../drizzle/schema');
+            const { inArray } = await import('drizzle-orm');
+            const existing = await db.select().from(loanRepayments).where(inArray(loanRepayments.id, input.existingRecordIds));
+            for (const record of existing) {
+              const extractedAmount = extractedData['amount'] as number | null;
+              if (extractedAmount && record.amount) {
+                const diff = Math.abs(extractedAmount - Number(record.amount));
+                if (diff > 1) {
+                  discrepancies.push({ field: 'amount', extracted: extractedAmount, existing: record.amount, severity: diff > 50 ? 'error' : 'warning' });
+                }
+              }
+            }
+          }
+        }
+
+        return {
+          extractedData,
+          discrepancies,
+          confidence,
+          moduleType: input.moduleType,
+          isBulk: 'records' in extractedData,
+        };
+      }),
+  }),
+
   // ─── BANK STATEMENT AI READER ─────────────────────────────────────────────
   bankStatement: router({
     extract: adminProcedure

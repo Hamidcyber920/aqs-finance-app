@@ -380,3 +380,56 @@
 - [x] Frontend: confirmation dialog for manager — "Have you verified this cash withheld amount?" with checkbox
 - [x] Monthly Expenses: cash withheld amounts appear as a line item under Friday Collections
 - [x] Reconciliation: cash withheld deducted from Friday Collection income total, shown as separate line
+
+## Universal AI Document Ingestion (May 2026)
+
+### Backend — Universal Extraction Procedure
+- [x] Backend: documents.extract procedure — accepts fileUrl + mimeType + moduleType, uses LLM vision/text to extract structured data
+- [x] Backend: moduleType enum: income_rental, loan_repayment, loan_application, invoice, payroll, friday_collection, fundraising_donation, receipt
+- [x] Backend: CSV parsing path — detect CSV, parse rows, map columns to module schema fields
+- [x] Backend: PDF path — upload to S3, pass URL to LLM with file_url content type
+- [x] Backend: Image path — pass URL to LLM with image_url content type
+- [x] Backend: discrepancy detection — compare extracted values against existing DB records for same entity (tenant/borrower/employee), flag mismatches
+- [x] Backend: return structured result: extractedFields, matchedRecord (if found), discrepancies array, confidence score
+
+### Frontend — SmartUpload Component
+- [x] Build SmartUpload component: drag-drop zone + camera button + file picker, accepts image/PDF/CSV
+- [x] Upload file to S3, call documents.extract, show loading spinner
+- [x] Show extraction preview card: each extracted field with value and confidence indicator
+- [x] Red-flag discrepancies: if extracted value differs from existing DB record, show red badge "Extracted: £450 / On record: £500 — please verify"
+- [x] Confirm & Import button: creates/updates the DB record with extracted values
+- [x] Skip / Edit button: allow manual correction before import
+- [x] Show import summary: "3 records imported, 1 flagged for review"
+
+### Income & Rentals — AI Ingestion
+- [x] Add SmartUpload button to Income & Rentals page header ("Import from Document")
+- [x] Extract: tenant name, room/unit, amount, payment period, payment method, payment date, category
+- [x] Match tenant name against existing incomeRecords for same category
+- [x] Flag discrepancies: amount differs, period differs, tenant name near-match (fuzzy)
+- [x] Auto-select correct category tab based on extracted category
+- [x] Bulk import: CSV with multiple tenants → creates multiple income records in one pass
+
+### Qarde Hasan Loans — AI Ingestion
+- [x] Add SmartUpload button to Loans page ("Import Repayment from Document")
+- [x] Extract: borrower name, repayment amount, repayment date, reference number
+- [x] Match borrower name against existing loanApplications (fuzzy match)
+- [x] Flag discrepancies: amount differs from scheduled instalment, borrower name near-match
+- [x] Auto-fill repayment form with extracted data for review before saving
+- [x] Loan application import: extract borrower name, amount requested, purpose, term from uploaded form
+
+### Monthly Expenses / Invoices — AI Ingestion
+- [x] SmartUpload already exists for individual invoices — extend to bulk CSV import
+- [x] CSV import: vendor, amount, category, description, date → creates multiple invoice records
+- [x] PDF invoice: extract vendor, invoice number, amount, VAT, date, description → auto-fill invoice form
+- [x] Flag: invoice number already exists in DB (duplicate detection)
+
+### Payroll — AI Ingestion
+- [x] Payroll PDF already has AI analysis — extend to CSV payroll export import
+- [x] CSV: employee name, gross pay, deductions, net pay, month → bulk create payroll records
+- [x] Flag: employee not found in staff directory, amount differs from previous month by >20%
+
+### Fundraising & Friday Collections — AI Ingestion
+- [x] SmartUpload for Friday Collection: upload tally sheet image → extract bucket total, card terminal total, date
+- [x] Flag: total differs from manually entered value if record already exists for that date
+- [x] SmartUpload for Donations: upload bank statement or donation receipt → extract donor name, amount, date, reference
+- [x] Match donor name against existing donors table (fuzzy match)

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Plus, Wallet, Users, TrendingDown, FileText, Upload, Sparkles, Loader2, Check, ChevronDown, ChevronUp, User } from "lucide-react";
+import { SmartUpload, type SmartUploadResult } from "@/components/SmartUpload";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -82,7 +83,12 @@ export default function Payroll() {
   const [newOpen, setNewOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number | undefined>();
+  const [payrollSmartPrefill, setPayrollSmartPrefill] = useState<Record<string, unknown> | undefined>(undefined);
 
+  function handleSmartPayrollConfirm(result: SmartUploadResult) {
+    setPayrollSmartPrefill(result.extractedData);
+    setNewOpen(true);
+  }
   // PDF upload state
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfUploading, setPdfUploading] = useState(false);
@@ -212,9 +218,17 @@ export default function Payroll() {
           <p className="page-subtitle">{isAdmin ? "Staff payslips and salary management" : "Your payslips"}</p>
         </div>
         {isAdmin && (
-          <Button size="sm" onClick={() => { handleDialogClose(); setNewOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" /> Add Payroll Record
-          </Button>
+          <div className="flex gap-2">
+            <SmartUpload
+              moduleType="payroll"
+              onConfirm={handleSmartPayrollConfirm}
+              buttonLabel="Import Payslip"
+              buttonVariant="outline"
+            />
+            <Button size="sm" onClick={() => { handleDialogClose(); setNewOpen(true); }}>
+              <Plus className="h-4 w-4 mr-2" /> Add Payroll Record
+            </Button>
+          </div>
         )}
       </div>
 

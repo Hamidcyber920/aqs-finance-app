@@ -20,6 +20,7 @@ import {
   Plus, Loader2, AlertTriangle, Clock, Briefcase, Heart, BookOpen,
   ShieldCheck, ShieldX, History, Receipt, Sparkles,
 } from "lucide-react";
+import { SmartUpload, type SmartUploadResult } from "@/components/SmartUpload";
 
 // ─── Category taxonomy ────────────────────────────────────────────────────────
 export const INVOICE_CATEGORIES: Record<string, string[]> = {
@@ -496,14 +497,14 @@ function Section({
 }
 
 // ─── Add Invoice Dialog ───────────────────────────────────────────────────────
-function AddInvoiceDialog({ open, onClose, month, year }: { open: boolean; onClose: () => void; month: number; year: number }) {
-  const [category, setCategory] = useState("");
+function AddInvoiceDialog({ open, onClose, month, year, prefill }: { open: boolean; onClose: () => void; month: number; year: number; prefill?: Record<string, unknown> }) {
+  const [category, setCategory] = useState(prefill?.category as string ?? "");
   const [subCategory, setSubCategory] = useState("");
-  const [vendor, setVendor] = useState("");
-  const [description, setDescription] = useState("");
-  const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState("");
-  const [amount, setAmount] = useState("");
+  const [vendor, setVendor] = useState(prefill?.vendorName as string ?? "");
+  const [description, setDescription] = useState(prefill?.description as string ?? "");
+  const [invoiceNumber, setInvoiceNumber] = useState(prefill?.invoiceNumber as string ?? "");
+  const [invoiceDate, setInvoiceDate] = useState(prefill?.invoiceDate as string ?? "");
+  const [amount, setAmount] = useState(prefill?.amount != null ? String(prefill.amount) : "");
   const [paymentMethod, setPaymentMethod] = useState<"cheque" | "bank_transfer" | "cash">("cheque");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [chequeFile, setChequeFile] = useState<File | null>(null);
@@ -831,7 +832,7 @@ function NewExpenseCategoryDialog({ open, onClose, onSuccess }: { open: boolean;
 }
 
 function InvoicesCategoryView({
-  invoiceItems, isAdmin, onEvidence, onAuthorise, onReject, onAdd,
+  invoiceItems, isAdmin, onEvidence, onAuthorise, onReject, onAdd, onSmartImport,
 }: {
   invoiceItems: BaseItem[];
   isAdmin: boolean;
@@ -839,6 +840,7 @@ function InvoicesCategoryView({
   onAuthorise: (item: BaseItem) => void;
   onReject: (item: BaseItem) => void;
   onAdd: () => void;
+  onSmartImport?: (result: SmartUploadResult) => void;
 }) {
   const allCategoryNames = Object.keys(INVOICE_CATEGORIES);
   // Collect categories that have invoice items + all predefined ones
@@ -894,6 +896,15 @@ function InvoicesCategoryView({
             className="px-3 py-1.5 rounded-md text-xs font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:bg-muted/50 flex items-center gap-1">
             <Plus className="h-3 w-3" />New Category
           </button>
+          {onSmartImport && (
+            <SmartUpload
+              moduleType="invoice"
+              onConfirm={onSmartImport}
+              buttonLabel="Import Invoice"
+              buttonVariant="outline"
+              className="h-7 text-xs px-2"
+            />
+          )}
         </div>
       </div>
 
@@ -932,7 +943,13 @@ export default function MonthlyExpenses() {
   const [rejectComment, setRejectComment] = useState("");
   const [addVolOpen, setAddVolOpen] = useState(false);
   const [addInvoiceOpen, setAddInvoiceOpen] = useState(false);
+  const [invoicePrefill, setInvoicePrefill] = useState<Record<string, unknown> | undefined>(undefined);
   const [activeTab, setActiveTab] = useState("payroll");
+
+  function handleSmartInvoiceConfirm(result: SmartUploadResult) {
+    setInvoicePrefill(result.extractedData);
+    setAddInvoiceOpen(true);
+  }
 
   const isAdmin = ["superadmin", "admin", "trustee", "manager"].includes(user?.role ?? "");
   const utils = trpc.useUtils();
@@ -1179,6 +1196,7 @@ export default function MonthlyExpenses() {
               onAuthorise={handleAuthorise}
               onReject={handleReject}
               onAdd={() => setAddInvoiceOpen(true)}
+              onSmartImport={handleSmartInvoiceConfirm}
             />
           )}
         </TabsContent>
@@ -1252,7 +1270,7 @@ export default function MonthlyExpenses() {
       </Dialog>
 
       {/* Add Invoice Dialog */}
-      <AddInvoiceDialog open={addInvoiceOpen} onClose={() => setAddInvoiceOpen(false)} month={month} year={year} />
+      <AddInvoiceDialog open={addInvoiceOpen} onClose={() => { setAddInvoiceOpen(false); setInvoicePrefill(undefined); }} month={month} year={year} prefill={invoicePrefill} />
 
       {/* Add Volunteer Dialog */}
       <AddVolunteerDialog open={addVolOpen} onClose={() => setAddVolOpen(false)} month={month} year={year} />
