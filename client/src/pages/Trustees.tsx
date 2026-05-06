@@ -21,7 +21,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { useState } from "react";
 import { Plus, Pencil, Trash2, ShieldCheck, Phone, Mail } from "lucide-react";
 
 interface TrusteeForm {
