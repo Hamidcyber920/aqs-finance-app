@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Plus, HandHeart, TrendingUp, Calendar, DollarSign } from "lucide-react";
+import { Plus, HandHeart, TrendingUp, Calendar, DollarSign, Trash2 } from "lucide-react";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 export default function Fundraising() {
   const [newCampaignOpen, setNewCampaignOpen] = useState(false);
@@ -33,6 +34,12 @@ export default function Fundraising() {
 
   const recordCollection = trpc.fundraising.recordFridayCollection.useMutation({
     onSuccess: () => { toast.success("Friday collection recorded"); setNewCollectionOpen(false); refetchCollections(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const [deleteCollectionId, setDeleteCollectionId] = useState<number | null>(null);
+  const deleteCollection = trpc.fundraising.deleteFridayCollection.useMutation({
+    onSuccess: () => { toast.success("Collection deleted"); setDeleteCollectionId(null); refetchCollections(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -142,7 +149,7 @@ export default function Fundraising() {
         <Card>
           <CardContent className="p-0">
             <table className="w-full data-table">
-              <thead><tr><th>Date</th><th>Bucket</th><th>Card Terminal</th><th>Total</th><th>Notes</th></tr></thead>
+              <thead><tr><th>Date</th><th>Bucket</th><th>Card Terminal</th><th>Total</th><th>Notes</th><th></th></tr></thead>
               <tbody>
                 {fridayCollections.length === 0 ? (
                   <tr><td colSpan={5} className="text-center text-muted-foreground py-8">No collections recorded yet</td></tr>
@@ -153,6 +160,11 @@ export default function Fundraising() {
                     <td>£{parseFloat(fc.cardTerminalTotal?.toString() ?? "0").toFixed(2)}</td>
                     <td className="font-semibold">£{parseFloat(fc.totalAmount?.toString() ?? "0").toFixed(2)}</td>
                     <td className="text-muted-foreground text-xs">{fc.notes ?? "—"}</td>
+                    <td>
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteCollectionId(fc.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -219,6 +231,14 @@ export default function Fundraising() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmDialog
+        open={deleteCollectionId !== null}
+        onOpenChange={(v) => { if (!v) setDeleteCollectionId(null); }}
+        itemLabel="this Friday collection record"
+        onConfirm={() => deleteCollectionId !== null && deleteCollection.mutate({ id: deleteCollectionId })}
+        loading={deleteCollection.isPending}
+      />
 
       {/* Friday Collection Dialog */}
       <Dialog open={newCollectionOpen} onOpenChange={setNewCollectionOpen}>

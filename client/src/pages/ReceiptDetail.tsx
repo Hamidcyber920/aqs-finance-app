@@ -14,12 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 export default function ReceiptDetailPage() {
   const params = useParams<{ id: string }>();
@@ -365,25 +362,13 @@ export default function ReceiptDetailPage() {
       )}
 
       {/* Delete dialog */}
-      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this receipt?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the receipt and all extracted data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteMutation.mutate({ id })}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={showDelete}
+        onOpenChange={setShowDelete}
+        itemLabel="this receipt and all extracted data"
+        onConfirm={() => deleteMutation.mutate({ id })}
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

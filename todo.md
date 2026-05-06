@@ -308,3 +308,13 @@
 - [x] Frontend: Reconciliation bank balance section — add "Scan Statement" button with camera/file upload
 - [x] Frontend: on upload, call AI extraction, auto-populate bank balance field with extracted closing balance
 - [x] Frontend: show extracted statement details (date, account, balance) as confirmation before applying
+
+## Multi-Step Deletion Confirmation (May 2026)
+- [x] Build reusable DeleteConfirmDialog component: single-step for general users, two-step (tick twice) for superadmin/trustee
+- [x] Wire into Receipts page delete buttons
+- [x] Wire into Income & Rentals page delete buttons
+- [x] Wire into Invoices / Monthly Expenses page delete buttons
+- [x] Wire into Fundraising donations delete buttons
+- [x] Wire into Friday Collections delete buttons
+- [x] Wire into Volunteer Payments delete buttons
+- [x] Wire into Trustees page delete buttons

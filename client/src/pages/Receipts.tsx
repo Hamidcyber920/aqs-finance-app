@@ -9,11 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 const PAGE_SIZE = 20;
 
@@ -264,25 +261,13 @@ export default function ReceiptsPage() {
       )}
 
       {/* Delete dialog */}
-      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete receipt?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the receipt and all extracted data. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(v) => { if (!v) setDeleteId(null); }}
+        itemLabel="this receipt and all extracted data"
+        onConfirm={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })}
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

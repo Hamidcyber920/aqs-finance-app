@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Building2, TrendingUp, DollarSign } from "lucide-react";
+import { Plus, Building2, TrendingUp, DollarSign, Trash2 } from "lucide-react";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 const PERIOD_LABELS: Record<string, string> = {
   daily: "Daily",
@@ -36,6 +37,13 @@ export default function Income() {
   const { data: records = [], refetch } = trpc.income.list.useQuery({
     categoryId: categoryIdFilter,
     paymentStatus: statusFilter === "all" ? undefined : statusFilter,
+  });
+
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const deleteRecord = trpc.income.delete.useMutation({
+    onSuccess: () => { toast.success("Income record deleted"); setDeleteId(null); refetch(); },
+    onError: (e) => toast.error(e.message),
   });
 
   const createRecord = trpc.income.create.useMutation({
@@ -188,6 +196,7 @@ export default function Income() {
                 <th>Amount</th>
                 <th>Status</th>
                 <th>Notes</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -205,12 +214,25 @@ export default function Income() {
                     </span>
                   </td>
                   <td className="text-muted-foreground text-xs max-w-[150px] truncate">{r.notes ?? "—"}</td>
+                  <td>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(r.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </CardContent>
       </Card>
+
+      <DeleteConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(v) => { if (!v) setDeleteId(null); }}
+        itemLabel="this income record"
+        onConfirm={() => deleteId !== null && deleteRecord.mutate({ id: deleteId })}
+        loading={deleteRecord.isPending}
+      />
 
       {/* Add Income Dialog */}
       <Dialog open={newOpen} onOpenChange={open => { if (!open) { setNewOpen(false); resetForm(); } else setNewOpen(true); }}>

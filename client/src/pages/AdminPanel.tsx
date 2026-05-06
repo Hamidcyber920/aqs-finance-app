@@ -18,6 +18,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 export default function AdminPanelPage() {
   const { user } = useAuth();
@@ -312,23 +313,20 @@ export default function AdminPanelPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Confirm dialog */}
-      <AlertDialog open={confirmAction !== null} onOpenChange={() => setConfirmAction(null)}>
+      {/* Role change confirm dialog (simple AlertDialog — not a delete) */}
+      <AlertDialog
+        open={confirmAction !== null && confirmAction.type === "role"}
+        onOpenChange={() => setConfirmAction(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmAction?.type === "role"
-                ? `${confirmAction.newRole === "admin" ? "Promote" : "Demote"} ${confirmAction.userName}?`
-                : `${confirmAction?.suspend ? "Suspend" : "Restore"} ${confirmAction?.userName}?`}
+              {confirmAction?.newRole === "admin" ? "Promote" : "Demote"} {confirmAction?.userName}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirmAction?.type === "role"
-                ? confirmAction.newRole === "admin"
-                  ? "This user will gain full admin access including user management."
-                  : "This user will lose admin access and return to a regular user role."
-                : confirmAction?.suspend
-                  ? "This user will no longer be able to sign in."
-                  : "This user will be able to sign in again."}
+              {confirmAction?.newRole === "admin"
+                ? "This user will gain full admin access including user management."
+                : "This user will lose admin access and return to a regular user role."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -336,11 +334,7 @@ export default function AdminPanelPage() {
             <AlertDialogAction
               onClick={() => {
                 if (!confirmAction) return;
-                if (confirmAction.type === "role") {
-                  updateRoleMutation.mutate({ userId: confirmAction.userId, role: confirmAction.newRole! });
-                } else {
-                  suspendMutation.mutate({ userId: confirmAction.userId, suspend: confirmAction.suspend! });
-                }
+                updateRoleMutation.mutate({ userId: confirmAction.userId, role: confirmAction.newRole! });
               }}
             >
               Confirm
@@ -348,6 +342,19 @@ export default function AdminPanelPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Suspend/restore confirm — uses DeleteConfirmDialog for the warning flow */}
+      <DeleteConfirmDialog
+        open={confirmAction !== null && confirmAction.type === "suspend"}
+        onOpenChange={(v) => { if (!v) setConfirmAction(null); }}
+        itemLabel={`${confirmAction?.userName ?? "this user"}'s account access (${confirmAction?.suspend ? "suspend" : "restore"})`}
+        onConfirm={() => {
+          if (!confirmAction) return;
+          suspendMutation.mutate({ userId: confirmAction.userId, suspend: confirmAction.suspend! });
+          setConfirmAction(null);
+        }}
+        loading={suspendMutation.isPending}
+      />
     </div>
   );
 }

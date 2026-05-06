@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, ShieldCheck, Phone, Mail } from "lucide-react";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 interface TrusteeForm {
   fullName: string;
@@ -197,20 +198,13 @@ export default function Trustees() {
       </Dialog>
 
       {/* Delete Confirm */}
-      <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Deactivate Trustee?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">This will mark the trustee as inactive. They will no longer appear in loan approval dropdowns.</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => deleteId && deleteMutation.mutate({ id: deleteId })} disabled={deleteMutation.isPending}>
-              Deactivate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteConfirmDialog
+        open={deleteId !== null}
+        onOpenChange={(v) => { if (!v) setDeleteId(null); }}
+        itemLabel="this trustee record (they will be marked inactive)"
+        onConfirm={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })}
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }
