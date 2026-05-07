@@ -245,86 +245,76 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="py-2 overflow-y-auto">
+          <SidebarContent className="overflow-y-auto">
             {/* MAIN */}
-            <SidebarGroup className="pb-1">
+            <div className="px-3 pt-4 pb-1">
               {!isCollapsed && (
-                <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-2 pb-1 uppercase tracking-widest font-semibold flex items-center">
-                  Main
-                </SidebarGroupLabel>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Main</p>
               )}
-              <SidebarMenu className="px-2 space-y-0.5">
+              <ul className="flex flex-col gap-0.5">
                 {coreItems.map((item) => (
                   <NavItem key={item.path} {...item} />
                 ))}
-              </SidebarMenu>
-            </SidebarGroup>
+              </ul>
+            </div>
 
             {/* FINANCE */}
             {(visibleIncomeItems.length > 0 || visibleExpenseItems.length > 0) && (
-              <SidebarGroup className="pb-1">
+              <div className="px-3 pt-4 pb-1 border-t border-white/5">
                 {!isCollapsed && (
-                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-3 pb-1 mt-2 uppercase tracking-widest font-semibold flex items-center border-t border-white/5">
-                    Finance
-                  </SidebarGroupLabel>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Finance</p>
                 )}
-                <SidebarMenu className="px-2 space-y-0.5">
+                <ul className="flex flex-col gap-0.5">
                   {visibleIncomeItems.map((item) => (
                     <NavItem key={item.path} {...item} />
                   ))}
                   {visibleExpenseItems.map((item) => (
                     <NavItem key={item.path} {...item} />
                   ))}
-                </SidebarMenu>
-              </SidebarGroup>
+                </ul>
+              </div>
             )}
 
             {/* RECONCILIATION */}
             {visibleReconciliationItems.length > 0 && (
-              <SidebarGroup className="pb-1">
+              <div className="px-3 pt-4 pb-1 border-t border-white/5">
                 {!isCollapsed && (
-                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-3 pb-1 mt-2 uppercase tracking-widest font-semibold flex items-center border-t border-white/5">
-                    Reconciliation
-                  </SidebarGroupLabel>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Reconciliation</p>
                 )}
-                <SidebarMenu className="px-2 space-y-0.5">
+                <ul className="flex flex-col gap-0.5">
                   {visibleReconciliationItems.map((item) => (
                     <NavItem key={item.path} {...item} />
                   ))}
-                </SidebarMenu>
-              </SidebarGroup>
+                </ul>
+              </div>
             )}
 
             {/* ORGANISATION */}
             {showOrg && (
-              <SidebarGroup className="pb-1">
+              <div className="px-3 pt-4 pb-1 border-t border-white/5">
                 {!isCollapsed && (
-                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-3 pb-1 mt-2 uppercase tracking-widest font-semibold flex items-center border-t border-white/5">
-                    Organisation
-                  </SidebarGroupLabel>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Organisation</p>
                 )}
-                <SidebarMenu className="px-2 space-y-0.5">
+                <ul className="flex flex-col gap-0.5">
                   {orgItems.map((item) => (
                     <NavItem key={item.path} {...item} />
                   ))}
-                </SidebarMenu>
-              </SidebarGroup>
+                </ul>
+              </div>
             )}
 
             {/* ADMINISTRATION */}
             {showAdmin && (
-              <SidebarGroup className="pb-2">
+              <div className="px-3 pt-4 pb-3 border-t border-white/5">
                 {!isCollapsed && (
-                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-3 pb-1 mt-2 uppercase tracking-widest font-semibold flex items-center border-t border-white/5">
-                    Administration
-                  </SidebarGroupLabel>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Administration</p>
                 )}
-                <SidebarMenu className="px-2 space-y-0.5">
+                <ul className="flex flex-col gap-0.5">
                   {adminItems.map((item) => (
                     <NavItem key={item.path} {...item} />
                   ))}
-                </SidebarMenu>
-              </SidebarGroup>
+                </ul>
+              </div>
             )}
           </SidebarContent>
 
