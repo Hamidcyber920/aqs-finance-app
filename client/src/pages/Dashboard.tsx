@@ -387,7 +387,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Summary stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(110px,1fr))", gap: 12, marginBottom: 20 }}>
               {[
                 { label: "Total Spend", value: "£28,340", icon: CreditCard, color: T.purple },
                 { label: "Receipts", value: "142", icon: Receipt, color: T.mint },
