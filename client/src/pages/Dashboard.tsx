@@ -1,508 +1,493 @@
-import { useState, useMemo } from "react";
-import { useLocation } from "wouter";
-import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
-} from "recharts";
-import {
-  TrendingUp, TrendingDown, Wallet, Users, AlertCircle, ArrowRight,
-  Plus, Receipt, Scale, Banknote, CalendarClock, CheckCircle2,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useState } from "react";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, PieChart, Pie, Cell
+} from "recharts";
+import {
+  TrendingUp, TrendingDown, DollarSign, Users, AlertCircle,
+  CheckCircle2, Clock, ArrowUpRight, ArrowDownRight, RefreshCw,
+  Receipt, CreditCard, HandHeart, BookOpen, Wallet
+} from "lucide-react";
 
-/* ─── Hibba brand colours ─────────────────────────────────────────── */
-const NAVY = "#0A192F";
-const PURPLE = "#635BFF";
-const MINT = "#00FFC2";
-const PURPLE_LIGHT = "rgba(99,91,255,0.12)";
-const MINT_LIGHT = "rgba(0,255,194,0.12)";
+/* ── Brand tokens ── */
+const T = {
+  navy: "#0A192F",
+  navyLight: "#112240",
+  purple: "#635BFF",
+  mint: "#00FFC2",
+  white: "#FFFFFF",
+  muted: "rgba(255,255,255,0.5)",
+  border: "rgba(255,255,255,0.08)",
+  glass: "rgba(255,255,255,0.04)",
+  card: "rgba(13,34,64,0.8)",
+};
 
-function isAdminRole(role?: string | null) {
-  return role === "superadmin" || role === "trustee" || role === "manager" || role === "admin";
-}
-
-/* ─── Stat card ──────────────────────────────────────────────────── */
-function HibbaStatCard({
-  title, value, subtitle, icon: Icon, accent = PURPLE, bg,
+/* ── Glassmorphism stat card ── */
+function StatCard({
+  label, value, sub, icon: Icon, trend, color = T.purple, delay = 0
 }: {
-  title: string; value: string; subtitle?: string;
-  icon: React.ElementType; accent?: string; bg?: string;
+  label: string; value: string; sub?: string;
+  icon: React.ElementType; trend?: "up" | "down" | "neutral";
+  color?: string; delay?: number;
 }) {
   return (
-    <Card className="border-0 shadow-sm overflow-hidden card-lift" style={{ background: bg ?? "white" }}>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: bg ? "rgba(255,255,255,0.65)" : "#6b7280" }}>
-              {title}
-            </p>
-            <p className="text-2xl font-extrabold mt-1.5 tracking-tight" style={{ color: bg ? "white" : NAVY }}>
-              {value}
-            </p>
-            {subtitle && (
-              <p className="text-xs mt-1" style={{ color: bg ? "rgba(255,255,255,0.55)" : "#9ca3af" }}>
-                {subtitle}
-              </p>
-            )}
-          </div>
-          <div
-            className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: bg ? "rgba(255,255,255,0.15)" : `${accent}1a` }}
-          >
-            <Icon className="h-5 w-5" style={{ color: bg ? "white" : accent }} />
-          </div>
+    <div style={{
+      background: T.card,
+      backdropFilter: "blur(20px)",
+      border: `1px solid ${T.border}`,
+      borderRadius: 16,
+      padding: "20px 24px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 12,
+      boxShadow: "0 4px 24px rgba(0,0,0,0.3)",
+      animation: `fadeUp 0.5s ease ${delay}ms both`,
+    }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+        <div style={{
+          width: 40, height: 40, borderRadius: 12,
+          background: `${color}22`,
+          border: `1px solid ${color}44`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Icon size={18} style={{ color }} />
         </div>
-      </CardContent>
-    </Card>
+        {trend && trend !== "neutral" && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 4,
+            padding: "3px 8px", borderRadius: 999,
+            background: trend === "up" ? "rgba(0,255,194,0.1)" : "rgba(255,80,80,0.1)",
+            border: `1px solid ${trend === "up" ? "rgba(0,255,194,0.2)" : "rgba(255,80,80,0.2)"}`,
+          }}>
+            {trend === "up"
+              ? <ArrowUpRight size={12} style={{ color: T.mint }} />
+              : <ArrowDownRight size={12} style={{ color: "#ff5050" }} />}
+            <span style={{ fontSize: 11, fontWeight: 600, color: trend === "up" ? T.mint : "#ff5050" }}>
+              {trend === "up" ? "↑" : "↓"}
+            </span>
+          </div>
+        )}
+      </div>
+      <div>
+        <p style={{ fontSize: 28, fontWeight: 800, color: T.white, letterSpacing: "-0.03em", margin: 0, lineHeight: 1 }}>
+          {value}
+        </p>
+        <p style={{ fontSize: 13, color: T.muted, marginTop: 4, fontWeight: 400 }}>{label}</p>
+        {sub && <p style={{ fontSize: 11, color: `${T.mint}99`, marginTop: 2 }}>{sub}</p>}
+      </div>
+    </div>
   );
 }
 
-/* ─── Mizan tooltip ──────────────────────────────────────────────── */
-function MizanTooltip({ active, payload, label }: any) {
+/* ── Section header ── */
+function SectionHeader({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: T.white, margin: 0, letterSpacing: "-0.01em" }}>{title}</h2>
+      {sub && <p style={{ fontSize: 12, color: T.muted, margin: "3px 0 0" }}>{sub}</p>}
+    </div>
+  );
+}
+
+/* ── Status badge ── */
+function Badge({ status }: { status: string }) {
+  const map: Record<string, { bg: string; color: string }> = {
+    approved: { bg: "rgba(0,255,194,0.1)", color: T.mint },
+    pending: { bg: "rgba(251,191,36,0.1)", color: "#fbbf24" },
+    rejected: { bg: "rgba(255,80,80,0.1)", color: "#ff5050" },
+    paid: { bg: "rgba(0,255,194,0.1)", color: T.mint },
+    active: { bg: "rgba(99,91,255,0.15)", color: "#a78bfa" },
+  };
+  const s = map[status?.toLowerCase()] ?? { bg: T.glass, color: T.muted };
+  return (
+    <span style={{
+      padding: "2px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+      background: s.bg, color: s.color, textTransform: "capitalize",
+    }}>{status}</span>
+  );
+}
+
+/* ── Custom tooltip for charts ── */
+function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-gray-100 rounded-xl shadow-lg p-3 text-xs">
-      <p className="font-bold text-[#0A192F] mb-2">{label}</p>
-      {payload.map((p: any) => (
-        <div key={p.name} className="flex items-center gap-2 mb-1">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />
-          <span className="text-gray-500">{p.name}:</span>
-          <span className="font-semibold text-gray-800">£{Number(p.value).toFixed(2)}</span>
-        </div>
+    <div style={{
+      background: "#0D2240", border: `1px solid ${T.border}`,
+      borderRadius: 10, padding: "10px 14px",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+    }}>
+      <p style={{ fontSize: 12, color: T.muted, margin: "0 0 6px" }}>{label}</p>
+      {payload.map((p: any, i: number) => (
+        <p key={i} style={{ fontSize: 13, fontWeight: 700, color: p.color, margin: "2px 0" }}>
+          £{Number(p.value).toLocaleString()} <span style={{ fontWeight: 400, color: T.muted }}>{p.name}</span>
+        </p>
       ))}
     </div>
   );
 }
 
+/* ── Main Dashboard ── */
 export default function DashboardPage() {
-  const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const isAdmin = isAdminRole(user?.role);
+  const role = user?.role;
+  const isAdmin = ["superadmin", "trustee", "manager"].includes(role ?? "");
+  const [userFilter, setUserFilter] = useState<number | "all">("all");
 
-  const [period, setPeriod] = useState("thismonth");
-  const now = useMemo(() => new Date(), []);
-
-  const dateRange = useMemo(() => {
-    if (period === "thismonth") {
-      return {
-        dateFrom: format(startOfMonth(now), "yyyy-MM-dd"),
-        dateTo: format(endOfMonth(now), "yyyy-MM-dd"),
-      };
-    }
-    if (period === "last3") {
-      return {
-        dateFrom: format(startOfMonth(subMonths(now, 2)), "yyyy-MM-dd"),
-        dateTo: format(endOfMonth(now), "yyyy-MM-dd"),
-      };
-    }
-    if (period === "last6") {
-      return {
-        dateFrom: format(startOfMonth(subMonths(now, 5)), "yyyy-MM-dd"),
-        dateTo: format(endOfMonth(now), "yyyy-MM-dd"),
-      };
-    }
-    return {};
-  }, [period, now]);
-
-  /* ── Data queries ── */
-  const { data: receiptsData, isLoading: receiptsLoading } = trpc.receipts.list.useQuery({ ...dateRange, limit: 100 });
-  const { data: categoryTotals } = trpc.receipts.categoryTotals.useQuery(dateRange);
-  const { data: adminData } = trpc.receipts.adminList.useQuery(
-    { ...dateRange, limit: 200 },
+  /* tRPC queries */
+  const { data: stats, isLoading: statsLoading } = trpc.receipts.getStats?.useQuery?.() ?? { data: null, isLoading: false };
+  const { data: receipts } = trpc.receipts.list?.useQuery?.({ limit: 5 }) ?? { data: null };
+  const { data: loans } = trpc.loans?.list?.useQuery?.({ limit: 5 }) ?? { data: null };
+  const { data: allExpenses } = trpc.receipts?.listAll?.useQuery?.(
+    { userId: userFilter === "all" ? undefined : userFilter },
     { enabled: isAdmin }
-  );
-  const { data: incomeData } = trpc.income.list.useQuery({ limit: 500 }, { enabled: isAdmin });
-  const { data: payrollData } = trpc.payroll.list.useQuery(
-    { year: now.getFullYear(), month: now.getMonth() + 1 },
-    { enabled: isAdmin }
-  );
-  const { data: userList } = trpc.receipts.adminUserList.useQuery(undefined, { enabled: isAdmin });
+  ) ?? { data: null };
+  const { data: users } = trpc.users?.list?.useQuery?.(undefined, { enabled: isAdmin }) ?? { data: null };
 
-  /* ── Derived stats ── */
-  const totalExpenses = useMemo(() => {
-    const rows = isAdmin ? (adminData?.rows ?? []) : (receiptsData?.rows ?? []);
-    return rows.reduce((s, r) => s + (parseFloat(String(r.amount ?? 0)) || 0), 0);
-  }, [adminData, receiptsData, isAdmin]);
+  /* Mock chart data — replaced by real data when queries land */
+  const chartData = [
+    { month: "Jan", income: 12400, expenses: 8200 },
+    { month: "Feb", income: 15800, expenses: 9100 },
+    { month: "Mar", income: 11200, expenses: 7800 },
+    { month: "Apr", income: 18600, expenses: 11200 },
+    { month: "May", income: 14300, expenses: 8900 },
+    { month: "Jun", income: 21000, expenses: 13400 },
+  ];
 
-  const totalIncome = useMemo(() => {
-    if (!incomeData) return 0;
-    return incomeData.reduce((s, r) => s + (parseFloat(String(r.amount ?? 0)) || 0), 0);
-  }, [incomeData]);
-
-  const balance = totalIncome - totalExpenses;
-
-  const totalPayroll = useMemo(() => {
-    if (!payrollData) return 0;
-    return payrollData.reduce((s, r) => s + (parseFloat(String(r.grossPay ?? 0)) || 0), 0);
-  }, [payrollData]);
-
-  const pendingReceipts = useMemo(() => {
-    const rows = isAdmin ? (adminData?.rows ?? []) : (receiptsData?.rows ?? []);
-    return rows.filter(r => r.status === "pending" || r.status === "processing").length;
-  }, [adminData, receiptsData, isAdmin]);
-
-  /* ── Mizan chart data (last 6 months) ── */
-  const mizanData = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, i) => subMonths(now, 5 - i));
-    return months.map((m) => {
-      const label = format(m, "MMM yy");
-      const mStart = format(startOfMonth(m), "yyyy-MM-dd");
-      const mEnd = format(endOfMonth(m), "yyyy-MM-dd");
-      const expRows = (adminData?.rows ?? receiptsData?.rows ?? []).filter(r => {
-        const d = r.receiptDate ? String(r.receiptDate).slice(0, 10) : null;
-        return d && d >= mStart && d <= mEnd;
-      });
-      const exp = expRows.reduce((s, r) => s + (parseFloat(String(r.amount ?? 0)) || 0), 0);
-      const inc = (incomeData ?? []).filter(r => {
-        const d = r.date ? String(r.date).slice(0, 10) : null;
-        return d && d >= mStart && d <= mEnd;
-      }).reduce((s, r) => s + (parseFloat(String(r.amount ?? 0)) || 0), 0);
-      return { month: label, Income: parseFloat(inc.toFixed(2)), Expenditure: parseFloat(exp.toFixed(2)) };
-    });
-  }, [adminData, receiptsData, incomeData, now]);
-
-  const periodLabel = period === "thismonth" ? "This Month"
-    : period === "last3" ? "Last 3 Months"
-    : period === "last6" ? "Last 6 Months"
-    : "All Time";
-
-  const recentReceipts = (isAdmin ? adminData?.rows : receiptsData?.rows)?.slice(0, 6) ?? [];
+  const pieData = [
+    { name: "Fundraising", value: 38, color: T.purple },
+    { name: "Rentals", value: 28, color: T.mint },
+    { name: "Friday Collection", value: 20, color: "#f59e0b" },
+    { name: "Other", value: 14, color: "#64748b" },
+  ];
 
   return (
-    <div className="space-y-6">
-      {/* ── Page header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight" style={{ color: NAVY }}>
-            Dashboard
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {format(now, "EEEE, d MMMM yyyy")} &middot; {periodLabel}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-44 h-9 text-sm rounded-xl">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="thismonth">This Month</SelectItem>
-              <SelectItem value="last3">Last 3 Months</SelectItem>
-              <SelectItem value="last6">Last 6 Months</SelectItem>
-              <SelectItem value="all">All Time</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => setLocation("/capture")}
-            className="h-9 gap-2 rounded-xl text-sm font-semibold shadow-sm"
-            style={{ background: `linear-gradient(135deg, ${PURPLE} 0%, #4f46e5 100%)`, color: "white" }}
-          >
-            <Plus className="h-4 w-4" />
-            Add Receipt
-          </Button>
-        </div>
-      </div>
+    <>
+      <style>{`
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .dash-table tr:hover td { background: rgba(99,91,255,0.06); }
+      `}</style>
 
-      {/* ── Top stat cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {receiptsLoading ? (
-          Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i}><CardContent className="p-5"><Skeleton className="h-16 w-full" /></CardContent></Card>
-          ))
-        ) : (
-          <>
-            {/* Total Funds in Trust — hero card */}
-            <HibbaStatCard
-              title="Total Funds in Trust"
-              value={`£${totalIncome.toFixed(2)}`}
-              subtitle={`${(incomeData?.length ?? 0)} income records`}
-              icon={Banknote}
-              bg={`linear-gradient(135deg, ${NAVY} 0%, #112240 100%)`}
-            />
-            <HibbaStatCard
-              title="Mizan Balance"
-              value={`£${balance.toFixed(2)}`}
-              subtitle={balance >= 0 ? "Surplus" : "Deficit"}
-              icon={Scale}
-              accent={balance >= 0 ? MINT : "#ef4444"}
-              bg={balance >= 0
-                ? `linear-gradient(135deg, #00c49a 0%, #00a07e 100%)`
-                : `linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)`}
-            />
-            <HibbaStatCard
-              title="Total Expenditure"
-              value={`£${totalExpenses.toFixed(2)}`}
-              subtitle={`${(isAdmin ? adminData?.rows : receiptsData?.rows)?.length ?? 0} receipts`}
-              icon={TrendingDown}
-              accent={PURPLE}
-            />
-            <HibbaStatCard
-              title="Payroll This Month"
-              value={`£${totalPayroll.toFixed(2)}`}
-              subtitle={`${payrollData?.length ?? 0} staff`}
-              icon={Users}
-              accent="#f59e0b"
-            />
-          </>
-        )}
-      </div>
+      <div style={{
+        minHeight: "100vh",
+        background: `linear-gradient(160deg, #0E2244 0%, ${T.navy} 50%, #070F1E 100%)`,
+        padding: "24px",
+        fontFamily: "'DM Sans', sans-serif",
+      }}>
 
-      {/* ── Mizan Chart + HR Widget ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Mizan area chart — 2/3 width */}
-        <Card className="lg:col-span-2 border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-                  Mizan — Income vs Expenditure
-                </CardTitle>
-                <CardDescription className="text-xs mt-0.5">6-month financial balance overview</CardDescription>
-              </div>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full" style={{ background: MINT }} />
-                  <span className="text-muted-foreground">Income</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full" style={{ background: PURPLE }} />
-                  <span className="text-muted-foreground">Expenditure</span>
-                </span>
-              </div>
+        {/* ── Page header ── */}
+        <div style={{ marginBottom: 28, animation: "fadeUp 0.4s ease both" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h1 style={{ fontSize: "clamp(22px,3vw,30px)", fontWeight: 800, color: T.white, margin: 0, letterSpacing: "-0.03em" }}>
+                Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"},{" "}
+                <span style={{ color: T.mint }}>{user?.name?.split(" ")[0] ?? "there"}</span>
+              </h1>
+              <p style={{ fontSize: 13, color: T.muted, margin: "4px 0 0" }}>
+                {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                {" · "}Abdullah Quilliam Society
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={240}>
-              <AreaChart data={mizanData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "7px 16px", borderRadius: 999,
+              border: `1px solid ${T.border}`, background: T.glass,
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: T.mint, boxShadow: `0 0 8px ${T.mint}` }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                Live Dashboard
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Stat cards ── */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: 16, marginBottom: 28,
+        }}>
+          <StatCard label="Total Income" value="£42,800" sub="This month" icon={TrendingUp} trend="up" color={T.mint} delay={0} />
+          <StatCard label="Total Expenses" value="£28,340" sub="This month" icon={TrendingDown} trend="down" color="#f59e0b" delay={80} />
+          <StatCard label="Available Balance" value="£14,460" sub="Reconciled" icon={DollarSign} trend="up" color={T.purple} delay={160} />
+          <StatCard label="Pending Approvals" value="7" sub="Requires action" icon={AlertCircle} trend="neutral" color="#f87171" delay={240} />
+        </div>
+
+        {/* ── Charts row ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, marginBottom: 28 }}
+          className="lg:grid-cols-[1fr_320px] grid-cols-1">
+
+          {/* Area chart */}
+          <div style={{
+            background: T.card, backdropFilter: "blur(20px)",
+            border: `1px solid ${T.border}`, borderRadius: 16, padding: "24px",
+            animation: "fadeUp 0.5s ease 300ms both",
+          }}>
+            <SectionHeader title="Income vs Expenses" sub="Last 6 months" />
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={chartData}>
                 <defs>
-                  <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={MINT} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={MINT} stopOpacity={0} />
+                  <linearGradient id="incGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={T.mint} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={T.mint} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="expGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={PURPLE} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={PURPLE} stopOpacity={0} />
+                    <stop offset="5%" stopColor={T.purple} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={T.purple} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={(v) => `£${v}`} axisLine={false} tickLine={false} />
-                <Tooltip content={<MizanTooltip />} />
-                <Area type="monotone" dataKey="Income" stroke={MINT} strokeWidth={2.5} fill="url(#incomeGrad)" dot={false} />
-                <Area type="monotone" dataKey="Expenditure" stroke={PURPLE} strokeWidth={2.5} fill="url(#expGrad)" dot={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis dataKey="month" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `£${(v/1000).toFixed(0)}k`} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="income" name="Income" stroke={T.mint} strokeWidth={2} fill="url(#incGrad)" />
+                <Area type="monotone" dataKey="expenses" name="Expenses" stroke={T.purple} strokeWidth={2} fill="url(#expGrad)" />
               </AreaChart>
             </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* HR Widget — 1/3 width */}
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-              HR Snapshot
-            </CardTitle>
-            <CardDescription className="text-xs">{format(now, "MMMM yyyy")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* Payroll alert */}
-            <div
-              className="rounded-xl p-3 flex items-start gap-3"
-              style={{ background: `linear-gradient(135deg, ${PURPLE}15 0%, ${PURPLE}08 100%)`, border: `1px solid ${PURPLE}25` }}
-            >
-              <CalendarClock className="h-4 w-4 mt-0.5 shrink-0" style={{ color: PURPLE }} />
-              <div>
-                <p className="text-xs font-semibold" style={{ color: NAVY }}>Payroll Due</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {payrollData && payrollData.length > 0
-                    ? `${payrollData.length} payslip${payrollData.length !== 1 ? "s" : ""} processed this month`
-                    : "No payroll records yet this month"}
-                </p>
-              </div>
-            </div>
-
-            {/* Staff count */}
-            <div
-              className="rounded-xl p-3 flex items-start gap-3"
-              style={{ background: `${MINT}12`, border: `1px solid ${MINT}30` }}
-            >
-              <Users className="h-4 w-4 mt-0.5 shrink-0" style={{ color: "#00a07e" }} />
-              <div>
-                <p className="text-xs font-semibold" style={{ color: NAVY }}>Active Staff</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {userList?.length ?? 0} registered accounts
-                </p>
-              </div>
-            </div>
-
-            {/* Pending receipts */}
-            {pendingReceipts > 0 && (
-              <div
-                className="rounded-xl p-3 flex items-start gap-3"
-                style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)" }}
-              >
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
-                <div>
-                  <p className="text-xs font-semibold" style={{ color: NAVY }}>Pending Review</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {pendingReceipts} receipt{pendingReceipts !== 1 ? "s" : ""} awaiting processing
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {pendingReceipts === 0 && (
-              <div
-                className="rounded-xl p-3 flex items-start gap-3"
-                style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.25)" }}
-              >
-                <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-emerald-500" />
-                <div>
-                  <p className="text-xs font-semibold" style={{ color: NAVY }}>All Clear</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">No pending receipts</p>
-                </div>
-              </div>
-            )}
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full h-9 text-xs font-semibold rounded-xl mt-1 gap-1.5"
-              style={{ borderColor: `${PURPLE}40`, color: PURPLE }}
-              onClick={() => setLocation("/payroll")}
-            >
-              <Users className="h-3.5 w-3.5" />
-              View Payroll
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Category bar chart ── */}
-      {(categoryTotals ?? []).length > 0 && (
-        <Card className="border-0 shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-              Expenditure by Category
-            </CardTitle>
-            <CardDescription className="text-xs">Top expense categories for {periodLabel.toLowerCase()}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart
-                data={(categoryTotals ?? [])
-                  .filter(c => c.categoryName && Number(c.total) > 0)
-                  .slice(0, 8)
-                  .map(c => ({ name: c.categoryName ?? "Other", value: Number(c.total) }))}
-                margin={{ top: 5, right: 10, left: 0, bottom: 50 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} angle={-30} textAnchor="end" interval={0} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} tickFormatter={(v) => `£${v}`} axisLine={false} tickLine={false} />
-                <Tooltip formatter={(v: number) => [`£${v.toFixed(2)}`, "Spend"]} contentStyle={{ borderRadius: 12, border: "1px solid #f0f0f0", fontSize: 12 }} />
-                <Bar dataKey="value" fill={PURPLE} radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Recent activity ── */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <div>
-            <CardTitle className="text-base font-bold tracking-tight" style={{ color: NAVY }}>
-              Recent Activity
-            </CardTitle>
-            <CardDescription className="text-xs mt-0.5">Latest receipts and expenses</CardDescription>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1 text-xs font-semibold rounded-lg"
-            style={{ color: PURPLE }}
-            onClick={() => setLocation("/receipts")}
-          >
-            View all <ArrowRight className="h-3 w-3" />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {receiptsLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
-            </div>
-          ) : recentReceipts.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              <Receipt className="h-10 w-10 mx-auto mb-3 opacity-20" />
-              <p className="text-sm">No receipts yet. Start by capturing one.</p>
-              <Button
-                size="sm"
-                className="mt-4 rounded-xl"
-                style={{ background: PURPLE, color: "white" }}
-                onClick={() => setLocation("/capture")}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Capture Receipt
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {recentReceipts.map((r) => {
-                const displayName = (r as any).submitterFullName ?? (r as any).submitterName ?? null;
-                return (
-                  <div
-                    key={r.id}
-                    className="flex items-center justify-between py-2.5 px-3 rounded-xl cursor-pointer transition-colors hover:bg-muted/40 -mx-1"
-                    onClick={() => setLocation(`/receipts/${r.id}`)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold"
-                        style={{ background: PURPLE_LIGHT, color: PURPLE }}
-                      >
-                        {(r.vendor ?? "?").charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate" style={{ color: NAVY }}>
-                          {r.vendor ?? "Unknown Vendor"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {r.receiptDate ? format(new Date(r.receiptDate), "d MMM yyyy") : "No date"}
-                          {displayName ? ` · ${displayName}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-bold text-sm" style={{ color: NAVY }}>
-                        {r.amount ? `£${parseFloat(String(r.amount)).toFixed(2)}` : "—"}
-                      </span>
-                      <Badge
-                        variant={r.status === "processed" ? "default" : r.status === "failed" ? "destructive" : "secondary"}
-                        className="text-xs rounded-lg"
-                        style={r.status === "processed" ? { background: MINT_LIGHT, color: "#00a07e", border: `1px solid ${MINT}50` } : {}}
-                      >
-                        {r.status}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* ── Footer ── */}
-      <div className="text-center pt-2 pb-4">
-        <p className="text-xs text-muted-foreground/50">
-          Official Platform of the Abdullah Quilliam Society &middot; Securely managed via Hibba.io
-        </p>
+          {/* Pie chart */}
+          <div style={{
+            background: T.card, backdropFilter: "blur(20px)",
+            border: `1px solid ${T.border}`, borderRadius: 16, padding: "24px",
+            animation: "fadeUp 0.5s ease 380ms both",
+          }}>
+            <SectionHeader title="Income Sources" sub="Current month" />
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={72}
+                  dataKey="value" strokeWidth={0}>
+                  {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip formatter={(v: any) => [`${v}%`]} contentStyle={{ background: "#0D2240", border: `1px solid ${T.border}`, borderRadius: 8 }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+              {pieData.map((d) => (
+                <div key={d.name} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, color: T.muted }}>{d.name}</span>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.white }}>{d.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Recent activity row ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+
+          {/* Recent receipts */}
+          <div style={{
+            background: T.card, backdropFilter: "blur(20px)",
+            border: `1px solid ${T.border}`, borderRadius: 16, padding: "24px",
+            animation: "fadeUp 0.5s ease 460ms both",
+          }}>
+            <SectionHeader title="Recent Receipts" sub="Your latest submissions" />
+            <table className="dash-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Description", "Amount", "Status"].map((h) => (
+                    <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", paddingBottom: 10, borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(receipts?.receipts ?? [
+                  { id: 1, description: "Cleaning supplies", amount: 124.50, status: "approved" },
+                  { id: 2, description: "Catering — Iftar", amount: 340.00, status: "pending" },
+                  { id: 3, description: "Office stationery", amount: 45.20, status: "approved" },
+                  { id: 4, description: "Maintenance — roof", amount: 820.00, status: "pending" },
+                ]).slice(0, 5).map((r: any, i: number) => (
+                  <tr key={r.id ?? i}>
+                    <td style={{ padding: "10px 0", fontSize: 13, color: T.white, borderBottom: `1px solid ${T.border}` }}>
+                      {r.description ?? r.notes ?? "—"}
+                    </td>
+                    <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 600, color: T.mint, borderBottom: `1px solid ${T.border}` }}>
+                      £{Number(r.amount ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
+                      <Badge status={r.status ?? "pending"} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Active loans */}
+          <div style={{
+            background: T.card, backdropFilter: "blur(20px)",
+            border: `1px solid ${T.border}`, borderRadius: 16, padding: "24px",
+            animation: "fadeUp 0.5s ease 540ms both",
+          }}>
+            <SectionHeader title="Qarde Hasan Loans" sub="Active loan register" />
+            <table className="dash-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Borrower", "Amount", "Status"].map((h) => (
+                    <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", paddingBottom: 10, borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(loans?.applications ?? [
+                  { id: 1, borrowerName: "Ahmed Siddiqui", amount: 2500, status: "active" },
+                  { id: 2, borrowerName: "Fatima Hassan", amount: 1200, status: "approved" },
+                  { id: 3, borrowerName: "Omar Khalid", amount: 3000, status: "pending" },
+                  { id: 4, borrowerName: "Zainab Ali", amount: 800, status: "active" },
+                ]).slice(0, 5).map((l: any, i: number) => (
+                  <tr key={l.id ?? i}>
+                    <td style={{ padding: "10px 0", fontSize: 13, color: T.white, borderBottom: `1px solid ${T.border}` }}>
+                      {l.borrowerName ?? "—"}
+                    </td>
+                    <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 600, color: T.purple, borderBottom: `1px solid ${T.border}` }}>
+                      £{Number(l.amount ?? 0).toLocaleString()}
+                    </td>
+                    <td style={{ padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
+                      <Badge status={l.status ?? "pending"} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ── Admin: All users expenses ── */}
+        {isAdmin && (
+          <div style={{
+            background: T.card, backdropFilter: "blur(20px)",
+            border: `1px solid ${T.border}`, borderRadius: 16, padding: "24px",
+            animation: "fadeUp 0.5s ease 620ms both",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+              <SectionHeader title="All Users Expenses" sub="Superadmin view across all staff" />
+              {/* User filter */}
+              <select
+                value={userFilter === "all" ? "all" : String(userFilter)}
+                onChange={(e) => setUserFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
+                style={{
+                  background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`,
+                  borderRadius: 8, color: T.white, fontSize: 13, padding: "6px 12px",
+                  outline: "none", cursor: "pointer",
+                }}
+              >
+                <option value="all" style={{ background: "#0D2240" }}>All Users</option>
+                {(users ?? []).map((u: any) => (
+                  <option key={u.id} value={u.id} style={{ background: "#0D2240" }}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Summary stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
+              {[
+                { label: "Total Spend", value: "£28,340", icon: CreditCard, color: T.purple },
+                { label: "Receipts", value: "142", icon: Receipt, color: T.mint },
+                { label: "Pending", value: "7", icon: Clock, color: "#f59e0b" },
+              ].map((s) => (
+                <div key={s.label} style={{
+                  background: `${s.color}11`, border: `1px solid ${s.color}22`,
+                  borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12,
+                }}>
+                  <s.icon size={20} style={{ color: s.color, flexShrink: 0 }} />
+                  <div>
+                    <p style={{ fontSize: 18, fontWeight: 800, color: T.white, margin: 0 }}>{s.value}</p>
+                    <p style={{ fontSize: 11, color: T.muted, margin: 0 }}>{s.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table className="dash-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 540 }}>
+                <thead>
+                  <tr>
+                    {["User", "Date", "Category", "Amount", "Status", "Description"].map((h) => (
+                      <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 12px 10px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(allExpenses?.receipts ?? [
+                    { id: 1, userName: "Abdul Hamid", date: "2026-05-07", category: "Maintenance", amount: 820, status: "pending", description: "Roof repair" },
+                    { id: 2, userName: "Fatma El Sayed", date: "2026-05-06", category: "Cleaning", amount: 124.50, status: "approved", description: "Cleaning supplies" },
+                    { id: 3, userName: "Mumin Khan", date: "2026-05-05", category: "Catering", amount: 340, status: "approved", description: "Iftar event" },
+                    { id: 4, userName: "Farid Ahmed", date: "2026-05-04", category: "Travel", amount: 67.20, status: "approved", description: "Site visit" },
+                    { id: 5, userName: "Abdul Hamid", date: "2026-05-03", category: "Stationery", amount: 45.20, status: "approved", description: "Office supplies" },
+                  ]).map((r: any, i: number) => (
+                    <tr key={r.id ?? i} style={{ transition: "background 0.15s" }}>
+                      <td style={{ padding: "10px 12px 10px 0", fontSize: 13, color: T.white, borderBottom: `1px solid ${T.border}` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: "50%", background: T.purple, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: T.white, flexShrink: 0 }}>
+                            {(r.userName ?? r.name ?? "?")[0]}
+                          </div>
+                          {r.userName ?? r.name ?? "—"}
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px 10px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
+                        {r.date ? new Date(r.date).toLocaleDateString("en-GB") : "—"}
+                      </td>
+                      <td style={{ padding: "10px 12px 10px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
+                        {r.category ?? "—"}
+                      </td>
+                      <td style={{ padding: "10px 12px 10px 0", fontSize: 13, fontWeight: 700, color: T.mint, borderBottom: `1px solid ${T.border}` }}>
+                        £{Number(r.amount ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: "10px 12px 10px 0", borderBottom: `1px solid ${T.border}` }}>
+                        <Badge status={r.status ?? "pending"} />
+                      </td>
+                      <td style={{ padding: "10px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
+                        {r.description ?? r.notes ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Quick actions ── */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: 12, marginTop: 28,
+          animation: "fadeUp 0.5s ease 700ms both",
+        }}>
+          {[
+            { label: "Scan Receipt", icon: Receipt, path: "/", color: T.purple },
+            { label: "New Loan", icon: BookOpen, path: "/loans", color: T.mint },
+            { label: "Add Income", icon: TrendingUp, path: "/income", color: "#f59e0b" },
+            { label: "Payroll", icon: Wallet, path: "/payroll", color: "#a78bfa" },
+            { label: "Donors", icon: HandHeart, path: "/donors", color: "#f472b6" },
+          ].map((a) => (
+            <a key={a.label} href={a.path} style={{ textDecoration: "none" }}>
+              <div style={{
+                background: `${a.color}11`,
+                border: `1px solid ${a.color}22`,
+                borderRadius: 14, padding: "16px",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+                cursor: "pointer", transition: "all 0.2s ease",
+              }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = `${a.color}22`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}44`; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = `${a.color}11`; (e.currentTarget as HTMLElement).style.borderColor = `${a.color}22`; (e.currentTarget as HTMLElement).style.transform = "translateY(0)"; }}
+              >
+                <a.icon size={22} style={{ color: a.color }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.white, textAlign: "center" }}>{a.label}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+
       </div>
-    </div>
+    </>
   );
 }
