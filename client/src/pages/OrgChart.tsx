@@ -1,519 +1,200 @@
-import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  ChevronDown,
-  ChevronRight,
-  Upload,
-  Users,
-  Building2,
-} from "lucide-react";
+import { GitBranch, Mail, Phone, Shield, Users } from "lucide-react";
 
-type OrgMember = {
-  id: number;
-  name: string;
-  title: string;
-  department?: string | null;
-  photoUrl?: string | null;
-  parentId?: number | null;
-  sortOrder: number;
-  isActive: boolean;
-  notes?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
+
+const ROLE_COLORS: Record<string,{bg:string;color:string}> = {
+  superadmin:{ bg:"rgba(248,113,113,0.12)", color:"#f87171" },
+  trustee:{ bg:"rgba(251,191,36,0.12)", color:"#fbbf24" },
+  manager:{ bg:"rgba(99,91,255,0.15)", color:"#a78bfa" },
+  deputy:{ bg:"rgba(167,139,250,0.12)", color:"#c4b5fd" },
+  assistant:{ bg:"rgba(0,255,194,0.1)", color:"#00FFC2" },
+  volunteer:{ bg:"rgba(148,163,184,0.1)", color:"#94a3b8" },
 };
 
-type TreeNode = OrgMember & { children: TreeNode[] };
-
-function buildTree(members: OrgMember[]): TreeNode[] {
-  const map = new Map<number, TreeNode>();
-  members.forEach((m) => map.set(m.id, { ...m, children: [] }));
-  const roots: TreeNode[] = [];
-  members.forEach((m) => {
-    if (m.parentId && map.has(m.parentId)) {
-      map.get(m.parentId)!.children.push(map.get(m.id)!);
-    } else {
-      roots.push(map.get(m.id)!);
-    }
-  });
-  return roots;
-}
-
-// Dept → colour mapping
-const DEPT_COLORS: Record<string, string> = {
-  "Board of Trustees": "bg-amber-100 text-amber-800 border-amber-200",
-  Management: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  Operations: "bg-blue-100 text-blue-800 border-blue-200",
-  Restaurant: "bg-orange-100 text-orange-800 border-orange-200",
-  Reception: "bg-purple-100 text-purple-800 border-purple-200",
-};
-function deptColor(dept?: string | null) {
-  return dept && DEPT_COLORS[dept]
-    ? DEPT_COLORS[dept]
-    : "bg-slate-100 text-slate-700 border-slate-200";
-}
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-// ─── Single card ──────────────────────────────────────────────────────────────
-function OrgCard({
-  node,
-  canEdit,
-  onEdit,
-  onAdd,
-  onDelete,
-  depth,
-}: {
-  node: TreeNode;
-  canEdit: boolean;
-  onEdit: (m: OrgMember) => void;
-  onAdd: (parentId: number) => void;
-  onDelete: (id: number) => void;
-  depth: number;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const hasChildren = node.children.length > 0;
-
+function PersonCard({ person, isRoot = false }: { person: any; isRoot?: boolean }) {
+  const rc = ROLE_COLORS[person.role] ?? { bg:"rgba(255,255,255,0.06)", color:T.muted };
   return (
-    <div className="flex flex-col items-center">
-      {/* Card */}
-      <div className="relative group">
-        <div
-          className={`
-            bg-white border-2 rounded-2xl shadow-md hover:shadow-xl transition-all duration-200
-            w-44 sm:w-52 p-4 flex flex-col items-center gap-2 cursor-default
-            ${depth === 0 ? "border-amber-400" : depth === 1 ? "border-emerald-400" : "border-slate-200"}
-          `}
-        >
-          {/* Photo */}
-          <div className="relative">
-            <Avatar className="h-16 w-16 border-4 border-white shadow-md">
-              <AvatarImage src={node.photoUrl ?? undefined} alt={node.name} />
-              <AvatarFallback
-                className={`text-lg font-bold ${
-                  depth === 0
-                    ? "bg-amber-500 text-white"
-                    : depth === 1
-                    ? "bg-emerald-600 text-white"
-                    : "bg-slate-500 text-white"
-                }`}
-              >
-                {initials(node.name)}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-          {/* Name & title */}
-          <div className="text-center">
-            <p className="font-semibold text-sm text-slate-900 leading-tight">
-              {node.name}
-            </p>
-            <p className="text-xs text-slate-500 mt-0.5 leading-tight">
-              {node.title}
-            </p>
-          </div>
-          {/* Dept badge */}
-          {node.department && (
-            <Badge
-              variant="outline"
-              className={`text-xs px-2 py-0.5 ${deptColor(node.department)}`}
-            >
-              {node.department}
-            </Badge>
-          )}
-          {/* Edit actions — visible on hover */}
-          {canEdit && (
-            <div className="absolute -top-2 -right-2 hidden group-hover:flex gap-1">
-              <button
-                onClick={() => onEdit(node)}
-                className="bg-white border border-slate-200 rounded-full p-1 shadow hover:bg-slate-50 transition"
-                title="Edit"
-              >
-                <Pencil className="h-3 w-3 text-slate-600" />
-              </button>
-              <button
-                onClick={() => onAdd(node.id)}
-                className="bg-emerald-600 rounded-full p-1 shadow hover:bg-emerald-700 transition"
-                title="Add report"
-              >
-                <Plus className="h-3 w-3 text-white" />
-              </button>
-              <button
-                onClick={() => onDelete(node.id)}
-                className="bg-white border border-red-200 rounded-full p-1 shadow hover:bg-red-50 transition"
-                title="Remove"
-              >
-                <Trash2 className="h-3 w-3 text-red-500" />
-              </button>
-            </div>
+    <div style={{
+      background: isRoot ? `linear-gradient(135deg,rgba(99,91,255,0.2),rgba(79,70,229,0.15))` : T.card,
+      backdropFilter:"blur(20px)",
+      border:`1px solid ${isRoot?"rgba(99,91,255,0.4)":T.border}`,
+      borderRadius:16,
+      padding:"18px 20px",
+      minWidth:200,
+      maxWidth:240,
+      boxShadow: isRoot ? "0 0 30px rgba(99,91,255,0.2)" : "0 4px 16px rgba(0,0,0,0.3)",
+      transition:"transform 0.2s,box-shadow 0.2s",
+      cursor:"default",
+    }}
+      onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(-3px)";(e.currentTarget as HTMLElement).style.boxShadow="0 12px 32px rgba(0,0,0,0.4)";}}
+      onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform="translateY(0)";(e.currentTarget as HTMLElement).style.boxShadow=isRoot?"0 0 30px rgba(99,91,255,0.2)":"0 4px 16px rgba(0,0,0,0.3)";}}
+    >
+      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:12 }}>
+        <div style={{ width:44,height:44,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:800,color:T.white,flexShrink:0,border:isRoot?`2px solid ${T.mint}`:"none" }}>
+          {(person.name??"?")[0].toUpperCase()}
+        </div>
+        <div style={{ minWidth:0 }}>
+          <p style={{ fontSize:13,fontWeight:700,color:T.white,margin:0,lineHeight:1.2 }}>{person.name}</p>
+          {person.isPropertyManager && (
+            <span style={{ fontSize:9,fontWeight:700,color:T.mint,background:"rgba(0,255,194,0.1)",padding:"1px 6px",borderRadius:999,display:"inline-block",marginTop:2 }}>PROPERTY MGR</span>
           )}
         </div>
-        {/* Expand / collapse toggle */}
-        {hasChildren && (
-          <button
-            onClick={() => setExpanded((e) => !e)}
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-white border border-slate-200 rounded-full p-0.5 shadow hover:bg-slate-50 transition z-10"
-          >
-            {expanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-slate-500" />
-            )}
-          </button>
-        )}
       </div>
-
-      {/* Children */}
-      {hasChildren && expanded && (
-        <div className="mt-8 flex flex-row flex-wrap justify-center gap-6 relative">
-          {/* Horizontal connector line */}
-          {node.children.length > 1 && (
-            <div
-              className="absolute top-0 left-1/2 -translate-x-1/2 h-px bg-slate-300"
-              style={{
-                width: `calc(${node.children.length - 1} * (13rem + 1.5rem))`,
-                maxWidth: "90vw",
-              }}
-            />
-          )}
-          {node.children.map((child) => (
-            <div key={child.id} className="flex flex-col items-center">
-              {/* Vertical connector */}
-              <div className="w-px h-8 bg-slate-300" />
-              <OrgCard
-                node={child}
-                canEdit={canEdit}
-                onEdit={onEdit}
-                onAdd={onAdd}
-                onDelete={onDelete}
-                depth={depth + 1}
-              />
-            </div>
-          ))}
+      <span style={{ fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:999,background:rc.bg,color:rc.color,textTransform:"capitalize",display:"inline-block" }}>
+        {person.role}
+      </span>
+      {person.email && (
+        <div style={{ display:"flex",alignItems:"center",gap:6,marginTop:10 }}>
+          <Mail size={11} style={{color:T.muted,flexShrink:0}}/>
+          <span style={{ fontSize:11,color:T.muted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{person.email}</span>
         </div>
       )}
     </div>
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+function ConnectorLine({ horizontal = false }: { horizontal?: boolean }) {
+  return horizontal
+    ? <div style={{ height:2,background:`linear-gradient(90deg,transparent,rgba(99,91,255,0.4),transparent)`,width:40,flexShrink:0 }}/>
+    : <div style={{ width:2,background:`linear-gradient(180deg,rgba(99,91,255,0.4),rgba(99,91,255,0.1))`,height:32,margin:"0 auto" }}/>;
+}
+
 export default function OrgChartPage() {
-  const { user } = useAuth();
-  const canEdit =
-    user?.role === "superadmin" || user?.role === "trustee";
+  const { data } = trpc.users.list?.useQuery?.() ?? { data: null };
+  const { data: trusteesData } = trpc.trustees.list?.useQuery?.() ?? { data: null };
 
-  const { data: members = [], refetch } = trpc.orgChart.list.useQuery();
-  const upsertMutation = trpc.orgChart.upsert.useMutation({
-    onSuccess: () => { refetch(); toast.success("Saved"); setDialogOpen(false); },
-    onError: (e) => toast.error(e.message),
-  });
-  const removeMutation = trpc.orgChart.remove.useMutation({
-    onSuccess: () => { refetch(); toast.success("Removed"); },
-    onError: (e) => toast.error(e.message),
-  });
+  const users = data?.users ?? [];
+  const trustees = trusteesData?.trustees ?? [];
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<Partial<OrgMember> | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const superadmins = users.filter((u: any) => u.role === "superadmin" || u.role === "admin");
+  const mgrs = users.filter((u: any) => u.role === "manager");
+  const deputies = users.filter((u: any) => u.role === "deputy");
+  const assistants = users.filter((u: any) => u.role === "assistant");
+  const volunteers = users.filter((u: any) => u.role === "volunteer");
 
-  const tree = buildTree(members as OrgMember[]);
-
-  function openAdd(parentId?: number) {
-    setEditing({ parentId: parentId ?? null, sortOrder: 0 });
-    setDialogOpen(true);
-  }
-  function openEdit(m: OrgMember) {
-    setEditing({ ...m });
-    setDialogOpen(true);
-  }
-  function handleDelete(id: number) {
-    if (confirm("Remove this person from the org chart?")) {
-      removeMutation.mutate({ id });
-    }
-  }
-
-  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const json = await res.json();
-      if (json.url) {
-        setEditing((prev) => prev ? { ...prev, photoUrl: json.url } : prev);
-        toast.success("Photo uploaded");
-      } else {
-        toast.error("Upload failed");
-      }
-    } catch {
-      toast.error("Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function handleSave() {
-    if (!editing?.name || !editing?.title) {
-      toast.error("Name and title are required");
-      return;
-    }
-    upsertMutation.mutate({
-      id: editing.id,
-      name: editing.name!,
-      title: editing.title!,
-      department: editing.department ?? undefined,
-      photoUrl: editing.photoUrl ?? undefined,
-      parentId: editing.parentId ?? null,
-      sortOrder: editing.sortOrder ?? 0,
-      notes: editing.notes ?? undefined,
-    });
-  }
-
-  // All members for parent selector
-  const allMembers = members as OrgMember[];
+  // Mock fallback for empty data
+  const mockOrg = {
+    superadmins: superadmins.length > 0 ? superadmins : [{ id:1,name:"Hamid (Owner)",role:"superadmin",email:"ahamid4@gmail.com" }],
+    trustees: trustees.length > 0 ? trustees.map((t:any)=>({...t,role:"trustee"})) : [{ id:2,name:"Trustee A",role:"trustee" },{ id:3,name:"Trustee B",role:"trustee" }],
+    managers: mgrs.length > 0 ? mgrs : [{ id:4,name:"Mumin Khan",role:"manager",email:"mumin@aqs.org" }],
+    deputies: deputies.length > 0 ? deputies : [{ id:5,name:"Farid Ahmed",role:"deputy",email:"farid@aqs.org",isPropertyManager:true }],
+    assistants: assistants.length > 0 ? assistants : [],
+    volunteers: volunteers.length > 0 ? volunteers : [],
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Users className="h-6 w-6 text-emerald-600" />
-            Organisation Chart
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:24,fontFamily:"'DM Sans',sans-serif" }}>
+
+        {/* Header */}
+        <div style={{ marginBottom:28,animation:"fadeUp 0.4s ease both" }}>
+          <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
+            Organisation <span style={{ color:T.mint }}>Chart</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Abdullah Quilliam Society — staff structure
-          </p>
+          <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Abdullah Quilliam Society — reporting structure</p>
         </div>
-        {canEdit && (
-          <Button
-            onClick={() => openAdd(undefined)}
-            className="bg-emerald-700 hover:bg-emerald-800 text-white gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Add Person
-          </Button>
-        )}
-      </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-2 text-xs">
-        {Object.entries(DEPT_COLORS).map(([dept, cls]) => (
-          <Badge key={dept} variant="outline" className={`${cls} gap-1`}>
-            <Building2 className="h-3 w-3" />
-            {dept}
-          </Badge>
-        ))}
-      </div>
-
-      {/* Tree */}
-      <div className="overflow-x-auto pb-8">
-        <div className="min-w-max flex flex-col items-center gap-8 pt-4">
-          {tree.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground">
-              <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <p className="text-lg font-medium">No members yet</p>
-              {canEdit && (
-                <Button
-                  onClick={() => openAdd()}
-                  variant="outline"
-                  className="mt-4"
-                >
-                  Add first person
-                </Button>
-              )}
+        {/* Stats */}
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:14,marginBottom:32 }}>
+          {[
+            { label:"Leadership", value:mockOrg.superadmins.length, color:"#f87171" },
+            { label:"Trustees", value:mockOrg.trustees.length, color:"#fbbf24" },
+            { label:"Managers", value:mockOrg.managers.length, color:T.purple },
+            { label:"Deputies", value:mockOrg.deputies.length, color:"#a78bfa" },
+            { label:"Volunteers", value:mockOrg.volunteers.length, color:"#94a3b8" },
+          ].map((s,i)=>(
+            <div key={s.label} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px",animation:`fadeUp 0.5s ease ${i*60}ms both` }}>
+              <p style={{ fontSize:22,fontWeight:800,color:s.color,margin:0 }}>{s.value}</p>
+              <p style={{ fontSize:11,color:T.muted,margin:0 }}>{s.label}</p>
             </div>
-          ) : (
-            <>
-              {/* Trustees row (roots) */}
-              <div className="flex flex-row flex-wrap justify-center gap-6">
-                {tree.map((root) => (
-                  <OrgCard
-                    key={root.id}
-                    node={root}
-                    canEdit={canEdit}
-                    onEdit={openEdit}
-                    onAdd={openAdd}
-                    onDelete={handleDelete}
-                    depth={0}
-                  />
-                ))}
-              </div>
-            </>
-          )}
+          ))}
         </div>
-      </div>
 
-      {/* Add / Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editing?.id ? "Edit Person" : "Add Person"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* Photo */}
-            <div className="flex items-center gap-4">
-              <Avatar className="h-16 w-16 border-2 border-slate-200">
-                <AvatarImage src={editing?.photoUrl ?? undefined} />
-                <AvatarFallback className="bg-slate-200 text-slate-600 text-lg font-bold">
-                  {editing?.name ? initials(editing.name) : "?"}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoUpload}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploading}
-                  className="gap-2"
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  {uploading ? "Uploading…" : "Upload Photo"}
-                </Button>
-                <p className="text-xs text-muted-foreground mt-1">
-                  JPG, PNG — max 5 MB
-                </p>
+        {/* Org tree */}
+        <div style={{ overflowX:"auto",paddingBottom:20 }}>
+          <div style={{ display:"flex",flexDirection:"column",alignItems:"center",minWidth:700 }}>
+
+            {/* Level 1: Superadmin */}
+            <div style={{ display:"flex",gap:16,justifyContent:"center",animation:"fadeUp 0.5s ease 200ms both" }}>
+              {mockOrg.superadmins.map((p: any) => <PersonCard key={p.id} person={p} isRoot/>)}
+            </div>
+
+            <ConnectorLine/>
+
+            {/* Level 2: Trustees + Managers side by side */}
+            <div style={{ display:"flex",alignItems:"flex-start",gap:48,animation:"fadeUp 0.5s ease 300ms both",position:"relative" }}>
+              {/* Horizontal line across */}
+              <div style={{ position:"absolute",top:0,left:"15%",right:"15%",height:2,background:"linear-gradient(90deg,transparent,rgba(99,91,255,0.3),transparent)" }}/>
+
+              {/* Trustees column */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:0 }}>
+                <div style={{ fontSize:10,fontWeight:700,color:"#fbbf24",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:12,marginTop:2 }}>Board of Trustees</div>
+                <div style={{ display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center" }}>
+                  {mockOrg.trustees.map((p: any) => <PersonCard key={p.id} person={p}/>)}
+                </div>
+              </div>
+
+              {/* Managers column */}
+              <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:0 }}>
+                <div style={{ fontSize:10,fontWeight:700,color:"#a78bfa",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:12,marginTop:2 }}>Management</div>
+                <div style={{ display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center" }}>
+                  {mockOrg.managers.map((p: any) => <PersonCard key={p.id} person={p}/>)}
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2 space-y-1">
-                <Label>Full Name *</Label>
-                <Input
-                  value={editing?.name ?? ""}
-                  onChange={(e) =>
-                    setEditing((p) => p ? { ...p, name: e.target.value } : p)
-                  }
-                  placeholder="e.g. Dr Abdul Hamid"
-                />
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label>Title / Role *</Label>
-                <Input
-                  value={editing?.title ?? ""}
-                  onChange={(e) =>
-                    setEditing((p) => p ? { ...p, title: e.target.value } : p)
-                  }
-                  placeholder="e.g. Trustee & Super Admin"
-                />
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label>Department</Label>
-                <Input
-                  value={editing?.department ?? ""}
-                  onChange={(e) =>
-                    setEditing((p) => p ? { ...p, department: e.target.value } : p)
-                  }
-                  placeholder="e.g. Board of Trustees"
-                />
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label>Reports To</Label>
-                <Select
-                  value={editing?.parentId?.toString() ?? "none"}
-                  onValueChange={(v) =>
-                    setEditing((p) =>
-                      p ? { ...p, parentId: v === "none" ? null : parseInt(v) } : p
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Top-level (no parent)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Top-level (no parent) —</SelectItem>
-                    {allMembers
-                      .filter((m) => m.id !== editing?.id)
-                      .map((m) => (
-                        <SelectItem key={m.id} value={m.id.toString()}>
-                          {m.name} — {m.title}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Sort Order</Label>
-                <Input
-                  type="number"
-                  value={editing?.sortOrder ?? 0}
-                  onChange={(e) =>
-                    setEditing((p) =>
-                      p ? { ...p, sortOrder: parseInt(e.target.value) || 0 } : p
-                    )
-                  }
-                />
-              </div>
-            </div>
+            {mockOrg.deputies.length > 0 && (
+              <>
+                <ConnectorLine/>
+                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",animation:"fadeUp 0.5s ease 400ms both" }}>
+                  <div style={{ fontSize:10,fontWeight:700,color:"#c4b5fd",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:12 }}>Deputies</div>
+                  <div style={{ display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center" }}>
+                    {mockOrg.deputies.map((p: any) => <PersonCard key={p.id} person={p}/>)}
+                  </div>
+                </div>
+              </>
+            )}
 
-            <div className="space-y-1">
-              <Label>Notes</Label>
-              <Textarea
-                value={editing?.notes ?? ""}
-                onChange={(e) =>
-                  setEditing((p) => p ? { ...p, notes: e.target.value } : p)
-                }
-                rows={2}
-                placeholder="Optional notes…"
-              />
-            </div>
+            {mockOrg.assistants.length > 0 && (
+              <>
+                <ConnectorLine/>
+                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",animation:"fadeUp 0.5s ease 480ms both" }}>
+                  <div style={{ fontSize:10,fontWeight:700,color:T.mint,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:12 }}>Assistants</div>
+                  <div style={{ display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center" }}>
+                    {mockOrg.assistants.map((p: any) => <PersonCard key={p.id} person={p}/>)}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {mockOrg.volunteers.length > 0 && (
+              <>
+                <ConnectorLine/>
+                <div style={{ display:"flex",flexDirection:"column",alignItems:"center",animation:"fadeUp 0.5s ease 560ms both" }}>
+                  <div style={{ fontSize:10,fontWeight:700,color:"#94a3b8",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:12 }}>Volunteers</div>
+                  <div style={{ display:"flex",gap:12,flexWrap:"wrap",justifyContent:"center" }}>
+                    {mockOrg.volunteers.map((p: any) => <PersonCard key={p.id} person={p}/>)}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={upsertMutation.isPending}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white"
-            >
-              {upsertMutation.isPending ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        </div>
+
+        {/* Legend */}
+        <div style={{ marginTop:32,background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 20px",display:"flex",gap:16,flexWrap:"wrap",animation:"fadeUp 0.5s ease 640ms both" }}>
+          <span style={{ fontSize:12,color:T.muted,fontWeight:600 }}>Role key:</span>
+          {Object.entries(ROLE_COLORS).map(([role,{color}])=>(
+            <div key={role} style={{ display:"flex",alignItems:"center",gap:6 }}>
+              <span style={{ width:8,height:8,borderRadius:"50%",background:color }}/>
+              <span style={{ fontSize:12,color:T.muted,textTransform:"capitalize" }}>{role}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
