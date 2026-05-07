@@ -8,6 +8,7 @@
  * 3. voiceAgent.speak       — converts text → audio URL via TTS
  */
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { invokeLLM, type Tool } from "../_core/llm";
 import { transcribeAudio } from "../_core/voiceTranscription";
@@ -485,7 +486,19 @@ export const voiceAgentRouter = router({
     .input(z.object({ audioUrl: z.string().url(), language: z.string().optional() }))
     .mutation(async ({ input }) => {
       const result = await transcribeAudio({ audioUrl: input.audioUrl, language: input.language ?? "en" });
-      if ("error" in result) throw new Error(result.error);
+      if ("error" in result) {
+        const detail = result.details ? ` (${result.details})` : "";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `${result.error}${detail}`,
+        });
+      }
+      if (!result.text?.trim()) {
+        throw new TRPCError({
+          code: "UNPROCESSABLE_CONTENT",
+          message: "No speech detected in the recording. Please speak clearly and try again.",
+        });
+      }
       return { transcript: result.text };
     }),
 

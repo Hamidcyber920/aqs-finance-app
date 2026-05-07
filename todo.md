@@ -522,3 +522,10 @@
 - [x] Dashboard: "Total Funds in Trust" and Mizan Balance in top stat cards with navy/mint gradient backgrounds
 - [x] Dashboard: HR widget — payroll alerts, staff count, pending receipts indicator
 - [x] Dashboard: footer "Official Platform of the Abdullah Quilliam Society | Securely managed via Hibba.io"
+
+## Voice Agent Transcription Fix (May 2026)
+- [x] Frontend: raise minimum blob size from 1KB to 10KB to prevent near-empty webm files being sent to Whisper
+- [x] Frontend: improve "too short" toast message to guide user to hold for 2 seconds
+- [x] Backend: replace generic `throw new Error(result.error)` with TRPCError including Whisper error details
+- [x] Backend: add empty-transcript guard — throws TRPCError("No speech detected") if Whisper returns blank text
+- [x] Backend: import TRPCError from @trpc/server in voiceAgent.ts

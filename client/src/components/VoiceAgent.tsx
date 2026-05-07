@@ -126,9 +126,11 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
     });
 
     const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
-    if (blob.size < 1000) {
+    // Whisper requires a meaningful audio payload — anything under 10KB is likely
+    // an empty/near-silent webm container that the API will reject.
+    if (blob.size < 10000) {
       setState("idle");
-      toast.info("Recording too short — please hold the button and speak.");
+      toast.info("Recording too short — please hold the button for at least 2 seconds and speak clearly.");
       return;
     }
 
