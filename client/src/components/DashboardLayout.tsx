@@ -1,8 +1,3 @@
-bash
-
-cat /home/claude/DashboardLayout.tsx
-Output
-
 import { useAuth } from "@/_core/hooks/useAuth";
 import { VoiceAgent } from "@/components/VoiceAgent";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
