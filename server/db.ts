@@ -437,7 +437,7 @@ export async function getCategoryTotals(userId: number, dateFrom?: Date, dateTo?
     categoryName: receipts.categoryName,
     total: sql<number>`COALESCE(SUM(CAST(${receipts.amount} AS DECIMAL(10,2))), 0)`,
     count: sql<number>`COUNT(*)`,
-  }).from(receipts).where(and(...conditions)).groupBy(receipts.categoryName).orderBy(desc(sql`total`));
+  }).from(receipts).where(and(...conditions)).groupBy(receipts.categoryName).orderBy(desc(sql`COALESCE(SUM(CAST(${receipts.amount} AS DECIMAL(10,2))), 0)`));
 }
 
 export async function getMonthlyTotal(userId: number, year: number, month: number): Promise<number> {
