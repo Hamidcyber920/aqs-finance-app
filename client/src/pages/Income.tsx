@@ -1,536 +1,206 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { Plus, TrendingUp, DollarSign, Calendar, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { toast } from "sonner";
-import { Plus, TrendingUp, Building2, DollarSign, Trash2, Loader2, FolderPlus } from "lucide-react";
-import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import { SmartUpload, type SmartUploadResult } from "@/components/SmartUpload";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const PERIOD_LABELS: Record<string, string> = {
-  daily: "Daily",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  one_off: "One-off",
-  annual: "Annual",
-};
+const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
-const STATUS_COLOURS: Record<string, string> = {
-  paid: "bg-green-100 text-green-800",
-  pending: "bg-amber-100 text-amber-800",
-  overdue: "bg-red-100 text-red-800",
-  partial: "bg-blue-100 text-blue-800",
-};
+const INCOME_CATEGORIES = [
+  "Student Accommodation","Stalls","Office Rental","Coffee Shop",
+  "Hall Hire","Friday Collection","Accountants Office Hire",
+  "Community Hire","Restaurant/Bistro","Donations","Other"
+];
 
-// ─── Add Income Record Dialog ────────────────────────────────────────────────
-function AddIncomeDialog({
-  open, onClose, categories, preselectedCategoryId, onSuccess, prefill,
-}: {
-  open: boolean;
-  onClose: () => void;
-  categories: Array<{ id: number; name: string; allowedPeriods?: string | null; requiresSpecification?: boolean | number }>;
-  preselectedCategoryId?: number;
-  onSuccess: () => void;
-  prefill?: Record<string, unknown>;
-}) {
-  const [selectedCatId, setSelectedCatId] = useState<number | undefined>(preselectedCategoryId);
-  const [selectedPeriod, setSelectedPeriod] = useState("monthly");
-  const [communitySpec, setCommunitySpec] = useState("");
-  const [payerName, setPayerName] = useState(prefill?.tenantName as string ?? "");
-  const [payerEmail, setPayerEmail] = useState("");
-  const [amount, setAmount] = useState(prefill?.amount != null ? String(prefill.amount) : "");
-  const [reference, setReference] = useState(prefill?.reference as string ?? "");
-  const [notes, setNotes] = useState(prefill?.notes as string ?? "");
-  const [paymentStatus, setPaymentStatus] = useState("paid");
+const PERIODS = ["Daily","Weekly","Monthly","One-off"];
 
-  const selectedCat = useMemo(() => categories.find(c => c.id === selectedCatId), [categories, selectedCatId]);
-  const allowedPeriods: string[] = useMemo(() => {
-    const ap = selectedCat?.allowedPeriods as string | null | undefined;
-    if (!ap) return ["daily", "weekly", "monthly", "one_off"];
-    return ap.split(",").map((s: string) => s.trim()).filter(Boolean);
-  }, [selectedCat]);
-  const requiresSpec = selectedCat?.requiresSpecification === true || selectedCat?.requiresSpecification === 1;
-
-  const create = trpc.income.create.useMutation({
-    onSuccess: () => {
-      toast.success("Income record added");
-      onClose();
-      resetForm();
-      onSuccess();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  function resetForm() {
-    setSelectedCatId(preselectedCategoryId);
-    setSelectedPeriod("monthly");
-    setCommunitySpec("");
-    setPayerName("");
-    setPayerEmail("");
-    setAmount("");
-    setReference("");
-    setNotes("");
-    setPaymentStatus("paid");
-  }
-  // Apply prefill when it changes
-  useMemo(() => {
-    if (prefill) {
-      if (prefill.tenantName) setPayerName(prefill.tenantName as string);
-      if (prefill.amount != null) setAmount(String(prefill.amount));
-      if (prefill.reference) setReference(prefill.reference as string);
-      if (prefill.notes) setNotes(prefill.notes as string);
-    }
-  }, [prefill]);
-
-  function handleCatChange(id: number) {
-    setSelectedCatId(id);
-    const cat = categories.find(c => c.id === id);
-    const ap = cat?.allowedPeriods as string | null | undefined;
-    const first = ap ? ap.split(",")[0].trim() : "monthly";
-    setSelectedPeriod(first);
-    setCommunitySpec("");
-  }
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const catId = selectedCatId ?? preselectedCategoryId;
-    if (!catId) { toast.error("Please select a category"); return; }
-    if (!amount) { toast.error("Please enter an amount"); return; }
-    if (requiresSpec && !communitySpec.trim()) { toast.error("Please specify the purpose"); return; }
-    const description = requiresSpec ? `${selectedCat?.name} — ${communitySpec.trim()}` : (selectedCat?.name ?? "");
-    create.mutate({
-      categoryId: catId,
-      description,
-      amount,
-      period: selectedPeriod as any,
-      paymentStatus,
-      payerName: payerName || undefined,
-      payerEmail: payerEmail || undefined,
-      reference: reference || undefined,
-      notes: notes || undefined,
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={o => { if (!o) { onClose(); resetForm(); } }}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>Add Income Record</DialogTitle></DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-1">
-          {/* Category — only shown if no preselected */}
-          {!preselectedCategoryId && (
-            <div>
-              <Label>Category *</Label>
-              <Select value={selectedCatId?.toString() ?? ""} onValueChange={v => handleCatChange(parseInt(v))}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>
-                  {categories.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {preselectedCategoryId && (
-            <div className="p-2 bg-muted rounded text-sm">
-              Category: <strong>{categories.find(c => c.id === preselectedCategoryId)?.name}</strong>
-            </div>
-          )}
-
-          {requiresSpec && (
-            <div>
-              <Label>Specify Purpose *</Label>
-              <Input value={communitySpec} onChange={e => setCommunitySpec(e.target.value)} placeholder="e.g. Youth group meeting…" className="mt-1" required />
-            </div>
-          )}
-
-          {(selectedCatId || preselectedCategoryId) && allowedPeriods.length > 1 && (
-            <div>
-              <Label>Period</Label>
-              <div className="flex gap-1 mt-1 flex-wrap">
-                {allowedPeriods.map(p => (
-                  <button key={p} type="button" onClick={() => setSelectedPeriod(p)}
-                    className={"px-3 py-1.5 rounded-md text-xs font-medium border transition-colors " + (selectedPeriod === p ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:bg-muted/80")}>
-                    {PERIOD_LABELS[p] ?? p}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <Label>Tenant / Payer Name</Label>
-            <Input value={payerName} onChange={e => setPayerName(e.target.value)} className="mt-1" placeholder="Full name" />
-          </div>
-          <div>
-            <Label>Payer Email</Label>
-            <Input type="email" value={payerEmail} onChange={e => setPayerEmail(e.target.value)} className="mt-1" />
-          </div>
-          <div>
-            <Label>Amount (£) *</Label>
-            <Input type="number" step="0.01" min="0.01" value={amount} onChange={e => setAmount(e.target.value)} required className="mt-1" placeholder="0.00" />
-          </div>
-          <div>
-            <Label>Payment Status</Label>
-            <Select value={paymentStatus} onValueChange={setPaymentStatus}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Reference</Label>
-            <Input value={reference} onChange={e => setReference(e.target.value)} placeholder="Invoice / transaction ref" className="mt-1" />
-          </div>
-          <div>
-            <Label>Notes</Label>
-            <Textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="mt-1" />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => { onClose(); resetForm(); }}>Cancel</Button>
-            <Button type="submit" disabled={create.isPending}>
-              {create.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : "Add Income Record"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+function Badge({ status }: { status: string }) {
+  const map: Record<string,{bg:string;color:string}> = {
+    paid:{bg:"rgba(0,255,194,0.1)",color:T.mint},
+    pending:{bg:"rgba(251,191,36,0.1)",color:"#fbbf24"},
+    overdue:{bg:"rgba(255,80,80,0.1)",color:"#ff5050"},
+  };
+  const s = map[status?.toLowerCase()] ?? {bg:T.glass,color:T.muted};
+  return <span style={{padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,background:s.bg,color:s.color,textTransform:"capitalize"}}>{status}</span>;
 }
 
-// ─── New Category Dialog ─────────────────────────────────────────────────────
-function NewCategoryDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [color, setColor] = useState("#C9A84C");
-  const [allowedPeriods, setAllowedPeriods] = useState<string[]>(["daily", "weekly", "monthly", "one_off"]);
-  const [requiresSpec, setRequiresSpec] = useState(false);
+export default function IncomePage() {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [catFilter, setCatFilter] = useState("All");
+  const [period, setPeriod] = useState("Monthly");
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
 
-  const PERIOD_OPTIONS = ["daily", "weekly", "monthly", "one_off", "annual"];
-
-  const create = trpc.income.createCategory.useMutation({
-    onSuccess: () => {
-      toast.success(`Category "${name}" created`);
-      onClose();
-      setName(""); setDescription(""); setColor("#C9A84C");
-      setAllowedPeriods(["daily", "weekly", "monthly", "one_off"]);
-      setRequiresSpec(false);
-      onSuccess();
-    },
+  const { data, refetch } = trpc.income.list.useQuery({ month, year });
+  const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
+  const createMutation = trpc.income.create.useMutation({
+    onSuccess: () => { toast.success("Income record added"); setOpen(false); refetch(); reset(); },
     onError: (e) => toast.error(e.message),
   });
 
-  function togglePeriod(p: string) {
-    setAllowedPeriods(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
-  }
+  const { register, handleSubmit, reset, watch } = useForm<any>();
+  const watchCat = watch("category");
+
+  const records = data?.records ?? [];
+  const totalIncome = records.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+  const paidCount = records.filter((r: any) => r.paymentStatus === "paid").length;
+
+  const filtered = catFilter === "All" ? records : records.filter((r: any) => r.category === catFilter || r.categoryName === catFilter);
+
+  const allCats = ["All", ...INCOME_CATEGORIES];
 
   return (
-    <Dialog open={open} onOpenChange={o => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><FolderPlus className="h-5 w-5 text-primary" />New Income Category</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ minHeight:"100vh", background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`, padding:24, fontFamily:"'DM Sans',sans-serif" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12,animation:"fadeUp 0.4s ease both" }}>
           <div>
-            <Label>Category Name *</Label>
-            <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Parking Rental" className="mt-1" />
+            <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
+              Income <span style={{ color:T.mint }}>&amp; Rentals</span>
+            </h1>
+            <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>All income streams — rental, collections, donations</p>
           </div>
-          <div>
-            <Label>Description</Label>
-            <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Brief description" className="mt-1" />
-          </div>
-          <div>
-            <Label>Colour</Label>
-            <div className="flex items-center gap-2 mt-1">
-              <input type="color" value={color} onChange={e => setColor(e.target.value)} className="h-8 w-12 rounded cursor-pointer border" />
-              <span className="text-xs text-muted-foreground">{color}</span>
+          <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            {/* Month/year selector */}
+            <div style={{ display:"flex",gap:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:12,padding:"6px 12px",alignItems:"center" }}>
+              <Calendar size={14} style={{ color:T.muted }} />
+              <select value={month} onChange={e=>setMonth(Number(e.target.value))}
+                style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",cursor:"pointer" }}>
+                {Array.from({length:12},(_,i)=>i+1).map(m=>(
+                  <option key={m} value={m} style={{background:"#0D2240"}}>{new Date(2000,m-1).toLocaleString("en-GB",{month:"long"})}</option>
+                ))}
+              </select>
+              <input type="number" value={year} onChange={e=>setYear(Number(e.target.value))}
+                style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",width:52 }} />
             </div>
-          </div>
-          <div>
-            <Label className="block mb-1">Allowed Periods</Label>
-            <div className="flex flex-wrap gap-2">
-              {PERIOD_OPTIONS.map(p => (
-                <button key={p} type="button" onClick={() => togglePeriod(p)}
-                  className={"px-3 py-1 rounded-md text-xs font-medium border transition-colors " + (allowedPeriods.includes(p) ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border")}>
-                  {PERIOD_LABELS[p] ?? p}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="requiresSpec" checked={requiresSpec} onChange={e => setRequiresSpec(e.target.checked)} className="h-4 w-4" />
-            <Label htmlFor="requiresSpec" className="cursor-pointer">Requires purpose specification (free-text)</Label>
+            <Button onClick={()=>setOpen(true)}
+              style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+              <Plus size={16}/> Add Income
+            </Button>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => {
-            if (!name.trim()) { toast.error("Category name required"); return; }
-            if (allowedPeriods.length === 0) { toast.error("Select at least one period"); return; }
-            create.mutate({ name: name.trim(), description: description || undefined, color, allowedPeriods: allowedPeriods.join(","), requiresSpecification: requiresSpec });
-          }} disabled={create.isPending}>
-            {create.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : <><FolderPlus className="h-4 w-4 mr-2" />Create Category</>}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
-// ─── Per-Category Tab Content ─────────────────────────────────────────────────
-function CategoryTab({
-  category, allRecords, categories, onDeleted,
-}: {
-  category: { id: number; name: string; color: string; allowedPeriods?: string | null; requiresSpecification?: boolean | number };
-  allRecords: Array<any>;
-  categories: Array<any>;
-  onDeleted: () => void;
-}) {
-  const [addOpen, setAddOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [smartPrefill, setSmartPrefill] = useState<Record<string, unknown> | undefined>(undefined);
-
-  function handleSmartConfirm(result: SmartUploadResult) {
-    setSmartPrefill(result.extractedData);
-    setAddOpen(true);
-  }
-  const utils = trpc.useUtils();
-
-  const records = useMemo(() => allRecords.filter(r => r.categoryId === category.id), [allRecords, category.id]);
-  const total = records.reduce((s: number, r: any) => s + parseFloat(r.amount?.toString() ?? "0"), 0);
-  const paid = records.filter((r: any) => r.paymentStatus === "paid").reduce((s: number, r: any) => s + parseFloat(r.amount?.toString() ?? "0"), 0);
-
-  const deleteRecord = trpc.income.delete.useMutation({
-    onSuccess: () => { toast.success("Record deleted"); setDeleteId(null); onDeleted(); },
-    onError: (e) => toast.error(e.message),
-  });
-
-  return (
-    <div className="space-y-4">
-      {/* Category stats */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card><CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">Total</p>
-          <p className="text-lg font-bold">£{total.toFixed(2)}</p>
-          <p className="text-xs text-muted-foreground">{records.length} records</p>
-        </CardContent></Card>
-        <Card className="border-green-300"><CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">Paid</p>
-          <p className="text-lg font-bold text-green-600">£{paid.toFixed(2)}</p>
-        </CardContent></Card>
-        <Card className="border-amber-300"><CardContent className="p-3">
-          <p className="text-xs text-muted-foreground">Outstanding</p>
-          <p className="text-lg font-bold text-amber-600">£{(total - paid).toFixed(2)}</p>
-        </CardContent></Card>
-      </div>
-
-      {/* Add button */}
-      <div className="flex justify-end gap-2">
-        <SmartUpload
-          moduleType="income_rental"
-          onConfirm={handleSmartConfirm}
-          buttonLabel="Import from Document"
-          buttonVariant="outline"
-        />
-        <Button size="sm" onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />Add {category.name} Record
-        </Button>
-      </div>
-
-      {/* Records table */}
-      <Card>
-        <CardContent className="p-0">
-          {records.length === 0 ? (
-            <div className="text-center text-muted-foreground py-12">
-              <Building2 className="h-8 w-8 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">No records for this category yet.</p>
-              <Button size="sm" variant="outline" className="mt-3" onClick={() => setAddOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />Add First Record
-              </Button>
+        {/* Stat cards */}
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:16,marginBottom:28 }}>
+          {[
+            {label:"Total Income",value:`£${totalIncome.toLocaleString()}`,color:T.mint,icon:TrendingUp},
+            {label:"Records",value:records.length,color:T.purple,icon:DollarSign},
+            {label:"Paid",value:paidCount,color:"#6ee7b7",icon:DollarSign},
+            {label:"Pending",value:records.length-paidCount,color:"#fbbf24",icon:DollarSign},
+          ].map((s,i)=>(
+            <div key={s.label} style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:16,padding:"18px 20px",animation:`fadeUp 0.5s ease ${i*80}ms both` }}>
+              <div style={{ width:36,height:36,borderRadius:10,background:`${s.color}22`,border:`1px solid ${s.color}44`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12 }}>
+                <s.icon size={16} style={{color:s.color}}/>
+              </div>
+              <p style={{ fontSize:24,fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>{s.value}</p>
+              <p style={{ fontSize:12,color:T.muted,margin:"2px 0 0" }}>{s.label}</p>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[560px]">
+          ))}
+        </div>
+
+        {/* Category filter tabs */}
+        <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:20 }}>
+          {allCats.slice(0,8).map(c=>(
+            <button key={c} onClick={()=>setCatFilter(c)}
+              style={{ padding:"6px 14px",borderRadius:999,fontSize:12,fontWeight:600,border:`1px solid ${catFilter===c ? T.purple : T.border}`,background:catFilter===c ? `rgba(99,91,255,0.2)` : T.glass,color:catFilter===c ? T.white : T.muted,cursor:"pointer",transition:"all 0.2s" }}>
+              {c}
+            </button>
+          ))}
+        </div>
+
+        {/* Records table */}
+        <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:16,padding:24,animation:"fadeUp 0.5s ease 300ms both" }}>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%",borderCollapse:"collapse",minWidth:560 }}>
               <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Tenant / Payer</th>
-                  <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Period</th>
-                  <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Amount</th>
-                  <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Status</th>
-                  <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Date</th>
-                  <th className="text-left px-4 py-2 font-medium text-xs text-muted-foreground">Notes</th>
-                  <th className="px-4 py-2"></th>
+                <tr>
+                  {["Category","Payer / Ref","Period","Amount","Status","Date"].map(h=>(
+                    <th key={h} style={{ textAlign:"left",fontSize:10,fontWeight:600,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",padding:"0 12px 12px 0",borderBottom:`1px solid ${T.border}` }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {records.map((r: any) => (
-                  <tr key={r.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="px-4 py-2 font-medium">{r.tenantName}</td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground capitalize">{PERIOD_LABELS[r.period] ?? r.period}</td>
-                    <td className="px-4 py-2 font-semibold text-primary">£{parseFloat(r.amount.toString()).toFixed(2)}</td>
-                    <td className="px-4 py-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLOURS[r.paymentStatus] ?? "bg-gray-100 text-gray-800"}`}>
-                        {r.paymentStatus}
-                      </span>
+                {filtered.length===0 ? (
+                  <tr><td colSpan={6} style={{ textAlign:"center",padding:40,color:T.muted,fontSize:14 }}>No income records for this period</td></tr>
+                ) : filtered.map((r:any,i:number)=>(
+                  <tr key={r.id??i}>
+                    <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}>
+                      <span style={{ fontSize:13,fontWeight:600,color:T.white }}>{r.categoryName??r.category??"—"}</span>
                     </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground">
-                      {new Date(r.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
-                      <span className="block text-[10px]">{new Date(r.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
-                    </td>
-                    <td className="px-4 py-2 text-xs text-muted-foreground max-w-[120px] truncate">{r.notes ?? "—"}</td>
-                    <td className="px-4 py-2">
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(r.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </td>
+                    <td style={{ padding:"12px 12px 12px 0",fontSize:13,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.tenantName??r.reference??"—"}</td>
+                    <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.period??"—"}</td>
+                    <td style={{ padding:"12px 12px 12px 0",fontSize:14,fontWeight:700,color:T.mint,borderBottom:`1px solid ${T.border}` }}>£{Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td>
+                    <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}><Badge status={r.paymentStatus??"paid"}/></td>
+                    <td style={{ padding:"12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.createdAt?new Date(r.createdAt).toLocaleDateString("en-GB"):"—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <AddIncomeDialog
-        open={addOpen}
-        onClose={() => { setAddOpen(false); setSmartPrefill(undefined); }}
-        categories={categories}
-        preselectedCategoryId={category.id}
-        onSuccess={() => utils.income.list.invalidate()}
-        prefill={smartPrefill}
-      />
-
-      <DeleteConfirmDialog
-        open={deleteId !== null}
-        onOpenChange={(v) => { if (!v) setDeleteId(null); }}
-        itemLabel="this income record"
-        onConfirm={() => deleteId !== null && deleteRecord.mutate({ id: deleteId })}
-        loading={deleteRecord.isPending}
-      />
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-export default function Income() {
-  const [activeTab, setActiveTab] = useState<string>("");
-  const [newCatOpen, setNewCatOpen] = useState(false);
-
-  const { data: categories = [], refetch: refetchCats } = trpc.income.categories.useQuery();
-  const { data: records = [], refetch: refetchRecords } = trpc.income.list.useQuery({ limit: 500 });
-
-  // Set default tab to first category once loaded
-  const resolvedTab = activeTab || (categories[0]?.id?.toString() ?? "");
-
-  const totalIncome = records.reduce((s, r) => s + parseFloat(r.amount?.toString() ?? "0"), 0);
-  const paidIncome = records.filter(r => r.paymentStatus === "paid").reduce((s, r) => s + parseFloat(r.amount?.toString() ?? "0"), 0);
-  const pendingIncome = records.filter(r => r.paymentStatus === "pending" || r.paymentStatus === "overdue").reduce((s, r) => s + parseFloat(r.amount?.toString() ?? "0"), 0);
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Income & Rentals</h1>
-          <p className="page-subtitle">Rental income, grants, and other income sources — organised by category</p>
-        </div>
-        <Button size="sm" variant="outline" onClick={() => setNewCatOpen(true)}>
-          <FolderPlus className="h-4 w-4 mr-2" />New Category
-        </Button>
-      </div>
-
-      {/* Summary stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <TrendingUp className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Income</p>
-              <p className="text-xl font-bold">£{totalIncome.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
-              <p className="text-xs text-muted-foreground">{records.length} records across {categories.length} categories</p>
-            </div>
           </div>
         </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <Building2 className="h-5 w-5 text-green-700" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Paid</p>
-              <p className="text-xl font-bold text-green-600">£{paidIncome.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
-            </div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-amber-100 flex items-center justify-center">
-              <DollarSign className="h-5 w-5 text-amber-700" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Pending / Overdue</p>
-              <p className="text-xl font-bold text-amber-600">£{pendingIncome.toLocaleString("en-GB", { minimumFractionDigits: 2 })}</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Category tabs */}
-      {categories.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-muted-foreground">
-          <FolderPlus className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <p>No income categories yet.</p>
-          <Button size="sm" className="mt-3" onClick={() => setNewCatOpen(true)}>Create First Category</Button>
-        </CardContent></Card>
-      ) : (
-        <Tabs value={resolvedTab} onValueChange={setActiveTab}>
-          <div className="overflow-x-auto">
-            <TabsList className="h-auto flex-wrap gap-1 min-w-max">
-              {categories.map(cat => {
-                const count = records.filter(r => r.categoryId === cat.id).length;
-                return (
-                  <TabsTrigger key={cat.id} value={cat.id.toString()} className="text-xs gap-1">
-                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color ?? "#C9A84C" }} />
-                    {cat.name}
-                    {count > 0 && <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{count}</Badge>}
-                  </TabsTrigger>
-                );
-              })}
-              <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => setNewCatOpen(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" />New
+        {/* Add income dialog */}
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:480 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color:T.white,fontSize:18,fontWeight:800 }}>Add Income Record</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit(d=>createMutation.mutate({...d,month,year}))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
+              <div>
+                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Category</Label>
+                <select {...register("category",{required:true})}
+                  style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
+                  {INCOME_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              {watchCat==="Community Hire" && (
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Specify</Label>
+                  <Input {...register("communityHireDetail")} placeholder="Specify community hire..."
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                </div>
+              )}
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Amount (£)</Label>
+                  <Input {...register("amount",{required:true})} type="number" step="0.01" placeholder="0.00"
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Period</Label>
+                  <select {...register("period")}
+                    style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
+                    {PERIODS.map(p=><option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Payer / Tenant Name</Label>
+                <Input {...register("tenantName")} placeholder="Name or reference"
+                  style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+              </div>
+              <div>
+                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
+                <Input {...register("notes")} placeholder="Optional notes"
+                  style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+              </div>
+              <Button type="submit" disabled={createMutation.isPending}
+                style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:48,borderRadius:12,border:"none",fontSize:15 }}>
+                {createMutation.isPending?"Saving…":"Add Record"}
               </Button>
-            </TabsList>
-          </div>
-
-          {categories.map(cat => (
-            <TabsContent key={cat.id} value={cat.id.toString()} className="mt-4">
-              <CategoryTab
-                category={cat as any}
-                allRecords={records as any[]}
-                categories={categories as any[]}
-                onDeleted={refetchRecords}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
-
-      {/* New Category Dialog */}
-      <NewCategoryDialog
-        open={newCatOpen}
-        onClose={() => setNewCatOpen(false)}
-        onSuccess={() => { refetchCats(); }}
-      />
-    </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   );
 }
