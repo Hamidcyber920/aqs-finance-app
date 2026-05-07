@@ -1,0 +1,59 @@
+# Google Cloud Build — Hibba Finance & HR OS
+# Triggered on push to main branch
+# Builds Docker image → pushes to Artifact Registry → deploys to Cloud Run
+
+steps:
+  # Step 1: Build the Docker image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - build
+      - -t
+      - "europe-west2-docker.pkg.dev/$PROJECT_ID/hibba/hibba-api:$COMMIT_SHA"
+      - -t
+      - "europe-west2-docker.pkg.dev/$PROJECT_ID/hibba/hibba-api:latest"
+      - .
+
+  # Step 2: Push to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - push
+      - "europe-west2-docker.pkg.dev/$PROJECT_ID/hibba/hibba-api:$COMMIT_SHA"
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - push
+      - "europe-west2-docker.pkg.dev/$PROJECT_ID/hibba/hibba-api:latest"
+
+  # Step 3: Deploy to Cloud Run (London region)
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - hibba-api
+      - --image=europe-west2-docker.pkg.dev/$PROJECT_ID/hibba/hibba-api:$COMMIT_SHA
+      - --region=europe-west2
+      - --platform=managed
+      - --allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=10
+      - --memory=512Mi
+      - --cpu=1
+      - --port=8080
+      - --set-env-vars=NODE_ENV=production
+      # Secrets are injected via Cloud Run secret manager references:
+      # --set-secrets=DATABASE_URL=hibba-db-url:latest,JWT_SECRET=hibba-jwt-secret:latest
+
+  # Step 4: Deploy frontend to Firebase Hosting
+  - name: "gcr.io/firebase-tools/firebase"
+    args:
+      - hosting:deploy
+      - --only=hosting
+      - --project=$PROJECT_ID
+
+images:
+  - "europe-west2-docker.pkg.dev/$PROJECT_ID/hibba/hibba-api:$COMMIT_SHA"
+  - "europe-west2-docker.pkg.dev/$PROJECT_ID/hibba/hibba-api:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
