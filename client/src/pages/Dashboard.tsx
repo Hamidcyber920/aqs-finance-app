@@ -175,8 +175,9 @@ export default function DashboardPage() {
       <div style={{
         minHeight: "100vh",
         background: `linear-gradient(160deg, #0E2244 0%, ${T.navy} 50%, #070F1E 100%)`,
-        padding: "24px",
+        padding: "clamp(12px, 4vw, 24px)",
         fontFamily: "'DM Sans', sans-serif",
+        overflowX: "hidden",
       }}>
 
         {/* ── Page header ── */}
@@ -208,8 +209,8 @@ export default function DashboardPage() {
         {/* ── Stat cards ── */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: 16, marginBottom: 28,
+          gridTemplateColumns: "repeat(auto-fit, minmax(min(200px, 100%), 1fr))",
+          gap: 12, marginBottom: 20,
         }}>
           <StatCard label="Total Income" value="£42,800" sub="This month" icon={TrendingUp} trend="up" color={T.mint} delay={0} />
           <StatCard label="Total Expenses" value="£28,340" sub="This month" icon={TrendingDown} trend="down" color="#f59e0b" delay={80} />
@@ -218,8 +219,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Charts row ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16, marginBottom: 28 }}
-          className="lg:grid-cols-[1fr_320px] grid-cols-1">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 mb-6">
 
           {/* Area chart */}
           <div style={{
@@ -281,7 +281,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Recent activity row ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 28 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
 
           {/* Recent receipts */}
           <div style={{

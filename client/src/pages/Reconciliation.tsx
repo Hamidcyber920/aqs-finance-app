@@ -92,7 +92,7 @@ export default function ReconciliationPage() {
   return (
     <>
       <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
-      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:24,fontFamily:"'DM Sans',sans-serif" }}>
+      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:"clamp(12px,4vw,24px)",fontFamily:"'DM Sans',sans-serif",overflowX:"hidden" }}>
 
         {/* Header */}
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12,animation:"fadeUp 0.4s ease both" }}>
@@ -157,7 +157,7 @@ export default function ReconciliationPage() {
         </div>
 
         {/* Income & Expenditure summary */}
-        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20 }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
           {/* Income */}
           <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid rgba(0,255,194,0.15)`,borderRadius:16,padding:20,animation:"fadeUp 0.5s ease 260ms both" }}>
             <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:16 }}>

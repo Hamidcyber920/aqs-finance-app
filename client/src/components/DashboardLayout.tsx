@@ -366,7 +366,7 @@ function DashboardLayoutContent({
       </div>
 
       {/* ── Main content ── */}
-      <SidebarInset className={isMobile ? "pb-[72px]" : ""}>
+      <SidebarInset className={`${isMobile ? "pb-[72px]" : ""} overflow-y-auto`} style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
         {/* Mobile top bar */}
         {isMobile && (
           <div
@@ -410,7 +410,7 @@ function DashboardLayoutContent({
           </div>
         )}
 
-        <main className="flex-1 p-3 sm:p-4 md:p-6 min-h-0">{children}</main>
+        <main className="flex-1 p-3 sm:p-4 md:p-6">{children}</main>
 
         {/* Mobile bottom nav — Hibba mint/purple theme */}
         {isMobile && (
