@@ -140,10 +140,21 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
   const processAudio = async (blob: Blob) => {
     setState("uploading");
     try {
-      // Upload audio to S3 via the file upload endpoint
+      // Upload audio to S3 via the file upload endpoint.
+      // Derive extension from MIME type (strip codec params first).
+      const baseMime = blob.type.split(';')[0].trim();
+      const mimeToExt: Record<string, string> = {
+        'audio/webm': 'webm',
+        'audio/ogg': 'ogg',
+        'audio/mp4': 'm4a',
+        'audio/mpeg': 'mp3',
+        'audio/wav': 'wav',
+      };
+      const ext = mimeToExt[baseMime] ?? 'webm';
+      // Re-create the blob with the clean MIME type (no codec suffix) so S3 stores it correctly.
+      const cleanBlob = new Blob([blob], { type: baseMime });
       const formData = new FormData();
-      const ext = blob.type.includes("mp4") ? "m4a" : "webm";
-      formData.append("file", blob, `voice-${Date.now()}.${ext}`);
+      formData.append("file", cleanBlob, `voice-${Date.now()}.${ext}`);
 
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
       if (!uploadRes.ok) throw new Error("Upload failed");

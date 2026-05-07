@@ -529,3 +529,11 @@
 - [x] Backend: replace generic `throw new Error(result.error)` with TRPCError including Whisper error details
 - [x] Backend: add empty-transcript guard — throws TRPCError("No speech detected") if Whisper returns blank text
 - [x] Backend: import TRPCError from @trpc/server in voiceAgent.ts
+
+## Voice Agent Audio Format Fix (May 2026)
+- [x] Root cause: S3 returns 'application/octet-stream' content-type; voiceTranscription.ts was using that header instead of the actual audio format, causing Whisper to reject the file
+- [x] voiceTranscription.ts: derive MIME type from file extension in the S3 URL (which we control) instead of trusting the S3 content-type header
+- [x] voiceTranscription.ts: strip codec parameters from MIME type before creating the Blob for Whisper (e.g. 'audio/webm;codecs=opus' → 'audio/webm')
+- [x] voiceTranscription.ts: updated getFileExtension() to strip codec suffix and handle all Whisper-supported formats
+- [x] VoiceAgent.tsx: re-create blob with clean MIME type (no codec suffix) before uploading to S3; derive file extension from MIME type map
+- [x] Production build clean (2747 modules, 0 errors)

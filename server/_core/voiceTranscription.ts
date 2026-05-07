@@ -104,7 +104,23 @@ export async function transcribeAudio(
       }
       
       audioBuffer = Buffer.from(await response.arrayBuffer());
-      mimeType = response.headers.get('content-type') || 'audio/mpeg';
+      // S3 often returns 'application/octet-stream' regardless of the actual audio format.
+      // Derive the MIME type from the file extension in the URL instead, which we control.
+      const urlPath = new URL(options.audioUrl).pathname;
+      const urlExt = urlPath.split('.').pop()?.toLowerCase() ?? '';
+      const extToMime: Record<string, string> = {
+        webm: 'audio/webm',
+        mp3: 'audio/mpeg',
+        mp4: 'audio/mp4',
+        m4a: 'audio/mp4',
+        wav: 'audio/wav',
+        ogg: 'audio/ogg',
+        oga: 'audio/ogg',
+        flac: 'audio/flac',
+        mpeg: 'audio/mpeg',
+        mpga: 'audio/mpeg',
+      };
+      mimeType = extToMime[urlExt] || response.headers.get('content-type') || 'audio/webm';
       
       // Check file size (16MB limit)
       const sizeMB = audioBuffer.length / (1024 * 1024);
@@ -126,9 +142,11 @@ export async function transcribeAudio(
     // Step 3: Create FormData for multipart upload to Whisper API
     const formData = new FormData();
     
-    // Create a Blob from the buffer and append to form
-    const filename = `audio.${getFileExtension(mimeType)}`;
-    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+    // Create a Blob from the buffer and append to form.
+    // Strip codec parameters from MIME type (Whisper expects plain 'audio/webm', not 'audio/webm;codecs=opus').
+    const baseMimeType = mimeType.split(';')[0].trim();
+    const filename = `audio.${getFileExtension(baseMimeType)}`;
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: baseMimeType });
     formData.append("file", audioBlob, filename);
     
     formData.append("model", "whisper-1");
@@ -198,6 +216,8 @@ export async function transcribeAudio(
  * Helper function to get file extension from MIME type
  */
 function getFileExtension(mimeType: string): string {
+  // Strip codec parameters (e.g. 'audio/webm;codecs=opus' → 'audio/webm')
+  const baseMime = mimeType.split(';')[0].trim().toLowerCase();
   const mimeToExt: Record<string, string> = {
     'audio/webm': 'webm',
     'audio/mp3': 'mp3',
@@ -205,11 +225,14 @@ function getFileExtension(mimeType: string): string {
     'audio/wav': 'wav',
     'audio/wave': 'wav',
     'audio/ogg': 'ogg',
+    'audio/oga': 'ogg',
     'audio/m4a': 'm4a',
     'audio/mp4': 'm4a',
+    'audio/flac': 'flac',
+    'audio/x-flac': 'flac',
   };
   
-  return mimeToExt[mimeType] || 'audio';
+  return mimeToExt[baseMime] || 'webm';
 }
 
 /**
