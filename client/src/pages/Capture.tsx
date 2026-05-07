@@ -1,400 +1,220 @@
-import { useCallback, useRef, useState } from "react";
+import { useState, useRef } from "react";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { Camera, Upload, X, CheckCircle, Loader2, RefreshCw, ImageIcon, FileText } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { Camera, Upload, Loader2, CheckCircle2, Sparkles, Receipt, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { trpc } from "@/lib/trpc";
-import { uploadReceiptFile } from "@/lib/uploadReceipt";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-type UploadState = "idle" | "uploading" | "processing" | "done" | "error";
+const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
+
+const DEPARTMENTS = ["Mosque","Restaurant/Bistro","Ramadan","Staff/Payroll","Events","Other"];
 
 export default function CapturePage() {
   const [, setLocation] = useLocation();
-  const utils = trpc.useUtils();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [extracted, setExtracted] = useState<any>(null);
+  const [submitted, setSubmitted] = useState(false);
 
-  // Camera state
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-
-  // Upload state
-  const [dragOver, setDragOver] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadState, setUploadState] = useState<UploadState>("idle");
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [processedReceiptId, setProcessedReceiptId] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const processMutation = trpc.receipts.process.useMutation({
-    onSuccess: (data) => {
-      setUploadState("done");
-      setProcessedReceiptId(data.data?.id ?? null);
-      toast.success("Receipt processed successfully!", {
-        description: `Vendor: ${data.data?.vendor ?? "Unknown"} — £${data.data?.amount ?? 0}`,
-      });
-      utils.receipts.list.invalidate();
-    },
-    onError: (err) => {
-      setUploadState("error");
-      toast.error("Processing failed", { description: err.message });
-    },
+  const { data: depts } = trpc.expenses?.departments?.useQuery?.() ?? { data: null };
+  const createMutation = trpc.receipts.create.useMutation({
+    onSuccess: () => { toast.success("Receipt submitted"); setSubmitted(true); setTimeout(() => setLocation("/receipts"), 1800); },
+    onError: (e) => toast.error(e.message),
   });
 
-  // ── Camera ────────────────────────────────────────────────────────────────
+  const { register, handleSubmit, setValue, watch } = useForm<any>({
+    defaultValues: { department: "Mosque" }
+  });
 
-  const startCamera = async () => {
-    setCameraError(null);
+  const handleFile = async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => setPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+    setUploading(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
-      });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setCameraActive(true);
-        setCapturedImage(null);
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method:"POST", body:fd });
+      const { url } = await res.json();
+      setValue("imageUrl", url);
+      setUploading(false);
+      setAnalyzing(true);
+      // AI extraction
+      const aiRes = await fetch("/api/extract-receipt", { method:"POST", body: JSON.stringify({ url }), headers:{"Content-Type":"application/json"} });
+      const aiData = await aiRes.json();
+      if (aiData) {
+        setExtracted(aiData);
+        if (aiData.amount) setValue("amount", aiData.amount);
+        if (aiData.description) setValue("description", aiData.description);
+        if (aiData.vendor) setValue("vendor", aiData.vendor);
+        if (aiData.date) setValue("date", aiData.date);
+        toast.success("AI extracted receipt data");
       }
-    } catch (err) {
-      setCameraError("Camera access denied or not available. Please use file upload instead.");
+    } catch {
+      toast.error("Could not process receipt");
+    } finally {
+      setUploading(false);
+      setAnalyzing(false);
     }
   };
 
-  const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((t) => t.stop());
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
-  };
-
-  const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      setCapturedBlob(blob);
-      setCapturedImage(canvas.toDataURL("image/jpeg", 0.9));
-      stopCamera();
-    }, "image/jpeg", 0.9);
-  };
-
-  const retakePhoto = () => {
-    setCapturedImage(null);
-    setCapturedBlob(null);
-    startCamera();
-  };
-
-  const processCapture = async () => {
-    if (!capturedBlob) return;
-    const file = new File([capturedBlob], `receipt-${Date.now()}.jpg`, { type: "image/jpeg" });
-    await processFile(file);
-  };
-
-  // ── File Upload ───────────────────────────────────────────────────────────
-
-  const processFile = async (file: File) => {
-    setSelectedFile(file);
-    if (file.type.startsWith("image/")) {
-      setPreviewUrl(URL.createObjectURL(file));
-    } else {
-      setPreviewUrl(null);
-    }
-    setUploadState("uploading");
-    setUploadProgress(20);
-
-    try {
-      const { receiptId } = await uploadReceiptFile(file, utils);
-      setUploadProgress(60);
-      setUploadState("processing");
-      await processMutation.mutateAsync({ receiptId });
-      setUploadProgress(100);
-    } catch (err) {
-      setUploadState("error");
-      toast.error("Upload failed", { description: (err as Error).message });
-    }
-  };
-
-  const handleFileSelect = (file: File) => {
-    const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-    if (!allowed.includes(file.type)) {
-      toast.error("Unsupported file type", { description: "Please upload JPG, PNG, WebP, or PDF files." });
-      return;
-    }
-    if (file.size > 16 * 1024 * 1024) {
-      toast.error("File too large", { description: "Maximum file size is 16MB." });
-      return;
-    }
-    processFile(file);
-  };
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFileSelect(file);
-  }, []);
-
-  const resetUpload = () => {
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setUploadState("idle");
-    setUploadProgress(0);
-    setProcessedReceiptId(null);
-    setCapturedImage(null);
-    setCapturedBlob(null);
+    if (file) handleFile(file);
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  if (submitted) {
+    return (
+      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans',sans-serif" }}>
+        <div style={{ textAlign:"center",animation:"scaleIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both" }}>
+          <style>{`@keyframes scaleIn{from{opacity:0;transform:scale(0.7)}to{opacity:1;transform:scale(1)}}`}</style>
+          <div style={{ width:80,height:80,borderRadius:"50%",background:"rgba(0,255,194,0.15)",border:"2px solid rgba(0,255,194,0.4)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px" }}>
+            <CheckCircle2 size={40} style={{ color:T.mint }}/>
+          </div>
+          <h2 style={{ fontSize:24,fontWeight:800,color:T.white,margin:"0 0 8px" }}>Receipt Submitted!</h2>
+          <p style={{ fontSize:14,color:T.muted }}>Redirecting to your expenses…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Capture Receipt</h1>
-        <p className="text-muted-foreground mt-1">
-          Take a photo or upload a receipt file to automatically extract and categorize expenses.
-        </p>
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}`}</style>
+      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:24,fontFamily:"'DM Sans',sans-serif",maxWidth:640,margin:"0 auto" }}>
+
+        <div style={{ marginBottom:28,animation:"fadeUp 0.4s ease both" }}>
+          <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
+            Scan <span style={{ color:T.mint }}>Receipt</span>
+          </h1>
+          <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Upload or photograph a receipt — AI will extract the data</p>
+        </div>
+
+        {/* Drop zone */}
+        <div
+          onDrop={onDrop}
+          onDragOver={e=>e.preventDefault()}
+          onClick={() => !preview && fileRef.current?.click()}
+          style={{
+            background: preview ? "transparent" : T.card,
+            backdropFilter: "blur(20px)",
+            border: `2px dashed ${preview ? "transparent" : uploading||analyzing ? T.mint : T.border}`,
+            borderRadius:20,
+            padding: preview ? 0 : "48px 24px",
+            textAlign:"center",
+            cursor: preview ? "default" : "pointer",
+            marginBottom:24,
+            transition:"all 0.3s",
+            animation:"fadeUp 0.5s ease 100ms both",
+            overflow:"hidden",
+            position:"relative",
+          }}
+        >
+          {preview ? (
+            <div style={{ position:"relative" }}>
+              <img src={preview} alt="Receipt" style={{ width:"100%",borderRadius:18,display:"block",maxHeight:320,objectFit:"cover" }}/>
+              <button onClick={e=>{e.stopPropagation();setPreview(null);setExtracted(null);}}
+                style={{ position:"absolute",top:10,right:10,width:32,height:32,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:T.white,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                <X size={16}/>
+              </button>
+              {(uploading||analyzing) && (
+                <div style={{ position:"absolute",inset:0,background:"rgba(10,25,47,0.8)",borderRadius:18,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12 }}>
+                  <Sparkles size={32} style={{ color:T.mint,animation:"pulse 1.5s infinite" }}/>
+                  <p style={{ color:T.white,fontWeight:600,fontSize:14 }}>{uploading?"Uploading…":"AI analysing receipt…"}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div style={{ width:64,height:64,borderRadius:20,background:"rgba(99,91,255,0.15)",border:"1px solid rgba(99,91,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px" }}>
+                {uploading||analyzing ? <Loader2 size={28} style={{ color:T.purple,animation:"spin 1s linear infinite" }}/> : <Camera size={28} style={{ color:T.purple }}/>}
+              </div>
+              <p style={{ fontSize:16,fontWeight:700,color:T.white,margin:"0 0 6px" }}>Drop receipt here</p>
+              <p style={{ fontSize:13,color:T.muted,margin:"0 0 20px" }}>or tap to browse · JPG, PNG, PDF</p>
+              <div style={{ display:"flex",gap:10,justifyContent:"center" }}>
+                <button onClick={e=>{e.stopPropagation();fileRef.current?.click();}}
+                  style={{ padding:"9px 20px",borderRadius:10,background:`rgba(99,91,255,0.15)`,border:`1px solid rgba(99,91,255,0.3)`,color:T.purple,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:7 }}>
+                  <Upload size={14}/> Browse Files
+                </button>
+                <button onClick={e=>{e.stopPropagation();fileRef.current?.click();}}
+                  style={{ padding:"9px 20px",borderRadius:10,background:`rgba(0,255,194,0.1)`,border:`1px solid rgba(0,255,194,0.2)`,color:T.mint,fontSize:13,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:7 }}>
+                  <Camera size={14}/> Take Photo
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        <input ref={fileRef} type="file" accept="image/*,.pdf" capture="environment" onChange={e=>{ const f=e.target.files?.[0]; if(f) handleFile(f); }} style={{ display:"none" }}/>
+
+        {/* AI extracted banner */}
+        {extracted && (
+          <div style={{ background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",borderRadius:14,padding:"12px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:10,animation:"fadeUp 0.4s ease both" }}>
+            <Sparkles size={16} style={{ color:T.mint,flexShrink:0 }}/>
+            <p style={{ fontSize:13,color:T.mint,margin:0,fontWeight:600 }}>AI extracted data — please review and confirm below</p>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit(d => createMutation.mutate(d))}
+          style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:20,padding:24,display:"flex",flexDirection:"column",gap:16,animation:"fadeUp 0.5s ease 200ms both" }}>
+
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+            <div>
+              <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Amount (£) *</Label>
+              <Input {...register("amount",{required:true})} type="number" step="0.01" placeholder="0.00"
+                style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${extracted?.amount?T.mint:T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+            </div>
+            <div>
+              <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Date</Label>
+              <Input {...register("date")} type="date"
+                style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${extracted?.date?T.mint:T.border}`,borderRadius:10,color:T.white,height:44,colorScheme:"dark" }}/>
+            </div>
+          </div>
+
+          <div>
+            <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Description *</Label>
+            <Input {...register("description",{required:true})} placeholder="What was purchased?"
+              style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${extracted?.description?T.mint:T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+          </div>
+
+          <div>
+            <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Vendor / Supplier</Label>
+            <Input {...register("vendor")} placeholder="Shop or supplier name"
+              style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${extracted?.vendor?T.mint:T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+          </div>
+
+          <div>
+            <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Department</Label>
+            <select {...register("department")}
+              style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
+              {(depts ?? DEPARTMENTS).map((d: any) => (
+                <option key={typeof d==="string"?d:d.id} value={typeof d==="string"?d:d.id} style={{ background:"#0D2240" }}>
+                  {typeof d==="string"?d:d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes (optional)</Label>
+            <textarea {...register("notes")} rows={2} placeholder="Any additional context…"
+              style={{ marginTop:6,width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,padding:"10px 14px",fontSize:14,resize:"vertical",boxSizing:"border-box" }}/>
+          </div>
+
+          <Button type="submit" disabled={createMutation.isPending}
+            style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:52,borderRadius:14,border:"none",fontSize:16,marginTop:4,display:"flex",alignItems:"center",justifyContent:"center",gap:8 }}>
+            {createMutation.isPending ? <><Loader2 size={18} className="animate-spin"/>Submitting…</> : <><Receipt size={18}/>Submit Receipt</>}
+          </Button>
+        </form>
       </div>
-
-      {/* Success state */}
-      {uploadState === "done" && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                <CheckCircle className="h-6 w-6 text-green-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-green-800">Receipt processed successfully</p>
-                <p className="text-sm text-green-600 mt-0.5">
-                  The data has been extracted and categorized automatically.
-                </p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                {processedReceiptId && (
-                  <Button size="sm" onClick={() => setLocation(`/receipts/${processedReceiptId}`)}>
-                    View Receipt
-                  </Button>
-                )}
-                <Button size="sm" variant="outline" onClick={resetUpload}>
-                  <RefreshCw className="h-4 w-4 mr-1" />
-                  New Receipt
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Processing progress */}
-      {(uploadState === "uploading" || uploadState === "processing") && (
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              <div>
-                <p className="font-medium">
-                  {uploadState === "uploading" ? "Uploading receipt..." : "AI is extracting data..."}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {uploadState === "processing"
-                    ? "Analysing vendor, amounts, and categorising expense..."
-                    : "Securely uploading to cloud storage..."}
-                </p>
-              </div>
-            </div>
-            <Progress value={uploadProgress} className="h-2" />
-          </CardContent>
-        </Card>
-      )}
-
-      {uploadState === "idle" && (
-        <Tabs defaultValue="camera">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="camera" className="gap-2">
-              <Camera className="h-4 w-4" />
-              Camera
-            </TabsTrigger>
-            <TabsTrigger value="upload" className="gap-2">
-              <Upload className="h-4 w-4" />
-              Upload File
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Camera Tab */}
-          <TabsContent value="camera" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Camera Capture</CardTitle>
-                <CardDescription>
-                  Use your device camera to take a photo of a receipt.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {cameraError && (
-                  <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive">
-                    {cameraError}
-                  </div>
-                )}
-
-                {/* Camera preview */}
-                <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3] w-full">
-                  <video
-                    ref={videoRef}
-                    className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`}
-                    playsInline
-                    muted
-                  />
-                  <canvas ref={canvasRef} className="hidden" />
-
-                  {capturedImage && (
-                    <img
-                      src={capturedImage}
-                      alt="Captured receipt"
-                      className="w-full h-full object-contain"
-                    />
-                  )}
-
-                  {!cameraActive && !capturedImage && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white/60">
-                      <Camera className="h-16 w-16" />
-                      <p className="text-sm">Camera preview will appear here</p>
-                    </div>
-                  )}
-
-                  {cameraActive && (
-                    <div className="absolute inset-0 pointer-events-none">
-                      <div className="absolute inset-8 border-2 border-white/40 rounded-lg" />
-                      <div className="absolute top-10 left-10 w-6 h-6 border-t-2 border-l-2 border-white rounded-tl-sm" />
-                      <div className="absolute top-10 right-10 w-6 h-6 border-t-2 border-r-2 border-white rounded-tr-sm" />
-                      <div className="absolute bottom-10 left-10 w-6 h-6 border-b-2 border-l-2 border-white rounded-bl-sm" />
-                      <div className="absolute bottom-10 right-10 w-6 h-6 border-b-2 border-r-2 border-white rounded-br-sm" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-3 justify-center">
-                  {!cameraActive && !capturedImage && (
-                    <Button onClick={startCamera} className="gap-2" size="lg">
-                      <Camera className="h-5 w-5" />
-                      Start Camera
-                    </Button>
-                  )}
-                  {cameraActive && (
-                    <>
-                      <Button onClick={capturePhoto} size="lg" className="gap-2">
-                        <Camera className="h-5 w-5" />
-                        Capture
-                      </Button>
-                      <Button onClick={stopCamera} variant="outline" size="lg">
-                        Cancel
-                      </Button>
-                    </>
-                  )}
-                  {capturedImage && (
-                    <>
-                      <Button onClick={processCapture} size="lg" className="gap-2">
-                        <CheckCircle className="h-5 w-5" />
-                        Process Receipt
-                      </Button>
-                      <Button onClick={retakePhoto} variant="outline" size="lg" className="gap-2">
-                        <RefreshCw className="h-4 w-4" />
-                        Retake
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Upload Tab */}
-          <TabsContent value="upload" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Upload Receipt File</CardTitle>
-                <CardDescription>
-                  Drag and drop a receipt image or PDF, or click to browse.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`
-                    border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all
-                    ${dragOver
-                      ? "border-primary bg-primary/5 scale-[1.01]"
-                      : "border-border hover:border-primary/50 hover:bg-muted/30"
-                    }
-                  `}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileSelect(file);
-                    }}
-                  />
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center">
-                      <Upload className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-foreground">
-                        {dragOver ? "Drop your receipt here" : "Drop receipt here or click to browse"}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Supports JPG, PNG, WebP, and PDF — up to 16MB
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Badge variant="secondary" className="gap-1">
-                        <ImageIcon className="h-3 w-3" /> Images
-                      </Badge>
-                      <Badge variant="secondary" className="gap-1">
-                        <FileText className="h-3 w-3" /> PDF
-                      </Badge>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      )}
-
-      {/* Tips */}
-      {uploadState === "idle" && (
-        <Card className="bg-muted/30 border-dashed">
-          <CardContent className="pt-4 pb-4">
-            <p className="text-sm font-medium text-foreground mb-2">Tips for best results</p>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Ensure the entire receipt is visible and well-lit</li>
-              <li>• Avoid shadows or glare on the receipt</li>
-              <li>• Keep the receipt flat and unfolded</li>
-              <li>• Higher resolution images produce more accurate results</li>
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    </>
   );
 }
