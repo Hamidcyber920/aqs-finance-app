@@ -1,210 +1,159 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { Plus, Shield, Phone, Mail, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { toast } from "sonner";
-import { Plus, Pencil, Trash2, ShieldCheck, Phone, Mail } from "lucide-react";
-import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-interface TrusteeForm {
-  fullName: string;
-  email: string;
-  phone: string;
-  role: string;
-  notes: string;
-}
+const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
-const emptyForm: TrusteeForm = { fullName: "", email: "", phone: "", role: "Trustee", notes: "" };
-
-export default function Trustees() {
-  const utils = trpc.useUtils();
-  const { data: trustees = [], isLoading } = trpc.trustees.list.useQuery();
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState<TrusteeForm>(emptyForm);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-
+export default function TrusteesPage() {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
+  const { data, refetch } = trpc.trustees.list.useQuery();
   const createMutation = trpc.trustees.create.useMutation({
-    onSuccess: () => { utils.trustees.list.invalidate(); setDialogOpen(false); toast.success("Trustee added successfully"); },
+    onSuccess: () => { toast.success("Trustee added"); setOpen(false); refetch(); reset(); },
     onError: (e) => toast.error(e.message),
   });
-
   const updateMutation = trpc.trustees.update.useMutation({
-    onSuccess: () => { utils.trustees.list.invalidate(); setDialogOpen(false); toast.success("Trustee updated"); },
+    onSuccess: () => { toast.success("Trustee updated"); setEditing(null); refetch(); },
     onError: (e) => toast.error(e.message),
   });
-
   const deleteMutation = trpc.trustees.delete.useMutation({
-    onSuccess: () => { utils.trustees.list.invalidate(); setDeleteId(null); toast.success("Trustee deactivated"); },
+    onSuccess: () => { toast.success("Trustee removed"); refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
-  const openAdd = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
-  const openEdit = (t: typeof trustees[0]) => {
-    setForm({ fullName: t.fullName, email: t.email ?? "", phone: t.phone ?? "", role: t.role, notes: t.notes ?? "" });
-    setEditingId(t.id);
-    setDialogOpen(true);
-  };
+  const { register, handleSubmit, reset, setValue } = useForm<any>();
 
-  const handleSave = () => {
-    if (!form.fullName.trim()) { toast.error("Full name is required"); return; }
-    if (editingId) {
-      updateMutation.mutate({ id: editingId, ...form });
-    } else {
-      createMutation.mutate(form);
-    }
-  };
+  const trustees = data?.trustees ?? [];
+  const active = trustees.filter((t: any) => t.isActive !== false).length;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-[#1a4731]" />
-            Trustees
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Manage trustees who co-sign Qarde Hasan loan agreements and repayment confirmations.
-          </p>
-        </div>
-        <Button onClick={openAdd} className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white">
-          <Plus className="h-4 w-4 mr-2" /> Add Trustee
-        </Button>
-      </div>
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:24,fontFamily:"'DM Sans',sans-serif" }}>
 
-      {isLoading ? (
-        <div className="text-muted-foreground text-sm">Loading trustees…</div>
-      ) : trustees.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed rounded-lg">
-          <ShieldCheck className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-          <p className="text-muted-foreground">No trustees added yet.</p>
-          <Button variant="outline" className="mt-4" onClick={openAdd}>Add First Trustee</Button>
-        </div>
-      ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {trustees.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell className="font-medium">{t.fullName}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-[#1a4731] border-[#1a4731]">{t.role}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-0.5 text-sm">
-                      {t.email && (
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <Mail className="h-3 w-3" /> {t.email}
-                        </span>
-                      )}
-                      {t.phone && (
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <Phone className="h-3 w-3" /> {t.phone}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={t.isActive ? "bg-green-100 text-green-800 border-green-200" : "bg-red-100 text-red-800 border-red-200"}>
-                      {t.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{t.notes ?? "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost" onClick={() => openEdit(t)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteId(t.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* Add / Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Trustee" : "Add Trustee"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div>
-              <Label>Full Name *</Label>
-              <Input value={form.fullName} onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))} placeholder="e.g. Mumin Khan" />
-            </div>
-            <div>
-              <Label>Role</Label>
-              <Input value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} placeholder="e.g. Trustee, Chair, Manager" />
-            </div>
-            <div>
-              <Label>Email Address</Label>
-              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="trustee@example.com" />
-            </div>
-            <div>
-              <Label>Phone / WhatsApp Number</Label>
-              <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+44 7700 000000" />
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes about this trustee" rows={2} />
-            </div>
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12,animation:"fadeUp 0.4s ease both" }}>
+          <div>
+            <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
+              Trustees <span style={{ color:T.mint }}>Register</span>
+            </h1>
+            <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Board of trustees — Qarde Hasan co-signatories</p>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button
-              className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
-              onClick={handleSave}
-              disabled={createMutation.isPending || updateMutation.isPending}
-            >
-              {editingId ? "Save Changes" : "Add Trustee"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <Button onClick={() => { reset(); setOpen(true); }}
+            style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+            <Plus size={15}/> Add Trustee
+          </Button>
+        </div>
 
-      {/* Delete Confirm */}
-      <DeleteConfirmDialog
-        open={deleteId !== null}
-        onOpenChange={(v) => { if (!v) setDeleteId(null); }}
-        itemLabel="this trustee record (they will be marked inactive)"
-        onConfirm={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })}
-        loading={deleteMutation.isPending}
-      />
-    </div>
+        {/* Stats */}
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:16,marginBottom:28 }}>
+          {[
+            { label:"Total Trustees", value:trustees.length, color:T.purple },
+            { label:"Active", value:active, color:T.mint },
+          ].map((s,i) => (
+            <div key={s.label} style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",animation:`fadeUp 0.5s ease ${i*80}ms both` }}>
+              <p style={{ fontSize:28,fontWeight:800,color:s.color,margin:0,letterSpacing:"-0.03em" }}>{s.value}</p>
+              <p style={{ fontSize:12,color:T.muted,margin:"3px 0 0" }}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Trustees grid */}
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16 }}>
+          {trustees.length === 0 ? (
+            <div style={{ gridColumn:"1/-1",textAlign:"center",padding:60,color:T.muted,background:T.card,borderRadius:16,border:`1px solid ${T.border}` }}>
+              <Shield size={36} style={{ opacity:0.3,marginBottom:12 }}/>
+              <p>No trustees yet — add one above</p>
+            </div>
+          ) : trustees.map((t: any, i: number) => (
+            <div key={t.id} style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:16,padding:22,animation:`fadeUp 0.5s ease ${200+i*60}ms both` }}>
+              <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+                  <div style={{ width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:T.white,flexShrink:0 }}>
+                    {(t.name??"?")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p style={{ fontSize:15,fontWeight:700,color:T.white,margin:0 }}>{t.name}</p>
+                    <p style={{ fontSize:11,color:T.purple,margin:0,fontWeight:600 }}>{t.role??"Trustee"}</p>
+                  </div>
+                </div>
+                <div style={{ display:"flex",gap:6 }}>
+                  <button onClick={() => { setEditing(t); setValue("name",t.name); setValue("email",t.email); setValue("phone",t.phone); setValue("role",t.role); setOpen(true); }}
+                    style={{ width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                    <Pencil size={12}/>
+                  </button>
+                  <button onClick={() => { if(confirm("Remove this trustee?")) deleteMutation.mutate({ id:t.id }); }}
+                    style={{ width:30,height:30,borderRadius:8,background:"rgba(255,80,80,0.08)",border:"1px solid rgba(255,80,80,0.15)",color:"#ff5050",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                    <Trash2 size={12}/>
+                  </button>
+                </div>
+              </div>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                {t.email && (
+                  <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                    <Mail size={13} style={{ color:T.muted,flexShrink:0 }}/>
+                    <span style={{ fontSize:13,color:T.muted }}>{t.email}</span>
+                  </div>
+                )}
+                {t.phone && (
+                  <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                    <Phone size={13} style={{ color:T.muted,flexShrink:0 }}/>
+                    <span style={{ fontSize:13,color:T.muted }}>{t.phone}</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ marginTop:14,display:"flex",alignItems:"center",gap:6 }}>
+                <span style={{ width:8,height:8,borderRadius:"50%",background:t.isActive!==false?T.mint:"#ff5050",boxShadow:t.isActive!==false?`0 0 6px ${T.mint}`:undefined }}/>
+                <span style={{ fontSize:12,color:t.isActive!==false?T.mint:"#ff5050",fontWeight:600 }}>
+                  {t.isActive!==false?"Active":"Inactive"}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add / Edit dialog */}
+        <Dialog open={open} onOpenChange={v=>{ setOpen(v); if(!v) setEditing(null); }}>
+          <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:420 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color:T.white,fontSize:18,fontWeight:800 }}>{editing?"Edit Trustee":"Add Trustee"}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit(d => editing ? updateMutation.mutate({id:editing.id,...d}) : createMutation.mutate(d))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
+              <div>
+                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Full Name</Label>
+                <Input {...register("name",{required:true})} placeholder="Full name"
+                  style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Email</Label>
+                  <Input {...register("email")} type="email"
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Phone</Label>
+                  <Input {...register("phone")}
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                </div>
+              </div>
+              <div>
+                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Role / Title</Label>
+                <Input {...register("role")} placeholder="e.g. Chair of Trustees"
+                  style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+              </div>
+              <Button type="submit" disabled={createMutation.isPending||updateMutation.isPending}
+                style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:48,borderRadius:12,border:"none",fontSize:15 }}>
+                {createMutation.isPending||updateMutation.isPending?"Saving…":editing?"Update Trustee":"Add Trustee"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   );
 }
