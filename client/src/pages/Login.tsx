@@ -1,8 +1,3 @@
-bash
-
-cat /home/claude/Login.tsx
-Output
-
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
