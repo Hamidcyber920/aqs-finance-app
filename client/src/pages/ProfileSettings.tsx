@@ -1,337 +1,202 @@
 import { useState } from "react";
-import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { User, Lock, Bell, Shield, Eye, EyeOff, Save, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
-import { User, Lock, Bell, Shield, Building2, Calendar } from "lucide-react";
 
-export default function ProfileSettings() {
-  const { user } = useAuth();
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [changingPassword, setChangingPassword] = useState(false);
+const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
-  const { data: departments = [] } = trpc.departments.list.useQuery();
-  const { data: incomeCategories = [] } = trpc.income.categories.useQuery();
+const TABS = [
+  { id:"profile", label:"Profile", icon:User },
+  { id:"security", label:"Security", icon:Lock },
+  { id:"notifications", label:"Notifications", icon:Bell },
+];
 
-  const changePasswordMutation = trpc.localAuth.changePassword.useMutation({
-    onSuccess: () => {
-      toast.success("Password changed successfully");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setChangingPassword(false);
-    },
-    onError: (err: { message?: string }) => {
-      toast.error(err.message || "Failed to change password");
-      setChangingPassword(false);
-    },
+export default function ProfileSettingsPage() {
+  const { user, logout } = useAuth();
+  const [tab, setTab] = useState("profile");
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+
+  const updateMutation = trpc.users.updateProfile?.useMutation?.({
+    onSuccess: () => toast.success("Profile updated"),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const passwordMutation = trpc.localAuth.changePassword?.useMutation?.({
+    onSuccess: () => { toast.success("Password changed"); resetPwd(); },
+    onError: (e: any) => toast.error(e.message),
   });
 
-  const handleChangePassword = () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      toast.error("Please fill in all password fields");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("New passwords do not match");
-      return;
-    }
-    if (newPassword.length < 8) {
-      toast.error("New password must be at least 8 characters");
-      return;
-    }
-    setChangingPassword(true);
-    changePasswordMutation.mutate({ currentPassword, newPassword });
-  };
+  const { register: regP, handleSubmit: handleP } = useForm<any>({
+    defaultValues: { name: user?.name, email: user?.email },
+  });
+  const { register: regPwd, handleSubmit: handlePwd, reset: resetPwd } = useForm<any>();
 
-  const getRoleBadgeColor = (role: string) => {
-    switch (role) {
-      case "superadmin": return "bg-red-100 text-red-800 border-red-200";
-      case "trustee": return "bg-purple-100 text-purple-800 border-purple-200";
-      case "manager": return "bg-blue-100 text-blue-800 border-blue-200";
-      case "assistant": return "bg-green-100 text-green-800 border-green-200";
-      case "volunteer": return "bg-gray-100 text-gray-800 border-gray-200";
-      default: return "bg-gray-100 text-gray-800 border-gray-200";
-    }
-  };
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case "superadmin": return "Super Admin";
-      case "trustee": return "Trustee";
-      case "manager": return "Manager";
-      case "assistant": return "Assistant";
-      case "volunteer": return "Volunteer";
-      default: return role;
-    }
-  };
+  const role = user?.role ?? "user";
+  const ROLE_COLORS: Record<string,string> = { superadmin:"#f87171",trustee:"#fbbf24",manager:T.purple,deputy:"#a78bfa",assistant:T.mint,volunteer:"#94a3b8" };
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Profile & Settings</h1>
-          <p className="page-subtitle">Manage your account details and preferences</p>
-        </div>
-      </div>
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:24,fontFamily:"'DM Sans',sans-serif" }}>
 
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="bg-white border border-gray-200 p-1">
-          <TabsTrigger value="profile" className="flex items-center gap-2">
-            <User className="w-4 h-4" />
-            Profile
-          </TabsTrigger>
-          <TabsTrigger value="security" className="flex items-center gap-2">
-            <Lock className="w-4 h-4" />
-            Security
-          </TabsTrigger>
-          <TabsTrigger value="organisation" className="flex items-center gap-2">
-            <Building2 className="w-4 h-4" />
-            Organisation
-          </TabsTrigger>
-        </TabsList>
+        <div style={{ maxWidth:680,margin:"0 auto" }}>
 
-        {/* Profile Tab */}
-        <TabsContent value="profile" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="w-5 h-5 text-[#1B4332]" />
-                Account Information
-              </CardTitle>
-              <CardDescription>Your personal account details</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Avatar */}
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-full bg-[#1B4332] flex items-center justify-center text-white text-2xl font-bold">
-                  {user?.name?.charAt(0)?.toUpperCase() ?? "U"}
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900 text-lg">{user?.name ?? "—"}</p>
-                  <p className="text-gray-500 text-sm">{user?.email ?? "—"}</p>
-                  <Badge className={`mt-1 text-xs border ${getRoleBadgeColor(user?.role ?? "")}`}>
-                    <Shield className="w-3 h-3 mr-1" />
-                    {getRoleLabel(user?.role ?? "")}
-                  </Badge>
-                </div>
-              </div>
+          {/* Header */}
+          <div style={{ marginBottom:28,animation:"fadeUp 0.4s ease both" }}>
+            <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
+              Profile <span style={{ color:T.mint }}>&amp; Settings</span>
+            </h1>
+            <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Manage your account, security and preferences</p>
+          </div>
 
-              <Separator />
+          {/* Profile card */}
+          <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:20,padding:24,marginBottom:20,display:"flex",alignItems:"center",gap:20,flexWrap:"wrap",animation:"fadeUp 0.5s ease 100ms both" }}>
+            <div style={{ width:72,height:72,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:800,color:T.white,flexShrink:0 }}>
+              {(user?.name??"?")[0].toUpperCase()}
+            </div>
+            <div style={{ flex:1 }}>
+              <p style={{ fontSize:20,fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.02em" }}>{user?.name}</p>
+              <p style={{ fontSize:13,color:T.muted,margin:"3px 0 6px" }}>{user?.email}</p>
+              <span style={{ fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:999,background:`${ROLE_COLORS[role]??T.muted}18`,color:ROLE_COLORS[role]??T.muted,border:`1px solid ${ROLE_COLORS[role]??T.muted}30`,textTransform:"capitalize" }}>
+                {role}
+              </span>
+            </div>
+            <button onClick={logout}
+              style={{ display:"flex",alignItems:"center",gap:7,padding:"9px 16px",borderRadius:10,background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.2)",color:"#ff5050",fontSize:13,fontWeight:600,cursor:"pointer" }}>
+              <LogOut size={14}/> Sign Out
+            </button>
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-gray-600 text-sm">Full Name</Label>
-                  <p className="mt-1 font-medium text-gray-900">{user?.name ?? "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Email Address</Label>
-                  <p className="mt-1 font-medium text-gray-900">{user?.email ?? "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Role</Label>
-                  <p className="mt-1 font-medium text-gray-900">{getRoleLabel(user?.role ?? "")}</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Login Method</Label>
-                  <p className="mt-1 font-medium text-gray-900 capitalize">{user?.loginMethod ?? "Email & Password"}</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Account Status</Label>
-                  <p className="mt-1">
-                    <Badge className="bg-green-100 text-green-800 border-green-200 border text-xs">Active</Badge>
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Member Since</Label>
-                  <p className="mt-1 font-medium text-gray-900 flex items-center gap-1">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    {user?.createdAt ? new Date(user.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "—"}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Tabs */}
+          <div style={{ display:"flex",gap:4,marginBottom:20,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:4,width:"fit-content" }}>
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                style={{ padding:"8px 18px",borderRadius:10,fontSize:13,fontWeight:600,border:"none",cursor:"pointer",transition:"all 0.2s",display:"flex",alignItems:"center",gap:7,
+                  background:tab===t.id?"rgba(99,91,255,0.3)":"transparent",
+                  color:tab===t.id?T.white:T.muted }}>
+                <t.icon size={14}/>{t.label}
+              </button>
+            ))}
+          </div>
 
-          {/* Permissions Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-[#1B4332]" />
-                Access & Permissions
-              </CardTitle>
-              <CardDescription>Modules you have access to based on your role</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {user?.role === "superadmin" || user?.role === "trustee" ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {["Receipt Scanner", "Dashboard", "Fundraising", "Qarde Hasan Loans", "Income & Rentals", "Payroll", "Donors", "Email Campaigns", "Admin Panel", "Reports"].map((mod) => (
-                    <div key={mod} className="flex items-center gap-2 p-2 rounded-lg bg-green-50 border border-green-200">
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                      <span className="text-xs text-green-800 font-medium">{mod}</span>
+          {/* Profile tab */}
+          {tab === "profile" && (
+            <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:20,padding:28,animation:"fadeUp 0.4s ease both" }}>
+              <h2 style={{ fontSize:16,fontWeight:700,color:T.white,margin:"0 0 20px" }}>Personal Information</h2>
+              <form onSubmit={handleP(d => updateMutation?.mutate?.(d))} style={{ display:"flex",flexDirection:"column",gap:16 }}>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14 }}>
+                  <div>
+                    <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Full Name</Label>
+                    <Input {...regP("name")} style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                  </div>
+                  <div>
+                    <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Email</Label>
+                    <Input {...regP("email")} type="email" style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                  </div>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Role</Label>
+                  <div style={{ marginTop:6,height:44,background:"rgba(255,255,255,0.03)",border:`1px solid ${T.border}`,borderRadius:10,display:"flex",alignItems:"center",paddingLeft:14 }}>
+                    <span style={{ fontSize:14,color:T.muted,textTransform:"capitalize" }}>{role} — read only</span>
+                  </div>
+                </div>
+                <Button type="submit" disabled={updateMutation?.isPending}
+                  style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:46,borderRadius:12,border:"none",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:4 }}>
+                  <Save size={16}/>{updateMutation?.isPending?"Saving…":"Save Changes"}
+                </Button>
+              </form>
+            </div>
+          )}
+
+          {/* Security tab */}
+          {tab === "security" && (
+            <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:20,padding:28,animation:"fadeUp 0.4s ease both" }}>
+              <h2 style={{ fontSize:16,fontWeight:700,color:T.white,margin:"0 0 20px" }}>Change Password</h2>
+              <form onSubmit={handlePwd(d => passwordMutation?.mutate?.(d))} style={{ display:"flex",flexDirection:"column",gap:16 }}>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Current Password</Label>
+                  <div style={{ position:"relative",marginTop:6 }}>
+                    <Input {...regPwd("oldPassword",{required:true})} type={showOld?"text":"password"} placeholder="••••••••"
+                      style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,paddingRight:44 }}/>
+                    <button type="button" onClick={()=>setShowOld(!showOld)}
+                      style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.muted,cursor:"pointer",display:"flex" }}>
+                      {showOld?<EyeOff size={16}/>:<Eye size={16}/>}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>New Password</Label>
+                  <div style={{ position:"relative",marginTop:6 }}>
+                    <Input {...regPwd("newPassword",{required:true,minLength:8})} type={showNew?"text":"password"} placeholder="Min 8 characters"
+                      style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,paddingRight:44 }}/>
+                    <button type="button" onClick={()=>setShowNew(!showNew)}
+                      style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.muted,cursor:"pointer",display:"flex" }}>
+                      {showNew?<EyeOff size={16}/>:<Eye size={16}/>}
+                    </button>
+                  </div>
+                </div>
+                <Button type="submit" disabled={passwordMutation?.isPending}
+                  style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,fontWeight:700,height:46,borderRadius:12,border:"none",fontSize:15,marginTop:4 }}>
+                  {passwordMutation?.isPending?"Updating…":"Update Password"}
+                </Button>
+              </form>
+
+              <div style={{ marginTop:24,padding:18,borderRadius:14,background:"rgba(0,255,194,0.06)",border:"1px solid rgba(0,255,194,0.15)" }}>
+                <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
+                  <Shield size={14} style={{color:T.mint}}/>
+                  <span style={{ fontSize:13,fontWeight:700,color:T.mint }}>Security Status</span>
+                </div>
+                <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                  {[
+                    { label:"256-bit encryption", ok:true },
+                    { label:"Secure session", ok:true },
+                    { label:"GDPR compliant", ok:true },
+                  ].map(item => (
+                    <div key={item.label} style={{ display:"flex",alignItems:"center",gap:8 }}>
+                      <span style={{ width:6,height:6,borderRadius:"50%",background:T.mint,flexShrink:0 }}/>
+                      <span style={{ fontSize:12,color:T.muted }}>{item.label}</span>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-gray-500 text-sm">Contact your administrator to view or update your module permissions.</p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Security Tab */}
-        <TabsContent value="security" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="w-5 h-5 text-[#1B4332]" />
-                Change Password
-              </CardTitle>
-              <CardDescription>Update your password to keep your account secure</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 max-w-md">
-              <div className="space-y-2">
-                <Label htmlFor="current-password">Current Password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  placeholder="Enter your current password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  placeholder="At least 8 characters"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password">Confirm New Password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="Repeat your new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-              <Button
-                onClick={handleChangePassword}
-                disabled={changingPassword}
-                className="bg-[#1B4332] hover:bg-[#2D6A4F] text-white"
-              >
-                {changingPassword ? "Updating..." : "Update Password"}
-              </Button>
-            </CardContent>
-          </Card>
+            </div>
+          )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="w-5 h-5 text-[#1B4332]" />
-                Notifications
-              </CardTitle>
-              <CardDescription>Email notifications sent to {user?.email}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                { label: "New user registration requires approval", enabled: true },
-                { label: "Receipt processed successfully", enabled: true },
-                { label: "Monthly expense threshold exceeded", enabled: true },
-                { label: "Loan application submitted", enabled: true },
-                { label: "Payroll sync completed (25th of month)", enabled: true },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                  <span className="text-sm text-gray-700">{item.label}</span>
-                  <Badge className={item.enabled ? "bg-green-100 text-green-800 border-green-200 border text-xs" : "bg-gray-100 text-gray-500 border text-xs"}>
-                    {item.enabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Organisation Tab */}
-        <TabsContent value="organisation" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-[#1B4332]" />
-                Organisation Details
-              </CardTitle>
-              <CardDescription>Abdullah Quilliam Society — system configuration</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-gray-600 text-sm">Organisation Name</Label>
-                  <p className="mt-1 font-medium text-gray-900">Abdullah Quilliam Society</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">System</Label>
-                  <p className="mt-1 font-medium text-gray-900">Financial Management System</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Gmail Integration</Label>
-                  <Badge className="mt-1 bg-green-100 text-green-800 border-green-200 border text-xs">Connected</Badge>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Google Drive Sync</Label>
-                  <Badge className="mt-1 bg-green-100 text-green-800 border-green-200 border text-xs">Connected — syncs on 25th</Badge>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Monthly Expense Threshold</Label>
-                  <p className="mt-1 font-medium text-gray-900">£5,000 (notification trigger)</p>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-sm">Payroll Cycle</Label>
-                  <p className="mt-1 font-medium text-gray-900">Monthly — 25th of each month</p>
-                </div>
+          {/* Notifications tab */}
+          {tab === "notifications" && (
+            <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:20,padding:28,animation:"fadeUp 0.4s ease both" }}>
+              <h2 style={{ fontSize:16,fontWeight:700,color:T.white,margin:"0 0 20px" }}>Notification Preferences</h2>
+              <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
+                {[
+                  { label:"Expense approved/rejected", sub:"Get notified when your receipts are reviewed", key:"expenses" },
+                  { label:"Loan status updates", sub:"Updates on Qarde Hasan loan applications", key:"loans" },
+                  { label:"Payroll processed", sub:"When monthly payslip is available", key:"payroll" },
+                  { label:"New campaign donations", sub:"When a donation is recorded against a campaign", key:"donations" },
+                  { label:"System announcements", sub:"Important platform updates", key:"system" },
+                ].map((item, i) => (
+                  <div key={item.key} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 0",borderBottom:i<4?`1px solid ${T.border}`:"none" }}>
+                    <div>
+                      <p style={{ fontSize:14,fontWeight:600,color:T.white,margin:0 }}>{item.label}</p>
+                      <p style={{ fontSize:12,color:T.muted,margin:"2px 0 0" }}>{item.sub}</p>
+                    </div>
+                    <label style={{ position:"relative",width:44,height:24,cursor:"pointer",flexShrink:0 }}>
+                      <input type="checkbox" defaultChecked style={{ opacity:0,width:0,height:0,position:"absolute" }}/>
+                      <span style={{ position:"absolute",inset:0,borderRadius:999,background:T.mint,transition:"0.2s",display:"flex",alignItems:"center" }}>
+                        <span style={{ position:"absolute",right:2,width:20,height:20,borderRadius:"50%",background:T.white,boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }}/>
+                      </span>
+                    </label>
+                  </div>
+                ))}
               </div>
-
-              <Separator />
-
-                <div>
-                <Label className="text-gray-600 text-sm">Expense Departments</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {departments.map((dept) => (
-                    <Badge key={dept.id} variant="outline" className="text-xs" style={{ borderColor: dept.color ?? '#1B4332', color: dept.color ?? '#1B4332' }}>
-                      {dept.name}
-                    </Badge>
-                  ))}
-                  {departments.length === 0 && <span className="text-xs text-muted-foreground">No departments yet</span>}
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-gray-600 text-sm">Income Categories</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {incomeCategories.map((cat) => (
-                    <Badge key={cat.id} variant="outline" className="text-xs" style={{ borderColor: cat.color ?? '#C9A84C', color: cat.color ?? '#C9A84C' }}>
-                      {cat.name}
-                    </Badge>
-                  ))}
-                  {incomeCategories.length === 0 && <span className="text-xs text-muted-foreground">No categories yet</span>}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
