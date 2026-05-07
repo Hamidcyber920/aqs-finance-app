@@ -1,273 +1,156 @@
-import { useState, useMemo } from "react";
-import { useLocation } from "wouter";
-import { format } from "date-fns";
-import { Search, Filter, Receipt, Trash2, Eye, ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
-import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocation } from "wouter";
+import { toast } from "sonner";
+import { Search, Filter, Receipt, CheckCircle2, Clock, XCircle, Camera } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
-const PAGE_SIZE = 20;
+const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
-const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  processed: "default",
-  processing: "secondary",
-  pending: "secondary",
-  failed: "destructive",
-};
+const STATUSES = ["All","pending","approved","rejected"];
+const DEPTS = ["All","Mosque","Restaurant/Bistro","Ramadan","Staff/Payroll"];
+
+function Badge({ status }: { status: string }) {
+  const map: Record<string,{bg:string;color:string;icon:any}> = {
+    approved:{bg:"rgba(0,255,194,0.1)",color:T.mint,icon:CheckCircle2},
+    pending:{bg:"rgba(251,191,36,0.1)",color:"#fbbf24",icon:Clock},
+    rejected:{bg:"rgba(255,80,80,0.1)",color:"#ff5050",icon:XCircle},
+  };
+  const s = map[status?.toLowerCase()] ?? {bg:T.glass,color:T.muted,icon:Clock};
+  return (
+    <span style={{ display:"inline-flex",alignItems:"center",gap:5,padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,background:s.bg,color:s.color,textTransform:"capitalize" }}>
+      <s.icon size={10}/>{status}
+    </span>
+  );
+}
 
 export default function ReceiptsPage() {
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
-  const utils = trpc.useUtils();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [deptFilter, setDeptFilter] = useState("All");
 
-  const [vendor, setVendor] = useState("");
-  const [category, setCategory] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [page, setPage] = useState(0);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-
-  const filters = useMemo(() => ({
-    vendor: vendor || undefined,
-    categoryName: category !== "all" ? category : undefined,
-    status: status !== "all" ? status : undefined,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
-  }), [vendor, category, status, dateFrom, dateTo, page]);
-
-  const { data, isLoading, refetch } = trpc.receipts.list.useQuery(filters);
-  const { data: categories } = trpc.categories.list.useQuery();
-
-  const deleteMutation = trpc.receipts.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Receipt deleted");
-      utils.receipts.list.invalidate();
-      setDeleteId(null);
-    },
-    onError: (err) => toast.error("Delete failed", { description: err.message }),
+  const { data, refetch } = trpc.receipts.list.useQuery({ limit: 100 });
+  const deleteMutation = trpc.receipts.delete?.useMutation?.({
+    onSuccess: () => { toast.success("Receipt deleted"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
   });
 
-  const totalPages = Math.ceil((data?.total ?? 0) / PAGE_SIZE);
+  const receipts = data?.receipts ?? [];
 
-  const setMarchFilter = () => {
-    setDateFrom("2026-03-01");
-    setDateTo("2026-03-31");
-    setPage(0);
-  };
+  const filtered = receipts.filter((r: any) => {
+    const matchSearch = !search || (r.description??r.notes??"").toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === "All" || r.status === statusFilter;
+    const matchDept = deptFilter === "All" || r.department === deptFilter || r.departmentName === deptFilter;
+    return matchSearch && matchStatus && matchDept;
+  });
+
+  const total = filtered.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+  const approved = receipts.filter((r: any) => r.status === "approved").length;
+  const pending = receipts.filter((r: any) => r.status === "pending").length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">All Receipts</h1>
-          <p className="text-muted-foreground mt-1">
-            {data ? `${data.total} receipt${data.total !== 1 ? "s" : ""} found` : "Loading..."}
-          </p>
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}} tr:hover td{background:rgba(99,91,255,0.05)}`}</style>
+      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:24,fontFamily:"'DM Sans',sans-serif" }}>
+
+        {/* Header */}
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12,animation:"fadeUp 0.4s ease both" }}>
+          <div>
+            <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
+              My <span style={{ color:T.mint }}>Expenses</span>
+            </h1>
+            <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>All your submitted receipts and expense claims</p>
+          </div>
+          <Button onClick={() => setLocation("/")}
+            style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+            <Camera size={15}/> Scan Receipt
+          </Button>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={setMarchFilter}>
-            March 2026
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-          </Button>
+
+        {/* Stats */}
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:16,marginBottom:24 }}>
+          {[
+            {label:"Total Spent",value:`£${total.toLocaleString("en-GB",{minimumFractionDigits:2})}`,color:T.purple},
+            {label:"Receipts",value:receipts.length,color:T.mint},
+            {label:"Approved",value:approved,color:"#6ee7b7"},
+            {label:"Pending",value:pending,color:"#fbbf24"},
+          ].map((s,i)=>(
+            <div key={s.label} style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 18px",animation:`fadeUp 0.5s ease ${i*80}ms both` }}>
+              <p style={{ fontSize:22,fontWeight:800,color:s.color,margin:0,letterSpacing:"-0.03em" }}>{s.value}</p>
+              <p style={{ fontSize:12,color:T.muted,margin:"2px 0 0" }}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Filters */}
+        <div style={{ display:"flex",gap:12,marginBottom:20,flexWrap:"wrap",alignItems:"center" }}>
+          <div style={{ position:"relative",flex:1,minWidth:200 }}>
+            <Search size={14} style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:T.muted,pointerEvents:"none" }}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search receipts…"
+              style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:12,color:T.white,height:42,paddingLeft:36,paddingRight:14,fontSize:13,outline:"none",boxSizing:"border-box" }}/>
+          </div>
+          <div style={{ display:"flex",gap:8" }}>
+            {STATUSES.map(s=>(
+              <button key={s} onClick={()=>setStatusFilter(s)}
+                style={{ padding:"7px 14px",borderRadius:999,fontSize:12,fontWeight:600,border:`1px solid ${statusFilter===s?T.purple:T.border}`,background:statusFilter===s?"rgba(99,91,255,0.2)":T.glass,color:statusFilter===s?T.white:T.muted,cursor:"pointer",transition:"all 0.2s",textTransform:"capitalize" }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:16,padding:24,animation:"fadeUp 0.5s ease 300ms both" }}>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%",borderCollapse:"collapse",minWidth:520 }}>
+              <thead>
+                <tr>
+                  {["Description","Department","Category","Amount","Status","Date",""].map(h=>(
+                    <th key={h} style={{ textAlign:"left",fontSize:10,fontWeight:600,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",padding:"0 12px 12px 0",borderBottom:`1px solid ${T.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length===0 ? (
+                  <tr><td colSpan={7} style={{ textAlign:"center",padding:48,color:T.muted,fontSize:14 }}>
+                    <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:10 }}>
+                      <Receipt size={32} style={{color:T.muted,opacity:0.4}}/>
+                      <span>No receipts found</span>
+                    </div>
+                  </td></tr>
+                ) : filtered.map((r:any,i:number)=>(
+                  <tr key={r.id??i} style={{ cursor:"pointer",transition:"background 0.15s" }}
+                    onClick={()=>setLocation(`/receipts/${r.id}`)}>
+                    <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}>
+                      <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                        {r.imageUrl && (
+                          <img src={r.imageUrl} alt="" style={{ width:36,height:36,borderRadius:8,objectFit:"cover",flexShrink:0,border:`1px solid ${T.border}` }}/>
+                        )}
+                        <span style={{ fontSize:13,color:T.white,fontWeight:500 }}>{r.description??r.notes??"—"}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.department??r.departmentName??"—"}</td>
+                    <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.category??r.categoryName??"—"}</td>
+                    <td style={{ padding:"12px 12px 12px 0",fontSize:14,fontWeight:700,color:T.mint,borderBottom:`1px solid ${T.border}` }}>£{Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td>
+                    <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}><Badge status={r.status??"pending"}/></td>
+                    <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.date?new Date(r.date).toLocaleDateString("en-GB"):r.createdAt?new Date(r.createdAt).toLocaleDateString("en-GB"):"—"}</td>
+                    <td style={{ padding:"12px 0",borderBottom:`1px solid ${T.border}` }}>
+                      <button onClick={e=>{e.stopPropagation();setLocation(`/receipts/${r.id}`);}}
+                        style={{ padding:"4px 10px",borderRadius:8,background:"rgba(99,91,255,0.1)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-
-      {/* Search & Filters */}
-      <Card>
-        <CardContent className="pt-4 pb-4 space-y-3">
-          <div className="flex gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-48">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by vendor..."
-                value={vendor}
-                onChange={(e) => { setVendor(e.target.value); setPage(0); }}
-                className="pl-9"
-              />
-            </div>
-            <Select value={category} onValueChange={(v) => { setCategory(v); setPage(0); }}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="All categories" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {categories?.map((c) => (
-                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={status} onValueChange={(v) => { setStatus(v); setPage(0); }}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="All statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="processed">Processed</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="processing">Processing</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {showFilters && (
-            <div className="flex gap-3 flex-wrap pt-1 border-t">
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground whitespace-nowrap">From:</label>
-                <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
-                  className="w-40"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground whitespace-nowrap">To:</label>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
-                  className="w-40"
-                />
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setVendor(""); setCategory("all"); setStatus("all");
-                  setDateFrom(""); setDateTo(""); setPage(0);
-                }}
-              >
-                Clear all
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 space-y-3">
-              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
-            </div>
-          ) : !data?.rows.length ? (
-            <div className="py-16 text-center text-muted-foreground">
-              <Receipt className="h-12 w-12 mx-auto mb-4 opacity-30" />
-              <p className="font-medium">No receipts found</p>
-              <p className="text-sm mt-1">Try adjusting your filters or add a new receipt.</p>
-            </div>
-          ) : (
-            <>
-              {/* Header */}
-              <div className="grid grid-cols-[1fr_120px_100px_100px_80px_80px] gap-4 px-4 py-3 border-b bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                <span>Vendor</span>
-                <span>Date</span>
-                <span>Amount</span>
-                <span>Category</span>
-                <span>Status</span>
-                <span className="text-right">Actions</span>
-              </div>
-
-              {data.rows.map((r) => (
-                <div
-                  key={r.id}
-                  className="grid grid-cols-[1fr_120px_100px_100px_80px_80px] gap-4 px-4 py-3 border-b last:border-0 hover:bg-muted/20 transition-colors items-center"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">{r.vendor ?? "Unknown Vendor"}</p>
-                    <p className="text-xs text-muted-foreground truncate">{r.originalFilename ?? ""}</p>
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {r.receiptDate ? format(new Date(r.receiptDate), "d MMM yyyy") : "—"}
-                  </span>
-                  <span className="text-sm font-medium">
-                    {r.amount ? `£${parseFloat(String(r.amount)).toFixed(2)}` : "—"}
-                  </span>
-                  <span className="text-xs text-muted-foreground truncate">
-                    {r.categoryName ?? "—"}
-                  </span>
-                  <Badge variant={STATUS_COLORS[r.status] ?? "secondary"} className="text-xs w-fit">
-                    {r.status}
-                  </Badge>
-                  <div className="flex gap-1 justify-end">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={() => setLocation(`/receipts/${r.id}`)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => setDeleteId(r.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Page {page + 1} of {totalPages} · {data?.total} total
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline" size="sm"
-              disabled={page === 0}
-              onClick={() => setPage(p => p - 1)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </Button>
-            <Button
-              variant="outline" size="sm"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage(p => p + 1)}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Delete dialog */}
-      <DeleteConfirmDialog
-        open={deleteId !== null}
-        onOpenChange={(v) => { if (!v) setDeleteId(null); }}
-        itemLabel="this receipt and all extracted data"
-        onConfirm={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })}
-        loading={deleteMutation.isPending}
-      />
-    </div>
+    </>
   );
 }
