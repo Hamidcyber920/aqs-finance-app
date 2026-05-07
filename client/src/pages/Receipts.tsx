@@ -93,7 +93,7 @@ export default function ReceiptsPage() {
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search receipts…"
               style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:12,color:T.white,height:42,paddingLeft:36,paddingRight:14,fontSize:13,outline:"none",boxSizing:"border-box" }}/>
           </div>
-          <div style={{ display:"flex",gap:8" }}>
+          <div style={{ display:"flex",gap:8 }}>
             {STATUSES.map(s=>(
               <button key={s} onClick={()=>setStatusFilter(s)}
                 style={{ padding:"7px 14px",borderRadius:999,fontSize:12,fontWeight:600,border:`1px solid ${statusFilter===s?T.purple:T.border}`,background:statusFilter===s?"rgba(99,91,255,0.2)":T.glass,color:statusFilter===s?T.white:T.muted,cursor:"pointer",transition:"all 0.2s",textTransform:"capitalize" }}>

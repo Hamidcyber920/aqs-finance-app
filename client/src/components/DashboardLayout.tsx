@@ -251,66 +251,83 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="py-2 overflow-y-auto">
-            <SidebarGroup>
+            {/* MAIN */}
+            <SidebarGroup className="pb-1">
               {!isCollapsed && (
-                <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-4 py-1 uppercase tracking-widest font-semibold">
+                <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-2 pb-1 uppercase tracking-widest font-semibold flex items-center">
                   Main
                 </SidebarGroupLabel>
               )}
-              <SidebarMenu className="px-2">
-                {coreItems.map((item) => <NavItem key={item.path} {...item} />)}
+              <SidebarMenu className="px-2 space-y-0.5">
+                {coreItems.map((item) => (
+                  <NavItem key={item.path} {...item} />
+                ))}
               </SidebarMenu>
             </SidebarGroup>
 
+            {/* FINANCE */}
             {(visibleIncomeItems.length > 0 || visibleExpenseItems.length > 0) && (
-              <SidebarGroup>
+              <SidebarGroup className="pb-1">
                 {!isCollapsed && (
-                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-4 py-1 uppercase tracking-widest font-semibold">
+                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-3 pb-1 mt-2 uppercase tracking-widest font-semibold flex items-center border-t border-white/5">
                     Finance
                   </SidebarGroupLabel>
                 )}
-                <SidebarMenu className="px-2">
-                  {visibleIncomeItems.map((item) => <NavItem key={item.path} {...item} />)}
-                  {visibleExpenseItems.map((item) => <NavItem key={item.path} {...item} />)}
+                <SidebarMenu className="px-2 space-y-0.5">
+                  {visibleIncomeItems.map((item) => (
+                    <NavItem key={item.path} {...item} />
+                  ))}
+                  {visibleExpenseItems.map((item) => (
+                    <NavItem key={item.path} {...item} />
+                  ))}
                 </SidebarMenu>
               </SidebarGroup>
             )}
 
+            {/* RECONCILIATION */}
             {visibleReconciliationItems.length > 0 && (
-              <SidebarGroup>
+              <SidebarGroup className="pb-1">
                 {!isCollapsed && (
-                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-4 py-1 uppercase tracking-widest font-semibold">
+                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-3 pb-1 mt-2 uppercase tracking-widest font-semibold flex items-center border-t border-white/5">
                     Reconciliation
                   </SidebarGroupLabel>
                 )}
-                <SidebarMenu className="px-2">
-                  {visibleReconciliationItems.map((item) => <NavItem key={item.path} {...item} />)}
+                <SidebarMenu className="px-2 space-y-0.5">
+                  {visibleReconciliationItems.map((item) => (
+                    <NavItem key={item.path} {...item} />
+                  ))}
                 </SidebarMenu>
               </SidebarGroup>
             )}
 
+            {/* ORGANISATION */}
             {showOrg && (
-              <SidebarGroup>
+              <SidebarGroup className="pb-1">
                 {!isCollapsed && (
-                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-4 py-1 uppercase tracking-widest font-semibold">
+                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-3 pb-1 mt-2 uppercase tracking-widest font-semibold flex items-center border-t border-white/5">
                     Organisation
                   </SidebarGroupLabel>
                 )}
-                <SidebarMenu className="px-2">
-                  {orgItems.map((item) => <NavItem key={item.path} {...item} />)}
+                <SidebarMenu className="px-2 space-y-0.5">
+                  {orgItems.map((item) => (
+                    <NavItem key={item.path} {...item} />
+                  ))}
                 </SidebarMenu>
               </SidebarGroup>
             )}
 
+            {/* ADMINISTRATION */}
             {showAdmin && (
-              <SidebarGroup>
+              <SidebarGroup className="pb-2">
                 {!isCollapsed && (
-                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-4 py-1 uppercase tracking-widest font-semibold">
+                  <SidebarGroupLabel className="text-sidebar-foreground/40 text-[10px] px-3 pt-3 pb-1 mt-2 uppercase tracking-widest font-semibold flex items-center border-t border-white/5">
                     Administration
                   </SidebarGroupLabel>
                 )}
-                <SidebarMenu className="px-2">
-                  {adminItems.map((item) => <NavItem key={item.path} {...item} />)}
+                <SidebarMenu className="px-2 space-y-0.5">
+                  {adminItems.map((item) => (
+                    <NavItem key={item.path} {...item} />
+                  ))}
                 </SidebarMenu>
               </SidebarGroup>
             )}
