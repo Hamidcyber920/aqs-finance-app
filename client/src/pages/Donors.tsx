@@ -1,162 +1,170 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { Plus, Search, Users, Heart, Star, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
-import { Plus, Users, Heart, Search } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-export default function Donors() {
-  const [newOpen, setNewOpen] = useState(false);
+const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
+
+export default function DonorsPage() {
+  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [regularOnly, setRegularOnly] = useState(false);
 
-  const { data: donors = [], refetch } = trpc.donors.list.useQuery({ search: search || undefined, isRegular: regularOnly || undefined });
-
-  const createDonor = trpc.donors.create.useMutation({
-    onSuccess: () => { toast.success("Donor added"); setNewOpen(false); refetch(); },
+  const { data, refetch } = trpc.donors.list.useQuery({ limit:100 });
+  const createMutation = trpc.donors.create.useMutation({
+    onSuccess: () => { toast.success("Donor added"); setOpen(false); refetch(); reset(); },
     onError: (e) => toast.error(e.message),
   });
 
-  const totalGiven = donors.reduce((s, d) => s + parseFloat(d.totalGiven?.toString() ?? "0"), 0);
-  const regularCount = donors.filter(d => d.isRegular).length;
-  const giftAidCount = 0; // Gift Aid field not in current schema
+  const { register, handleSubmit, reset } = useForm<any>();
+
+  const donors = data?.donors ?? [];
+  const filtered = donors.filter((d: any) =>
+    !search || (d.name??"").toLowerCase().includes(search.toLowerCase()) || (d.email??"").toLowerCase().includes(search.toLowerCase())
+  );
+  const regularDonors = donors.filter((d: any) => d.isRegular).length;
+  const totalGiven = donors.reduce((s: number, d: any) => s + Number(d.totalGiven ?? 0), 0);
 
   return (
-    <div className="space-y-6">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Donors</h1>
-          <p className="page-subtitle">Donor management and Gift Aid tracking</p>
-        </div>
-        <Button size="sm" onClick={() => setNewOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" /> Add Donor
-        </Button>
-      </div>
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:24,fontFamily:"'DM Sans',sans-serif" }}>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Users className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Donors</p>
-              <p className="text-xl font-bold">{donors.length}</p>
-            </div>
+        {/* Header */}
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12,animation:"fadeUp 0.4s ease both" }}>
+          <div>
+            <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
+              Donor <span style={{ color:T.mint }}>Management</span>
+            </h1>
+            <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Community donors — Sadaqah, Zakat, regular giving</p>
           </div>
+          <Button onClick={() => setOpen(true)}
+            style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+            <Plus size={16}/> Add Donor
+          </Button>
         </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-rose-100 flex items-center justify-center">
-              <Heart className="h-5 w-5 text-rose-600" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Regular Donors</p>
-              <p className="text-xl font-bold">{regularCount}</p>
-            </div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <span className="text-green-700 font-bold text-xs">GA</span>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Gift Aid Eligible</p>
-              <p className="text-xl font-bold">{giftAidCount}</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Search & Filter */}
-      <div className="flex gap-3 items-center flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9 h-8 text-sm" placeholder="Search donors..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <div className="flex items-center gap-2 text-sm">
-          <Switch checked={regularOnly} onCheckedChange={setRegularOnly} id="regular-filter" />
-          <label htmlFor="regular-filter" className="text-sm cursor-pointer">Regular only</label>
-        </div>
-      </div>
-
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <table className="w-full data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Total Given</th>
-                <th>Regular</th>
-                <th>Gift Aid</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {donors.length === 0 ? (
-                <tr><td colSpan={7} className="text-center text-muted-foreground py-10">No donors found</td></tr>
-              ) : donors.map(d => (
-                <tr key={d.id}>
-                  <td className="font-medium">{d.name}</td>
-                  <td className="text-muted-foreground text-xs">{d.email ?? "—"}</td>
-                  <td className="text-muted-foreground text-xs">{d.phone ?? "—"}</td>
-                  <td className="font-semibold text-primary">£{parseFloat(d.totalGiven?.toString() ?? "0").toFixed(2)}</td>
-                  <td>{d.isRegular ? <Badge variant="default" className="text-xs">Regular</Badge> : <span className="text-muted-foreground text-xs">—</span>}</td>
-                  <td><span className="text-muted-foreground text-xs">—</span></td>
-                  <td className="text-muted-foreground text-xs max-w-[150px] truncate">{d.notes ?? "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
-
-      {/* Add Donor Dialog */}
-      <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add Donor</DialogTitle></DialogHeader>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget);
-            createDonor.mutate({
-              name: fd.get("name") as string,
-              email: fd.get("email") as string || undefined,
-              phone: fd.get("phone") as string || undefined,
-              address: fd.get("address") as string || undefined,
-              isRegular: fd.get("isRegular") === "on",
-
-              notes: fd.get("notes") as string || undefined,
-            });
-          }} className="space-y-4">
-            <div><Label>Full Name *</Label><Input name="name" required /></div>
-            <div><Label>Email</Label><Input name="email" type="email" /></div>
-            <div><Label>Phone</Label><Input name="phone" /></div>
-            <div><Label>Address</Label><Input name="address" /></div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" name="isRegular" id="isRegular" className="h-4 w-4" />
-                <label htmlFor="isRegular" className="text-sm">Regular Donor</label>
+        {/* Stats */}
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:16,marginBottom:24 }}>
+          {[
+            { label:"Total Donors", value:donors.length, color:T.purple, icon:Users },
+            { label:"Regular Donors", value:regularDonors, color:T.mint, icon:Star },
+            { label:"Total Given", value:`£${totalGiven.toLocaleString()}`, color:"#f59e0b", icon:Heart },
+          ].map((s,i) => (
+            <div key={s.label} style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:16,padding:"18px 20px",display:"flex",alignItems:"center",gap:14,animation:`fadeUp 0.5s ease ${i*80}ms both` }}>
+              <div style={{ width:40,height:40,borderRadius:12,background:`${s.color}22`,border:`1px solid ${s.color}44`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                <s.icon size={18} style={{ color:s.color }}/>
               </div>
-
+              <div>
+                <p style={{ fontSize:22,fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>{s.value}</p>
+                <p style={{ fontSize:11,color:T.muted,margin:0 }}>{s.label}</p>
+              </div>
             </div>
-            <div><Label>Notes</Label><Textarea name="notes" rows={2} /></div>
-            <Button type="submit" className="w-full" disabled={createDonor.isPending}>
-              {createDonor.isPending ? "Adding..." : "Add Donor"}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div style={{ position:"relative",marginBottom:20,maxWidth:400 }}>
+          <Search size={14} style={{ position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:T.muted,pointerEvents:"none" }}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search donors…"
+            style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:12,color:T.white,height:42,paddingLeft:36,paddingRight:14,fontSize:13,outline:"none",boxSizing:"border-box" }}/>
+        </div>
+
+        {/* Donors grid */}
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16 }}>
+          {filtered.length === 0 ? (
+            <div style={{ gridColumn:"1/-1",textAlign:"center",padding:60,color:T.muted }}>
+              <Users size={36} style={{ opacity:0.3,marginBottom:12 }}/>
+              <p>{search ? "No donors match your search" : "No donors yet — add one above"}</p>
+            </div>
+          ) : filtered.map((d: any, i: number) => (
+            <div key={d.id} style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:16,padding:20,animation:`fadeUp 0.5s ease ${200+i*60}ms both` }}>
+              <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:12 }}>
+                  <div style={{ width:44,height:44,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:T.white,flexShrink:0 }}>
+                    {(d.name??"?")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <p style={{ fontSize:14,fontWeight:700,color:T.white,margin:0 }}>{d.name}</p>
+                    <p style={{ fontSize:11,color:T.muted,margin:0 }}>{d.email??"No email"}</p>
+                  </div>
+                </div>
+                {d.isRegular && (
+                  <span style={{ fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:999,background:"rgba(0,255,194,0.1)",color:T.mint,border:"1px solid rgba(0,255,194,0.2)",flexShrink:0 }}>
+                    REGULAR
+                  </span>
+                )}
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14 }}>
+                <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 12px" }}>
+                  <p style={{ fontSize:16,fontWeight:800,color:T.mint,margin:0 }}>£{Number(d.totalGiven??0).toLocaleString()}</p>
+                  <p style={{ fontSize:10,color:T.muted,margin:0 }}>Total Given</p>
+                </div>
+                <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 12px" }}>
+                  <p style={{ fontSize:12,fontWeight:600,color:T.white,margin:0 }}>{d.lastGiftDate ? new Date(d.lastGiftDate).toLocaleDateString("en-GB") : "—"}</p>
+                  <p style={{ fontSize:10,color:T.muted,margin:0 }}>Last Gift</p>
+                </div>
+              </div>
+              {d.phone && (
+                <p style={{ fontSize:12,color:T.muted,margin:"0 0 12px" }}>📞 {d.phone}</p>
+              )}
+              <button style={{ width:"100%",padding:"8px",borderRadius:10,background:"rgba(99,91,255,0.1)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
+                <Mail size={12}/> Send Thank You
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add donor dialog */}
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:440 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color:T.white,fontSize:18,fontWeight:800 }}>Add Donor</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit(d => createMutation.mutate(d))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Full Name</Label>
+                  <Input {...register("name",{required:true})} placeholder="Full name"
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Email</Label>
+                  <Input {...register("email")} type="email" placeholder="email@example.com"
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                </div>
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Phone</Label>
+                  <Input {...register("phone")} placeholder="+44..."
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                </div>
+                <div style={{ display:"flex",flexDirection:"column",justifyContent:"flex-end" }}>
+                  <label style={{ display:"flex",alignItems:"center",gap:10,cursor:"pointer",paddingBottom:10 }}>
+                    <input type="checkbox" {...register("isRegular")} style={{ width:16,height:16,accentColor:T.mint }}/>
+                    <span style={{ fontSize:13,color:T.muted }}>Regular donor</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
+                <textarea {...register("notes")} rows={2} placeholder="Any notes..."
+                  style={{ marginTop:6,width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,padding:"10px 14px",fontSize:14,resize:"vertical",boxSizing:"border-box" }}/>
+              </div>
+              <Button type="submit" disabled={createMutation.isPending}
+                style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:48,borderRadius:12,border:"none",fontSize:15 }}>
+                {createMutation.isPending?"Saving…":"Add Donor"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   );
 }
