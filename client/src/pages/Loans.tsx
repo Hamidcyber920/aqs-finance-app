@@ -1,661 +1,265 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useLocation } from "wouter";
+import { toast } from "sonner";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Plus, BookOpen, Clock, CheckCircle2, XCircle,
+  ChevronRight, Download, Send, AlertCircle, Users
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
 import {
-  Plus, BookOpen, CheckCircle, Clock, XCircle, TrendingUp,
-  CalendarDays, AlertCircle, Users, LayoutDashboard, List,
-} from "lucide-react";
-import { useLocation } from "wouter";
-import { SmartUpload, type SmartUploadResult } from "@/components/SmartUpload";
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
-// ─── Loan purpose presets ────────────────────────────────────────────────────
-
-const LOAN_PURPOSE_PRESETS = [
-  "Rimmers Purchase",
-  "Refurbishment",
-  "Building Maintenance",
-  "Equipment Purchase",
-  "Emergency Repairs",
-  "Event Costs",
-  "Other (specify below)",
-];
-
-const STATUS_COLORS: Record<string, string> = {
-  pending_review: "badge-pending",
-  approved: "badge-approved",
-  active: "badge-active",
-  completed: "badge-completed",
-  rejected: "badge-rejected",
-  defaulted: "bg-red-200 text-red-900 border border-red-300",
-  draft: "bg-gray-100 text-gray-700 border border-gray-200",
+const T = {
+  navy: "#0A192F", navyLight: "#112240", purple: "#635BFF",
+  mint: "#00FFC2", white: "#FFFFFF",
+  muted: "rgba(255,255,255,0.5)", border: "rgba(255,255,255,0.08)",
+  glass: "rgba(255,255,255,0.04)", card: "rgba(13,34,64,0.8)",
 };
 
-// ─── Repayment schedule helper ────────────────────────────────────────────────
+const loanSchema = z.object({
+  borrowerName: z.string().min(2),
+  borrowerEmail: z.string().email(),
+  amount: z.coerce.number().min(1),
+  termValue: z.coerce.number().min(1),
+  termUnit: z.enum(["months", "years"]),
+  purpose: z.string().min(2),
+  termNotes: z.string().optional(),
+});
+type LoanForm = z.infer<typeof loanSchema>;
 
-function buildRepaymentSchedule(amount: number, termMonths: number, startDate: Date) {
-  const monthly = amount / termMonths;
-  return Array.from({ length: termMonths }, (_, i) => {
-    const due = new Date(startDate);
-    due.setMonth(due.getMonth() + i + 1);
-    return { month: i + 1, dueDate: due, amount: monthly };
-  });
-}
-
-/** Format a loan's term for display, preferring termValue+termUnit if available */
-function formatTerm(loan: { termMonths?: number | null; termValue?: number | null; termUnit?: string | null }) {
-  if (loan.termValue && loan.termUnit) {
-    return `${loan.termValue} ${loan.termUnit}`;
-  }
-  if (loan.termMonths) {
-    return `${loan.termMonths} months`;
-  }
-  return "—";
-}
-
-export default function Loans() {
-  const [view, setView] = useState<"dashboard" | "list">("dashboard");
-  const [newLoanOpen, setNewLoanOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [purposePreset, setPurposePreset] = useState<string>("");
-  const [customPurpose, setCustomPurpose] = useState("");
-  const [loanAmount, setLoanAmount] = useState("");
-  const [termValue, setTermValue] = useState<string>("6");
-  const [termUnit, setTermUnit] = useState<"months" | "years">("months");
-  const [termNotes, setTermNotes] = useState("");
-  const [, setLocation] = useLocation();
-
-  function handleSmartLoanConfirm(result: SmartUploadResult) {
-    const d = result.extractedData;
-    if (d.amountRequested != null) setLoanAmount(String(d.amountRequested));
-    if (d.purpose) {
-      setPurposePreset("Other (specify below)");
-      setCustomPurpose(d.purpose as string);
-    }
-    if (d.repaymentTerm != null) setTermValue(String(d.repaymentTerm));
-    setNewLoanOpen(true);
-  }
-
-  const { data: loans = [], refetch } = trpc.loans.list.useQuery(
-    { status: statusFilter === "all" ? undefined : statusFilter }
+function Badge({ status }: { status: string }) {
+  const map: Record<string, { bg: string; color: string }> = {
+    approved: { bg: "rgba(0,255,194,0.1)", color: T.mint },
+    pending: { bg: "rgba(251,191,36,0.1)", color: "#fbbf24" },
+    rejected: { bg: "rgba(255,80,80,0.1)", color: "#ff5050" },
+    active: { bg: "rgba(99,91,255,0.15)", color: "#a78bfa" },
+    repaid: { bg: "rgba(0,255,194,0.08)", color: "#6ee7b7" },
+  };
+  const s = map[status?.toLowerCase()] ?? { bg: T.glass, color: T.muted };
+  return (
+    <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, background: s.bg, color: s.color, textTransform: "capitalize" }}>
+      {status}
+    </span>
   );
+}
 
-  const createLoan = trpc.loans.create.useMutation({
-    onSuccess: () => {
-      toast.success("Loan application created");
-      setNewLoanOpen(false);
-      setPurposePreset("");
-      setCustomPurpose("");
-      setLoanAmount("");
-      setTermValue("6");
-      setTermUnit("months");
-      setTermNotes("");
-      refetch();
-    },
+function StatCard({ label, value, icon: Icon, color }: any) {
+  return (
+    <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+      <div style={{ width: 44, height: 44, borderRadius: 12, background: `${color}22`, border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icon size={20} style={{ color }} />
+      </div>
+      <div>
+        <p style={{ fontSize: 24, fontWeight: 800, color: T.white, margin: 0, letterSpacing: "-0.03em" }}>{value}</p>
+        <p style={{ fontSize: 12, color: T.muted, margin: 0 }}>{label}</p>
+      </div>
+    </div>
+  );
+}
+
+const PURPOSES = ["Rimmers Purchase", "Refurbishment", "Equipment", "Events", "Emergency", "Other"];
+
+export default function LoansPage() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const isAdmin = ["superadmin", "trustee", "manager"].includes(user?.role ?? "");
+  const [open, setOpen] = useState(false);
+  const [termUnit, setTermUnit] = useState<"months" | "years">("months");
+
+  const { data, refetch } = trpc.loans.list.useQuery({ limit: 50 });
+  const { data: trustees } = trpc.trustees.list.useQuery(undefined, { enabled: isAdmin });
+
+  const createMutation = trpc.loans.create.useMutation({
+    onSuccess: () => { toast.success("Loan application submitted"); setOpen(false); refetch(); reset(); },
     onError: (e) => toast.error(e.message),
   });
 
-  // ─── Stats ────────────────────────────────────────────────────────────────
-
-  const pending = loans.filter(l => l.status === "pending_review").length;
-  const active = loans.filter(l => l.status === "active" || l.status === "approved").length;
-  const totalReceived = loans
-    .filter(l => ["active", "approved", "completed"].includes(l.status ?? ""))
-    .reduce((s, l) => s + parseFloat(l.amount?.toString() ?? "0"), 0);
-  const totalRepaid = loans
-    .reduce((s, l) => s + parseFloat(l.totalRepaid?.toString() ?? "0"), 0);
-  const totalOutstanding = Math.max(0, totalReceived - totalRepaid);
-
-  // Loans due for repayment this month
-  const now = new Date();
-  const dueThisMonth = loans.filter(l => {
-    if (!["active", "approved"].includes(l.status ?? "")) return false;
-    const start = l.startDate ? new Date(l.startDate) : new Date(l.createdAt);
-    const term = l.termMonths ?? 6;
-    const end = new Date(start);
-    end.setMonth(end.getMonth() + term);
-    return end.getFullYear() === now.getFullYear() && end.getMonth() === now.getMonth();
+  const approveMutation = trpc.loans.approveAdmin.useMutation({
+    onSuccess: () => { toast.success("Loan approved"); refetch(); },
+    onError: (e) => toast.error(e.message),
   });
 
-  // ─── Active loans sorted by next repayment due ────────────────────────────
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<LoanForm>({
+    resolver: zodResolver(loanSchema),
+    defaultValues: { termUnit: "months", termValue: 6 },
+  });
 
-  const activeLoans = useMemo(() =>
-    loans
-      .filter(l => ["active", "approved", "pending_review"].includes(l.status ?? ""))
-      .map(l => {
-        const start = l.startDate ? new Date(l.startDate) : new Date(l.createdAt);
-        const term = l.termMonths ?? 6;
-        const end = new Date(start);
-        end.setMonth(end.getMonth() + term);
-        const amount = parseFloat(l.amount?.toString() ?? "0");
-        const repaid = parseFloat(l.totalRepaid?.toString() ?? "0");
-        const remaining = Math.max(0, amount - repaid);
-        const progressPct = amount > 0 ? Math.min(100, (repaid / amount) * 100) : 0;
-        return { ...l, endDate: end, remaining, progressPct };
-      })
-      .sort((a, b) => a.endDate.getTime() - b.endDate.getTime()),
-    [loans]
-  );
+  const watchAmount = watch("amount");
+  const watchTermValue = watch("termValue");
+  const monthlyPayment = watchAmount && watchTermValue
+    ? (Number(watchAmount) / (termUnit === "years" ? watchTermValue * 12 : watchTermValue)).toFixed(2)
+    : "0.00";
 
-  // ─── Computed monthly repayment (based on termValue + termUnit) ───────────
-
-  const computedTermMonths = useMemo(() => {
-    const tv = parseInt(termValue, 10);
-    if (!tv || isNaN(tv) || tv <= 0) return 0;
-    return termUnit === "years" ? tv * 12 : tv;
-  }, [termValue, termUnit]);
-
-  const computedMonthly = useMemo(() => {
-    const amt = parseFloat(loanAmount);
-    if (!amt || isNaN(amt) || computedTermMonths <= 0) return "";
-    return (amt / computedTermMonths).toFixed(2);
-  }, [loanAmount, computedTermMonths]);
-
-  // ─── Purpose value ────────────────────────────────────────────────────────
-
-  const finalPurpose = purposePreset === "Other (specify below)" ? customPurpose : purposePreset;
+  const loans = data?.applications ?? [];
+  const totalLoaned = loans.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
+  const activeLoans = loans.filter((l: any) => l.status === "active" || l.status === "approved").length;
+  const pendingLoans = loans.filter((l: any) => l.status === "pending").length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Qarde Hasan Loans</h1>
-          <p className="page-subtitle">Worshippers lending to the mosque — interest-free</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant={view === "dashboard" ? "default" : "outline"}
-            onClick={() => setView("dashboard")}
-          >
-            <LayoutDashboard className="h-4 w-4 mr-1" /> Dashboard
-          </Button>
-          <Button
-            size="sm"
-            variant={view === "list" ? "default" : "outline"}
-            onClick={() => setView("list")}
-          >
-            <List className="h-4 w-4 mr-1" /> All Loans
-          </Button>
-          <SmartUpload
-            moduleType="loan_application"
-            onConfirm={handleSmartLoanConfirm}
-            buttonLabel="Import Application"
-            buttonVariant="outline"
-          />
-          <Button size="sm" onClick={() => setNewLoanOpen(true)}>
-            <Plus className="h-4 w-4 mr-1" /> New Application
+    <>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ minHeight: "100vh", background: `linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`, padding: 24, fontFamily: "'DM Sans',sans-serif" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12, animation: "fadeUp 0.4s ease both" }}>
+          <div>
+            <h1 style={{ fontSize: "clamp(22px,3vw,30px)", fontWeight: 800, color: T.white, margin: 0, letterSpacing: "-0.03em" }}>
+              Qarde Hasan <span style={{ color: T.mint }}>Loans</span>
+            </h1>
+            <p style={{ fontSize: 13, color: T.muted, margin: "4px 0 0" }}>Interest-free loans — Amanah of the community</p>
+          </div>
+          <Button onClick={() => setOpen(true)}
+            style={{ background: `linear-gradient(135deg,${T.purple},#4f46e5)`, color: T.white, border: "none", borderRadius: 12, padding: "10px 20px", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+            <Plus size={16} /> New Application
           </Button>
         </div>
-      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
-              <Clock className="h-4 w-4 text-amber-700" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Pending</p>
-              <p className="text-xl font-bold">{pending}</p>
-            </div>
-          </div>
+        {/* Stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 28 }}>
+          <StatCard label="Total Loaned" value={`£${totalLoaned.toLocaleString()}`} icon={BookOpen} color={T.purple} />
+          <StatCard label="Active Loans" value={activeLoans} icon={CheckCircle2} color={T.mint} />
+          <StatCard label="Pending Review" value={pendingLoans} icon={Clock} color="#fbbf24" />
+          <StatCard label="Trustees" value={trustees?.length ?? 0} icon={Users} color="#a78bfa" />
         </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
-              <Users className="h-4 w-4 text-green-700" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Active</p>
-              <p className="text-xl font-bold">{active}</p>
-            </div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <BookOpen className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Received</p>
-              <p className="text-xl font-bold">£{totalReceived.toLocaleString("en-GB", { minimumFractionDigits: 0 })}</p>
-            </div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg bg-red-100 flex items-center justify-center shrink-0">
-              <TrendingUp className="h-4 w-4 text-red-700" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Outstanding</p>
-              <p className="text-xl font-bold">£{totalOutstanding.toLocaleString("en-GB", { minimumFractionDigits: 0 })}</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* ── DASHBOARD VIEW ── */}
-      {view === "dashboard" && (
-        <div className="space-y-6">
-          {/* Due this month alert */}
-          {dueThisMonth.length > 0 && (
-            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-amber-800 text-sm">
-                  {dueThisMonth.length} loan{dueThisMonth.length > 1 ? "s" : ""} due for final repayment this month
-                </p>
-                <p className="text-xs text-amber-700 mt-0.5">
-                  {dueThisMonth.map(l => l.borrowerName).join(", ")}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Active loan cards */}
-          {activeLoans.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center text-muted-foreground">
-                <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="font-medium">No active loans</p>
-                <p className="text-sm mt-1">Click "New Application" to record a worshipper loan</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeLoans.map(l => {
-                const amount = parseFloat(l.amount?.toString() ?? "0");
-                const monthly = l.monthlyRepayment ? parseFloat(l.monthlyRepayment.toString()) : amount / (l.termMonths ?? 6);
-                const schedule = buildRepaymentSchedule(amount, l.termMonths ?? 6, l.startDate ? new Date(l.startDate) : new Date(l.createdAt));
-                const nextDue = schedule.find(s => s.dueDate > now);
-                const isOverdue = l.endDate < now && l.remaining > 0;
-
-                return (
-                  <Card
-                    key={l.id}
-                    className={`cursor-pointer hover:shadow-md transition-shadow ${isOverdue ? "border-red-300" : ""}`}
-                    onClick={() => setLocation(`/loans/${l.id}`)}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <CardTitle className="text-sm font-semibold">{l.borrowerName}</CardTitle>
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{l.purpose}</p>
-                        </div>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium shrink-0 ${STATUS_COLORS[l.status ?? "draft"]}`}>
-                          {(l.status ?? "draft").replace(/_/g, " ")}
-                        </span>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {/* Amount + repayment */}
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-muted/50 rounded p-2">
-                          <p className="text-xs text-muted-foreground">Lent</p>
-                          <p className="font-bold text-sm">£{amount.toFixed(0)}</p>
-                        </div>
-                        <div className="bg-muted/50 rounded p-2">
-                          <p className="text-xs text-muted-foreground">Repaid</p>
-                          <p className="font-bold text-sm text-green-700">£{parseFloat(l.totalRepaid?.toString() ?? "0").toFixed(0)}</p>
-                        </div>
-                        <div className="bg-muted/50 rounded p-2">
-                          <p className="text-xs text-muted-foreground">Owed</p>
-                          <p className={`font-bold text-sm ${isOverdue ? "text-red-600" : ""}`}>£{l.remaining.toFixed(0)}</p>
-                        </div>
-                      </div>
-
-                      {/* Progress bar */}
-                      <div>
-                        <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                          <span>Repayment progress</span>
-                          <span>{l.progressPct.toFixed(0)}%</span>
-                        </div>
-                        <div className="w-full bg-muted rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full transition-all ${isOverdue ? "bg-red-500" : "bg-primary"}`}
-                            style={{ width: `${l.progressPct}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Next payment due */}
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <CalendarDays className="h-3 w-3" />
-                          {nextDue ? (
-                            <span>
-                              Next: <strong>{nextDue.dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</strong>
-                              {" "}(£{nextDue.amount.toFixed(2)}/mo)
-                            </span>
-                          ) : isOverdue ? (
-                            <span className="text-red-600 font-medium">Overdue — please follow up</span>
-                          ) : (
-                            <span>All repayments complete</span>
-                          )}
-                        </div>
-                        <span className="text-muted-foreground">{formatTerm(l)}</span>
-                      </div>
-
-                      {/* Term notes if present */}
-                      {(l as any).termNotes && (
-                        <p className="text-xs text-muted-foreground italic border-t pt-2">
-                          Note: {(l as any).termNotes}
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Completed loans summary */}
-          {loans.filter(l => l.status === "completed").length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" /> Completed Loans
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <table className="w-full data-table">
-                  <thead>
-                    <tr>
-                      <th>Lender</th>
-                      <th>Purpose</th>
-                      <th>Amount</th>
-                      <th>Completed</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loans.filter(l => l.status === "completed").map(l => (
-                      <tr key={l.id} className="cursor-pointer" onClick={() => setLocation(`/loans/${l.id}`)}>
-                        <td className="font-medium">{l.borrowerName}</td>
-                        <td className="text-muted-foreground text-xs max-w-[160px] truncate">{l.purpose}</td>
-                        <td>£{parseFloat(l.amount?.toString() ?? "0").toFixed(2)}</td>
-                        <td className="text-xs text-muted-foreground">
-                          {l.lastRepaymentDate ? new Date(l.lastRepaymentDate).toLocaleDateString("en-GB") : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* ── LIST VIEW ── */}
-      {view === "list" && (
-        <div className="space-y-4">
-          {/* Filter */}
-          <div className="flex gap-2 flex-wrap">
-            {["all", "pending_review", "approved", "active", "completed", "rejected"].map(s => (
-              <Button
-                key={s}
-                size="sm"
-                variant={statusFilter === s ? "default" : "outline"}
-                onClick={() => setStatusFilter(s)}
-                className="capitalize text-xs"
-              >
-                {s.replace(/_/g, " ")}
-              </Button>
-            ))}
-          </div>
-
-          <Card>
-            <CardContent className="p-0">
-              <table className="w-full data-table">
-                <thead>
-                  <tr>
-                    <th>Lender</th>
-                    <th>Purpose</th>
-                    <th>Amount</th>
-                    <th>Term</th>
-                    <th>Repaid</th>
-                    <th>Status</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loans.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="text-center text-muted-foreground py-10">
-                        No loan applications found
-                      </td>
-                    </tr>
-                  ) : loans.map(l => (
-                    <tr key={l.id} className="cursor-pointer" onClick={() => setLocation(`/loans/${l.id}`)}>
-                      <td className="font-medium">{l.borrowerName}</td>
-                      <td className="text-muted-foreground max-w-[200px] truncate">{l.purpose}</td>
-                      <td>£{parseFloat(l.amount?.toString() ?? "0").toFixed(2)}</td>
-                      <td>{formatTerm(l)}</td>
-                      <td>£{parseFloat(l.totalRepaid?.toString() ?? "0").toFixed(2)}</td>
-                      <td>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[l.status ?? "pending_review"] ?? "badge-pending"}`}>
-                          {(l.status ?? "pending").replace(/_/g, " ")}
-                        </span>
-                      </td>
-                      <td>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={(e) => { e.stopPropagation(); setLocation(`/loans/${l.id}`); }}
-                        >
-                          View
-                        </Button>
-                      </td>
-                    </tr>
+        {/* Loans table */}
+        <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: 24, animation: "fadeUp 0.5s ease 200ms both" }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: T.white, margin: "0 0 20px", letterSpacing: "-0.01em" }}>Loan Register</h2>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+              <thead>
+                <tr>
+                  {["Borrower", "Amount", "Term", "Monthly", "Purpose", "Status", "Actions"].map(h => (
+                    <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>
                   ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+                </tr>
+              </thead>
+              <tbody>
+                {loans.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: T.muted, fontSize: 14 }}>No loan applications yet</td></tr>
+                ) : loans.map((l: any) => {
+                  const termMonths = l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6);
+                  const monthly = (Number(l.amount) / termMonths).toFixed(2);
+                  return (
+                    <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setLocation(`/loans/${l.id}`)}>
+                      <td style={{ padding: "12px 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: T.white, margin: 0 }}>{l.borrowerName}</p>
+                          <p style={{ fontSize: 11, color: T.muted, margin: 0 }}>{l.borrowerEmail}</p>
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 14, fontWeight: 700, color: T.mint, borderBottom: `1px solid ${T.border}` }}>£{Number(l.amount).toLocaleString()}</td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 13, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
+                        {l.termValue} {l.termUnit ?? "months"}
+                      </td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 13, color: T.purple, fontWeight: 600, borderBottom: `1px solid ${T.border}` }}>£{monthly}/mo</td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{l.purpose}</td>
+                      <td style={{ padding: "12px 12px 12px 0", borderBottom: `1px solid ${T.border}` }}><Badge status={l.status} /></td>
+                      <td style={{ padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {isAdmin && l.status === "pending" && (
+                            <button onClick={(e) => { e.stopPropagation(); approveMutation.mutate({ id: l.id }); }}
+                              style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,255,194,0.1)", border: "1px solid rgba(0,255,194,0.2)", color: T.mint, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                              Approve
+                            </button>
+                          )}
+                          <button onClick={(e) => { e.stopPropagation(); setLocation(`/loans/${l.id}`); }}
+                            style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(99,91,255,0.1)", border: "1px solid rgba(99,91,255,0.2)", color: T.purple, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                            View
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      )}
 
-      {/* ── NEW LOAN DIALOG ── */}
-      <Dialog open={newLoanOpen} onOpenChange={setNewLoanOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>New Qarde Hasan Application</DialogTitle>
-            <p className="text-xs text-muted-foreground mt-1">
-              Record a worshipper who is lending money to the mosque (interest-free).
-            </p>
-          </DialogHeader>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              const purpose = purposePreset === "Other (specify below)"
-                ? customPurpose
-                : purposePreset;
-              const amount = fd.get("amount") as string;
-              const tv = parseInt(termValue, 10) || 6;
-              const termMonthsCalc = termUnit === "years" ? tv * 12 : tv;
-              const monthly = (parseFloat(amount) / termMonthsCalc).toFixed(2);
-              createLoan.mutate({
-                applicantName: fd.get("applicantName") as string,
-                applicantEmail: fd.get("applicantEmail") as string || undefined,
-                applicantPhone: fd.get("applicantPhone") as string || undefined,
-                applicantAddress: fd.get("applicantAddress") as string || undefined,
-                purpose,
-                amount,
-                termValue: tv,
-                termUnit,
-                termNotes: termNotes || undefined,
-                monthlyRepayment: monthly,
-                notes: fd.get("notes") as string || undefined,
-              });
-            }}
-            className="space-y-4 mt-2"
-          >
-            {/* Lender details */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Lender (Worshipper) Details</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <Label>Full Name *</Label>
-                  <Input name="applicantName" required placeholder="e.g. Ahmed Hassan" />
+        {/* New loan dialog */}
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent style={{ background: "#0D2240", border: `1px solid ${T.border}`, borderRadius: 20, maxWidth: 520 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: T.white, fontSize: 18, fontWeight: 800 }}>New Loan Application</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit((d) => createMutation.mutate({ ...d, termUnit }))} style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Borrower Name</Label>
+                  <Input {...register("borrowerName")} placeholder="Full name"
+                    style={{ marginTop: 6, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
                 </div>
                 <div>
-                  <Label>Email</Label>
-                  <Input name="applicantEmail" type="email" placeholder="email@example.com" />
-                </div>
-                <div>
-                  <Label>Phone</Label>
-                  <Input name="applicantPhone" placeholder="07..." />
-                </div>
-                <div className="col-span-2">
-                  <Label>Address</Label>
-                  <Input name="applicantAddress" placeholder="Street, City, Postcode" />
+                  <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Email</Label>
+                  <Input {...register("borrowerEmail")} type="email" placeholder="email@example.com"
+                    style={{ marginTop: 6, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
                 </div>
               </div>
-            </div>
 
-            {/* Loan details */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Loan Details</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Amount (£)</Label>
+                  <Input {...register("amount")} type="number" placeholder="0.00"
+                    style={{ marginTop: 6, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+                </div>
+                <div>
+                  <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Purpose</Label>
+                  <select {...register("purpose")}
+                    style={{ marginTop: 6, width: "100%", background: "#0D2240", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44, padding: "0 12px", fontSize: 14 }}>
+                    {PURPOSES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
 
-              {/* Purpose dropdown */}
+              {/* Term */}
               <div>
-                <Label>Purpose *</Label>
-                <Select value={purposePreset} onValueChange={setPurposePreset} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select purpose..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LOAN_PURPOSE_PRESETS.map(p => (
-                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Repayment Term</Label>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  <Input {...register("termValue")} type="number" placeholder="6"
+                    style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+                  <div style={{ display: "flex", borderRadius: 10, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+                    {(["months", "years"] as const).map(u => (
+                      <button key={u} type="button" onClick={() => setTermUnit(u)}
+                        style={{ padding: "0 16px", height: 44, background: termUnit === u ? T.purple : "rgba(255,255,255,0.06)", color: termUnit === u ? T.white : T.muted, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>
+                        {u}
+                      </button>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Free text if "Other" */}
-              {purposePreset === "Other (specify below)" && (
-                <div>
-                  <Label>Describe Purpose *</Label>
-                  <Textarea
-                    value={customPurpose}
-                    onChange={(e) => setCustomPurpose(e.target.value)}
-                    rows={2}
-                    placeholder="Describe the specific purpose..."
-                    required
-                  />
-                </div>
-              )}
-
-              {/* Amount */}
-              <div>
-                <Label>Amount Lent (£) *</Label>
-                <Input
-                  name="amount"
-                  type="number"
-                  step="0.01"
-                  min="1"
-                  required
-                  value={loanAmount}
-                  onChange={(e) => setLoanAmount(e.target.value)}
-                  placeholder="0.00"
-                />
-              </div>
-
-              {/* Repayment term: number + months/years toggle */}
-              <div>
-                <Label>Repayment Term *</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={termValue}
-                    onChange={(e) => setTermValue(e.target.value)}
-                    className="w-24"
-                    placeholder="6"
-                    required
-                  />
-                  {/* Months / Years toggle */}
-                  <div className="flex rounded-md border overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setTermUnit("months")}
-                      className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                        termUnit === "months"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-background text-foreground hover:bg-muted"
-                      }`}
-                    >
-                      Months
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTermUnit("years")}
-                      className={`px-3 py-1.5 text-sm font-medium transition-colors border-l ${
-                        termUnit === "years"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-background text-foreground hover:bg-muted"
-                      }`}
-                    >
-                      Years
-                    </button>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {computedTermMonths > 0 ? `= ${computedTermMonths} months total` : ""}
-                </p>
-              </div>
-
-              {/* Term notes */}
-              <div>
-                <Label>Repayment Notes <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <Textarea
-                  value={termNotes}
-                  onChange={(e) => setTermNotes(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. Repayment to start after Ramadan, or flexible schedule agreed..."
-                />
-              </div>
-
-              {/* Monthly repayment preview */}
-              {computedMonthly && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground">Monthly repayment (auto-calculated)</p>
-                  <p className="text-lg font-bold text-primary">£{computedMonthly} / month</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {computedTermMonths} equal payments of £{computedMonthly} over {termValue} {termUnit}
+                {watchAmount && watchTermValue && (
+                  <p style={{ fontSize: 12, color: T.mint, marginTop: 6 }}>
+                    Monthly repayment: <strong>£{monthlyPayment}</strong>
                   </p>
-                </div>
-              )}
+                )}
+              </div>
 
               <div>
-                <Label>Notes</Label>
-                <Textarea name="notes" rows={2} placeholder="Any additional notes..." />
+                <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Notes (optional)</Label>
+                <textarea {...register("termNotes")} rows={2} placeholder="Additional context..."
+                  style={{ marginTop: 6, width: "100%", background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, padding: "10px 14px", fontSize: 14, resize: "vertical", boxSizing: "border-box" }} />
               </div>
-            </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={createLoan.isPending || !purposePreset || (purposePreset === "Other (specify below)" && !customPurpose)}
-            >
-              {createLoan.isPending ? "Submitting..." : "Submit Application"}
-            </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </div>
+              <Button type="submit" disabled={createMutation.isPending}
+                style={{ background: `linear-gradient(135deg,${T.mint},#00DDB0)`, color: "#081526", fontWeight: 700, height: 48, borderRadius: 12, border: "none", fontSize: 15, marginTop: 4 }}>
+                {createMutation.isPending ? "Submitting…" : "Submit Application"}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+      </div>
+    </>
   );
 }
