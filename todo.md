@@ -543,3 +543,10 @@
 - [x] Image/photo upload as evidence on Record Repayment
 - [x] Send Reminder button on overdue repayment rows
 - [x] Repayment receipt PDF download button on confirmed repayment rows
+
+## Repayment Row Improvements (May 2026 — round 3)
+- [x] Show date/time stamp on each repayment row (when it was recorded)
+- [x] Per-row evidence upload (camera + file) on each instalment row
+- [x] Authorised-by name display on each confirmed repayment row
+- [x] Fix WhatsApp URL for UK phone numbers (strip leading 0, add 44 country code)
+- [x] WhatsApp message button on each repayment row

@@ -78,23 +78,80 @@ function ApprovalBox({ label, approved, approvedBy, approvedAt, onApprove, canAp
   );
 }
 
-function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin, onSendReminder, onDownloadReceipt }: any) {
+function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin, onSendReminder, onDownloadReceipt, borrowerPhone }: any) {
   const [adminName, setAdminName] = useState("");
   const [trusteeName, setTrusteeName] = useState("");
+  const [rowEvidenceUrl, setRowEvidenceUrl] = useState(repayment.evidenceUrl ?? "");
+  const [rowUploading, setRowUploading] = useState(false);
+  const rowFileRef = useRef<HTMLInputElement>(null);
+
+  const handleRowEvidence = async (file: File) => {
+    setRowUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("key", `loan-repayment-evidence/${repayment.id}-${Date.now()}.${file.name.split('.').pop()}`);
+      const res = await fetch("/api/upload", { method:"POST", body:fd });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setRowEvidenceUrl(data.url);
+      toast.success("Evidence uploaded");
+    } catch (err: any) {
+      toast.error(err.message ?? "Upload failed");
+    } finally {
+      setRowUploading(false);
+      if (rowFileRef.current) rowFileRef.current.value = "";
+    }
+  };
+
+  const openWhatsApp = () => {
+    let phone = (borrowerPhone ?? "").replace(/\D/g,"");
+    if (!phone) { toast.error("No phone number on file"); return; }
+    if (phone.startsWith("0")) phone = "44" + phone.slice(1);
+    else if (!phone.startsWith("44") && phone.length <= 10) phone = "44" + phone;
+    const amount = Number(repayment.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2});
+    const msg = encodeURIComponent(`Assalamu Alaikum, this is a reminder that your Qarde Hasan loan repayment of £${amount} (Instalment ${repayment.instalment}) is due. Please arrange payment at your earliest convenience. JazakAllahu Khayran — AQ Society Finance Team`);
+    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+  };
 
   return (
     <div style={{ padding:"14px 0",borderBottom:`1px solid ${T.border}` }}>
       <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10 }}>
-        <div>
+        <div style={{ flex:1,minWidth:0 }}>
           <p style={{ fontSize:13,fontWeight:600,color:T.white,margin:0 }}>
             Instalment {repayment.instalment ?? "#"} — £{Number(repayment.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}
           </p>
           <p style={{ fontSize:11,color:T.muted,margin:"2px 0 0" }}>
             Due: {repayment.dueDate ? new Date(repayment.dueDate).toLocaleDateString("en-GB") : "—"}
+            {repayment.paidAt && <span style={{marginLeft:8,color:"rgba(255,255,255,0.4)"}}>Recorded: {new Date(repayment.paidAt).toLocaleString("en-GB")}</span>}
           </p>
-          {repayment.adminApprovedAt && (
-            <p style={{ fontSize:11,color:T.mint,margin:"2px 0 0" }}>✓ Admin · {repayment.trusteeApprovedAt ? "✓ Trustee · Fully confirmed" : "Awaiting trustee"}</p>
+          {repayment.paymentMethod && (
+            <p style={{ fontSize:11,color:"rgba(255,255,255,0.4)",margin:"2px 0 0",textTransform:"capitalize" }}>
+              {repayment.paymentMethod.replace(/_/g," ")}
+              {repayment.notes && <span style={{marginLeft:8}}>· {repayment.notes}</span>}
+            </p>
           )}
+          {repayment.adminApprovedAt && (
+            <p style={{ fontSize:11,color:T.mint,margin:"2px 0 0" }}>
+              ✓ Admin: <strong>{repayment.adminApprovedByName ?? ""}</strong> · {new Date(repayment.adminApprovedAt).toLocaleString("en-GB")}
+              {repayment.trusteeApprovedAt && <span> · ✓ Trustee: <strong>{repayment.trusteeName ?? ""}</strong> · {new Date(repayment.trusteeApprovedAt).toLocaleString("en-GB")}</span>}
+            </p>
+          )}
+          {/* Evidence */}
+          <div style={{ marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+            <input ref={rowFileRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display:"none" }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleRowEvidence(f); }}/>
+            <button
+              onClick={() => rowFileRef.current?.click()}
+              disabled={rowUploading}
+              style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,color:T.muted,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+              <Upload size={11}/> {rowUploading ? "Uploading…" : rowEvidenceUrl ? "📷 Replace Evidence" : "📷 Add Evidence"}
+            </button>
+            {rowEvidenceUrl && (
+              <a href={rowEvidenceUrl} target="_blank" rel="noreferrer"
+                style={{ fontSize:11,color:T.mint,textDecoration:"none" }}>View ↗</a>
+            )}
+          </div>
         </div>
         <div style={{ display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end" }}>
           <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,textTransform:"capitalize",
@@ -111,9 +168,13 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
               {onSendReminder && (
                 <button onClick={()=>onSendReminder(repayment)}
                   style={{ padding:"5px 12px",borderRadius:8,background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",fontSize:12,fontWeight:600,cursor:"pointer" }}>
-                  ✉️ Remind
+                  ✉️ Email
                 </button>
               )}
+              <button onClick={openWhatsApp}
+                style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                💬 WhatsApp
+              </button>
             </div>
           )}
           {isAdmin && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
@@ -345,9 +406,12 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 </Button>
               )}
               <Button onClick={() => {
-                  const phone = loan.borrowerPhone?.replace(/\D/g,"") ?? "";
-                  if (phone) { window.open(`https://wa.me/${phone}`, "_blank"); }
-                  else { toast.error("No phone number on file for this borrower"); }
+                  let phone = (loan as any).borrowerPhone?.replace(/\D/g,"") ?? "";
+                  if (!phone) { toast.error("No phone number on file for this borrower"); return; }
+                  // Handle UK numbers: 07xxx → 447xxx, already international 44xxx stays
+                  if (phone.startsWith("0")) phone = "44" + phone.slice(1);
+                  else if (!phone.startsWith("44") && phone.length <= 10) phone = "44" + phone;
+                  window.open(`https://wa.me/${phone}`, "_blank");
                 }}
                 style={{ background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
                 <MessageCircle size={14}/> WhatsApp
@@ -424,6 +488,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 repayment={{ ...rep, instalment: i+1 }}
                 isAdmin={isAdmin}
                 isTrustee={isTrustee}
+                borrowerPhone={(loan as any).borrowerPhone}
                 onConfirm={(r: any) => confirmRepMutation?.mutate?.({ repaymentId:r.id })}
                 onApproveAdmin={(r: any) => approveRepAdminMutation?.mutate?.({ repaymentId: r.id, approvedByName: r.approvedByName })}
                 onApproveTrustee={(r: any) => approveRepTrusteeMutation?.mutate?.({ repaymentId: r.id, trusteeName: r.trusteeName })}
