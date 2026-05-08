@@ -299,6 +299,19 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const emailStatementMutation = trpc.loans.emailLoanStatement?.useMutation?.({
+    onSuccess: (res: any) => toast.success(`Statement emailed to ${res?.sentTo}`),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const remindAllOverdueMutation = trpc.loans.remindAllOverdue?.useMutation?.({
+    onSuccess: (res: any) => {
+      if (res?.count === 0) toast.info('No overdue repayments to remind');
+      else toast.success(`Reminder sent for ${res?.count} overdue instalment(s) to ${res?.sentTo}`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const genRepPdfMutation = trpc.loans.generateRepaymentPdf?.useMutation?.({
     onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank"); refetch(); },
     onError: (e: any) => toast.error(e.message),
@@ -462,6 +475,14 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   <FileText size={14}/> {generateStatementMutation?.isPending ? "Generating…" : "Loan Statement"}
                 </Button>
               )}
+              {fullyApproved && loan.borrowerEmail && (
+                <Button
+                  onClick={() => emailStatementMutation?.mutate?.({ id })}
+                  disabled={emailStatementMutation?.isPending}
+                  style={{ background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.15)",color:"#fbbf24",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                  <Mail size={14}/> {emailStatementMutation?.isPending ? "Sending…" : "Email Statement"}
+                </Button>
+              )}
             </div>
           )}
 
@@ -512,7 +533,17 @@ export default function LoanDetailPage({ id }: { id: number }) {
 
           {/* Repayment schedule */}
           <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:24,animation:"fadeUp 0.5s ease 400ms both" }}>
-            <h2 style={{ fontSize:15,fontWeight:700,color:T.white,margin:"0 0 4px" }}>Repayment Schedule</h2>
+            <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4 }}>
+              <h2 style={{ fontSize:15,fontWeight:700,color:T.white,margin:0 }}>Repayment Schedule</h2>
+              {isAdmin && fullyApproved && loan.borrowerEmail && (
+                <button
+                  onClick={() => remindAllOverdueMutation?.mutate?.({ loanId: id })}
+                  disabled={remindAllOverdueMutation?.isPending}
+                  style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:9,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.25)",color:"#f87171",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>
+                  <Mail size={12}/> {remindAllOverdueMutation?.isPending ? "Sending…" : "Remind All Overdue"}
+                </button>
+              )}
+            </div>
             <p style={{ fontSize:12,color:T.muted,margin:"0 0 16px" }}>
               {termMonths} monthly payments of £{monthly} · Started {loan.createdAt ? new Date(loan.createdAt).toLocaleDateString("en-GB") : "—"}
             </p>

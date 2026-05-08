@@ -77,7 +77,7 @@ export default function LoansPage() {
   const [open, setOpen] = useState(false);
   const [termUnit, setTermUnit] = useState<"months" | "years">("months");
 
-  const { data, refetch } = trpc.loans.list.useQuery({});
+  const { data, refetch } = trpc.loans.listWithSummary.useQuery({});
   const { data: trustees } = trpc.trustees.list.useQuery(undefined, { enabled: isAdmin });
 
   const createMutation = trpc.loans.create.useMutation({
@@ -149,14 +149,24 @@ export default function LoansPage() {
                 {loans.length === 0 ? (
                   <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: T.muted, fontSize: 14 }}>No loan applications yet</td></tr>
                 ) : loans.map((l: any) => {
-                  const termMonths = l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6);
+                  const s = l._summary ?? {};
+                  const termMonths = s.termMonths ?? (l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6));
                   const monthly = (Number(l.amount) / termMonths).toFixed(2);
+                  const paidCount = s.paidCount ?? 0;
+                  const totalInstalments = s.totalInstalments ?? termMonths;
+                  const outstanding = s.outstanding ?? Number(l.amount);
+                  const overdueCount = s.overdueCount ?? 0;
                   return (
                     <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setLocation(`/loans/${l.id}`)}>
                       <td style={{ padding: "12px 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>
                         <div>
                           <p style={{ fontSize: 13, fontWeight: 600, color: T.white, margin: 0 }}>{l.borrowerName}</p>
                           <p style={{ fontSize: 11, color: T.muted, margin: 0 }}>{l.borrowerEmail}</p>
+                          <div style={{ display:"flex",gap:6,marginTop:5,flexWrap:"wrap" }}>
+                            <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(0,255,194,0.08)",color:"#6ee7b7" }}>{paidCount}/{totalInstalments} paid</span>
+                            {outstanding > 0 && <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(239,68,68,0.08)",color:"#f87171" }}>£{outstanding.toFixed(0)} outstanding</span>}
+                            {overdueCount > 0 && <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(239,68,68,0.15)",color:"#fca5a5" }}>⚠ {overdueCount} overdue</span>}
+                          </div>
                         </div>
                       </td>
                       <td style={{ padding: "12px 12px 12px 0", fontSize: 14, fontWeight: 700, color: T.mint, borderBottom: `1px solid ${T.border}` }}>£{Number(l.amount).toLocaleString()}</td>

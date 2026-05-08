@@ -862,6 +862,24 @@ export const appRouter = router({
 
   loans: router({
     list: adminProcedure.input(z.object({ status: z.string().optional() })).query(({ input }) => getLoans(input.status)),
+
+    listWithSummary: adminProcedure.input(z.object({ status: z.string().optional() })).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const loans = await getLoans(input.status);
+      const now = new Date();
+      const results = await Promise.all(loans.map(async (loan: any) => {
+        const reps = await db.select().from(loanRepayments).where(eq((loanRepayments as any).loanId, loan.id));
+        const termMonths = loan.termUnit === 'years' ? (loan.termValue ?? 6) * 12 : (loan.termValue ?? loan.termMonths ?? 6);
+        const totalPaid = reps.filter((r: any) => r.trusteeApprovedAt).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+        const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
+        const overdueCount = reps.filter((r: any) => !r.trusteeApprovedAt && r.dueDate && new Date(r.dueDate) < now).length;
+        const paidCount = reps.filter((r: any) => r.trusteeApprovedAt).length;
+        return { ...loan, _summary: { termMonths, totalPaid, outstanding, overdueCount, paidCount, totalInstalments: termMonths } };
+      }));
+      return results;
+    }),
+
     get: adminProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
       const loan = await getLoanById(input.id);
       if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
@@ -1239,6 +1257,107 @@ export const appRouter = router({
         const key = `loan-statements/loan-${input.id}-statement-${Date.now()}.html`;
         const { url } = await storagePut(key, Buffer.from(html, 'utf8'), 'text/html');
         return { url };
+      }),
+
+    emailLoanStatement: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const loan = await getLoanById(input.id);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        if (!loan.borrowerEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "Lender has no email address on file" });
+        const repayments = await db.select().from(loanRepayments).where(eq((loanRepayments as any).loanId, input.id)).orderBy((loanRepayments as any).createdAt);
+        const termMonths = loan.termUnit === 'years' ? (loan.termValue ?? 6) * 12 : (loan.termValue ?? (loan as any).termMonths ?? 6);
+        const monthly = (Number(loan.amount) / termMonths).toFixed(2);
+        const totalPaid = repayments.filter((r: any) => r.trusteeApprovedAt).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+        const outstanding = Number(loan.amount) - totalPaid;
+        const firstName = (loan.borrowerName ?? '').split(' ')[0];
+        const rows = repayments.map((r: any, i: number) => {
+          const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
+          const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
+          const paid = r.paidAt ? new Date(r.paidAt).toLocaleString('en-GB') : '—';
+          const lenderConf = r.lenderConfirmedAt ? new Date(r.lenderConfirmedAt).toLocaleDateString('en-GB') : '—';
+          return `<tr style="border-bottom:1px solid #e5e7eb"><td style="padding:8px 12px;font-size:13px">${i+1}</td><td style="padding:8px 12px;font-size:13px">&pound;${Number(r.amount??0).toFixed(2)}</td><td style="padding:8px 12px;font-size:13px">${due}</td><td style="padding:8px 12px;font-size:13px">${paid}</td><td style="padding:8px 12px;font-size:13px;text-transform:capitalize">${r.paymentMethod?.replace(/_/g,' ')??'—'}</td><td style="padding:8px 12px;font-size:13px;color:${r.trusteeApprovedAt?'#059669':r.adminApprovedAt?'#d97706':'#6b7280'}">${status}</td><td style="padding:8px 12px;font-size:13px">${lenderConf}</td></tr>`;
+        }).join('');
+        const html = `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
+          <div style="background:#1a4731;padding:24px;text-align:center">
+            <h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1>
+            <p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Statement</p>
+          </div>
+          <div style="padding:24px">
+            <p>Dear ${firstName},</p><p>Assalamu Alaikum,</p>
+            <p>Please find below your Qarde Hasan loan statement as of ${new Date().toLocaleDateString('en-GB')}.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0">
+              <tr><td style="padding:5px 0;font-size:13px;color:#6b7280;width:150px">Loan Amount</td><td style="font-size:14px;font-weight:700;color:#059669">&pound;${Number(loan.amount).toLocaleString('en-GB',{minimumFractionDigits:2})}</td></tr>
+              <tr><td style="padding:5px 0;font-size:13px;color:#6b7280">Total Paid</td><td style="font-size:14px;font-weight:700">&pound;${totalPaid.toFixed(2)}</td></tr>
+              <tr><td style="padding:5px 0;font-size:13px;color:#6b7280">Outstanding</td><td style="font-size:14px;font-weight:700;color:${outstanding>0?'#dc2626':'#059669'}">&pound;${outstanding.toFixed(2)}</td></tr>
+            </table>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb">
+              <thead><tr style="background:#f9fafb">
+                <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">#</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Amount</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Due</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Paid At</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Method</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Status</th>
+                <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280;text-transform:uppercase">Confirmed</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <p style="margin-top:24px">If you have any questions, please do not hesitate to contact us.</p>
+            <p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p>
+          </div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>
+        </div>`;
+        try {
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Loan Statement — ${new Date().toLocaleDateString('en-GB')}`, html);
+          return { success: true, sentTo: loan.borrowerEmail };
+        } catch (e: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
+        }
+      }),
+
+    remindAllOverdue: adminProcedure
+      .input(z.object({ loanId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const loan = await getLoanById(input.loanId);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        if (!loan.borrowerEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "Lender has no email address on file" });
+        const now = new Date();
+        const allReps = await db.select().from(loanRepayments).where(eq((loanRepayments as any).loanId, input.loanId)).orderBy((loanRepayments as any).dueDate);
+        const overdueReps = allReps.filter((r: any) => !r.trusteeApprovedAt && r.dueDate && new Date(r.dueDate) < now);
+        if (overdueReps.length === 0) return { success: true, count: 0, message: 'No overdue repayments' };
+        const firstName = (loan.borrowerName ?? '').split(' ')[0];
+        const overdueList = overdueReps.map((r: any, i: number) => {
+          const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
+          const amt = Number(r.amount ?? 0).toFixed(2);
+          return `<li style="margin:6px 0">Instalment ${i+1} — <strong>&pound;${amt}</strong> (due ${due})</li>`;
+        }).join('');
+        const totalOverdue = overdueReps.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+        const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+          <div style="background:#1a4731;padding:24px;text-align:center">
+            <h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1>
+            <p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Reminder</p>
+          </div>
+          <div style="padding:24px">
+            <p>Dear ${firstName},</p><p>Assalamu Alaikum,</p>
+            <p>This is a reminder that the following Qarde Hasan loan repayments are outstanding:</p>
+            <ul style="margin:12px 0;padding-left:20px">${overdueList}</ul>
+            <p style="font-weight:700">Total outstanding: &pound;${totalOverdue.toFixed(2)}</p>
+            <p>Please arrange payment at your earliest convenience. If you have already made payment, please disregard this message.</p>
+            <p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p>
+          </div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>
+        </div>`;
+        try {
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Overdue Repayment Reminder — ${overdueReps.length} instalment(s)`, html);
+          return { success: true, count: overdueReps.length, sentTo: loan.borrowerEmail };
+        } catch (e: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
+        }
       }),
   }),
 

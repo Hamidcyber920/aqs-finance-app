@@ -567,3 +567,10 @@
 - [x] Add confirmLenderReceipt tRPC procedure
 - [x] Add Lender Confirmed checkbox to each RepaymentRow
 - [x] Add Loan Statement PDF button to LoanDetail page (generates full statement with all instalments)
+
+## Loan Enhancements Round 8 (May 2026)
+- [x] Add emailLoanStatement tRPC procedure (generates + emails statement to lender)
+- [x] Add remindAllOverdue tRPC procedure (bulk reminder for all overdue repayments)
+- [x] Add "Send Statement by Email" button to LoanDetail actions bar
+- [x] Add "Remind All Overdue" button to Repayment Schedule section header
+- [x] Add summary cards (paid/total, outstanding, overdue count) to each loan row on Loans list page
