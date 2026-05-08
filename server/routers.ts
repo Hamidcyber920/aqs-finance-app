@@ -1760,6 +1760,54 @@ export const appRouter = router({
     get: adminProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => { const d = await getDonorById(input.id); if (!d) throw new TRPCError({ code: "NOT_FOUND" }); return d; }),
     create: adminProcedure.input(z.object({ name: z.string(), email: z.string().optional(), phone: z.string().optional(), address: z.string().optional(), isRegular: z.boolean().default(false), isGiftAid: z.boolean().default(false), notes: z.string().optional() })).mutation(({ input }) => createDonor(input)),
     update: adminProcedure.input(z.object({ id: z.number(), name: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), isRegular: z.boolean().optional(), isGiftAid: z.boolean().optional(), notes: z.string().optional(), totalGiven: z.string().optional() })).mutation(async ({ input }) => { const { id, ...data } = input; await updateDonor(id, data as any); return { success: true }; }),
+    // Create or upsert multiple donors and link them to an income record
+    linkToIncome: protectedProcedure.input(z.object({
+      incomeRecordId: z.number(),
+      donors: z.array(z.object({
+        name: z.string(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        amount: z.string().optional(),
+        notes: z.string().optional(),
+      })),
+    })).mutation(async ({ input }) => {
+      const db = getDb();
+      const { incomeDonors: incomeDonorsTable, donors: donorsTable } = await import("../drizzle/schema");
+      const results: number[] = [];
+      for (const d of input.donors) {
+        // Upsert donor by name+email
+        let donorId: number;
+        if (d.email) {
+          const existing = await db.select().from(donorsTable).where(eq(donorsTable.email, d.email)).limit(1);
+          if (existing.length > 0) {
+            donorId = existing[0].id;
+            // Update phone if missing
+            if (d.phone && !existing[0].phone) await db.update(donorsTable).set({ phone: d.phone }).where(eq(donorsTable.id, donorId));
+          } else {
+            const ins = await db.insert(donorsTable).values({ name: d.name, email: d.email, phone: d.phone ?? null, isRegular: false, totalGiven: "0" });
+            donorId = (ins as any).insertId ?? (ins as any)[0]?.insertId;
+          }
+        } else {
+          const ins = await db.insert(donorsTable).values({ name: d.name, phone: d.phone ?? null, isRegular: false, totalGiven: "0" });
+          donorId = (ins as any).insertId ?? (ins as any)[0]?.insertId;
+        }
+        await db.insert(incomeDonorsTable).values({ incomeRecordId: input.incomeRecordId, donorId, amount: d.amount ?? null, notes: d.notes ?? null });
+        results.push(donorId);
+      }
+      return { linkedDonorIds: results };
+    }),
+    // List donors linked to a specific income record
+    byIncome: protectedProcedure.input(z.object({ incomeRecordId: z.number() })).query(async ({ input }) => {
+      const db = getDb();
+      const { incomeDonors: incomeDonorsTable, donors: donorsTable } = await import("../drizzle/schema");
+      const rows = await db.select({
+        id: donorsTable.id, name: donorsTable.name, email: donorsTable.email, phone: donorsTable.phone,
+        amount: incomeDonorsTable.amount, notes: incomeDonorsTable.notes, linkedAt: incomeDonorsTable.createdAt,
+      }).from(incomeDonorsTable)
+        .innerJoin(donorsTable, eq(incomeDonorsTable.donorId, donorsTable.id))
+        .where(eq(incomeDonorsTable.incomeRecordId, input.incomeRecordId));
+      return rows;
+    }),
   }),
 
   // ─── EMAIL CAMPAIGNS ──────────────────────────────────────────────────────

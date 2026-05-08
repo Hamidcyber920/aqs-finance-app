@@ -314,6 +314,21 @@ export default function IncomePage() {
   const [signOtherName, setSignOtherName] = useState<string>("");  // free-text trustee name
   const [signOther, setSignOther] = useState<string>("");       // ISO timestamp when ticked
 
+  // Donation categories that collect donor info
+  const DONOR_CATS = new Set(["£100 Rimmers Mussallah", "Direct Donations", "Mussallah Sales £20"]);
+  // Multi-donor entry state
+  const [donors, setDonors] = useState<{ name:string; email:string; phone:string; amount:string }[]>([]);
+  const [draftDonor, setDraftDonor] = useState({ name:"", email:"", phone:"", amount:"" });
+
+  function addDonorEntry() {
+    if (!draftDonor.name.trim()) { toast.error("Donor name is required"); return; }
+    setDonors(prev => [...prev, { ...draftDonor }]);
+    setDraftDonor({ name:"", email:"", phone:"", amount:"" });
+  }
+  function removeDonor(i: number) { setDonors(prev => prev.filter((_, idx) => idx !== i)); }
+
+  const linkDonorsMutation = trpc.donors.linkToIncome.useMutation();
+
   function fmtStamp(iso: string) {
     if (!iso) return "";
     const d = new Date(iso);
@@ -324,7 +339,13 @@ export default function IncomePage() {
   const { data, refetch } = trpc.income.list.useQuery({ month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
   const createMutation = trpc.income.create.useMutation({
-    onSuccess: () => {
+    onSuccess: async (result: any) => {
+      // If there are donors to link, do so now
+      if (donors.length > 0 && result?.id) {
+        try {
+          await linkDonorsMutation.mutateAsync({ incomeRecordId: result.id, donors });
+        } catch { /* non-fatal */ }
+      }
       toast.success("Income record added");
       setOpen(false);
       setSubPanel(null);
@@ -337,6 +358,8 @@ export default function IncomePage() {
       setCashWithheldReason("");
       setTotalBankedDate("");
       setSignFarid(""); setSignMumin(""); setSignAbdul(""); setSignGhalib(""); setSignOther(""); setSignOtherName("");
+      setDonors([]);
+      setDraftDonor({ name:"", email:"", phone:"", amount:"" });
       refetch();
       reset();
     },
@@ -392,6 +415,8 @@ export default function IncomePage() {
       setCashWithheldReason("");
       setTotalBankedDate("");
       setSignFarid(""); setSignMumin(""); setSignAbdul(""); setSignGhalib(""); setSignOther(""); setSignOtherName("");
+      setDonors([]);
+      setDraftDonor({ name:"", email:"", phone:"", amount:"" });
       reset();
     }
   }
@@ -805,8 +830,52 @@ export default function IncomePage() {
                         style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
                     </div>
                   </>
+                ) : DONOR_CATS.has(watchCat) ? (
+                  /* Donation categories — multi-donor entry */
+                  <>
+                    <div style={{ background:"rgba(0,255,194,0.05)",border:`1px solid rgba(0,255,194,0.15)`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10 }}>
+                      <p style={{ margin:"0 0 4px",fontSize:11,color:T.mint,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em" }}>Donor Details</p>
+
+                      {/* Existing donors list */}
+                      {donors.map((d, i) => (
+                        <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,background:"rgba(0,255,194,0.07)",border:`1px solid rgba(0,255,194,0.2)` }}>
+                          <div style={{ flex:1 }}>
+                            <span style={{ fontSize:13,color:T.white,fontWeight:600 }}>{d.name}</span>
+                            {d.amount && <span style={{ fontSize:11,color:T.mint,marginLeft:8 }}>£{d.amount}</span>}
+                            {(d.email || d.phone) && <span style={{ display:"block",fontSize:11,color:T.muted,marginTop:1 }}>{[d.email,d.phone].filter(Boolean).join(" · ")}</span>}
+                          </div>
+                          <button type="button" onClick={() => removeDonor(i)} style={{ background:"none",border:"none",color:"rgba(255,100,100,0.7)",cursor:"pointer",fontSize:16,lineHeight:1,padding:2 }}>×</button>
+                        </div>
+                      ))}
+
+                      {/* Draft donor form */}
+                      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
+                        <input value={draftDonor.name} onChange={e => setDraftDonor(p => ({...p,name:e.target.value}))} placeholder="Full name *"
+                          style={{ gridColumn:"1/-1",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
+                        <input value={draftDonor.email} onChange={e => setDraftDonor(p => ({...p,email:e.target.value}))} placeholder="Email (optional)"
+                          type="email"
+                          style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
+                        <input value={draftDonor.phone} onChange={e => setDraftDonor(p => ({...p,phone:e.target.value}))} placeholder="Phone (optional)"
+                          type="tel"
+                          style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
+                        <input value={draftDonor.amount} onChange={e => setDraftDonor(p => ({...p,amount:e.target.value}))} placeholder="Amount (£) optional"
+                          type="number" step="0.01"
+                          style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
+                      </div>
+                      <button type="button" onClick={addDonorEntry}
+                        style={{ alignSelf:"flex-start",background:`rgba(0,255,194,0.12)`,border:`1px solid rgba(0,255,194,0.3)`,borderRadius:8,color:T.mint,fontWeight:600,fontSize:12,padding:"6px 14px",cursor:"pointer" }}>
+                        + Add Donor
+                      </button>
+                      {donors.length === 0 && <p style={{ margin:0,fontSize:10,color:T.muted,fontStyle:"italic" }}>Add at least one donor, or leave empty to record without donor details.</p>}
+                    </div>
+                    <div>
+                      <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
+                      <Input {...register("notes")} placeholder="Optional notes"
+                        style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                    </div>
+                  </>
                 ) : (
-                  /* Non-Friday-Collections categories */
+                  /* Other non-Friday-Collections categories */
                   <>
                     <div>
                       <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>

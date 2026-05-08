@@ -432,6 +432,20 @@ export const donors = mysqlTable("donors", {
 export type Donor = typeof donors.$inferSelect;
 export type InsertDonor = typeof donors.$inferInsert;
 
+// ─── INCOME DONORS (links income records to donor profiles) ─────────────────
+
+export const incomeDonors = mysqlTable("income_donors", {
+  id: int("id").autoincrement().primaryKey(),
+  incomeRecordId: int("incomeRecordId").notNull(),
+  donorId: int("donorId").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type IncomeDonor = typeof incomeDonors.$inferSelect;
+export type InsertIncomeDonor = typeof incomeDonors.$inferInsert;
+
 // ─── EMAIL / SMS CAMPAIGNS ────────────────────────────────────────────────────
 
 export const campaigns = mysqlTable("campaigns", {
