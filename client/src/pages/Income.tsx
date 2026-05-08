@@ -69,6 +69,14 @@ const INCOME_CATEGORIES = INCOME_CATEGORY_GROUPS.flatMap(g => g.items);
 
 const PERIODS = ["Daily","Weekly","Monthly","One-off"];
 
+// Friday Income and Kiosk Donations use a date picker instead of period dropdown
+const FRIDAY_INCOME_CATS = new Set([
+  "Friday Collections","Mussallah Sales £20","£100 Rimmers Mussallah",
+  "Direct Donations","Restaurant/Bistro 87","Biryani Sale",
+  "Other Campaign Sales","Stalls","Coffee Shop","Quilliam Bazaar","Eid Income",
+  "Kiosk Donations",
+]);
+
 function Badge({ status }: { status: string }) {
   const map: Record<string,{bg:string;color:string}> = {
     paid:{bg:"rgba(0,255,194,0.1)",color:T.mint},
@@ -360,11 +368,25 @@ export default function IncomePage() {
                       style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
                   </div>
                   <div>
-                    <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Period</Label>
-                    <select {...register("period")}
-                      style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
-                      {PERIODS.map(p=><option key={p} value={p}>{p}</option>)}
-                    </select>
+                    {FRIDAY_INCOME_CATS.has(watchCat) ? (
+                      <>
+                        <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Date</Label>
+                        <Input
+                          {...register("incomeDate")}
+                          type="date"
+                          defaultValue={new Date().toISOString().slice(0,10)}
+                          style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14,colorScheme:"dark" }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Period</Label>
+                        <select {...register("period")}
+                          style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
+                          {PERIODS.map(p=><option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div>
