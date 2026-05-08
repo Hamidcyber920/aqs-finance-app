@@ -1659,11 +1659,38 @@ export const appRouter = router({
       .input(z.object({ name: z.string().min(1), description: z.string().optional(), color: z.string().optional(), allowedPeriods: z.string().optional(), requiresSpecification: z.boolean().optional() }))
       .mutation(({ input }) => createIncomeCategory(input)),
     list: adminProcedure
-      .input(z.object({ categoryId: z.number().optional(), paymentStatus: z.string().optional(), startDate: z.date().optional(), endDate: z.date().optional(), limit: z.number().default(100), offset: z.number().default(0) }))
-      .query(({ input }) => getIncomeRecords(input)),
+      .input(z.object({ categoryId: z.number().optional(), paymentStatus: z.string().optional(), startDate: z.date().optional(), endDate: z.date().optional(), month: z.number().optional(), year: z.number().optional(), limit: z.number().default(100), offset: z.number().default(0) }))
+      .query(({ input }) => {
+        const filters: any = { ...input };
+        if (input.month && input.year) {
+          filters.startDate = new Date(input.year, input.month - 1, 1);
+          filters.endDate = new Date(input.year, input.month, 0, 23, 59, 59);
+        }
+        return getIncomeRecords(filters);
+      }),
     create: adminProcedure
-      .input(z.object({ categoryId: z.number(), description: z.string(), amount: z.string(), paymentStatus: z.string().default("paid"), period: z.enum(["daily", "weekly", "monthly", "one_off", "annual"]).default("monthly"), payerName: z.string().optional(), payerEmail: z.string().optional(), payerPhone: z.string().optional(), reference: z.string().optional(), periodStart: z.date().optional(), periodEnd: z.date().optional(), receiptUrl: z.string().optional(), notes: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => createIncomeRecord({ ...input, tenantName: input.payerName ?? "", paymentStatus: input.paymentStatus as any, period: input.period as any, recordedById: ctx.user.id })),
+      .input(z.object({ category: z.string().optional(), categoryId: z.number().optional(), subcategory: z.string().optional(), description: z.string().default(""), amount: z.string(), paymentStatus: z.string().default("paid"), period: z.string().default("monthly"), payerName: z.string().optional(), tenantName: z.string().optional(), payerEmail: z.string().optional(), payerPhone: z.string().optional(), reference: z.string().optional(), periodStart: z.date().optional(), periodEnd: z.date().optional(), receiptUrl: z.string().optional(), notes: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        let catId = input.categoryId ?? 1;
+        let catName = input.category ?? "Other";
+        if (input.category && !input.categoryId) {
+          const db2 = await (await import('./db')).getDb();
+          if (db2) {
+            const { incomeCategories } = await import('../drizzle/schema');
+            const { like } = await import('drizzle-orm');
+            const existing = await db2.select().from(incomeCategories).where(like(incomeCategories.name, `%${input.category.substring(0,30)}%`)).limit(1);
+            if (existing[0]) { catId = existing[0].id; catName = existing[0].name; }
+            else {
+              const res = await db2.insert(incomeCategories).values({ name: input.category, color: '#635BFF' });
+              catId = (res as any).insertId ?? 1;
+              catName = input.category;
+            }
+          }
+        }
+        const periodMap: Record<string,string> = { Daily:'one_off', Weekly:'one_off', Monthly:'monthly', 'One-off':'one_off', daily:'one_off', weekly:'one_off', monthly:'monthly', one_off:'one_off', annual:'annual' };
+        const period = (periodMap[input.period] ?? 'monthly') as any;
+        return createIncomeRecord({ categoryId: catId, categoryName: catName, subcategory: input.subcategory, amount: input.amount, paymentStatus: input.paymentStatus as any, period, tenantName: input.tenantName ?? input.payerName ?? "", notes: input.notes, recordedById: ctx.user.id } as any);
+      }),
     update: adminProcedure
       .input(z.object({ id: z.number(), paymentStatus: z.string().optional(), amount: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ input }) => { const { id, ...data } = input; await updateIncomeRecord(id, data as any); return { success: true }; }),

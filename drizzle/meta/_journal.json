@@ -162,6 +162,13 @@
       "when": 1778079856133,
       "tag": "0022_glorious_mordo",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1778228041650,
+      "tag": "0023_left_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

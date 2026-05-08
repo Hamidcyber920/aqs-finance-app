@@ -373,6 +373,7 @@ export const incomeRecords = mysqlTable("income_records", {
   id: int("id").autoincrement().primaryKey(),
   categoryId: int("categoryId").notNull(),
   categoryName: varchar("categoryName", { length: 100 }),
+  subcategory: varchar("subcategory", { length: 150 }),
   // Tenant / payer details
   tenantName: varchar("tenantName", { length: 200 }).notNull(),
   tenantEmail: varchar("tenantEmail", { length: 320 }),

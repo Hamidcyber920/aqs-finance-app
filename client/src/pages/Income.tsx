@@ -3,13 +3,32 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { Plus, TrendingUp, DollarSign, Calendar, Filter } from "lucide-react";
+import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
+
+// Categories that have subcategory drill-downs
+const SUBCATEGORY_MAP: Record<string, string[]> = {
+  "Quilliam Bazaar": [
+    "Stalls Hire",
+    "Donations Collected",
+    "Restaurant Sales",
+    "General Sales",
+  ],
+  "Eid Income": [
+    "Donations Collected",
+    "Musallahs",
+    "Rimmers Campaign £1,000",
+    "Rimmers Campaign Other",
+    "Restaurant Sales",
+    "General Sales",
+    "Stalls Hire",
+  ],
+};
 
 const INCOME_CATEGORY_GROUPS = [
   {
@@ -24,6 +43,8 @@ const INCOME_CATEGORY_GROUPS = [
       "Other Campaign Sales",
       "Stalls",
       "Coffee Shop",
+      "Quilliam Bazaar",
+      "Eid Income",
     ],
   },
   {
@@ -58,6 +79,60 @@ function Badge({ status }: { status: string }) {
   return <span style={{padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,background:s.bg,color:s.color,textTransform:"capitalize"}}>{status}</span>;
 }
 
+// Subcategory drill-down panel rendered inside the dialog
+function SubcategoryPanel({
+  parent,
+  onSelect,
+  onBack,
+}: {
+  parent: string;
+  onSelect: (sub: string) => void;
+  onBack: () => void;
+}) {
+  const subs = SUBCATEGORY_MAP[parent] ?? [];
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
+      {/* Back button */}
+      <button
+        type="button"
+        onClick={onBack}
+        style={{ display:"flex",alignItems:"center",gap:6,background:"none",border:"none",color:T.mint,fontSize:13,fontWeight:600,cursor:"pointer",padding:"0 0 16px 0",width:"fit-content" }}
+      >
+        <ArrowLeft size={15}/> Back to categories
+      </button>
+
+      {/* Parent label */}
+      <div style={{ marginBottom:14,padding:"10px 14px",background:"rgba(99,91,255,0.12)",border:`1px solid rgba(99,91,255,0.3)`,borderRadius:10 }}>
+        <p style={{ margin:0,fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Selected category</p>
+        <p style={{ margin:"4px 0 0",fontSize:15,fontWeight:700,color:T.white }}>{parent}</p>
+      </div>
+
+      <p style={{ margin:"0 0 10px",fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Choose subcategory</p>
+
+      <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+        {subs.map(sub => (
+          <button
+            key={sub}
+            type="button"
+            onClick={() => onSelect(sub)}
+            style={{
+              display:"flex",alignItems:"center",justifyContent:"space-between",
+              background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`,
+              borderRadius:12,padding:"14px 16px",color:T.white,fontSize:14,
+              fontWeight:500,cursor:"pointer",textAlign:"left",transition:"all 0.15s",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background="rgba(0,255,194,0.08)")}
+            onMouseLeave={e => (e.currentTarget.style.background="rgba(255,255,255,0.04)")}
+          >
+            <span>{sub}</span>
+            <ChevronRight size={16} style={{ color:T.muted }}/>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function IncomePage() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -67,14 +142,25 @@ export default function IncomePage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
 
+  // Subcategory drill-down state
+  const [subPanel, setSubPanel] = useState<string | null>(null); // parent category name when drill-down is open
+  const [selectedSub, setSelectedSub] = useState<string>("");
+
   const { data, refetch } = trpc.income.list.useQuery({ month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
   const createMutation = trpc.income.create.useMutation({
-    onSuccess: () => { toast.success("Income record added"); setOpen(false); refetch(); reset(); },
+    onSuccess: () => {
+      toast.success("Income record added");
+      setOpen(false);
+      setSubPanel(null);
+      setSelectedSub("");
+      refetch();
+      reset();
+    },
     onError: (e) => toast.error(e.message),
   });
 
-  const { register, handleSubmit, reset, watch } = useForm<any>();
+  const { register, handleSubmit, reset, watch, setValue } = useForm<any>();
   const watchCat = watch("category");
 
   const records = data?.records ?? [];
@@ -84,6 +170,32 @@ export default function IncomePage() {
   const filtered = catFilter === "All" ? records : records.filter((r: any) => r.category === catFilter || r.categoryName === catFilter);
 
   const allCats = ["All", ...INCOME_CATEGORIES];
+
+  function handleCategoryChange(cat: string) {
+    setValue("category", cat);
+    if (SUBCATEGORY_MAP[cat]) {
+      setSubPanel(cat);
+      setSelectedSub("");
+    } else {
+      setSubPanel(null);
+      setSelectedSub("");
+    }
+  }
+
+  function handleSubSelect(sub: string) {
+    setSelectedSub(sub);
+    setValue("subcategory", sub);
+    setSubPanel(null); // close drill-down, return to main form
+  }
+
+  function handleDialogClose(v: boolean) {
+    setOpen(v);
+    if (!v) {
+      setSubPanel(null);
+      setSelectedSub("");
+      reset();
+    }
+  }
 
   return (
     <>
@@ -99,7 +211,6 @@ export default function IncomePage() {
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>All income streams — rental, collections, donations</p>
           </div>
           <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
-            {/* Month/year selector */}
             <div style={{ display:"flex",gap:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:12,padding:"6px 12px",alignItems:"center" }}>
               <Calendar size={14} style={{ color:T.muted }} />
               <select value={month} onChange={e=>setMonth(Number(e.target.value))}
@@ -164,6 +275,7 @@ export default function IncomePage() {
                   <tr key={r.id??i}>
                     <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}>
                       <span style={{ fontSize:13,fontWeight:600,color:T.white }}>{r.categoryName??r.category??"—"}</span>
+                      {r.subcategory && <span style={{ display:"block",fontSize:11,color:T.muted,marginTop:2 }}>{r.subcategory}</span>}
                     </td>
                     <td style={{ padding:"12px 12px 12px 0",fontSize:13,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.tenantName??r.reference??"—"}</td>
                     <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.period??"—"}</td>
@@ -178,60 +290,99 @@ export default function IncomePage() {
         </div>
 
         {/* Add income dialog */}
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={handleDialogClose}>
           <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:480 }}>
             <DialogHeader>
-              <DialogTitle style={{ color:T.white,fontSize:18,fontWeight:800 }}>Add Income Record</DialogTitle>
+              <DialogTitle style={{ color:T.white,fontSize:18,fontWeight:800 }}>
+                {subPanel ? `${subPanel} — Subcategory` : "Add Income Record"}
+              </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit(d=>createMutation.mutate({...d,month,year}))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
-              <div>
-                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Category</Label>
-                <select {...register("category",{required:true})}
-                  style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
-                  <option value="" disabled>Select category…</option>
-                  {INCOME_CATEGORY_GROUPS.map(g => (
-                    <optgroup key={g.group} label={`── ${g.group} ──`} style={{ color: T.mint, fontWeight: 700, background: "#081526" }}>
-                      {g.items.map(c => <option key={c} value={c} style={{ background: "#0D2240", color: T.white }}>{c}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              {watchCat==="Community Hire" && (
+
+            {/* Subcategory drill-down panel */}
+            {subPanel ? (
+              <SubcategoryPanel
+                parent={subPanel}
+                onSelect={handleSubSelect}
+                onBack={() => { setSubPanel(null); setValue("category",""); }}
+              />
+            ) : (
+              <form onSubmit={handleSubmit(d => createMutation.mutate({ ...d, month, year }))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
                 <div>
-                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Specify</Label>
-                  <Input {...register("communityHireDetail")} placeholder="Specify community hire..."
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Category</Label>
+                  {/* Show selected category + subcategory badge when a sub was chosen */}
+                  {selectedSub && watchCat ? (
+                    <div style={{ marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+                      <span style={{ padding:"6px 12px",background:"rgba(99,91,255,0.15)",border:`1px solid rgba(99,91,255,0.4)`,borderRadius:8,fontSize:13,color:T.white,fontWeight:600 }}>
+                        {watchCat}
+                      </span>
+                      <ChevronRight size={14} style={{ color:T.muted }}/>
+                      <span style={{ padding:"6px 12px",background:"rgba(0,255,194,0.1)",border:`1px solid rgba(0,255,194,0.3)`,borderRadius:8,fontSize:13,color:T.mint,fontWeight:600 }}>
+                        {selectedSub}
+                      </span>
+                      <button type="button" onClick={() => { setValue("category",""); setValue("subcategory",""); setSelectedSub(""); }}
+                        style={{ fontSize:11,color:T.muted,background:"none",border:"none",cursor:"pointer",textDecoration:"underline",padding:0 }}>
+                        change
+                      </button>
+                    </div>
+                  ) : (
+                    <select
+                      {...register("category",{required:true})}
+                      onChange={e => handleCategoryChange(e.target.value)}
+                      style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}
+                    >
+                      <option value="" disabled>Select category…</option>
+                      {INCOME_CATEGORY_GROUPS.map(g => (
+                        <optgroup key={g.group} label={`── ${g.group} ──`} style={{ color: T.mint, fontWeight: 700, background: "#081526" }}>
+                          {g.items.map(c => (
+                            <option key={c} value={c} style={{ background: "#0D2240", color: T.white }}>
+                              {c}{SUBCATEGORY_MAP[c] ? " ›" : ""}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  )}
+                  {/* Hidden subcategory field */}
+                  <input type="hidden" {...register("subcategory")} />
+                </div>
+
+                {watchCat==="Community Hire" && (
+                  <div>
+                    <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Specify</Label>
+                    <Input {...register("communityHireDetail")} placeholder="Specify community hire..."
+                      style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                  </div>
+                )}
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                  <div>
+                    <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Amount (£)</Label>
+                    <Input {...register("amount",{required:true})} type="number" step="0.01" placeholder="0.00"
+                      style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                  </div>
+                  <div>
+                    <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Period</Label>
+                    <select {...register("period")}
+                      style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
+                      {PERIODS.map(p=><option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Payer / Tenant Name</Label>
+                  <Input {...register("tenantName")} placeholder="Name or reference"
                     style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
                 </div>
-              )}
-              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
                 <div>
-                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Amount (£)</Label>
-                  <Input {...register("amount",{required:true})} type="number" step="0.01" placeholder="0.00"
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
+                  <Input {...register("notes")} placeholder="Optional notes"
                     style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
                 </div>
-                <div>
-                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Period</Label>
-                  <select {...register("period")}
-                    style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
-                    {PERIODS.map(p=><option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Payer / Tenant Name</Label>
-                <Input {...register("tenantName")} placeholder="Name or reference"
-                  style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
-              </div>
-              <div>
-                <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
-                <Input {...register("notes")} placeholder="Optional notes"
-                  style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
-              </div>
-              <Button type="submit" disabled={createMutation.isPending}
-                style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:48,borderRadius:12,border:"none",fontSize:15 }}>
-                {createMutation.isPending?"Saving…":"Add Record"}
-              </Button>
-            </form>
+                <Button type="submit" disabled={createMutation.isPending}
+                  style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:48,borderRadius:12,border:"none",fontSize:15 }}>
+                  {createMutation.isPending?"Saving…":"Add Record"}
+                </Button>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
       </div>

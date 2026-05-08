@@ -1,0 +1,1 @@
+ALTER TABLE `income_records` ADD `subcategory` varchar(150);
