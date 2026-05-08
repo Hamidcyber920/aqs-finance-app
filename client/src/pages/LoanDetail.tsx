@@ -148,10 +148,17 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const recordRepaymentMutation = trpc.loans.recordRepayment?.useMutation?.({
+    onSuccess: () => { toast.success("Repayment recorded"); refetch(); setRepaymentAmount(""); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const confirmRepMutation = trpc.loans.confirmRepaymentReceived?.useMutation?.({
     onSuccess: () => { toast.success("Repayment confirmed"); refetchRep(); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const [repaymentAmount, setRepaymentAmount] = useState("");
 
   const loan = data;
   const repayments = (data as any)?.repayments ?? [];
@@ -265,12 +272,14 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   <FileText size={14}/> PDF Generating…
                 </Button>
               )}
-              {loan.borrowerPhone ? (
-                <Button onClick={() => window.open(`https://wa.me/${loan.borrowerPhone!.replace(/\D/g,"")}`, "_blank")}
-                  style={{ background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
-                  <MessageCircle size={14}/> WhatsApp
-                </Button>
-              ) : null}
+              <Button onClick={() => {
+                  const phone = loan.borrowerPhone?.replace(/\D/g,"") ?? "";
+                  if (phone) { window.open(`https://wa.me/${phone}`, "_blank"); }
+                  else { toast.error("No phone number on file for this borrower"); }
+                }}
+                style={{ background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                <MessageCircle size={14}/> WhatsApp
+              </Button>
               {loan.borrowerEmail ? (
                 <Button
                   onClick={() => sendEmailMutation?.mutate?.({ id, type: "approved" })}
@@ -318,11 +327,24 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 <p style={{ fontSize:12,color:T.muted,marginBottom:10,fontWeight:600 }}>RECORD REPAYMENT</p>
                 <div style={{ display:"flex",gap:10,alignItems:"flex-end" }}>
                   <div style={{ flex:1 }}>
-                    <Input type="number" step="0.01" placeholder={`£${monthly}`}
+                    <Input
+                      type="number" step="0.01" placeholder={`£${monthly}`}
+                      value={repaymentAmount}
+                      onChange={e => setRepaymentAmount(e.target.value)}
                       style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42 }}/>
                   </div>
-                  <Button style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:10,height:42,padding:"0 18px",fontWeight:700,fontSize:13 }}>
-                    + Add
+                  <Button
+                    disabled={!repaymentAmount || recordRepaymentMutation?.isPending}
+                    onClick={() => {
+                      if (!repaymentAmount) return;
+                      recordRepaymentMutation?.mutate?.({
+                        loanId: id,
+                        amount: repaymentAmount,
+                        paymentMethod: "bank_transfer",
+                      });
+                    }}
+                    style={{ background: repaymentAmount ? `linear-gradient(135deg,${T.purple},#4f46e5)` : "rgba(99,91,255,0.2)",color:T.white,border:"none",borderRadius:10,height:42,padding:"0 18px",fontWeight:700,fontSize:13,cursor:repaymentAmount?"pointer":"not-allowed" }}>
+                    {recordRepaymentMutation?.isPending ? "Saving…" : "+ Add"}
                   </Button>
                 </div>
               </div>
