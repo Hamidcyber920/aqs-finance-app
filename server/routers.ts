@@ -1110,6 +1110,49 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${msg}` });
         }
       }),
+
+    // Update borrower contact details
+    updateBorrower: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        borrowerName: z.string().optional(),
+        borrowerEmail: z.string().email().optional(),
+        borrowerPhone: z.string().optional(),
+        borrowerAddress: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...fields } = input;
+        const loan = await getLoanById(id);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+        await updateLoan(id, fields as any);
+        return { success: true };
+      }),
+
+    // Send repayment reminder email
+    sendRepaymentReminder: adminProcedure
+      .input(z.object({ repaymentId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const [rep] = await db.select().from(loanRepayments).where(eq(loanRepayments.id, input.repaymentId));
+        if (!rep) throw new TRPCError({ code: "NOT_FOUND", message: "Repayment not found" });
+        const loan = await getLoanById((rep as any).loanId);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        if (!loan.borrowerEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "Borrower has no email address on file" });
+        const firstName = (loan.borrowerName ?? '').split(' ')[0];
+        const dueDate = (rep as any).dueDate ? new Date((rep as any).dueDate).toLocaleDateString('en-GB') : 'soon';
+        const amount = parseFloat(String((rep as any).amount ?? 0)).toFixed(2);
+        const baseStyle = `font-family:Arial,sans-serif;max-width:600px;margin:0 auto`;
+        const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan</p></div>`;
+        const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>`;
+        const htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum, ${firstName},</p><p>This is a friendly reminder that your Qarde Hasan loan repayment of <strong>&pound;${amount}</strong> is due on <strong>${dueDate}</strong>.</p><p>Please arrange payment at your earliest convenience. If you have any difficulties, please contact us.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+        try {
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Repayment Reminder — Due ${dueDate}`, htmlBody);
+          return { success: true, sentTo: loan.borrowerEmail };
+        } catch (e: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
+        }
+      }),
   }),
 
   // ─── MONTHLY EXPENSES PANE ──────────────────────────────────────────────────

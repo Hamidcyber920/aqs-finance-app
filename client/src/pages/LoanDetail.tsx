@@ -78,7 +78,7 @@ function ApprovalBox({ label, approved, approvedBy, approvedAt, onApprove, canAp
   );
 }
 
-function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin }: any) {
+function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin, onSendReminder, onDownloadReceipt }: any) {
   const [adminName, setAdminName] = useState("");
   const [trusteeName, setTrusteeName] = useState("");
 
@@ -103,10 +103,18 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
             {repayment.trusteeApprovedAt?"Confirmed":repayment.adminApprovedAt?"Partial":"Pending"}
           </span>
           {isAdmin && !repayment.adminApprovedAt && (
-            <button onClick={()=>onConfirm(repayment)}
-              style={{ padding:"5px 12px",borderRadius:8,background:"rgba(99,91,255,0.12)",border:"1px solid rgba(99,91,255,0.25)",color:T.purple,fontSize:12,fontWeight:600,cursor:"pointer" }}>
-              Confirm Received
-            </button>
+            <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
+              <button onClick={()=>onConfirm(repayment)}
+                style={{ padding:"5px 12px",borderRadius:8,background:"rgba(99,91,255,0.12)",border:"1px solid rgba(99,91,255,0.25)",color:T.purple,fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                Confirm Received
+              </button>
+              {onSendReminder && (
+                <button onClick={()=>onSendReminder(repayment)}
+                  style={{ padding:"5px 12px",borderRadius:8,background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                  ✉️ Remind
+                </button>
+              )}
+            </div>
           )}
           {isAdmin && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
             <div style={{ display:"flex",gap:6,alignItems:"center" }}>
@@ -135,6 +143,12 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
                 Trustee Sign ✓
               </button>
             </div>
+          )}
+          {repayment.trusteeApprovedAt && onDownloadReceipt && (
+            <button onClick={()=>onDownloadReceipt(repayment)}
+              style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
+              <Download size={12}/> Receipt PDF
+            </button>
           )}
         </div>
       </div>
@@ -184,8 +198,31 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const updateBorrowerMutation = trpc.loans.updateBorrower?.useMutation?.({
+    onSuccess: () => { toast.success("Borrower details updated"); refetch(); setEditBorrowerOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const sendReminderMutation = trpc.loans.sendRepaymentReminder?.useMutation?.({
+    onSuccess: (res: any) => toast.success(`Reminder sent to ${res?.sentTo}`),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const genRepPdfMutation = trpc.loans.generateRepaymentPdf?.useMutation?.({
+    onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const [repaymentAmount, setRepaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [evidenceUploading, setEvidenceUploading] = useState(false);
+  const evidenceFileRef = useRef<HTMLInputElement>(null);
+  const [editBorrowerOpen, setEditBorrowerOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
 
   const loan = data;
   const repayments = (data as any)?.repayments ?? [];
@@ -226,11 +263,19 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 </h1>
                 <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>{loan.borrowerEmail}</p>
               </div>
-              <span style={{ padding:"5px 14px",borderRadius:999,fontSize:12,fontWeight:700,textTransform:"capitalize",
-                background:fullyApproved?"rgba(0,255,194,0.1)":!fullyApproved?"rgba(251,191,36,0.1)":"rgba(99,91,255,0.12)",
-                color:fullyApproved?T.mint:!fullyApproved?"#fbbf24":"#a78bfa" }}>
-                {fullyApproved?"Fully Approved":loan.status}
-              </span>
+              <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+                <span style={{ padding:"5px 14px",borderRadius:999,fontSize:12,fontWeight:700,textTransform:"capitalize",
+                  background:fullyApproved?"rgba(0,255,194,0.1)":!fullyApproved?"rgba(251,191,36,0.1)":"rgba(99,91,255,0.12)",
+                  color:fullyApproved?T.mint:!fullyApproved?"#fbbf24":"#a78bfa" }}>
+                  {fullyApproved?"Fully Approved":loan.status}
+                </span>
+                {isAdmin && (
+                  <button onClick={() => { setEditName(loan.borrowerName??''); setEditEmail(loan.borrowerEmail??''); setEditPhone((loan as any).borrowerPhone??''); setEditAddress((loan as any).borrowerAddress??''); setEditBorrowerOpen(true); }}
+                    style={{ padding:"5px 12px",borderRadius:999,fontSize:11,fontWeight:600,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer" }}>
+                    ✏️ Edit Details
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -318,6 +363,43 @@ export default function LoanDetailPage({ id }: { id: number }) {
             </div>
           )}
 
+          {/* Edit Borrower Dialog */}
+          <Dialog open={editBorrowerOpen} onOpenChange={setEditBorrowerOpen}>
+            <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:480 }}>
+              <DialogHeader>
+                <DialogTitle style={{ color:T.white,fontSize:17,fontWeight:800 }}>Edit Borrower Details</DialogTitle>
+              </DialogHeader>
+              <div style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Full Name</Label>
+                  <Input value={editName} onChange={e=>setEditName(e.target.value)} placeholder="Full name"
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42 }}/>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Email</Label>
+                  <Input value={editEmail} onChange={e=>setEditEmail(e.target.value)} type="email" placeholder="email@example.com"
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42 }}/>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Phone Number</Label>
+                  <Input value={editPhone} onChange={e=>setEditPhone(e.target.value)} type="tel" placeholder="+44 7700 000000"
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42 }}/>
+                </div>
+                <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Address (optional)</Label>
+                  <Input value={editAddress} onChange={e=>setEditAddress(e.target.value)} placeholder="Street, City"
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42 }}/>
+                </div>
+                <Button
+                  disabled={updateBorrowerMutation?.isPending}
+                  onClick={() => updateBorrowerMutation?.mutate?.({ id, borrowerName:editName||undefined, borrowerEmail:editEmail||undefined, borrowerPhone:editPhone||undefined, borrowerAddress:editAddress||undefined })}
+                  style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:44,borderRadius:12,border:"none",fontSize:14,marginTop:4 }}>
+                  {updateBorrowerMutation?.isPending ? "Saving…" : "Save Changes"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           {/* Notes */}
           {loan.termNotes && (
             <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 20px",marginBottom:20,animation:"fadeUp 0.5s ease 340ms both" }}>
@@ -345,6 +427,11 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 onConfirm={(r: any) => confirmRepMutation?.mutate?.({ repaymentId:r.id })}
                 onApproveAdmin={(r: any) => approveRepAdminMutation?.mutate?.({ repaymentId: r.id, approvedByName: r.approvedByName })}
                 onApproveTrustee={(r: any) => approveRepTrusteeMutation?.mutate?.({ repaymentId: r.id, trusteeName: r.trusteeName })}
+                onSendReminder={(r: any) => sendReminderMutation?.mutate?.({ repaymentId: r.id })}
+                onDownloadReceipt={(r: any) => {
+                  if (r.confirmationPdfUrl) { window.open(r.confirmationPdfUrl, "_blank"); }
+                  else { genRepPdfMutation?.mutate?.({ repaymentId: r.id }); }
+                }}
               />
             ))}
 
@@ -376,11 +463,50 @@ export default function LoanDetailPage({ id }: { id: number }) {
                         loanId: id,
                         amount: repaymentAmount,
                         paymentMethod,
+                        evidenceUrl: evidenceUrl || undefined,
                       });
                     }}
                     style={{ background: repaymentAmount ? `linear-gradient(135deg,${T.purple},#4f46e5)` : "rgba(99,91,255,0.2)",color:T.white,border:"none",borderRadius:10,height:42,padding:"0 18px",fontWeight:700,fontSize:13,cursor:repaymentAmount?"pointer":"not-allowed" }}>
                     {recordRepaymentMutation?.isPending ? "Saving…" : "+ Add"}
                   </Button>
+                </div>
+                {/* Evidence upload */}
+                <div style={{ marginTop:10,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap" }}>
+                  <input ref={evidenceFileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setEvidenceUploading(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append("file", file);
+                        fd.append("key", `loan-evidence/${id}-${Date.now()}.${file.name.split('.').pop()}`);
+                        const res = await fetch("/api/upload", { method:"POST", body:fd });
+                        if (!res.ok) throw new Error("Upload failed");
+                        const data = await res.json();
+                        setEvidenceUrl(data.url);
+                        toast.success("Evidence uploaded");
+                      } catch (err: any) {
+                        toast.error(err.message ?? "Upload failed");
+                      } finally {
+                        setEvidenceUploading(false);
+                        if (evidenceFileRef.current) evidenceFileRef.current.value = "";
+                      }
+                    }}/>
+                  <button
+                    onClick={() => evidenceFileRef.current?.click()}
+                    disabled={evidenceUploading}
+                    style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:9,background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,color:T.muted,fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                    <Upload size={13}/> {evidenceUploading ? "Uploading…" : "📷 Add Evidence"}
+                  </button>
+                  {evidenceUrl && (
+                    <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                      <a href={evidenceUrl} target="_blank" rel="noreferrer"
+                        style={{ fontSize:11,color:T.mint,textDecoration:"none" }}>View evidence ↗</a>
+                      <button onClick={() => setEvidenceUrl("")}
+                        style={{ background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:13,padding:0 }}>✕</button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

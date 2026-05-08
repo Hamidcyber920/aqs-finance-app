@@ -537,3 +537,9 @@
 - [x] voiceTranscription.ts: updated getFileExtension() to strip codec suffix and handle all Whisper-supported formats
 - [x] VoiceAgent.tsx: re-create blob with clean MIME type (no codec suffix) before uploading to S3; derive file extension from MIME type map
 - [x] Production build clean (2747 modules, 0 errors)
+
+## Loan Improvements (May 2026 — round 2)
+- [x] Edit Borrower Details dialog on loan detail page (name, email, phone, address)
+- [x] Image/photo upload as evidence on Record Repayment
+- [x] Send Reminder button on overdue repayment rows
+- [x] Repayment receipt PDF download button on confirmed repayment rows
