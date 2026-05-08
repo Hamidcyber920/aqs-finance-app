@@ -531,8 +531,10 @@ export default function IncomePage() {
                   </div>
                 </div>
                 <div>
-                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Payer / Tenant Name</Label>
-                  <Input {...register("tenantName")} placeholder="Name or reference"
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>
+                    {FRIDAY_INCOME_CATS.has(watchCat) ? "Type / Reference" : "Payer / Tenant Name"}
+                  </Label>
+                  <Input {...register("tenantName")} placeholder={FRIDAY_INCOME_CATS.has(watchCat) ? "Type or reference…" : "Name or reference"}
                     style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
                 </div>
                 <div>
