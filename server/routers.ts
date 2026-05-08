@@ -1796,6 +1796,23 @@ export const appRouter = router({
       }
       return { linkedDonorIds: results };
     }),
+    // Send a donation receipt email to a donor
+    sendReceipt: adminProcedure.input(z.object({
+      donorName: z.string(),
+      donorEmail: z.string(),
+      amount: z.string().optional(),
+      category: z.string(),
+      incomeDate: z.string().optional(),
+      authorisedBy: z.string().optional(),
+    })).mutation(async ({ input }) => {
+      const { donorName, donorEmail, amount, category, incomeDate, authorisedBy } = input;
+      const firstName = donorName.split(' ')[0];
+      const amtStr = amount ? `£${parseFloat(amount).toFixed(2)}` : 'your donation';
+      const dateStr = incomeDate ? new Date(incomeDate).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' }) : new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#0A192F;padding:24px;text-align:center"><h1 style="color:#00FFC2;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Donation Receipt</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName},</p><p>JazakAllahu Khayran for your generous donation. Please find your receipt details below:</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Donor Name</td><td style="padding:8px">${donorName}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Category</td><td style="padding:8px">${category}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount</td><td style="padding:8px">${amtStr}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Date</td><td style="padding:8px">${dateStr}</td></tr>${authorisedBy ? `<tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Authorised By</td><td style="padding:8px">${authorisedBy}</td></tr>` : ''}</table><p>May Allah accept your contribution and bless you abundantly.</p><p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated receipt from the AQ Society Finance System.</div></div>`;
+      await sendGmail(donorEmail, donorName, `Donation Receipt — ${category} — Abdullah Quilliam Society`, html);
+      return { success: true };
+    }),
     // List donors linked to a specific income record
     byIncome: protectedProcedure.input(z.object({ incomeRecordId: z.number() })).query(async ({ input }) => {
       const db = getDb();

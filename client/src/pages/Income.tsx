@@ -320,15 +320,25 @@ export default function IncomePage() {
   // Multi-donor entry state
   const [donors, setDonors] = useState<{ name:string; email:string; phone:string; amount:string }[]>([]);
   const [draftDonor, setDraftDonor] = useState({ name:"", email:"", phone:"", amount:"" });
+  // Donor sign-off state
+  const [donorSignManager, setDonorSignManager] = useState<string>(""); // "Farid Ahmed" | "Mumin Khan"
+  const [donorSignManagerTs, setDonorSignManagerTs] = useState<string>("");
+  const [donorSignTrustee, setDonorSignTrustee] = useState<string>(""); // trustee name
+  const [donorSignTrusteeTs, setDonorSignTrusteeTs] = useState<string>("");
+  const [donorSignTrusteeOther, setDonorSignTrusteeOther] = useState<string>("");
+  const [sendingReceipt, setSendingReceipt] = useState<number | null>(null); // index of donor being emailed
 
   function addDonorEntry() {
     if (!draftDonor.name.trim()) { toast.error("Donor name is required"); return; }
+    if (!draftDonor.email.trim()) { toast.error("Donor email is required"); return; }
+    if (!draftDonor.phone.trim()) { toast.error("Donor phone is required"); return; }
     setDonors(prev => [...prev, { ...draftDonor }]);
     setDraftDonor({ name:"", email:"", phone:"", amount:"" });
   }
   function removeDonor(i: number) { setDonors(prev => prev.filter((_, idx) => idx !== i)); }
 
   const linkDonorsMutation = trpc.donors.linkToIncome.useMutation();
+  const sendReceiptMutation = trpc.donors.sendReceipt.useMutation();
 
   function fmtStamp(iso: string) {
     if (!iso) return "";
@@ -361,6 +371,7 @@ export default function IncomePage() {
       setSignFarid(""); setSignMumin(""); setSignAbdul(""); setSignGhalib(""); setSignOther(""); setSignOtherName("");
       setDonors([]);
       setDraftDonor({ name:"", email:"", phone:"", amount:"" });
+      setDonorSignManager(""); setDonorSignManagerTs(""); setDonorSignTrustee(""); setDonorSignTrusteeTs(""); setDonorSignTrusteeOther("");
       refetch();
       reset();
     },
@@ -418,6 +429,7 @@ export default function IncomePage() {
       setSignFarid(""); setSignMumin(""); setSignAbdul(""); setSignGhalib(""); setSignOther(""); setSignOtherName("");
       setDonors([]);
       setDraftDonor({ name:"", email:"", phone:"", amount:"" });
+      setDonorSignManager(""); setDonorSignManagerTs(""); setDonorSignTrustee(""); setDonorSignTrusteeTs(""); setDonorSignTrusteeOther("");
       reset();
     }
   }
@@ -832,20 +844,55 @@ export default function IncomePage() {
                     </div>
                   </>
                 ) : DONOR_CATS.has(watchCat) ? (
-                  /* Donation categories — multi-donor entry */
+                  /* Donation categories — multi-donor entry with sign-off */
                   <>
+                    {/* Donor Details panel */}
                     <div style={{ background:"rgba(0,255,194,0.05)",border:`1px solid rgba(0,255,194,0.15)`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10 }}>
                       <p style={{ margin:"0 0 4px",fontSize:11,color:T.mint,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em" }}>Donor Details</p>
 
                       {/* Existing donors list */}
                       {donors.map((d, i) => (
-                        <div key={i} style={{ display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,background:"rgba(0,255,194,0.07)",border:`1px solid rgba(0,255,194,0.2)` }}>
-                          <div style={{ flex:1 }}>
-                            <span style={{ fontSize:13,color:T.white,fontWeight:600 }}>{d.name}</span>
-                            {d.amount && <span style={{ fontSize:11,color:T.mint,marginLeft:8 }}>£{d.amount}</span>}
-                            {(d.email || d.phone) && <span style={{ display:"block",fontSize:11,color:T.muted,marginTop:1 }}>{[d.email,d.phone].filter(Boolean).join(" · ")}</span>}
+                        <div key={i} style={{ borderRadius:10,background:"rgba(0,255,194,0.07)",border:`1px solid rgba(0,255,194,0.2)`,padding:"10px 12px" }}>
+                          <div style={{ display:"flex",alignItems:"flex-start",gap:8 }}>
+                            <div style={{ flex:1 }}>
+                              <span style={{ fontSize:13,color:T.white,fontWeight:600 }}>{d.name}</span>
+                              {d.amount && <span style={{ fontSize:11,color:T.mint,marginLeft:8 }}>£{d.amount}</span>}
+                              <span style={{ display:"block",fontSize:11,color:T.muted,marginTop:1 }}>{[d.email,d.phone].filter(Boolean).join(" · ")}</span>
+                            </div>
+                            <button type="button" onClick={() => removeDonor(i)} style={{ background:"none",border:"none",color:"rgba(255,100,100,0.7)",cursor:"pointer",fontSize:16,lineHeight:1,padding:2 }}>×</button>
                           </div>
-                          <button type="button" onClick={() => removeDonor(i)} style={{ background:"none",border:"none",color:"rgba(255,100,100,0.7)",cursor:"pointer",fontSize:16,lineHeight:1,padding:2 }}>×</button>
+                          {/* Email receipt + WhatsApp buttons per donor */}
+                          <div style={{ display:"flex",gap:8,marginTop:8 }}>
+                            {d.email && (
+                              <button type="button"
+                                disabled={sendingReceipt === i}
+                                onClick={async () => {
+                                  setSendingReceipt(i);
+                                  try {
+                                    const authorisedBy = [donorSignManager, donorSignTrustee === "Other" ? donorSignTrusteeOther : donorSignTrustee].filter(Boolean).join(" & ");
+                                    await sendReceiptMutation.mutateAsync({ donorName:d.name, donorEmail:d.email, amount:d.amount||undefined, category:watchCat, incomeDate:watch("incomeDate")||undefined, authorisedBy:authorisedBy||undefined });
+                                    toast.success(`Receipt sent to ${d.email}`);
+                                  } catch(e:any) { toast.error(e.message||"Failed to send email"); }
+                                  setSendingReceipt(null);
+                                }}
+                                style={{ flex:1,padding:"6px 10px",borderRadius:8,background:"rgba(99,91,255,0.12)",border:"1px solid rgba(99,91,255,0.3)",color:"#a5b4fc",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                                {sendingReceipt === i ? "Sending…" : "✉️ Send Email Receipt"}
+                              </button>
+                            )}
+                            {d.phone && (
+                              <button type="button"
+                                onClick={() => {
+                                  const phone = d.phone.replace(/[^0-9]/g,"");
+                                  const authorisedBy = [donorSignManager, donorSignTrustee === "Other" ? donorSignTrusteeOther : donorSignTrustee].filter(Boolean).join(" & ");
+                                  const amtStr = d.amount ? `£${parseFloat(d.amount).toFixed(2)}` : "your donation";
+                                  const msg = encodeURIComponent(`Assalamu Alaikum ${d.name.split(" ")[0]}, JazakAllahu Khayran for your generous donation of ${amtStr} to Abdullah Quilliam Society (${watchCat}). This is your confirmation receipt.${authorisedBy ? ` Authorised by: ${authorisedBy}.` : ""} May Allah bless you.`);
+                                  window.open(`https://wa.me/${phone}?text=${msg}`,"_blank");
+                                }}
+                                style={{ flex:1,padding:"6px 10px",borderRadius:8,background:"rgba(37,211,102,0.1)",border:"1px solid rgba(37,211,102,0.3)",color:"#4ade80",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                                💬 Send WhatsApp
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
 
@@ -853,13 +900,13 @@ export default function IncomePage() {
                       <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:8 }}>
                         <input value={draftDonor.name} onChange={e => setDraftDonor(p => ({...p,name:e.target.value}))} placeholder="Full name *"
                           style={{ gridColumn:"1/-1",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
-                        <input value={draftDonor.email} onChange={e => setDraftDonor(p => ({...p,email:e.target.value}))} placeholder="Email (optional)"
+                        <input value={draftDonor.email} onChange={e => setDraftDonor(p => ({...p,email:e.target.value}))} placeholder="Email *"
                           type="email"
-                          style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
-                        <input value={draftDonor.phone} onChange={e => setDraftDonor(p => ({...p,phone:e.target.value}))} placeholder="Phone (optional)"
+                          style={{ background:"rgba(255,255,255,0.06)",border:`1px solid rgba(0,255,194,0.3)`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
+                        <input value={draftDonor.phone} onChange={e => setDraftDonor(p => ({...p,phone:e.target.value}))} placeholder="Phone *"
                           type="tel"
-                          style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
-                        <input value={draftDonor.amount} onChange={e => setDraftDonor(p => ({...p,amount:e.target.value}))} placeholder="Amount (£) optional"
+                          style={{ background:"rgba(255,255,255,0.06)",border:`1px solid rgba(0,255,194,0.3)`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
+                        <input value={draftDonor.amount} onChange={e => setDraftDonor(p => ({...p,amount:e.target.value}))} placeholder="Amount (£)"
                           type="number" step="0.01"
                           style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:38,padding:"0 10px",fontSize:13,outline:"none" }}/>
                       </div>
@@ -867,12 +914,64 @@ export default function IncomePage() {
                         style={{ alignSelf:"flex-start",background:`rgba(0,255,194,0.12)`,border:`1px solid rgba(0,255,194,0.3)`,borderRadius:8,color:T.mint,fontWeight:600,fontSize:12,padding:"6px 14px",cursor:"pointer" }}>
                         + Add Donor
                       </button>
-                      {donors.length === 0 && <p style={{ margin:0,fontSize:10,color:T.muted,fontStyle:"italic" }}>Add at least one donor, or leave empty to record without donor details.</p>}
                     </div>
+
+                    {/* Notes — mandatory */}
                     <div>
-                      <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
-                      <Input {...register("notes")} placeholder="Optional notes"
+                      <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes <span style={{ color:"#f87171" }}>*</span></Label>
+                      <Input {...register("notes",{required:true})} placeholder="Notes (required)"
                         style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                    </div>
+
+                    {/* Donor sign-off section */}
+                    <div style={{ background:"rgba(99,91,255,0.06)",border:`1px solid rgba(99,91,255,0.2)`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:12 }}>
+                      <p style={{ margin:0,fontSize:11,color:T.purple,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em" }}>Authorised By</p>
+
+                      {/* Manager tick boxes */}
+                      <div>
+                        <p style={{ margin:"0 0 8px",fontSize:10,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Manager</p>
+                        {(["Farid Ahmed","Mumin Khan"] as const).map(name => {
+                          const isSelected = donorSignManager === name;
+                          return (
+                            <div key={name} onClick={() => { if(isSelected){setDonorSignManager("");setDonorSignManagerTs("");}else{setDonorSignManager(name);setDonorSignManagerTs(new Date().toISOString());} }}
+                              style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,cursor:"pointer",marginBottom:6,background:isSelected?"rgba(0,255,194,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${isSelected?"rgba(0,255,194,0.3)":T.border}`,transition:"all 0.15s" }}>
+                              <div style={{ width:18,height:18,borderRadius:4,border:`2px solid ${isSelected?T.mint:"rgba(255,255,255,0.3)"}`,background:isSelected?T.mint:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s" }}>
+                                {isSelected && <span style={{ fontSize:11,color:T.navy,fontWeight:900 }}>✓</span>}
+                              </div>
+                              <div style={{ flex:1 }}>
+                                <span style={{ fontSize:13,color:T.white,fontWeight:600 }}>{name}</span>
+                                {isSelected && donorSignManagerTs && <span style={{ display:"block",fontSize:10,color:T.mint,marginTop:1 }}>{fmtStamp(donorSignManagerTs)}</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Trustee tick boxes */}
+                      <div>
+                        <p style={{ margin:"0 0 8px",fontSize:10,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Trustee</p>
+                        {(["Dr Abdul Hamid","Ghalib Khan","Other"] as const).map(name => {
+                          const isSelected = donorSignTrustee === name;
+                          return (
+                            <div key={name}>
+                              <div onClick={() => { if(isSelected){setDonorSignTrustee("");setDonorSignTrusteeTs("");}else{setDonorSignTrustee(name);setDonorSignTrusteeTs(new Date().toISOString());} }}
+                                style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,cursor:"pointer",marginBottom:4,background:isSelected?"rgba(165,180,252,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${isSelected?"rgba(165,180,252,0.4)":T.border}`,transition:"all 0.15s" }}>
+                                <div style={{ width:18,height:18,borderRadius:4,border:`2px solid ${isSelected?"#a5b4fc":"rgba(255,255,255,0.3)"}`,background:isSelected?"#a5b4fc":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s" }}>
+                                  {isSelected && <span style={{ fontSize:11,color:T.navy,fontWeight:900 }}>✓</span>}
+                                </div>
+                                <div style={{ flex:1 }}>
+                                  <span style={{ fontSize:13,color:T.white,fontWeight:600 }}>{name}</span>
+                                  {isSelected && donorSignTrusteeTs && <span style={{ display:"block",fontSize:10,color:"#a5b4fc",marginTop:1 }}>{fmtStamp(donorSignTrusteeTs)}</span>}
+                                </div>
+                              </div>
+                              {isSelected && name === "Other" && (
+                                <input value={donorSignTrusteeOther} onChange={e => setDonorSignTrusteeOther(e.target.value)} placeholder="Enter trustee name"
+                                  style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid rgba(165,180,252,0.3)`,borderRadius:8,color:T.white,height:36,padding:"0 10px",fontSize:13,outline:"none",boxSizing:"border-box",marginBottom:4 }}/>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </>
                 ) : (
