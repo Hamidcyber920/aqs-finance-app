@@ -165,12 +165,21 @@ export default function ReconciliationPage() {
               <h2 style={{ fontSize:15,fontWeight:700,color:T.white,margin:0 }}>Total Income</h2>
               <span style={{ marginLeft:"auto",fontSize:18,fontWeight:800,color:T.mint }}>£{income.toLocaleString("en-GB",{minimumFractionDigits:2})}</span>
             </div>
-            {incomeBreakdown.map((item: any, i: number) => (
-              <div key={i} style={{ display:"flex",justifyContent:"space-between",padding:"8px 0",borderTop:`1px solid ${T.border}` }}>
-                <span style={{ fontSize:12,color:T.muted }}>{item.source ?? item.category}</span>
-                <span style={{ fontSize:12,fontWeight:600,color:T.white }}>£{Number(item.amount).toLocaleString("en-GB",{minimumFractionDigits:2})}</span>
-              </div>
-            ))}
+            {(() => {
+              const grouped: Record<string, number> = {};
+              incomeBreakdown.forEach((item: any) => {
+                const key = item.category ?? item.source ?? "Other";
+                grouped[key] = (grouped[key] ?? 0) + Number(item.amount ?? 0);
+              });
+              const entries = Object.entries(grouped).sort((a, b) => b[1] - a[1]);
+              if (entries.length === 0) return <p style={{ fontSize:12,color:T.muted,margin:0 }}>No income records for this period.</p>;
+              return entries.map(([cat, amt], i) => (
+                <div key={i} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderTop:`1px solid ${T.border}` }}>
+                  <span style={{ fontSize:12,color:T.muted,flex:1 }}>{cat}</span>
+                  <span style={{ fontSize:13,fontWeight:700,color:T.white }}>£{amt.toLocaleString("en-GB",{minimumFractionDigits:2})}</span>
+                </div>
+              ));
+            })()}
           </div>
           {/* Expenditure */}
           <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid rgba(99,91,255,0.15)`,borderRadius:16,padding:20,animation:"fadeUp 0.5s ease 340ms both" }}>

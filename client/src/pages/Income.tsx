@@ -293,6 +293,7 @@ export default function IncomePage() {
   const [showAll, setShowAll] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   // Subcategory drill-down state
   const [subPanel, setSubPanel] = useState<string | null>(null); // parent category name when drill-down is open
@@ -342,6 +343,10 @@ export default function IncomePage() {
 
   const linkDonorsMutation = trpc.donors.linkToIncome.useMutation();
   const sendReceiptMutation = trpc.donors.sendReceipt.useMutation();
+  const deleteMutation = trpc.income.delete.useMutation({
+    onSuccess: () => { toast.success("Record deleted"); refetch(); setExpandedRow(null); },
+    onError: (e) => toast.error(e.message),
+  });
 
   function fmtStamp(iso: string) {
     if (!iso) return "";
@@ -450,8 +455,8 @@ export default function IncomePage() {
   }
 
   function handleDialogClose(v: boolean) {
-    setOpen(v);
     if (!v) {
+      setConfirmed(false);
       setSubPanel(null);
       setSelectedSub("");
       setEidType("");
@@ -593,6 +598,22 @@ export default function IncomePage() {
                             {r.signedByTrustee && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>SIGNED BY TRUSTEE</span><span style={{color:T.white}}>{r.signedByTrustee}</span></div>}
                             {r.receiptUrl && <div style={{gridColumn:"1/-1"}}><span style={{color:T.muted,display:"block",marginBottom:4}}>ATTACHED EVIDENCE</span><a href={r.receiptUrl} target="_blank" rel="noreferrer" style={{color:T.mint,textDecoration:"underline"}}>View attached document</a></div>}
                             <div><span style={{color:T.muted,display:"block",marginBottom:2}}>RECORDED AT</span><span style={{color:T.white}}>{r.createdAt ? new Date(r.createdAt).toLocaleString("en-GB") : "—"}</span></div>
+                            {/* Delete button — visible within 10 min of creation or for superadmin/trustee */}
+                            {(() => {
+                              const ageMs = r.createdAt ? Date.now() - new Date(r.createdAt).getTime() : Infinity;
+                              const canDel = (user?.role === "superadmin" || user?.role === "trustee") || ageMs <= 10 * 60 * 1000;
+                              if (!canDel) return null;
+                              const minsLeft = Math.max(0, Math.ceil((10 * 60 * 1000 - ageMs) / 60000));
+                              const isAdmin = user?.role === "superadmin" || user?.role === "trustee";
+                              return (
+                                <div style={{gridColumn:"1/-1",marginTop:4}}>
+                                  <button onClick={(e)=>{ e.stopPropagation(); if(window.confirm("Delete this income record? This cannot be undone.")) deleteMutation.mutate({id:r.id}); }}
+                                    style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:600,border:"1px solid rgba(239,68,68,0.4)",background:"rgba(239,68,68,0.1)",color:"#f87171",cursor:"pointer"}}>
+                                    Delete Record{!isAdmin && minsLeft > 0 ? ` (${minsLeft} min left)` : ""}
+                                  </button>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
@@ -1069,8 +1090,16 @@ export default function IncomePage() {
                     </div>
                   </>
                 )}
-                <Button type="submit" disabled={createMutation.isPending || uploadingEvidence}
-                  style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:48,borderRadius:12,border:"none",fontSize:15 }}>
+                {/* Confirmation checkbox */}
+                <div onClick={()=>setConfirmed(c=>!c)}
+                  style={{ display:"flex",alignItems:"flex-start",gap:10,padding:"12px 14px",borderRadius:10,border:`1px solid ${confirmed ? T.mint : T.border}`,background:confirmed ? "rgba(0,255,178,0.06)" : "rgba(255,255,255,0.03)",cursor:"pointer",transition:"all 0.2s" }}>
+                  <div style={{ width:18,height:18,borderRadius:4,border:`2px solid ${confirmed ? T.mint : T.muted}`,background:confirmed ? T.mint : "transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,transition:"all 0.2s" }}>
+                    {confirmed && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="#081526" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                  </div>
+                  <span style={{ fontSize:12,color:confirmed ? T.white : T.muted,lineHeight:1.4 }}>I confirm that the figures above have been checked and are correct, and I authorise this record to be saved.</span>
+                </div>
+                <Button type="submit" disabled={createMutation.isPending || uploadingEvidence || !confirmed}
+                  style={{ background:confirmed ? `linear-gradient(135deg,${T.mint},#00DDB0)` : "rgba(255,255,255,0.1)",color:confirmed ? "#081526" : T.muted,fontWeight:700,height:48,borderRadius:12,border:"none",fontSize:15,transition:"all 0.3s",cursor:confirmed ? "pointer" : "not-allowed" }}>
                   {createMutation.isPending?"Saving…":uploadingEvidence?"Uploading…":"Add Record"}
                 </Button>
               </form>
