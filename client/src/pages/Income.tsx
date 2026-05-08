@@ -87,17 +87,57 @@ function Badge({ status }: { status: string }) {
   return <span style={{padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,background:s.bg,color:s.color,textTransform:"capitalize"}}>{status}</span>;
 }
 
+// Generate Eid date options: past 3 years + next year, formatted as "Wednesday, 2 April 2025"
+function generateEidDates(): { value: string; label: string }[] {
+  const dates: { value: string; label: string }[] = [];
+  const currentYear = new Date().getFullYear();
+  // Approximate Eid-ul-Fitr dates (1 Shawwal) — hardcoded known/estimated dates
+  const eidFitrDates = [
+    new Date(2022, 4, 2),   // 2 May 2022
+    new Date(2023, 3, 21),  // 21 Apr 2023
+    new Date(2024, 3, 10),  // 10 Apr 2024
+    new Date(2025, 2, 30),  // 30 Mar 2025
+    new Date(2026, 2, 20),  // 20 Mar 2026
+  ];
+  // Approximate Eid-ul-Adha dates (10 Dhul Hijjah)
+  const eidAdhaDatesList = [
+    new Date(2022, 6, 9),   // 9 Jul 2022
+    new Date(2023, 5, 28),  // 28 Jun 2023
+    new Date(2024, 5, 16),  // 16 Jun 2024
+    new Date(2025, 5, 6),   // 6 Jun 2025
+    new Date(2026, 4, 27),  // 27 May 2026
+  ];
+  const allDates = [...eidFitrDates, ...eidAdhaDatesList].sort((a, b) => b.getTime() - a.getTime());
+  for (const d of allDates) {
+    const value = d.toISOString().slice(0, 10);
+    const label = d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    dates.push({ value, label });
+  }
+  return dates;
+}
+
+const EID_DATES = generateEidDates();
+
 // Subcategory drill-down panel rendered inside the dialog
 function SubcategoryPanel({
   parent,
   onSelect,
   onBack,
+  eidType,
+  setEidType,
+  eidDate,
+  setEidDate,
 }: {
   parent: string;
   onSelect: (sub: string) => void;
   onBack: () => void;
+  eidType: string;
+  setEidType: (v: string) => void;
+  eidDate: string;
+  setEidDate: (v: string) => void;
 }) {
   const subs = SUBCATEGORY_MAP[parent] ?? [];
+  const isEid = parent === "Eid Income";
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
       {/* Back button */}
@@ -115,6 +155,47 @@ function SubcategoryPanel({
         <p style={{ margin:"4px 0 0",fontSize:15,fontWeight:700,color:T.white }}>{parent}</p>
       </div>
 
+      {/* Eid-specific selectors */}
+      {isEid && (
+        <div style={{ display:"flex",flexDirection:"column",gap:12,marginBottom:18,padding:"14px 16px",background:"rgba(0,255,194,0.04)",border:`1px solid rgba(0,255,194,0.15)`,borderRadius:12 }}>
+          {/* Eid type selector */}
+          <div>
+            <p style={{ margin:"0 0 8px",fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Which Eid?</p>
+            <div style={{ display:"flex",gap:10 }}>
+              {["Eid-ul-Fitr","Eid-ul-Adha"].map(type => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setEidType(type)}
+                  style={{
+                    flex:1,padding:"10px 0",borderRadius:10,fontSize:13,fontWeight:700,cursor:"pointer",transition:"all 0.15s",
+                    background: eidType === type ? "rgba(0,255,194,0.15)" : "rgba(255,255,255,0.04)",
+                    border: eidType === type ? `1.5px solid ${T.mint}` : `1px solid ${T.border}`,
+                    color: eidType === type ? T.mint : T.muted,
+                  }}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Eid date dropdown */}
+          <div>
+            <p style={{ margin:"0 0 8px",fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Eid Date</p>
+            <select
+              value={eidDate}
+              onChange={e => setEidDate(e.target.value)}
+              style={{ width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color: eidDate ? T.white : T.muted,height:44,padding:"0 12px",fontSize:13 }}
+            >
+              <option value="" disabled style={{ background:"#081526",color:T.muted }}>Select Eid date…</option>
+              {EID_DATES.map(d => (
+                <option key={d.value} value={d.value} style={{ background:"#0D2240",color:T.white }}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
       <p style={{ margin:"0 0 10px",fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Choose subcategory</p>
 
       <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
@@ -122,20 +203,31 @@ function SubcategoryPanel({
           <button
             key={sub}
             type="button"
-            onClick={() => onSelect(sub)}
+            onClick={() => {
+              if (isEid && (!eidType || !eidDate)) {
+                // Require both Eid type and date before selecting subcategory
+                return;
+              }
+              onSelect(sub);
+            }}
             style={{
               display:"flex",alignItems:"center",justifyContent:"space-between",
-              background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`,
-              borderRadius:12,padding:"14px 16px",color:T.white,fontSize:14,
-              fontWeight:500,cursor:"pointer",textAlign:"left",transition:"all 0.15s",
+              background: isEid && (!eidType || !eidDate) ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)",
+              border:`1px solid ${T.border}`,
+              borderRadius:12,padding:"14px 16px",color: isEid && (!eidType || !eidDate) ? T.muted : T.white,fontSize:14,
+              fontWeight:500,cursor: isEid && (!eidType || !eidDate) ? "not-allowed" : "pointer",textAlign:"left",transition:"all 0.15s",
+              opacity: isEid && (!eidType || !eidDate) ? 0.5 : 1,
             }}
-            onMouseEnter={e => (e.currentTarget.style.background="rgba(0,255,194,0.08)")}
-            onMouseLeave={e => (e.currentTarget.style.background="rgba(255,255,255,0.04)")}
+            onMouseEnter={e => { if (!(isEid && (!eidType || !eidDate))) e.currentTarget.style.background="rgba(0,255,194,0.08)"; }}
+            onMouseLeave={e => { if (!(isEid && (!eidType || !eidDate))) e.currentTarget.style.background="rgba(255,255,255,0.04)"; }}
           >
             <span>{sub}</span>
             <ChevronRight size={16} style={{ color:T.muted }}/>
           </button>
         ))}
+        {isEid && (!eidType || !eidDate) && (
+          <p style={{ margin:"4px 0 0",fontSize:11,color:"#fbbf24",textAlign:"center" }}>Please select which Eid and the date above first</p>
+        )}
       </div>
     </div>
   );
@@ -153,6 +245,9 @@ export default function IncomePage() {
   // Subcategory drill-down state
   const [subPanel, setSubPanel] = useState<string | null>(null); // parent category name when drill-down is open
   const [selectedSub, setSelectedSub] = useState<string>("");
+  // Eid-specific state
+  const [eidType, setEidType] = useState<string>("");
+  const [eidDate, setEidDate] = useState<string>("");
 
   const { data, refetch } = trpc.income.list.useQuery({ month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
@@ -162,6 +257,8 @@ export default function IncomePage() {
       setOpen(false);
       setSubPanel(null);
       setSelectedSub("");
+      setEidType("");
+      setEidDate("");
       refetch();
       reset();
     },
@@ -192,7 +289,14 @@ export default function IncomePage() {
 
   function handleSubSelect(sub: string) {
     setSelectedSub(sub);
-    setValue("subcategory", sub);
+    // For Eid Income, prefix subcategory with eid type and store date
+    if (subPanel === "Eid Income" && eidType) {
+      setValue("subcategory", `${eidType} — ${sub}`);
+      // Store the eid date as the incomeDate
+      if (eidDate) setValue("incomeDate", eidDate);
+    } else {
+      setValue("subcategory", sub);
+    }
     setSubPanel(null); // close drill-down, return to main form
   }
 
@@ -201,6 +305,8 @@ export default function IncomePage() {
     if (!v) {
       setSubPanel(null);
       setSelectedSub("");
+      setEidType("");
+      setEidDate("");
       reset();
     }
   }
@@ -311,7 +417,11 @@ export default function IncomePage() {
               <SubcategoryPanel
                 parent={subPanel}
                 onSelect={handleSubSelect}
-                onBack={() => { setSubPanel(null); setValue("category",""); }}
+                onBack={() => { setSubPanel(null); setValue("category",""); setEidType(""); setEidDate(""); }}
+                eidType={eidType}
+                setEidType={setEidType}
+                eidDate={eidDate}
+                setEidDate={setEidDate}
               />
             ) : (
               <form onSubmit={handleSubmit(d => createMutation.mutate({ ...d, month, year }))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
