@@ -79,12 +79,12 @@ function ApprovalBox({ label, approved, approvedBy, approvedAt, onApprove, canAp
 }
 
 function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin }: any) {
-  const [open, setOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [adminName, setAdminName] = useState("");
+  const [trusteeName, setTrusteeName] = useState("");
 
   return (
     <div style={{ padding:"14px 0",borderBottom:`1px solid ${T.border}` }}>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10 }}>
+      <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10 }}>
         <div>
           <p style={{ fontSize:13,fontWeight:600,color:T.white,margin:0 }}>
             Instalment {repayment.instalment ?? "#"} — £{Number(repayment.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}
@@ -96,7 +96,7 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
             <p style={{ fontSize:11,color:T.mint,margin:"2px 0 0" }}>✓ Admin · {repayment.trusteeApprovedAt ? "✓ Trustee · Fully confirmed" : "Awaiting trustee"}</p>
           )}
         </div>
-        <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+        <div style={{ display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end" }}>
           <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,textTransform:"capitalize",
             background:repayment.trusteeApprovedAt?"rgba(0,255,194,0.1)":repayment.adminApprovedAt?"rgba(251,191,36,0.1)":"rgba(255,255,255,0.06)",
             color:repayment.trusteeApprovedAt?T.mint:repayment.adminApprovedAt?"#fbbf24":T.muted }}>
@@ -109,16 +109,32 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
             </button>
           )}
           {isAdmin && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
-            <button onClick={()=>onApproveAdmin(repayment)}
-              style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:600,cursor:"pointer" }}>
-              Admin Sign
-            </button>
+            <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+              <select value={adminName} onChange={e=>setAdminName(e.target.value)}
+                style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:adminName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:130 }}>
+                <option value="" disabled style={{background:"#0A192F"}}>Select admin…</option>
+                {ADMIN_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
+              </select>
+              <button onClick={()=>{ if(adminName) onApproveAdmin({...repayment, approvedByName: adminName}); }}
+                disabled={!adminName}
+                style={{ padding:"4px 10px",borderRadius:8,background:adminName?"rgba(0,255,194,0.15)":"rgba(255,255,255,0.04)",border:`1px solid ${adminName?"rgba(0,255,194,0.3)":T.border}`,color:adminName?T.mint:T.muted,fontSize:11,fontWeight:600,cursor:adminName?"pointer":"not-allowed" }}>
+                Admin Sign ✓
+              </button>
+            </div>
           )}
           {isTrustee && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
-            <button onClick={()=>onApproveTrustee(repayment)}
-              style={{ padding:"5px 12px",borderRadius:8,background:"rgba(251,191,36,0.1)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",fontSize:12,fontWeight:600,cursor:"pointer" }}>
-              Trustee Sign
-            </button>
+            <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+              <select value={trusteeName} onChange={e=>setTrusteeName(e.target.value)}
+                style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:trusteeName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:140 }}>
+                <option value="" disabled style={{background:"#0A192F"}}>Select trustee…</option>
+                {TRUSTEE_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
+              </select>
+              <button onClick={()=>{ if(trusteeName) onApproveTrustee({...repayment, trusteeName}); }}
+                disabled={!trusteeName}
+                style={{ padding:"4px 10px",borderRadius:8,background:trusteeName?"rgba(251,191,36,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${trusteeName?"rgba(251,191,36,0.3)":T.border}`,color:trusteeName?"#fbbf24":T.muted,fontSize:11,fontWeight:600,cursor:trusteeName?"pointer":"not-allowed" }}>
+                Trustee Sign ✓
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -158,7 +174,18 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const approveRepAdminMutation = trpc.loans.approveRepaymentAdmin?.useMutation?.({
+    onSuccess: () => { toast.success("Repayment admin approval recorded"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const approveRepTrusteeMutation = trpc.loans.approveRepaymentTrustee?.useMutation?.({
+    onSuccess: () => { toast.success("Repayment trustee approval recorded"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const [repaymentAmount, setRepaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
 
   const loan = data;
   const repayments = (data as any)?.repayments ?? [];
@@ -316,8 +343,8 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 isAdmin={isAdmin}
                 isTrustee={isTrustee}
                 onConfirm={(r: any) => confirmRepMutation?.mutate?.({ repaymentId:r.id })}
-                onApproveAdmin={(r: any) => approveAdminMutation?.mutate?.({ id:r.id } as any)}
-                onApproveTrustee={(r: any) => approveTrusteeMutation?.mutate?.({ id:r.id, trusteeId: r.trusteeId ?? 0 } as any)}
+                onApproveAdmin={(r: any) => approveRepAdminMutation?.mutate?.({ repaymentId: r.id, approvedByName: r.approvedByName })}
+                onApproveTrustee={(r: any) => approveRepTrusteeMutation?.mutate?.({ repaymentId: r.id, trusteeName: r.trusteeName })}
               />
             ))}
 
@@ -325,14 +352,22 @@ export default function LoanDetailPage({ id }: { id: number }) {
             {isAdmin && fullyApproved && (
               <div style={{ marginTop:16,padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.03)",border:`1px solid ${T.border}` }}>
                 <p style={{ fontSize:12,color:T.muted,marginBottom:10,fontWeight:600 }}>RECORD REPAYMENT</p>
-                <div style={{ display:"flex",gap:10,alignItems:"flex-end" }}>
-                  <div style={{ flex:1 }}>
+                <div style={{ display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap" }}>
+                  <div style={{ flex:"1 1 120px",minWidth:100 }}>
                     <Input
                       type="number" step="0.01" placeholder={`£${monthly}`}
                       value={repaymentAmount}
                       onChange={e => setRepaymentAmount(e.target.value)}
                       style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42 }}/>
                   </div>
+                  <select
+                    value={paymentMethod}
+                    onChange={e => setPaymentMethod(e.target.value)}
+                    style={{ flex:"1 1 130px",minWidth:120,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42,padding:"0 12px",fontSize:13,outline:"none",cursor:"pointer" }}>
+                    <option value="bank_transfer" style={{background:"#0A192F"}}>Bank Transfer</option>
+                    <option value="cash" style={{background:"#0A192F"}}>Cash</option>
+                    <option value="cheque" style={{background:"#0A192F"}}>Cheque</option>
+                  </select>
                   <Button
                     disabled={!repaymentAmount || recordRepaymentMutation?.isPending}
                     onClick={() => {
@@ -340,7 +375,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
                       recordRepaymentMutation?.mutate?.({
                         loanId: id,
                         amount: repaymentAmount,
-                        paymentMethod: "bank_transfer",
+                        paymentMethod,
                       });
                     }}
                     style={{ background: repaymentAmount ? `linear-gradient(135deg,${T.purple},#4f46e5)` : "rgba(99,91,255,0.2)",color:T.white,border:"none",borderRadius:10,height:42,padding:"0 18px",fontWeight:700,fontSize:13,cursor:repaymentAmount?"pointer":"not-allowed" }}>

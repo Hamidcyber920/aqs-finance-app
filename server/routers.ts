@@ -1000,11 +1000,12 @@ export const appRouter = router({
 
     // Repayment dual approval: admin
     approveRepaymentAdmin: adminProcedure
-      .input(z.object({ repaymentId: z.number() }))
+      .input(z.object({ repaymentId: z.number(), approvedByName: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-        await db.update(loanRepayments).set({ adminApprovedById: ctx.user.id, adminApprovedByName: ctx.user.name ?? ctx.user.email ?? "Admin", adminApprovedAt: new Date() } as any).where(eq(loanRepayments.id, input.repaymentId));
+        const adminName = input.approvedByName ?? ctx.user.name ?? ctx.user.email ?? "Admin";
+        await db.update(loanRepayments).set({ adminApprovedById: ctx.user.id, adminApprovedByName: adminName, adminApprovedAt: new Date() } as any).where(eq(loanRepayments.id, input.repaymentId));
         const repayment = await getLoanRepaymentsById(input.repaymentId);
         if (repayment && (repayment as any).trusteeApprovedAt) {
           await _fullyApproveRepayment(repayment as any);
@@ -1014,13 +1015,11 @@ export const appRouter = router({
 
     // Repayment dual approval: trustee
     approveRepaymentTrustee: adminProcedure
-      .input(z.object({ repaymentId: z.number(), trusteeId: z.number() }))
+      .input(z.object({ repaymentId: z.number(), trusteeName: z.string(), trusteeId: z.number().optional() }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-        const trustee = await getTrusteeById(input.trusteeId);
-        if (!trustee) throw new TRPCError({ code: "NOT_FOUND", message: "Trustee not found" });
-        await db.update(loanRepayments).set({ trusteeId: input.trusteeId, trusteeName: trustee.fullName, trusteeApprovedAt: new Date() } as any).where(eq(loanRepayments.id, input.repaymentId));
+        await db.update(loanRepayments).set({ trusteeId: input.trusteeId ?? 0, trusteeName: input.trusteeName, trusteeApprovedAt: new Date() } as any).where(eq(loanRepayments.id, input.repaymentId));
         const repayment = await getLoanRepaymentsById(input.repaymentId);
         if (repayment && (repayment as any).adminApprovedAt) {
           await _fullyApproveRepayment(repayment as any);
