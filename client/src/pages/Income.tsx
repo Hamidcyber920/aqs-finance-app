@@ -37,6 +37,7 @@ const INCOME_CATEGORY_GROUPS = [
       "Friday Collections",
       "Mussallah Sales £20",
       "£100 Rimmers Mussallah",
+      "£1,000 Donors Wall",
       "Direct Donations",
       "Restaurant/Bistro 87",
       "Biryani Sale",
@@ -72,7 +73,7 @@ const PERIODS = ["Daily","Weekly","Monthly","One-off"];
 // Friday Income and Kiosk Donations use a date picker instead of period dropdown
 const FRIDAY_INCOME_CATS = new Set([
   "Friday Collections","Mussallah Sales £20","£100 Rimmers Mussallah",
-  "Direct Donations","Restaurant/Bistro 87","Biryani Sale",
+  "£1,000 Donors Wall","Direct Donations","Restaurant/Bistro 87","Biryani Sale",
   "Other Campaign Sales","Stalls","Coffee Shop","Quilliam Bazaar","Eid Income",
   "Kiosk Donations",
 ]);
@@ -315,7 +316,7 @@ export default function IncomePage() {
   const [signOther, setSignOther] = useState<string>("");       // ISO timestamp when ticked
 
   // Donation categories that collect donor info
-  const DONOR_CATS = new Set(["£100 Rimmers Mussallah", "Direct Donations", "Mussallah Sales £20"]);
+  const DONOR_CATS = new Set(["£100 Rimmers Mussallah", "£1,000 Donors Wall", "Direct Donations", "Mussallah Sales £20"]);
   // Multi-donor entry state
   const [donors, setDonors] = useState<{ name:string; email:string; phone:string; amount:string }[]>([]);
   const [draftDonor, setDraftDonor] = useState({ name:"", email:"", phone:"", amount:"" });
