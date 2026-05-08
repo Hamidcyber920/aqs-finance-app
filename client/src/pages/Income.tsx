@@ -127,6 +127,8 @@ function SubcategoryPanel({
   setEidType,
   eidDate,
   setEidDate,
+  bazaarDate,
+  setBazaarDate,
 }: {
   parent: string;
   onSelect: (sub: string) => void;
@@ -135,9 +137,12 @@ function SubcategoryPanel({
   setEidType: (v: string) => void;
   eidDate: string;
   setEidDate: (v: string) => void;
+  bazaarDate: string;
+  setBazaarDate: (v: string) => void;
 }) {
   const subs = SUBCATEGORY_MAP[parent] ?? [];
   const isEid = parent === "Eid Income";
+  const isBazaar = parent === "Quilliam Bazaar";
   return (
     <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
       {/* Back button */}
@@ -154,6 +159,34 @@ function SubcategoryPanel({
         <p style={{ margin:0,fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Selected category</p>
         <p style={{ margin:"4px 0 0",fontSize:15,fontWeight:700,color:T.white }}>{parent}</p>
       </div>
+
+      {/* Quilliam Bazaar date picker */}
+      {isBazaar && (
+        <div style={{ display:"flex",flexDirection:"column",gap:12,marginBottom:18,padding:"14px 16px",background:"rgba(0,255,194,0.04)",border:`1px solid rgba(0,255,194,0.15)`,borderRadius:12 }}>
+          <div>
+            <p style={{ margin:"0 0 8px",fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Bazaar Date</p>
+            <label style={{ position:"relative",display:"block",cursor:"pointer" }}>
+              <div style={{
+                width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${bazaarDate ? T.mint : T.border}`,
+                borderRadius:10,color: bazaarDate ? T.white : T.muted,height:44,padding:"0 12px",fontSize:13,
+                display:"flex",alignItems:"center",gap:8,pointerEvents:"none",
+              }}>
+                <Calendar size={14} style={{ color: bazaarDate ? T.mint : T.muted, flexShrink:0 }}/>
+                <span>{bazaarDate
+                  ? new Date(bazaarDate + "T12:00:00").toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
+                  : "Select date…"
+                }</span>
+              </div>
+              <input
+                type="date"
+                value={bazaarDate}
+                onChange={e => setBazaarDate(e.target.value)}
+                style={{ position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",cursor:"pointer" }}
+              />
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* Eid-specific selectors */}
       {isEid && (
@@ -212,34 +245,36 @@ function SubcategoryPanel({
       <p style={{ margin:"0 0 10px",fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Choose subcategory</p>
 
       <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-        {subs.map(sub => (
-          <button
-            key={sub}
-            type="button"
-            onClick={() => {
-              if (isEid && (!eidType || !eidDate)) {
-                // Require both Eid type and date before selecting subcategory
-                return;
-              }
-              onSelect(sub);
-            }}
-            style={{
-              display:"flex",alignItems:"center",justifyContent:"space-between",
-              background: isEid && (!eidType || !eidDate) ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)",
-              border:`1px solid ${T.border}`,
-              borderRadius:12,padding:"14px 16px",color: isEid && (!eidType || !eidDate) ? T.muted : T.white,fontSize:14,
-              fontWeight:500,cursor: isEid && (!eidType || !eidDate) ? "not-allowed" : "pointer",textAlign:"left",transition:"all 0.15s",
-              opacity: isEid && (!eidType || !eidDate) ? 0.5 : 1,
-            }}
-            onMouseEnter={e => { if (!(isEid && (!eidType || !eidDate))) e.currentTarget.style.background="rgba(0,255,194,0.08)"; }}
-            onMouseLeave={e => { if (!(isEid && (!eidType || !eidDate))) e.currentTarget.style.background="rgba(255,255,255,0.04)"; }}
-          >
-            <span>{sub}</span>
-            <ChevronRight size={16} style={{ color:T.muted }}/>
-          </button>
-        ))}
+        {subs.map(sub => {
+          const eidBlocked = isEid && (!eidType || !eidDate);
+          const bazaarBlocked = isBazaar && !bazaarDate;
+          const blocked = eidBlocked || bazaarBlocked;
+          return (
+            <button
+              key={sub}
+              type="button"
+              onClick={() => { if (!blocked) onSelect(sub); }}
+              style={{
+                display:"flex",alignItems:"center",justifyContent:"space-between",
+                background: blocked ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)",
+                border:`1px solid ${T.border}`,
+                borderRadius:12,padding:"14px 16px",color: blocked ? T.muted : T.white,fontSize:14,
+                fontWeight:500,cursor: blocked ? "not-allowed" : "pointer",textAlign:"left",transition:"all 0.15s",
+                opacity: blocked ? 0.5 : 1,
+              }}
+              onMouseEnter={e => { if (!blocked) e.currentTarget.style.background="rgba(0,255,194,0.08)"; }}
+              onMouseLeave={e => { if (!blocked) e.currentTarget.style.background="rgba(255,255,255,0.04)"; }}
+            >
+              <span>{sub}</span>
+              <ChevronRight size={16} style={{ color:T.muted }}/>
+            </button>
+          );
+        })}
         {isEid && (!eidType || !eidDate) && (
           <p style={{ margin:"4px 0 0",fontSize:11,color:"#fbbf24",textAlign:"center" }}>Please select which Eid and the date above first</p>
+        )}
+        {isBazaar && !bazaarDate && (
+          <p style={{ margin:"4px 0 0",fontSize:11,color:"#fbbf24",textAlign:"center" }}>Please select the bazaar date above first</p>
         )}
       </div>
     </div>
@@ -261,6 +296,8 @@ export default function IncomePage() {
   // Eid-specific state
   const [eidType, setEidType] = useState<string>("");
   const [eidDate, setEidDate] = useState<string>("");
+  // Quilliam Bazaar date state
+  const [bazaarDate, setBazaarDate] = useState<string>("");
 
   const { data, refetch } = trpc.income.list.useQuery({ month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
@@ -272,6 +309,7 @@ export default function IncomePage() {
       setSelectedSub("");
       setEidType("");
       setEidDate("");
+      setBazaarDate("");
       refetch();
       reset();
     },
@@ -302,15 +340,16 @@ export default function IncomePage() {
 
   function handleSubSelect(sub: string) {
     setSelectedSub(sub);
-    // For Eid Income, prefix subcategory with eid type and store date
     if (subPanel === "Eid Income" && eidType) {
       setValue("subcategory", `${eidType} — ${sub}`);
-      // Store the eid date as the incomeDate
       if (eidDate) setValue("incomeDate", eidDate);
+    } else if (subPanel === "Quilliam Bazaar") {
+      setValue("subcategory", sub);
+      if (bazaarDate) setValue("incomeDate", bazaarDate);
     } else {
       setValue("subcategory", sub);
     }
-    setSubPanel(null); // close drill-down, return to main form
+    setSubPanel(null);
   }
 
   function handleDialogClose(v: boolean) {
@@ -320,6 +359,7 @@ export default function IncomePage() {
       setSelectedSub("");
       setEidType("");
       setEidDate("");
+      setBazaarDate("");
       reset();
     }
   }
@@ -430,11 +470,13 @@ export default function IncomePage() {
               <SubcategoryPanel
                 parent={subPanel}
                 onSelect={handleSubSelect}
-                onBack={() => { setSubPanel(null); setValue("category",""); setEidType(""); setEidDate(""); }}
+                onBack={() => { setSubPanel(null); setValue("category",""); setEidType(""); setEidDate(""); setBazaarDate(""); }}
                 eidType={eidType}
                 setEidType={setEidType}
                 eidDate={eidDate}
                 setEidDate={setEidDate}
+                bazaarDate={bazaarDate}
+                setBazaarDate={setBazaarDate}
               />
             ) : (
               <form onSubmit={handleSubmit(d => createMutation.mutate({ ...d, month, year }))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
