@@ -140,7 +140,7 @@ export default function LoansPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
               <thead>
                 <tr>
-                  {["Borrower", "Amount", "Term", "Monthly", "Purpose", "Status", "Actions"].map(h => (
+                  {["Lender / Donor", "Amount", "Term", "Monthly", "Purpose", "Status", "Actions"].map(h => (
                     <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>
                   ))}
                 </tr>
@@ -197,7 +197,7 @@ export default function LoansPage() {
             <form onSubmit={handleSubmit((d: any) => createMutation.mutate({ ...d, termUnit }))} style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Borrower Name *</Label>
+                  <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Lender / Donor Name *</Label>
                   <Input {...register("applicantName", { required: true })} placeholder="Full name"
                     style={{ marginTop: 6, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
                 </div>

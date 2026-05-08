@@ -558,3 +558,6 @@
 
 ## Repayment Message Update (May 2026 — round 5)
 - [x] Update WhatsApp and email messages to confirm payment made and ask lender to confirm receipt
+
+## Terminology Update (May 2026 — round 6)
+- [x] Rename all "Borrower" UI labels to "Lender / Donor" in LoanDetail, Loans pages and email/WhatsApp messages

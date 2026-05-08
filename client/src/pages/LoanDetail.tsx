@@ -265,7 +265,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
   });
 
   const updateBorrowerMutation = trpc.loans.updateBorrower?.useMutation?.({
-    onSuccess: () => { toast.success("Borrower details updated"); refetch(); setEditBorrowerOpen(false); },
+    onSuccess: () => { toast.success("Lender details updated"); refetch(); setEditBorrowerOpen(false); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -336,7 +336,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   {fullyApproved?"Fully Approved":loan.status}
                 </span>
                 {isAdmin && (
-                  <button onClick={() => { setEditName(loan.borrowerName??''); setEditEmail(loan.borrowerEmail??''); setEditPhone((loan as any).borrowerPhone??''); setEditAddress((loan as any).borrowerAddress??''); setEditBorrowerOpen(true); }}
+                  <button onClick={() => { setEditName(loan.borrowerName??''); setEditEmail(loan.borrowerEmail??''); setEditPhone((loan as any).borrowerPhone??''); setEditAddress((loan as any).borrowerAddress??''); setEditBorrowerOpen(true); }} // label: Edit Lender Details
                     style={{ padding:"5px 12px",borderRadius:999,fontSize:11,fontWeight:600,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer" }}>
                     ✏️ Edit Details
                   </button>
@@ -391,7 +391,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
             {fullyApproved && (
               <div style={{ marginTop:14,padding:"12px 16px",borderRadius:12,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",display:"flex",alignItems:"center",gap:8 }}>
                 <CheckCircle2 size={16} style={{color:T.mint}}/>
-                <p style={{ fontSize:13,color:T.mint,margin:0,fontWeight:600 }}>Loan fully approved — borrower notified via email &amp; WhatsApp</p>
+                <p style={{ fontSize:13,color:T.mint,margin:0,fontWeight:600 }}>Loan fully approved — lender notified via email &amp; WhatsApp</p>
               </div>
             )}
           </div>
@@ -412,7 +412,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
               )}
               <Button onClick={() => {
                   let phone = (loan as any).borrowerPhone?.replace(/\D/g,"") ?? "";
-                  if (!phone) { toast.error("No phone number on file for this borrower"); return; }
+                  if (!phone) { toast.error("No phone number on file for this lender"); return; }
                   // Handle UK numbers: 07xxx → 447xxx, already international 44xxx stays
                   if (phone.startsWith("0")) phone = "44" + phone.slice(1);
                   else if (!phone.startsWith("44") && phone.length <= 10) phone = "44" + phone;
@@ -426,7 +426,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   onClick={() => sendEmailMutation?.mutate?.({ id, type: "approved" })}
                   disabled={sendEmailMutation?.isPending}
                   style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.white,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
-                  <Mail size={14}/> {sendEmailMutation?.isPending ? "Sending…" : "Email Borrower"}
+                  <Mail size={14}/> {sendEmailMutation?.isPending ? "Sending…" : "Email Lender"}
                 </Button>
               ) : null}
             </div>
@@ -436,7 +436,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
           <Dialog open={editBorrowerOpen} onOpenChange={setEditBorrowerOpen}>
             <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:480 }}>
               <DialogHeader>
-                <DialogTitle style={{ color:T.white,fontSize:17,fontWeight:800 }}>Edit Borrower Details</DialogTitle>
+                <DialogTitle style={{ color:T.white,fontSize:17,fontWeight:800 }}>Edit Lender Details</DialogTitle>
               </DialogHeader>
               <div style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
                 <div>

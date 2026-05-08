@@ -1146,7 +1146,7 @@ export const appRouter = router({
         if (!rep) throw new TRPCError({ code: "NOT_FOUND", message: "Repayment not found" });
         const loan = await getLoanById((rep as any).loanId);
         if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
-        if (!loan.borrowerEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "Borrower has no email address on file" });
+     if (!loan.borrowerEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "Lender has no email address on file" });
         const firstName = (loan.borrowerName ?? '').split(' ')[0];
         const instalmentNum = (rep as any).instalmentNumber ?? '';
         const amount = parseFloat(String((rep as any).amount ?? 0)).toFixed(2);
