@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft, Upload, X, Camera } from "lucide-react";
+import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft, Upload, X, Camera, Search, Download, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -291,6 +291,8 @@ export default function IncomePage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [showAll, setShowAll] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // Subcategory drill-down state
   const [subPanel, setSubPanel] = useState<string | null>(null); // parent category name when drill-down is open
@@ -386,7 +388,39 @@ export default function IncomePage() {
   const totalIncome = records.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
   const paidCount = records.filter((r: any) => r.paymentStatus === "paid").length;
 
-  const filtered = catFilter === "All" ? records : records.filter((r: any) => r.category === catFilter || r.categoryName === catFilter);
+  const filtered = records.filter((r: any) => {
+    const matchCat = catFilter === "All" || r.category === catFilter || r.categoryName === catFilter;
+    if (!searchQuery.trim()) return matchCat;
+    const q = searchQuery.toLowerCase();
+    return matchCat && (
+      (r.categoryName ?? r.category ?? "").toLowerCase().includes(q) ||
+      (r.subcategory ?? "").toLowerCase().includes(q) ||
+      (r.tenantName ?? r.reference ?? "").toLowerCase().includes(q) ||
+      String(r.amount ?? "").includes(q)
+    );
+  });
+
+  function exportCSV() {
+    const headers = ["Category","Subcategory","Payer/Ref","Period","Amount","Status","Date","Notes","Signed By Manager","Signed By Trustee"];
+    const rows = filtered.map((r: any) => [
+      r.categoryName ?? r.category ?? "",
+      r.subcategory ?? "",
+      r.tenantName ?? r.reference ?? "",
+      r.period ?? "",
+      Number(r.amount ?? 0).toFixed(2),
+      r.paymentStatus ?? "",
+      r.incomeDate ? new Date(r.incomeDate+"T12:00:00").toLocaleDateString("en-GB") : r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "",
+      (r.notes ?? "").replace(/,/g,";"),
+      (r.signedByManager ?? "").replace(/,/g,";"),
+      (r.signedByTrustee ?? "").replace(/,/g,";")
+    ]);
+    const csv = [headers, ...rows].map(row => row.map(v => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = `income-records-${showAll ? "all" : `${year}-${String(month).padStart(2,"0")}`}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  }
 
   const allCats = ["All", ...INCOME_CATEGORIES];
 
@@ -489,6 +523,19 @@ export default function IncomePage() {
           ))}
         </div>
 
+        {/* Search bar + Export */}
+        <div style={{ display:"flex",gap:10,alignItems:"center",marginBottom:16,flexWrap:"wrap" }}>
+          <div style={{ flex:1,minWidth:200,display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:12,padding:"8px 14px" }}>
+            <Search size={14} style={{color:T.muted,flexShrink:0}}/>
+            <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search by category, reference, amount…"
+              style={{ flex:1,background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none" }}/>
+            {searchQuery && <button onClick={()=>setSearchQuery("")} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",padding:0}}><X size={12}/></button>}
+          </div>
+          <button onClick={exportCSV}
+            style={{ display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:12,fontSize:12,fontWeight:600,border:`1px solid ${T.border}`,background:`rgba(255,255,255,0.06)`,color:T.muted,cursor:"pointer",transition:"all 0.2s" }}>
+            <Download size={13}/> Export CSV
+          </button>
+        </div>
         {/* Category filter tabs */}
         <div style={{ display:"flex",gap:8,flexWrap:"wrap",marginBottom:20 }}>
           {allCats.slice(0,8).map(c=>(
@@ -505,27 +552,53 @@ export default function IncomePage() {
             <table style={{ width:"100%",borderCollapse:"collapse",minWidth:560 }}>
               <thead>
                 <tr>
-                  {["Category","Payer / Ref","Period","Amount","Status","Date"].map(h=>(
+                  {["Category","Payer / Ref","Period","Amount","Status","Date",""].map(h=>(
                     <th key={h} style={{ textAlign:"left",fontSize:10,fontWeight:600,color:T.muted,letterSpacing:"0.1em",textTransform:"uppercase",padding:"0 12px 12px 0",borderBottom:`1px solid ${T.border}` }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.length===0 ? (
-                  <tr><td colSpan={6} style={{ textAlign:"center",padding:40,color:T.muted,fontSize:14 }}>No income records for this period</td></tr>
-                ) : filtered.map((r:any,i:number)=>(
-                  <tr key={r.id??i}>
-                    <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}>
-                      <span style={{ fontSize:13,fontWeight:600,color:T.white }}>{r.categoryName??r.category??"—"}</span>
-                      {r.subcategory && <span style={{ display:"block",fontSize:11,color:T.muted,marginTop:2 }}>{r.subcategory}</span>}
-                    </td>
-                    <td style={{ padding:"12px 12px 12px 0",fontSize:13,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.tenantName??r.reference??"—"}</td>
-                    <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.period??"—"}</td>
-                    <td style={{ padding:"12px 12px 12px 0",fontSize:14,fontWeight:700,color:T.mint,borderBottom:`1px solid ${T.border}` }}>£{Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td>
-                    <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}><Badge status={r.paymentStatus??"paid"}/></td>
-                    <td style={{ padding:"12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.incomeDate ? new Date(r.incomeDate+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) : r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) : "—"}</td>
-                  </tr>
-                ))}
+                  <tr><td colSpan={7} style={{ textAlign:"center",padding:40,color:T.muted,fontSize:14 }}>No income records for this period</td></tr>
+                ) : filtered.map((r:any,i:number)=>{
+                  const isExpanded = expandedRow === (r.id ?? i);
+                  const fmtDate = (d:string|null|undefined) => d ? new Date(d+(d.includes("T")?"":"T12:00:00")).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) : "—";
+                  return (
+                  <>
+                    <tr key={r.id??i} onClick={()=>setExpandedRow(isExpanded ? null : (r.id??i))} style={{ cursor:"pointer",transition:"background 0.15s" }}
+                      onMouseEnter={e=>(e.currentTarget.style.background="rgba(255,255,255,0.03)")} onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+                      <td style={{ padding:"12px 12px 12px 0",borderBottom:isExpanded?"none":`1px solid ${T.border}` }}>
+                        <span style={{ fontSize:13,fontWeight:600,color:T.white }}>{r.categoryName??r.category??"—"}</span>
+                        {r.subcategory && <span style={{ display:"block",fontSize:11,color:T.muted,marginTop:2 }}>{r.subcategory}</span>}
+                      </td>
+                      <td style={{ padding:"12px 12px 12px 0",fontSize:13,color:T.muted,borderBottom:isExpanded?"none":`1px solid ${T.border}` }}>{r.tenantName??r.reference??"—"}</td>
+                      <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:isExpanded?"none":`1px solid ${T.border}` }}>{r.period??"—"}</td>
+                      <td style={{ padding:"12px 12px 12px 0",fontSize:14,fontWeight:700,color:T.mint,borderBottom:isExpanded?"none":`1px solid ${T.border}` }}>£{Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td>
+                      <td style={{ padding:"12px 12px 12px 0",borderBottom:isExpanded?"none":`1px solid ${T.border}` }}><Badge status={r.paymentStatus??"paid"}/></td>
+                      <td style={{ padding:"12px 8px 12px 0",fontSize:12,color:T.muted,borderBottom:isExpanded?"none":`1px solid ${T.border}` }}>{fmtDate(r.incomeDate ?? r.createdAt)}</td>
+                      <td style={{ padding:"12px 0",borderBottom:isExpanded?"none":`1px solid ${T.border}`,textAlign:"right" }}>
+                        <ChevronDown size={14} style={{color:T.muted,transition:"transform 0.2s",transform:isExpanded?"rotate(180deg)":"rotate(0deg)"}}/>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr key={`${r.id??i}-detail`}>
+                        <td colSpan={7} style={{ padding:"0 0 16px 0",borderBottom:`1px solid ${T.border}` }}>
+                          <div style={{ background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"14px 16px",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:"10px 20px",fontSize:12 }}>
+                            {r.notes && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>NOTES</span><span style={{color:T.white}}>{r.notes}</span></div>}
+                            {r.bucketCollection != null && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>BUCKET COLLECTION</span><span style={{color:T.white}}>£{Number(r.bucketCollection).toLocaleString("en-GB",{minimumFractionDigits:2})}</span></div>}
+                            {r.cardPayment != null && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>CARD PAYMENT</span><span style={{color:T.white}}>£{Number(r.cardPayment).toLocaleString("en-GB",{minimumFractionDigits:2})}</span></div>}
+                            {r.cashWithheld != null && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>CASH WITHHELD</span><span style={{color:T.white}}>£{Number(r.cashWithheld).toLocaleString("en-GB",{minimumFractionDigits:2})}{r.cashWithheldReason ? ` — ${r.cashWithheldReason}` : ""}</span></div>}
+                            {r.totalBanked != null && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>TOTAL BANKED</span><span style={{color:T.white}}>£{Number(r.totalBanked).toLocaleString("en-GB",{minimumFractionDigits:2})}{r.totalBankedDate ? ` on ${fmtDate(r.totalBankedDate)}` : ""}</span></div>}
+                            {r.signedByManager && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>SIGNED BY MANAGER</span><span style={{color:T.white}}>{r.signedByManager}</span></div>}
+                            {r.signedByTrustee && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>SIGNED BY TRUSTEE</span><span style={{color:T.white}}>{r.signedByTrustee}</span></div>}
+                            {r.receiptUrl && <div style={{gridColumn:"1/-1"}}><span style={{color:T.muted,display:"block",marginBottom:4}}>ATTACHED EVIDENCE</span><a href={r.receiptUrl} target="_blank" rel="noreferrer" style={{color:T.mint,textDecoration:"underline"}}>View attached document</a></div>}
+                            <div><span style={{color:T.muted,display:"block",marginBottom:2}}>RECORDED AT</span><span style={{color:T.white}}>{r.createdAt ? new Date(r.createdAt).toLocaleString("en-GB") : "—"}</span></div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )})}
               </tbody>
             </table>
           </div>
