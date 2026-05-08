@@ -980,8 +980,16 @@ export const appRouter = router({
     recordRepayment: adminProcedure
       .input(z.object({ loanId: z.number(), amount: z.string(), paymentMethod: z.string().default("bank_transfer"), evidenceUrl: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
-        const repayment = await createLoanRepayment({ ...input, paymentMethod: input.paymentMethod as any, recordedById: ctx.user.id });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        // Calculate dueDate: loan approval date + (existing repayment count + 1) months
         const loan = await getLoanById(input.loanId);
+        const existingReps = await db.select({ id: loanRepayments.id }).from(loanRepayments).where(eq(loanRepayments.loanId, input.loanId));
+        const instalmentNumber = existingReps.length + 1;
+        const baseDate = (loan as any)?.trusteeApprovedAt ? new Date((loan as any).trusteeApprovedAt) : new Date();
+        const dueDate = new Date(baseDate);
+        dueDate.setMonth(dueDate.getMonth() + instalmentNumber);
+        const repayment = await createLoanRepayment({ ...input, paymentMethod: input.paymentMethod as any, recordedById: ctx.user.id, dueDate } as any);
         if (loan && parseFloat(loan.totalRepaid?.toString() ?? "0") >= parseFloat(loan.amount.toString())) {
           await updateLoan(input.loanId, { status: "completed" });
         }

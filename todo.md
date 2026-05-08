@@ -550,3 +550,8 @@
 - [x] Authorised-by name display on each confirmed repayment row
 - [x] Fix WhatsApp URL for UK phone numbers (strip leading 0, add 44 country code)
 - [x] WhatsApp message button on each repayment row
+
+## Repayment Due Dates & Overdue Highlighting (May 2026 — round 4)
+- [x] Set dueDate on repayment creation (trusteeApprovedAt + instalment × 1 month)
+- [x] Backfill dueDate for existing repayments that have no dueDate
+- [x] Highlight overdue repayment rows in amber/red when dueDate < now and status is Pending

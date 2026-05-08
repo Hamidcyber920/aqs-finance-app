@@ -81,6 +81,9 @@ function ApprovalBox({ label, approved, approvedBy, approvedAt, onApprove, canAp
 function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin, onSendReminder, onDownloadReceipt, borrowerPhone }: any) {
   const [adminName, setAdminName] = useState("");
   const [trusteeName, setTrusteeName] = useState("");
+  const isPending = !repayment.trusteeApprovedAt;
+  const isOverdue = isPending && repayment.dueDate && new Date(repayment.dueDate) < new Date();
+  const isDueSoon = isPending && !isOverdue && repayment.dueDate && (new Date(repayment.dueDate).getTime() - Date.now()) < 7 * 24 * 60 * 60 * 1000;
   const [rowEvidenceUrl, setRowEvidenceUrl] = useState(repayment.evidenceUrl ?? "");
   const [rowUploading, setRowUploading] = useState(false);
   const rowFileRef = useRef<HTMLInputElement>(null);
@@ -115,14 +118,14 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
   };
 
   return (
-    <div style={{ padding:"14px 0",borderBottom:`1px solid ${T.border}` }}>
+    <div style={{ padding:"14px 0",borderBottom:`1px solid ${T.border}`,borderLeft:isOverdue?"3px solid #ef4444":isDueSoon?"3px solid #fbbf24":"3px solid transparent",paddingLeft:isOverdue||isDueSoon?"12px":"0" }}>
       <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10 }}>
         <div style={{ flex:1,minWidth:0 }}>
           <p style={{ fontSize:13,fontWeight:600,color:T.white,margin:0 }}>
             Instalment {repayment.instalment ?? "#"} — £{Number(repayment.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}
           </p>
-          <p style={{ fontSize:11,color:T.muted,margin:"2px 0 0" }}>
-            Due: {repayment.dueDate ? new Date(repayment.dueDate).toLocaleDateString("en-GB") : "—"}
+          <p style={{ fontSize:11,color:isOverdue?"#ef4444":isDueSoon?"#fbbf24":T.muted,margin:"2px 0 0",fontWeight:isOverdue||isDueSoon?700:400 }}>
+            {isOverdue && "⚠️ OVERDUE · "}{isDueSoon && "⏰ Due soon · "}Due: {repayment.dueDate ? new Date(repayment.dueDate).toLocaleDateString("en-GB") : "—"}
             {repayment.paidAt && <span style={{marginLeft:8,color:"rgba(255,255,255,0.4)"}}>Recorded: {new Date(repayment.paidAt).toLocaleString("en-GB")}</span>}
           </p>
           {repayment.paymentMethod && (
@@ -155,9 +158,9 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
         </div>
         <div style={{ display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end" }}>
           <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,textTransform:"capitalize",
-            background:repayment.trusteeApprovedAt?"rgba(0,255,194,0.1)":repayment.adminApprovedAt?"rgba(251,191,36,0.1)":"rgba(255,255,255,0.06)",
-            color:repayment.trusteeApprovedAt?T.mint:repayment.adminApprovedAt?"#fbbf24":T.muted }}>
-            {repayment.trusteeApprovedAt?"Confirmed":repayment.adminApprovedAt?"Partial":"Pending"}
+            background:repayment.trusteeApprovedAt?"rgba(0,255,194,0.1)":repayment.adminApprovedAt?"rgba(251,191,36,0.1)":isOverdue?"rgba(239,68,68,0.1)":"rgba(255,255,255,0.06)",
+            color:repayment.trusteeApprovedAt?T.mint:repayment.adminApprovedAt?"#fbbf24":isOverdue?"#ef4444":T.muted }}>
+            {repayment.trusteeApprovedAt?"Confirmed":repayment.adminApprovedAt?"Partial":isOverdue?"Overdue":"Pending"}
           </span>
           {isAdmin && !repayment.adminApprovedAt && (
             <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
