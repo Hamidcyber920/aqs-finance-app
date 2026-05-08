@@ -14,21 +14,56 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
-function ApprovalBox({ label, approved, approvedBy, approvedAt, onApprove, canApprove, loading }: any) {
+const ADMIN_NAMES = ["Farid Ahmed", "Mumin Khan"];
+const TRUSTEE_NAMES = ["Dr Abdul Hamid", "Galib Khan"];
+
+function ApprovalBox({ label, approved, approvedBy, approvedAt, onApprove, canApprove, loading, names }: {
+  label: string; approved: boolean; approvedBy?: string | null; approvedAt?: Date | null;
+  onApprove: (name: string) => void; canApprove: boolean; loading?: boolean; names: string[];
+}) {
+  const [selectedName, setSelectedName] = useState("");
+
   return (
     <div style={{ background:approved?"rgba(0,255,194,0.06)":"rgba(255,255,255,0.04)",border:`1px solid ${approved?"rgba(0,255,194,0.2)":T.border}`,borderRadius:14,padding:"16px 18px" }}>
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:approved?8:0 }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:approved?8:0,flexWrap:"wrap",gap:10 }}>
         <div style={{ display:"flex",alignItems:"center",gap:8 }}>
           {approved
             ? <CheckCircle2 size={18} style={{color:T.mint}}/>
-            : <Clock size={18} style={{color:"#fbbf24"}}/>}
+            : <Clock size={18} style={{color:"#fbbf24"}}/> }
           <span style={{ fontSize:13,fontWeight:700,color:T.white }}>{label}</span>
         </div>
         {!approved && canApprove && (
-          <Button onClick={onApprove} disabled={loading}
-            style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",border:"none",borderRadius:9,height:34,padding:"0 14px",fontWeight:700,fontSize:12 }}>
-            {loading?"Signing…":"Sign Off ✓"}
-          </Button>
+          <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+            <select
+              value={selectedName}
+              onChange={e => setSelectedName(e.target.value)}
+              style={{
+                background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,
+                color:selectedName?T.white:T.muted,fontSize:12,padding:"6px 10px",height:34,
+                outline:"none",cursor:"pointer",minWidth:160,
+              }}
+            >
+              <option value="" disabled style={{background:"#0A192F",color:T.muted}}>Select name…</option>
+              {names.map(n => (
+                <option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>
+              ))}
+            </select>
+            <Button
+              onClick={() => { if (selectedName) onApprove(selectedName); }}
+              disabled={loading || !selectedName}
+              style={{
+                background: selectedName
+                  ? `linear-gradient(135deg,${T.mint},#00DDB0)`
+                  : "rgba(255,255,255,0.1)",
+                color: selectedName ? "#081526" : T.muted,
+                border:"none",borderRadius:9,height:34,padding:"0 14px",fontWeight:700,fontSize:12,
+                cursor: selectedName ? "pointer" : "not-allowed",
+                transition:"all 0.2s",
+              }}
+            >
+              {loading?"Signing…":"Sign Off ✓"}
+            </Button>
+          </div>
         )}
         {!approved && !canApprove && (
           <span style={{ fontSize:11,color:"#fbbf24",background:"rgba(251,191,36,0.1)",padding:"3px 10px",borderRadius:999,fontWeight:600 }}>Pending</span>
@@ -188,8 +223,9 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 approvedBy={loan.adminApprovedByName}
                 approvedAt={loan.adminApprovedAt}
                 canApprove={isAdmin && !loan.adminApprovedAt}
-                onApprove={() => approveAdminMutation?.mutate?.({ id })}
+                onApprove={(name) => approveAdminMutation?.mutate?.({ id, approvedByName: name })}
                 loading={approveAdminMutation?.isPending}
+                names={ADMIN_NAMES}
               />
               <ApprovalBox
                 label="Trustee Approval"
@@ -197,8 +233,9 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 approvedBy={(loan as any).trusteeName}
                 approvedAt={loan.trusteeApprovedAt}
                 canApprove={isTrustee && !loan.trusteeApprovedAt}
-                onApprove={() => approveTrusteeMutation?.mutate?.({ id, trusteeId: 0 } as any)}
+                onApprove={(name) => approveTrusteeMutation?.mutate?.({ id, trusteeName: name })}
                 loading={approveTrusteeMutation?.isPending}
+                names={TRUSTEE_NAMES}
               />
             </div>
             {fullyApproved && (

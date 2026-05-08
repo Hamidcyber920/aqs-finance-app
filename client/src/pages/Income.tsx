@@ -414,7 +414,7 @@ export default function IncomePage() {
       r.period ?? "",
       Number(r.amount ?? 0).toFixed(2),
       r.paymentStatus ?? "",
-      r.incomeDate ? new Date(r.incomeDate+"T12:00:00").toLocaleDateString("en-GB") : r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "",
+      r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "",
       (r.notes ?? "").replace(/,/g,";"),
       (r.signedByManager ?? "").replace(/,/g,";"),
       (r.signedByTrustee ?? "").replace(/,/g,";")
