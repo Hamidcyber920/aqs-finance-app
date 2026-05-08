@@ -22,7 +22,7 @@ export default function CapturePage() {
   const [extracted, setExtracted] = useState<any>(null);
   const [submitted, setSubmitted] = useState(false);
 
-  const { data: depts } = trpc.expenses?.departments?.useQuery?.() ?? { data: null };
+  const { data: depts } = trpc.departments.list.useQuery();
   const createMutation = trpc.receipts.create.useMutation({
     onSuccess: () => { toast.success("Receipt submitted"); setSubmitted(true); setTimeout(() => setLocation("/receipts"), 1800); },
     onError: (e) => toast.error(e.message),
