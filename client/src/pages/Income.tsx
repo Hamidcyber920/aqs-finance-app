@@ -494,12 +494,30 @@ export default function IncomePage() {
                     {FRIDAY_INCOME_CATS.has(watchCat) ? (
                       <>
                         <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Date</Label>
-                        <Input
-                          {...register("incomeDate")}
-                          type="date"
-                          defaultValue={new Date().toISOString().slice(0,10)}
-                          style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14,colorScheme:"dark" }}
-                        />
+                        <label style={{ position:"relative",display:"block",cursor:"pointer",marginTop:6 }}>
+                          {/* Styled display */}
+                          <div style={{
+                            width:"100%",background:"rgba(255,255,255,0.06)",
+                            border:`1px solid ${watch("incomeDate") ? T.mint : T.border}`,
+                            borderRadius:10,color: watch("incomeDate") ? T.white : T.muted,
+                            height:44,padding:"0 10px",fontSize:12,
+                            display:"flex",alignItems:"center",gap:6,pointerEvents:"none",
+                          }}>
+                            <Calendar size={13} style={{ color: watch("incomeDate") ? T.mint : T.muted, flexShrink:0 }}/>
+                            <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                              {watch("incomeDate")
+                                ? new Date(watch("incomeDate") + "T12:00:00").toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
+                                : "Select date…"
+                              }
+                            </span>
+                          </div>
+                          {/* Invisible native date input */}
+                          <input
+                            type="date"
+                            {...register("incomeDate")}
+                            style={{ position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",cursor:"pointer" }}
+                          />
+                        </label>
                       </>
                     ) : (
                       <>
