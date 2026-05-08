@@ -1669,7 +1669,29 @@ export const appRouter = router({
         return getIncomeRecords(filters);
       }),
     create: adminProcedure
-      .input(z.object({ category: z.string().optional(), categoryId: z.number().optional(), subcategory: z.string().optional(), description: z.string().default(""), amount: z.string(), paymentStatus: z.string().default("paid"), period: z.string().default("monthly"), payerName: z.string().optional(), tenantName: z.string().optional(), payerEmail: z.string().optional(), payerPhone: z.string().optional(), reference: z.string().optional(), periodStart: z.date().optional(), periodEnd: z.date().optional(), receiptUrl: z.string().optional(), notes: z.string().optional() }))
+      .input(z.object({
+        category: z.string().optional(), categoryId: z.number().optional(),
+        subcategory: z.string().optional(), description: z.string().default(""),
+        amount: z.string(), paymentStatus: z.string().default("paid"),
+        period: z.string().default("monthly"),
+        payerName: z.string().optional(), tenantName: z.string().optional(),
+        payerEmail: z.string().optional(), payerPhone: z.string().optional(),
+        reference: z.string().optional(),
+        periodStart: z.date().optional(), periodEnd: z.date().optional(),
+        receiptUrl: z.string().optional(), notes: z.string().optional(),
+        incomeDate: z.string().optional(),
+        month: z.number().optional(), year: z.number().optional(),
+        // Friday Collections breakdown
+        bucketCollection: z.string().optional(),
+        cardPayment: z.string().optional(),
+        cashWithheld: z.string().optional(),
+        cashWithheldReason: z.string().optional(),
+        totalBanked: z.string().optional(),
+        totalBankedDate: z.string().optional(),
+        // Sign-off
+        signedByManager: z.string().optional(),
+        signedByTrustee: z.string().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         let catId = input.categoryId ?? 1;
         let catName = input.category ?? "Other";
@@ -1689,7 +1711,29 @@ export const appRouter = router({
         }
         const periodMap: Record<string,string> = { Daily:'one_off', Weekly:'one_off', Monthly:'monthly', 'One-off':'one_off', daily:'one_off', weekly:'one_off', monthly:'monthly', one_off:'one_off', annual:'annual' };
         const period = (periodMap[input.period] ?? 'monthly') as any;
-        return createIncomeRecord({ categoryId: catId, categoryName: catName, subcategory: input.subcategory, amount: input.amount, paymentStatus: input.paymentStatus as any, period, tenantName: input.tenantName ?? input.payerName ?? "", notes: input.notes, recordedById: ctx.user.id } as any);
+        const hasSignOff = input.signedByManager || input.signedByTrustee;
+        return createIncomeRecord({
+          categoryId: catId, categoryName: catName,
+          subcategory: input.subcategory,
+          amount: input.amount,
+          paymentStatus: input.paymentStatus as any,
+          period,
+          tenantName: input.tenantName ?? input.payerName ?? "",
+          notes: input.notes,
+          evidenceUrl: input.receiptUrl,
+          recordedById: ctx.user.id,
+          // Friday Collections breakdown
+          bucketCollection: input.bucketCollection ?? null,
+          cardPayment: input.cardPayment ?? null,
+          cashWithheld: input.cashWithheld ?? null,
+          cashWithheldReason: input.cashWithheldReason ?? null,
+          totalBanked: input.totalBanked ?? null,
+          totalBankedDate: input.totalBankedDate ?? null,
+          // Sign-off
+          signedByManager: input.signedByManager ?? null,
+          signedByTrustee: input.signedByTrustee ?? null,
+          signedAt: hasSignOff ? new Date() : null,
+        } as any);
       }),
     update: adminProcedure
       .input(z.object({ id: z.number(), paymentStatus: z.string().optional(), amount: z.string().optional(), notes: z.string().optional() }))

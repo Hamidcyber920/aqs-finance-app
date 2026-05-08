@@ -169,6 +169,13 @@
       "when": 1778228041650,
       "tag": "0023_left_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1778233595688,
+      "tag": "0024_material_sally_floyd",
+      "breakpoints": true
     }
   ]
 }

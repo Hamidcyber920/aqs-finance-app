@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft } from "lucide-react";
+import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft, Upload, X, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -298,6 +298,14 @@ export default function IncomePage() {
   const [eidDate, setEidDate] = useState<string>("");
   // Quilliam Bazaar date state
   const [bazaarDate, setBazaarDate] = useState<string>("");
+  // Friday Collections upload state
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [evidenceUrl, setEvidenceUrl] = useState<string>("");
+  const [evidencePreview, setEvidencePreview] = useState<string>("");
+  // Friday Collections cash withheld reason
+  const [cashWithheldReason, setCashWithheldReason] = useState<string>("");
+  // Total banked date
+  const [totalBankedDate, setTotalBankedDate] = useState<string>("");
 
   const { data, refetch } = trpc.income.list.useQuery({ month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
@@ -310,6 +318,10 @@ export default function IncomePage() {
       setEidType("");
       setEidDate("");
       setBazaarDate("");
+      setEvidenceUrl("");
+      setEvidencePreview("");
+      setCashWithheldReason("");
+      setTotalBankedDate("");
       refetch();
       reset();
     },
@@ -360,6 +372,10 @@ export default function IncomePage() {
       setEidType("");
       setEidDate("");
       setBazaarDate("");
+      setEvidenceUrl("");
+      setEvidencePreview("");
+      setCashWithheldReason("");
+      setTotalBankedDate("");
       reset();
     }
   }
@@ -479,7 +495,19 @@ export default function IncomePage() {
                 setBazaarDate={setBazaarDate}
               />
             ) : (
-              <form onSubmit={handleSubmit(d => createMutation.mutate({ ...d, month, year }))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
+              <form onSubmit={handleSubmit(d => {
+                const payload: any = { ...d, month, year };
+                if (watchCat === "Friday Collections") {
+                  payload.receiptUrl = evidenceUrl || undefined;
+                  payload.cashWithheldReason = cashWithheldReason || undefined;
+                  payload.totalBankedDate = totalBankedDate || undefined;
+                  // If trustee is "other", use the free text field
+                  if (d.signedByTrustee === "__other__") {
+                    payload.signedByTrustee = d.signedByTrusteeOther || "";
+                  }
+                }
+                createMutation.mutate(payload);
+              })} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
                 <div>
                   <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Category</Label>
                   {/* Show selected category + subcategory badge when a sub was chosen */}
@@ -528,7 +556,7 @@ export default function IncomePage() {
                 )}
                 <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
                   <div>
-                    <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Amount (£)</Label>
+                    <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>{watchCat==="Friday Collections" ? "Total Collected (£)" : "Amount (£)"}</Label>
                     <Input {...register("amount",{required:true})} type="number" step="0.01" placeholder="0.00"
                       style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
                   </div>
@@ -572,21 +600,172 @@ export default function IncomePage() {
                     )}
                   </div>
                 </div>
-                <div>
-                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>
-                    {FRIDAY_INCOME_CATS.has(watchCat) ? "Type / Reference" : "Payer / Tenant Name"}
-                  </Label>
-                  <Input {...register("tenantName")} placeholder={FRIDAY_INCOME_CATS.has(watchCat) ? "Type or reference…" : "Name or reference"}
-                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
-                </div>
-                <div>
-                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
-                  <Input {...register("notes")} placeholder="Optional notes"
-                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
-                </div>
-                <Button type="submit" disabled={createMutation.isPending}
+                {/* Friday Collections specific fields */}
+                {watchCat === "Friday Collections" ? (
+                  <>
+                    {/* Breakdown amounts */}
+                    <div style={{ background:"rgba(0,255,194,0.04)",border:`1px solid rgba(0,255,194,0.12)`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:12 }}>
+                      <p style={{ margin:"0 0 4px",fontSize:11,color:T.mint,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em" }}>Collection Breakdown</p>
+                      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+                        <div>
+                          <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Bucket Collection (£)</Label>
+                          <Input {...register("bucketCollection")} type="number" step="0.01" placeholder="0.00"
+                            style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:40,fontSize:13 }}/>
+                        </div>
+                        <div>
+                          <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Card Payment (£)</Label>
+                          <Input {...register("cardPayment")} type="number" step="0.01" placeholder="0.00"
+                            style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:40,fontSize:13 }}/>
+                        </div>
+                      </div>
+                      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+                        <div>
+                          <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Cash Withheld (£)</Label>
+                          <Input {...register("cashWithheld")} type="number" step="0.01" placeholder="0.00"
+                            style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:40,fontSize:13 }}/>
+                        </div>
+                        <div>
+                          <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Reason Withheld</Label>
+                          <select
+                            value={cashWithheldReason}
+                            onChange={e => setCashWithheldReason(e.target.value)}
+                            style={{ marginTop:4,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:8,color: cashWithheldReason ? T.white : T.muted,height:40,padding:"0 10px",fontSize:12 }}
+                          >
+                            <option value="" disabled>Select reason…</option>
+                            <option value="Change needed">Change needed</option>
+                            <option value="Petty cash float">Petty cash float</option>
+                            <option value="Awaiting banking">Awaiting banking</option>
+                            <option value="Disputed amount">Disputed amount</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
+                        <div>
+                          <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Total Banked (£)</Label>
+                          <Input {...register("totalBanked")} type="number" step="0.01" placeholder="0.00"
+                            style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:40,fontSize:13 }}/>
+                        </div>
+                        <div>
+                          <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Date Banked</Label>
+                          <label style={{ position:"relative",display:"block",cursor:"pointer",marginTop:4 }}>
+                            <div style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${totalBankedDate ? T.mint : T.border}`,borderRadius:8,color: totalBankedDate ? T.white : T.muted,height:40,padding:"0 8px",fontSize:11,display:"flex",alignItems:"center",gap:5,pointerEvents:"none" }}>
+                              <Calendar size={11} style={{ color: totalBankedDate ? T.mint : T.muted, flexShrink:0 }}/>
+                              <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                                {totalBankedDate
+                                  ? new Date(totalBankedDate + "T12:00:00").toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
+                                  : "Select date…"}
+                              </span>
+                            </div>
+                            <input type="date" value={totalBankedDate} onChange={e => setTotalBankedDate(e.target.value)}
+                              style={{ position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",cursor:"pointer" }}/>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Evidence upload */}
+                    <div>
+                      <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Attach Record (Photo / Scan)</Label>
+                      {evidencePreview ? (
+                        <div style={{ marginTop:6,position:"relative",borderRadius:10,overflow:"hidden",border:`1px solid ${T.mint}` }}>
+                          <img src={evidencePreview} alt="Evidence" style={{ width:"100%",maxHeight:140,objectFit:"cover",display:"block" }}/>
+                          <button type="button" onClick={() => { setEvidenceUrl(""); setEvidencePreview(""); }}
+                            style={{ position:"absolute",top:6,right:6,background:"rgba(0,0,0,0.7)",border:"none",borderRadius:999,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer" }}>
+                            <X size={12} style={{ color:T.white }}/>
+                          </button>
+                        </div>
+                      ) : (
+                        <label style={{ marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8,height:60,border:`1.5px dashed ${uploadingEvidence ? T.mint : T.border}`,borderRadius:10,cursor:"pointer",background:"rgba(255,255,255,0.03)",transition:"all 0.2s" }}>
+                          {uploadingEvidence ? (
+                            <span style={{ fontSize:12,color:T.mint }}>Uploading…</span>
+                          ) : (
+                            <>
+                              <Camera size={16} style={{ color:T.muted }}/>
+                              <span style={{ fontSize:12,color:T.muted }}>Tap to upload photo or scan</span>
+                              <Upload size={14} style={{ color:T.muted }}/>
+                            </>
+                          )}
+                          <input type="file" accept="image/*,application/pdf" capture="environment"
+                            style={{ position:"absolute",opacity:0,width:0,height:0 }}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingEvidence(true);
+                              try {
+                                const reader = new FileReader();
+                                reader.onload = ev => setEvidencePreview(ev.target?.result as string);
+                                reader.readAsDataURL(file);
+                                const fd = new FormData();
+                                fd.append("file", file);
+                                const res = await fetch("/api/upload", { method:"POST", body:fd, credentials:"include" });
+                                const json = await res.json();
+                                if (json.url) setEvidenceUrl(json.url);
+                                else toast.error("Upload failed");
+                              } catch { toast.error("Upload failed"); }
+                              finally { setUploadingEvidence(false); }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Sign-off section */}
+                    <div style={{ background:"rgba(99,91,255,0.06)",border:`1px solid rgba(99,91,255,0.2)`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:12 }}>
+                      <p style={{ margin:"0 0 4px",fontSize:11,color:"#a5b4fc",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em" }}>Signed By</p>
+                      <div>
+                        <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Manager</Label>
+                        <select {...register("signedByManager")}
+                          style={{ marginTop:4,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:8,color: watch("signedByManager") ? T.white : T.muted,height:40,padding:"0 10px",fontSize:13 }}>
+                          <option value="">Select manager…</option>
+                          <option value="Farid Ahmed">Farid Ahmed</option>
+                          <option value="Mumin Khan">Mumin Khan</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Trustee</Label>
+                        <select {...register("signedByTrustee")}
+                          style={{ marginTop:4,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:8,color: watch("signedByTrustee") ? T.white : T.muted,height:40,padding:"0 10px",fontSize:13 }}>
+                          <option value="">Select trustee…</option>
+                          <option value="Dr Abdul Hamid">Dr Abdul Hamid</option>
+                          <option value="Ghalib Khan">Ghalib Khan</option>
+                          <option value="__other__">Other (free text)…</option>
+                        </select>
+                        {watch("signedByTrustee") === "__other__" && (
+                          <Input {...register("signedByTrusteeOther")} placeholder="Enter trustee name…"
+                            style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:40,fontSize:13 }}/>
+                        )}
+                      </div>
+                      <p style={{ margin:0,fontSize:10,color:T.muted,fontStyle:"italic" }}>Date &amp; time stamp will be recorded automatically on submission.</p>
+                    </div>
+
+                    {/* Notes */}
+                    <div>
+                      <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
+                      <Input {...register("notes")} placeholder="Optional notes"
+                        style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                    </div>
+                  </>
+                ) : (
+                  /* Non-Friday-Collections categories */
+                  <>
+                    <div>
+                      <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>
+                        {FRIDAY_INCOME_CATS.has(watchCat) ? "Type / Reference" : "Payer / Tenant Name"}
+                      </Label>
+                      <Input {...register("tenantName")} placeholder={FRIDAY_INCOME_CATS.has(watchCat) ? "Type or reference…" : "Name or reference"}
+                        style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                    </div>
+                    <div>
+                      <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Notes</Label>
+                      <Input {...register("notes")} placeholder="Optional notes"
+                        style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
+                    </div>
+                  </>
+                )}
+                <Button type="submit" disabled={createMutation.isPending || uploadingEvidence}
                   style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:48,borderRadius:12,border:"none",fontSize:15 }}>
-                  {createMutation.isPending?"Saving…":"Add Record"}
+                  {createMutation.isPending?"Saving…":uploadingEvidence?"Uploading…":"Add Record"}
                 </Button>
               </form>
             )}

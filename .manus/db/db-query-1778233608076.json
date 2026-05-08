@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `income_records` ADD `bucketCollection` decimal(10,2);\nALTER TABLE `income_records` ADD `cardPayment` decimal(10,2);\nALTER TABLE `income_records` ADD `cashWithheld` decimal(10,2);\nALTER TABLE `income_records` ADD `cashWithheldReason` varchar(300);\nALTER TABLE `income_records` ADD `totalBanked` decimal(10,2);\nALTER TABLE `income_records` ADD `totalBankedDate` varchar(50);\nALTER TABLE `income_records` ADD `signedByManager` varchar(200);\nALTER TABLE `income_records` ADD `signedByTrustee` varchar(200);\nALTER TABLE `income_records` ADD `signedAt` timestamp;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute ALTER TABLE `income_records` ADD `bucketCollection` decimal(10,2);\nALTER TABLE `income_records` ADD `cardPayment` decimal(10,2);\nALTER TABLE `income_records` ADD `cashWithheld` decimal(10,2);\nALTER TABLE `income_records` ADD `cashWithheldReason` varchar(300);\nALTER TABLE `income_records` ADD `totalBanked` decimal(10,2);\nALTER TABLE `income_records` ADD `totalBankedDate` varchar(50);\nALTER TABLE `income_records` ADD `signedByManager` varchar(200);\nALTER TABLE `income_records` ADD `signedByTrustee` varchar(200);\nALTER TABLE `income_records` ADD `signedAt` timestamp;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 3420
+}

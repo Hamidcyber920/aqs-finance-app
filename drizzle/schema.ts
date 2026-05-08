@@ -390,6 +390,17 @@ export const incomeRecords = mysqlTable("income_records", {
   paymentMethod: mysqlEnum("paymentMethod", ["cash", "bank_transfer", "card", "cheque"]),
   evidenceUrl: text("evidenceUrl"),
   notes: text("notes"),
+  // Friday Collections breakdown fields
+  bucketCollection: decimal("bucketCollection", { precision: 10, scale: 2 }),
+  cardPayment: decimal("cardPayment", { precision: 10, scale: 2 }),
+  cashWithheld: decimal("cashWithheld", { precision: 10, scale: 2 }),
+  cashWithheldReason: varchar("cashWithheldReason", { length: 300 }),
+  totalBanked: decimal("totalBanked", { precision: 10, scale: 2 }),
+  totalBankedDate: varchar("totalBankedDate", { length: 50 }),
+  // Sign-off fields
+  signedByManager: varchar("signedByManager", { length: 200 }),
+  signedByTrustee: varchar("signedByTrustee", { length: 200 }),
+  signedAt: timestamp("signedAt"),
   recordedById: int("recordedById").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
