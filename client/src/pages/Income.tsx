@@ -179,19 +179,32 @@ function SubcategoryPanel({
               ))}
             </div>
           </div>
-          {/* Eid date dropdown */}
+          {/* Eid date picker */}
           <div>
             <p style={{ margin:"0 0 8px",fontSize:11,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em" }}>Eid Date</p>
-            <select
-              value={eidDate}
-              onChange={e => setEidDate(e.target.value)}
-              style={{ width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color: eidDate ? T.white : T.muted,height:44,padding:"0 12px",fontSize:13 }}
-            >
-              <option value="" disabled style={{ background:"#081526",color:T.muted }}>Select Eid date…</option>
-              {EID_DATES.map(d => (
-                <option key={d.value} value={d.value} style={{ background:"#0D2240",color:T.white }}>{d.label}</option>
-              ))}
-            </select>
+            <label style={{ position:"relative",display:"block",cursor:"pointer" }}>
+              {/* Visible formatted display */}
+              <div style={{
+                width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${eidDate ? T.mint : T.border}`,
+                borderRadius:10,color: eidDate ? T.white : T.muted,height:44,padding:"0 12px",fontSize:13,
+                display:"flex",alignItems:"center",gap:8,pointerEvents:"none",
+              }}>
+                <Calendar size={14} style={{ color: eidDate ? T.mint : T.muted, flexShrink:0 }}/>
+                <span>{eidDate
+                  ? new Date(eidDate + "T12:00:00").toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" })
+                  : "Select Eid date…"
+                }</span>
+              </div>
+              {/* Invisible native date input layered on top */}
+              <input
+                type="date"
+                value={eidDate}
+                onChange={e => setEidDate(e.target.value)}
+                style={{
+                  position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",cursor:"pointer",
+                }}
+              />
+            </label>
           </div>
         </div>
       )}
