@@ -39,7 +39,7 @@ export default function ReceiptsPage() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const receipts = data?.receipts ?? [];
+  const receipts: any[] = data?.rows ?? [];
 
   const filtered = receipts.filter((r: any) => {
     const matchSearch = !search || (r.description??r.notes??"").toLowerCase().includes(search.toLowerCase());

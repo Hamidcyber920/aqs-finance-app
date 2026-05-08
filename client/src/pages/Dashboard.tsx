@@ -136,14 +136,13 @@ export default function DashboardPage() {
   const [userFilter, setUserFilter] = useState<number | "all">("all");
 
   /* tRPC queries */
-  const { data: stats, isLoading: statsLoading } = trpc.receipts.getStats?.useQuery?.() ?? { data: null, isLoading: false };
-  const { data: receipts } = trpc.receipts.list?.useQuery?.({ limit: 5 }) ?? { data: null };
-  const { data: loans } = trpc.loans?.list?.useQuery?.({ limit: 5 }) ?? { data: null };
-  const { data: allExpenses } = trpc.receipts?.listAll?.useQuery?.(
-    { userId: userFilter === "all" ? undefined : userFilter },
+  const { data: receipts } = trpc.receipts.list.useQuery({ limit: 5 });
+  const { data: loans } = trpc.loans.list.useQuery({});
+  const { data: allExpenses } = trpc.receipts.adminList.useQuery(
+    { userId: userFilter === "all" ? undefined : userFilter, limit: 50 },
     { enabled: isAdmin }
-  ) ?? { data: null };
-  const { data: users } = trpc.users?.list?.useQuery?.(undefined, { enabled: isAdmin }) ?? { data: null };
+  );
+  const { data: users } = trpc.users.list.useQuery({}, { enabled: isAdmin });
 
   /* Mock chart data — replaced by real data when queries land */
   const chartData = [
@@ -160,6 +159,13 @@ export default function DashboardPage() {
     { name: "Rentals", value: 28, color: T.mint },
     { name: "Friday Collection", value: 20, color: "#f59e0b" },
     { name: "Other", value: 14, color: "#64748b" },
+  ];
+
+  const loansList: any[] = Array.isArray(loans) && loans.length > 0 ? (loans as any[]) : [
+    { id: 1, borrowerName: "Ahmed Siddiqui", amount: 2500, status: "active" },
+    { id: 2, borrowerName: "Fatima Hassan", amount: 1200, status: "approved" },
+    { id: 3, borrowerName: "Omar Khalid", amount: 3000, status: "pending" },
+    { id: 4, borrowerName: "Zainab Ali", amount: 800, status: "active" },
   ];
 
   return (
@@ -299,7 +305,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {(receipts?.receipts ?? [
+                {(receipts?.rows ?? [
                   { id: 1, description: "Cleaning supplies", amount: 124.50, status: "approved" },
                   { id: 2, description: "Catering — Iftar", amount: 340.00, status: "pending" },
                   { id: 3, description: "Office stationery", amount: 45.20, status: "approved" },
@@ -337,12 +343,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {(loans?.applications ?? [
-                  { id: 1, borrowerName: "Ahmed Siddiqui", amount: 2500, status: "active" },
-                  { id: 2, borrowerName: "Fatima Hassan", amount: 1200, status: "approved" },
-                  { id: 3, borrowerName: "Omar Khalid", amount: 3000, status: "pending" },
-                  { id: 4, borrowerName: "Zainab Ali", amount: 800, status: "active" },
-                ]).slice(0, 5).map((l: any, i: number) => (
+                {loansList.slice(0, 5).map((l: any, i: number) => (
                   <tr key={l.id ?? i}>
                     <td style={{ padding: "10px 0", fontSize: 13, color: T.white, borderBottom: `1px solid ${T.border}` }}>
                       {l.borrowerName ?? "—"}
@@ -380,7 +381,7 @@ export default function DashboardPage() {
                 }}
               >
                 <option value="all" style={{ background: "#0D2240" }}>All Users</option>
-                {(users ?? []).map((u: any) => (
+                {(users?.rows ?? []).map((u: any) => (
                   <option key={u.id} value={u.id} style={{ background: "#0D2240" }}>{u.name}</option>
                 ))}
               </select>
@@ -416,7 +417,7 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(allExpenses?.receipts ?? [
+                  {(allExpenses?.rows ?? [
                     { id: 1, userName: "Abdul Hamid", date: "2026-05-07", category: "Maintenance", amount: 820, status: "pending", description: "Roof repair" },
                     { id: 2, userName: "Fatma El Sayed", date: "2026-05-06", category: "Cleaning", amount: 124.50, status: "approved", description: "Cleaning supplies" },
                     { id: 3, userName: "Mumin Khan", date: "2026-05-05", category: "Catering", amount: 340, status: "approved", description: "Iftar event" },

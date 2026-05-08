@@ -42,8 +42,8 @@ export default function AdminPanelPage() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [tab, setTab] = useState<"users"|"pending">("users");
 
-  const { data, refetch } = trpc.users.list.useQuery();
-  const { data: pending, refetch: refetchPending } = trpc.users.listPending?.useQuery?.() ?? { data: null, refetch: () => {} };
+  const { data, refetch } = trpc.users.list.useQuery({});
+  const { data: pending, refetch: refetchPending } = (trpc.users as any).listPending?.useQuery?.() ?? { data: null, refetch: () => {} };
 
   const approveMutation = trpc.users.approve?.useMutation?.({
     onSuccess: () => { toast.success("User approved"); refetchPending(); refetch(); },
@@ -62,19 +62,19 @@ export default function AdminPanelPage() {
     { userId: selectedUser?.id ?? 0 },
     { enabled: !!selectedUser?.id }
   );
-  const grantMutation = trpc.users.grantPermission?.useMutation?.({
+  const grantMutation = trpc.users.updatePermissions?.useMutation?.({
     onSuccess: () => refetchPerms(),
     onError: (e: any) => toast.error(e.message),
   });
-  const revokeMutation = trpc.users.revokePermission?.useMutation?.({
+  const revokeMutation = trpc.users.updatePermissions?.useMutation?.({
     onSuccess: () => refetchPerms(),
     onError: (e: any) => toast.error(e.message),
   });
 
   const { register: regC, handleSubmit: handleC, reset: resetC } = useForm<any>();
 
-  const users = data?.users ?? [];
-  const pendingUsers = pending?.users ?? [];
+  const users = data?.rows ?? [];
+  const pendingUsers = (pending as any)?.rows ?? [];
   const activeUsers = users.filter((u: any) => u.status === "active").length;
 
   const PERM_GROUPS = [
@@ -291,10 +291,7 @@ export default function AdminPanelPage() {
                             {perm.replace(/^can/,"").replace(/([A-Z])/g," $1").trim()}
                           </span>
                           <button
-                            onClick={() => enabled
-                              ? revokeMutation?.mutate?.({ userId:selectedUser?.id, permission:perm })
-                              : grantMutation?.mutate?.({ userId:selectedUser?.id, permission:perm })
-                            }
+                            onClick={() => grantMutation?.mutate?.({ userId:selectedUser?.id, [perm]: !enabled } as any)}
                             style={{ width:44,height:24,borderRadius:999,border:"none",cursor:"pointer",transition:"all 0.2s",
                               background:enabled?T.mint:"rgba(255,255,255,0.1)",
                               position:"relative",flexShrink:0 }}>

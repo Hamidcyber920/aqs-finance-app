@@ -97,8 +97,8 @@ export default function LoanDetailPage({ id }: { id: number }) {
   const isAdmin = ["superadmin","trustee","manager"].includes(user?.role ?? "");
   const isTrustee = user?.role === "trustee" || user?.role === "superadmin";
 
-  const { data, refetch } = trpc.loans.getById?.useQuery?.({ id }) ?? { data:null, refetch:()=>{} };
-  const { data: repaymentData, refetch: refetchRep } = trpc.loans.listRepayments?.useQuery?.({ loanId:id }) ?? { data:null, refetch:()=>{} };
+  const { data, refetch } = trpc.loans.get.useQuery({ id });
+  const refetchRep = refetch;
 
   const approveAdminMutation = trpc.loans.approveAdmin?.useMutation?.({
     onSuccess: () => { toast.success("Admin approval recorded"); refetch(); },
@@ -108,13 +108,13 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onSuccess: () => { toast.success("Trustee approval recorded"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const confirmRepMutation = trpc.loanRepayments?.confirmReceived?.useMutation?.({
+  const confirmRepMutation = trpc.loans.confirmRepaymentReceived?.useMutation?.({
     onSuccess: () => { toast.success("Repayment confirmed"); refetchRep(); },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const loan = data?.loan;
-  const repayments = repaymentData?.repayments ?? [];
+  const loan = data;
+  const repayments = (data as any)?.repayments ?? [];
 
   if (!loan) {
     return (
@@ -153,8 +153,8 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>{loan.borrowerEmail}</p>
               </div>
               <span style={{ padding:"5px 14px",borderRadius:999,fontSize:12,fontWeight:700,textTransform:"capitalize",
-                background:fullyApproved?"rgba(0,255,194,0.1)":loan.status==="pending"?"rgba(251,191,36,0.1)":"rgba(99,91,255,0.12)",
-                color:fullyApproved?T.mint:loan.status==="pending"?"#fbbf24":"#a78bfa" }}>
+                background:fullyApproved?"rgba(0,255,194,0.1)":!fullyApproved?"rgba(251,191,36,0.1)":"rgba(99,91,255,0.12)",
+                color:fullyApproved?T.mint:!fullyApproved?"#fbbf24":"#a78bfa" }}>
                 {fullyApproved?"Fully Approved":loan.status}
               </span>
             </div>
@@ -194,10 +194,10 @@ export default function LoanDetailPage({ id }: { id: number }) {
               <ApprovalBox
                 label="Trustee Approval"
                 approved={!!loan.trusteeApprovedAt}
-                approvedBy={loan.trusteeApprovedByName}
+                approvedBy={(loan as any).trusteeName}
                 approvedAt={loan.trusteeApprovedAt}
                 canApprove={isTrustee && !loan.trusteeApprovedAt}
-                onApprove={() => approveTrusteeMutation?.mutate?.({ id })}
+                onApprove={() => approveTrusteeMutation?.mutate?.({ id, trusteeId: 0 } as any)}
                 loading={approveTrusteeMutation?.isPending}
               />
             </div>
@@ -250,9 +250,9 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 repayment={{ ...rep, instalment: i+1 }}
                 isAdmin={isAdmin}
                 isTrustee={isTrustee}
-                onConfirm={(r: any) => confirmRepMutation?.mutate?.({ id:r.id })}
-                onApproveAdmin={(r: any) => approveAdminMutation?.mutate?.({ id:r.id, type:"repayment" })}
-                onApproveTrustee={(r: any) => approveTrusteeMutation?.mutate?.({ id:r.id, type:"repayment" })}
+                onConfirm={(r: any) => confirmRepMutation?.mutate?.({ repaymentId:r.id })}
+                onApproveAdmin={(r: any) => approveAdminMutation?.mutate?.({ id:r.id } as any)}
+                onApproveTrustee={(r: any) => approveTrusteeMutation?.mutate?.({ id:r.id, trusteeId: r.trusteeId ?? 0 } as any)}
               />
             ))}
 

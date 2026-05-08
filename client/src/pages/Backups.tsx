@@ -8,14 +8,14 @@ const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted
 
 export default function BackupsPage() {
   const [creating, setCreating] = useState(false);
-  const { data, refetch } = trpc.backups?.list?.useQuery?.() ?? { data: null, refetch: () => {} };
+  const { data, refetch } = trpc.backup.list.useQuery();
 
-  const createMutation = trpc.backups?.create?.useMutation?.({
+  const createMutation = trpc.backup.create.useMutation({
     onSuccess: () => { toast.success("Backup created successfully"); refetch(); setCreating(false); },
     onError: (e: any) => { toast.error(e.message); setCreating(false); },
   });
 
-  const backups = data?.backups ?? [
+  const backups: any[] = (Array.isArray(data) ? data : []).length > 0 ? (data as any[]) : [
     { id:1, name:"Full Backup — May 2026", createdAt:"2026-05-01T02:00:00Z", size:"4.2 MB", status:"complete", type:"scheduled" },
     { id:2, name:"Full Backup — Apr 2026", createdAt:"2026-04-01T02:00:00Z", size:"3.8 MB", status:"complete", type:"scheduled" },
     { id:3, name:"Manual Backup", createdAt:"2026-03-15T14:23:00Z", size:"3.5 MB", status:"complete", type:"manual" },

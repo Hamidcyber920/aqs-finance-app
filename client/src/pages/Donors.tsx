@@ -23,7 +23,7 @@ export default function DonorsPage() {
 
   const { register, handleSubmit, reset } = useForm<any>();
 
-  const donors = data?.donors ?? [];
+  const donors: any[] = Array.isArray(data) ? data : [];
   const filtered = donors.filter((d: any) =>
     !search || (d.name??"").toLowerCase().includes(search.toLowerCase()) || (d.email??"").toLowerCase().includes(search.toLowerCase())
   );

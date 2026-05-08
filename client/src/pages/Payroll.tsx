@@ -42,7 +42,7 @@ export default function PayrollPage() {
 
   const { register, handleSubmit, reset } = useForm<any>();
 
-  const records = data?.records ?? [];
+  const records: any[] = Array.isArray(data) ? data : [];
   const totalGross = records.reduce((s: number, r: any) => s + Number(r.grossPay ?? 0), 0);
   const totalNet = records.reduce((s: number, r: any) => s + Number(r.netPay ?? 0), 0);
   const totalDeductions = totalGross - totalNet;
@@ -56,7 +56,7 @@ export default function PayrollPage() {
       formData.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const { url } = await res.json();
-      analyzeMutation?.mutate?.({ fileUrl: url, month, year });
+      analyzeMutation?.mutate?.({ fileUrl: url });
     } catch {
       toast.error("Upload failed");
     } finally {

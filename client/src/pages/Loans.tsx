@@ -28,9 +28,9 @@ const T = {
 };
 
 const loanSchema = z.object({
-  borrowerName: z.string().min(2),
-  borrowerEmail: z.string().email(),
-  amount: z.coerce.number().min(1),
+  applicantName: z.string().min(2),
+  applicantEmail: z.string().email(),
+  amount: z.string().min(1),
   termValue: z.coerce.number().min(1),
   termUnit: z.enum(["months", "years"]),
   purpose: z.string().min(2),
@@ -77,7 +77,7 @@ export default function LoansPage() {
   const [open, setOpen] = useState(false);
   const [termUnit, setTermUnit] = useState<"months" | "years">("months");
 
-  const { data, refetch } = trpc.loans.list.useQuery({ limit: 50 });
+  const { data, refetch } = trpc.loans.list.useQuery({});
   const { data: trustees } = trpc.trustees.list.useQuery(undefined, { enabled: isAdmin });
 
   const createMutation = trpc.loans.create.useMutation({
@@ -90,7 +90,7 @@ export default function LoansPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<LoanForm>({
+  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<any>({
     resolver: zodResolver(loanSchema),
     defaultValues: { termUnit: "months", termValue: 6 },
   });
@@ -101,7 +101,7 @@ export default function LoansPage() {
     ? (Number(watchAmount) / (termUnit === "years" ? watchTermValue * 12 : watchTermValue)).toFixed(2)
     : "0.00";
 
-  const loans = data?.applications ?? [];
+  const loans: any[] = Array.isArray(data) ? data : [];
   const totalLoaned = loans.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
   const activeLoans = loans.filter((l: any) => l.status === "active" || l.status === "approved").length;
   const pendingLoans = loans.filter((l: any) => l.status === "pending").length;
@@ -194,16 +194,16 @@ export default function LoansPage() {
             <DialogHeader>
               <DialogTitle style={{ color: T.white, fontSize: 18, fontWeight: 800 }}>New Loan Application</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit((d) => createMutation.mutate({ ...d, termUnit }))} style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
+            <form onSubmit={handleSubmit((d: any) => createMutation.mutate({ ...d, termUnit }))} style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 8 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Borrower Name</Label>
-                  <Input {...register("borrowerName")} placeholder="Full name"
+                  <Input {...register("applicantName")} placeholder="Full name"
                     style={{ marginTop: 6, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
                 </div>
                 <div>
                   <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em" }}>Email</Label>
-                  <Input {...register("borrowerEmail")} type="email" placeholder="email@example.com"
+                  <Input {...register("applicantEmail")} type="email" placeholder="email@example.com"
                     style={{ marginTop: 6, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
                 </div>
               </div>

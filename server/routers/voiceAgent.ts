@@ -273,7 +273,7 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
         .orderBy(desc(schema.receipts.createdAt))
         .limit(50);
       const total = rows.reduce((s, r) => s + parseFloat(r.amount ?? "0"), 0);
-      return JSON.stringify({ count: rows.length, totalAmount: total.toFixed(2), records: rows.slice(0, 10).map(r => ({ id: r.id, description: r.description, amount: r.amount, vendor: r.vendor, date: r.createdAt })) });
+      return JSON.stringify({ count: rows.length, totalAmount: total.toFixed(2), records: rows.slice(0, 10).map(r => ({ id: r.id, description: r.notes ?? r.vendor ?? 'Receipt', amount: r.amount, vendor: r.vendor, date: r.createdAt })) });
     }
 
     case "get_income": {
@@ -388,8 +388,7 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
         year,
         grossPay: args.grossPay as string,
         netPay: (args.netPay as string) ?? (args.grossPay as string),
-        paymentMethod: (args.paymentMethod as any) ?? "bank",
-        taxCode: (args.taxCode as string) ?? null,
+        paymentMethod: (args.paymentMethod as any) ?? "bank_transfer",
         totalDeductions: "0.00",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -419,11 +418,10 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
       const cats = await db.select().from(schema.expenseCategories);
       const cat = args.categoryName ? cats.find(c => c.name.toLowerCase().includes((args.categoryName as string).toLowerCase())) : cats[0];
       const [record] = await db.insert(schema.receipts).values({
-        description: args.description as string,
         amount: args.amount as string,
         vendor: (args.vendor as string) ?? null,
+        notes: (args.description as string) ?? null,
         categoryId: cat?.id ?? null,
-        paymentMethod: (args.paymentMethod as any) ?? "cash",
         status: "pending",
         userId,
         createdAt: new Date(),
@@ -438,9 +436,9 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
       const card = args.cardAmount ? parseFloat(args.cardAmount as string) : null;
       const [record] = await db.insert(schema.fridayCollections).values({
         totalAmount: total.toFixed(2),
-        bucketAmount: bucket?.toFixed(2) ?? null,
-        cardTerminalAmount: card?.toFixed(2) ?? null,
-        collectionDate: (args.collectionDate as string) ?? new Date().toISOString().slice(0, 10),
+        bucketTotal: bucket?.toFixed(2) ?? "0",
+        cardTerminalTotal: card?.toFixed(2) ?? "0",
+        collectionDate: new Date((args.collectionDate as string) ?? new Date().toISOString().slice(0, 10)),
         notes: (args.notes as string) ?? null,
         recordedById: userId,
         createdAt: new Date(),

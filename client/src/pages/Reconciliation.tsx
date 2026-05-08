@@ -38,18 +38,17 @@ export default function ReconciliationPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const statementRef = useRef<HTMLInputElement>(null);
 
-  const { data, refetch } = trpc.reconciliation.fullStatement?.useQuery?.({ month, year }) ?? { data: null, refetch: () => {} };
-  const { data: session, refetch: refetchSession } = trpc.reconciliation.getSession?.useQuery?.({ month, year }) ?? { data: null, refetch: () => {} };
+  const { data, refetch } = trpc.reconciliation.fullStatement.useQuery({ month, year });
 
-  const saveBankMutation = trpc.reconciliation.saveBankBalance?.useMutation?.({
-    onSuccess: () => { toast.success("Bank balance saved"); refetchSession(); refetch(); },
+  const saveBankMutation = trpc.reconciliation.updateBankBalance.useMutation({
+    onSuccess: () => { toast.success("Bank balance saved"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const markPaidMutation = trpc.reconciliation.markPaymentPaid?.useMutation?.({
+  const markPaidMutation = (trpc.reconciliation as any).markPaymentPaid?.useMutation?.({
     onSuccess: () => { toast.success("Payment marked"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const withholdMutation = trpc.reconciliation.withholdPayment?.useMutation?.({
+  const withholdMutation = trpc.reconciliation.withholdPayment.useMutation({
     onSuccess: () => { toast.success("Payment withheld"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -61,10 +60,10 @@ export default function ReconciliationPage() {
     onError: (e: any) => { toast.error(e.message); setScanningStatement(false); },
   });
 
-  const income = data?.totalIncome ?? 0;
-  const expenditure = data?.totalExpenditure ?? 0;
-  const bankBal = Number(session?.bankBalance ?? bankBalance ?? 0);
-  const pendingOut = data?.pendingTotal ?? expenditure;
+  const income = data?.totals?.totalIncome ?? data?.income?.total ?? 0;
+  const expenditure = data?.totals?.totalExpenditure ?? data?.expenditure?.total ?? 0;
+  const bankBal = Number(data?.session?.bankBalance ?? bankBalance ?? 0);
+  const pendingOut = data?.totals?.totalPending ?? expenditure;
   const balance = bankBal - pendingOut;
 
   const daysUntil25 = (() => {
@@ -85,9 +84,22 @@ export default function ReconciliationPage() {
     extractStatementMutation?.mutate?.({ fileUrl: url });
   };
 
-  const rows = data?.rows ?? [];
-  const incomeBreakdown = data?.incomeBreakdown ?? [];
-  const expBreakdown = data?.expenditureBreakdown ?? [];
+  const rows = data?.expenditure ? [
+    ...(data.expenditure.payroll ?? []),
+    ...(data.expenditure.receipts ?? []),
+    ...(data.expenditure.volunteers ?? []),
+    ...(data.expenditure.loans ?? []),
+    ...(data.expenditure.invoices ?? []),
+    ...(data.expenditure.carried ?? []),
+  ] : [];
+  const incomeBreakdown = data?.income?.breakdown ?? [];
+  const expBreakdown = data?.expenditure ? [
+    ...(data.expenditure.payroll ?? []).map((r: any) => ({ type: 'payroll', category: 'Payroll', amount: r.amount })),
+    ...(data.expenditure.receipts ?? []).map((r: any) => ({ type: 'receipt', category: r.categoryName ?? 'Receipt', amount: r.amount })),
+    ...(data.expenditure.volunteers ?? []).map((r: any) => ({ type: 'volunteer', category: 'Volunteer', amount: r.amount })),
+    ...(data.expenditure.loans ?? []).map((r: any) => ({ type: 'loan', category: 'Loan', amount: r.amount })),
+    ...(data.expenditure.invoices ?? []).map((r: any) => ({ type: 'invoice', category: 'Invoice', amount: r.amount })),
+  ] : [];
 
   return (
     <>
@@ -139,7 +151,7 @@ export default function ReconciliationPage() {
               <Input value={bankBalance} onChange={e=>setBankBalance(e.target.value)} type="number" step="0.01" placeholder="0.00"
                 style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:46,fontSize:18,fontWeight:700 }}/>
             </div>
-            <Button onClick={() => saveBankMutation?.mutate?.({ month, year, bankBalance:Number(bankBalance) })} disabled={!bankBalance||saveBankMutation?.isPending}
+            <Button onClick={() => saveBankMutation?.mutate?.({ month, year, bankBalance:String(bankBalance) })} disabled={!bankBalance||saveBankMutation?.isPending}
               style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,height:46,padding:"0 20px",fontWeight:700,fontSize:14 }}>
               {saveBankMutation?.isPending?"Saving…":"Save Balance"}
             </Button>

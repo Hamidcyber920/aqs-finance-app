@@ -22,7 +22,7 @@ export default function ProfileSettingsPage() {
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);
 
-  const updateMutation = trpc.users.updateProfile?.useMutation?.({
+  const updateMutation = (trpc.users as any).updateProfile?.useMutation?.({
     onSuccess: () => toast.success("Profile updated"),
     onError: (e: any) => toast.error(e.message),
   });

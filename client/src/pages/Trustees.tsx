@@ -29,7 +29,7 @@ export default function TrusteesPage() {
 
   const { register, handleSubmit, reset, setValue } = useForm<any>();
 
-  const trustees = data?.trustees ?? [];
+  const trustees = data ?? [];
   const active = trustees.filter((t: any) => t.isActive !== false).length;
 
   return (

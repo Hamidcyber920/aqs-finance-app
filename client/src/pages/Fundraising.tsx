@@ -43,7 +43,7 @@ export default function FundraisingPage() {
     onSuccess: () => { toast.success("Campaign created"); setCampaignOpen(false); refetch(); resetC(); },
     onError: (e) => toast.error(e.message),
   });
-  const addDonationMutation = trpc.fundraising.addDonation.useMutation({
+  const addDonationMutation = trpc.fundraising.recordDonation.useMutation({
     onSuccess: () => { toast.success("Donation recorded"); setDonationOpen(false); refetch(); resetD(); },
     onError: (e) => toast.error(e.message),
   });
@@ -51,7 +51,7 @@ export default function FundraisingPage() {
   const { register: regC, handleSubmit: handleC, reset: resetC } = useForm<any>();
   const { register: regD, handleSubmit: handleD, reset: resetD } = useForm<any>();
 
-  const campaigns = data?.campaigns ?? [];
+  const campaigns = (data as any[]) ?? [];
   const totalRaised = campaigns.reduce((s: number, c: any) => s + Number(c.currentAmount ?? 0), 0);
   const totalTarget = campaigns.reduce((s: number, c: any) => s + Number(c.targetAmount ?? 0), 0);
   const activeCampaigns = campaigns.filter((c: any) => Number(c.currentAmount) < Number(c.targetAmount)).length;

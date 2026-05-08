@@ -36,8 +36,8 @@ export default function CampaignsPage() {
   const [previewCampaign, setPreviewCampaign] = useState<any>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string|null>(null);
 
-  const { data, refetch } = trpc.campaigns.list.useQuery({ limit:50 });
-  const { data: donors } = trpc.donors.list?.useQuery?.({ limit:200 }) ?? { data:null };
+  const { data, refetch } = trpc.campaigns.list.useQuery();
+  const { data: donors } = trpc.donors.list.useQuery({ limit:200 });
   const createMutation = trpc.campaigns.create.useMutation({
     onSuccess: () => { toast.success("Campaign created"); setOpen(false); refetch(); reset(); },
     onError: (e) => toast.error(e.message),
@@ -50,10 +50,10 @@ export default function CampaignsPage() {
   const { register, handleSubmit, reset, setValue, watch } = useForm<any>({ defaultValues:{ type:"email" } });
   const watchBody = watch("body","");
 
-  const campaigns = data?.campaigns ?? [];
+  const campaigns: any[] = Array.isArray(data) ? data : [];
   const sent = campaigns.filter((c: any) => c.status === "sent").length;
   const totalSent = campaigns.reduce((s: number, c: any) => s + Number(c.sentCount ?? 0), 0);
-  const donorCount = donors?.donors?.length ?? 0;
+  const donorCount = Array.isArray(donors) ? donors.length : 0;
 
   const applyTemplate = (tpl: typeof TEMPLATES[0]) => {
     setValue("subject", tpl.subject);
@@ -141,7 +141,7 @@ export default function CampaignsPage() {
                             <Eye size={11}/> View
                           </button>
                           {c.status==="draft" && (
-                            <button onClick={()=>sendMutation?.mutate?.({ id:c.id })}
+                            <button onClick={()=>sendMutation.mutate({ id:c.id })}
                               style={{ padding:"4px 10px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
                               <Send size={11}/> Send
                             </button>

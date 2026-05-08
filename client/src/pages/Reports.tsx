@@ -29,7 +29,7 @@ export default function ReportsPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [generating, setGenerating] = useState(false);
 
-  const { data: reportData } = trpc.reports?.monthly?.useQuery?.({ month, year }) ?? { data: null };
+  const { data: reportData } = trpc.expenses.monthlySummary.useQuery({ month, year });
 
   const monthlyData = [
     { month:"Jan", income:12400, expenses:8200 },

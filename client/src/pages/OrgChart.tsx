@@ -62,11 +62,11 @@ function ConnectorLine({ horizontal = false }: { horizontal?: boolean }) {
 }
 
 export default function OrgChartPage() {
-  const { data } = trpc.users.list?.useQuery?.() ?? { data: null };
-  const { data: trusteesData } = trpc.trustees.list?.useQuery?.() ?? { data: null };
+  const { data } = trpc.users.list.useQuery({});
+  const { data: trusteesData } = trpc.trustees.list.useQuery();
 
-  const users = data?.users ?? [];
-  const trustees = trusteesData?.trustees ?? [];
+  const users: any[] = data?.rows ?? [];
+  const trustees: any[] = Array.isArray(trusteesData) ? trusteesData : [];
 
   const superadmins = users.filter((u: any) => u.role === "superadmin" || u.role === "admin");
   const mgrs = users.filter((u: any) => u.role === "manager");

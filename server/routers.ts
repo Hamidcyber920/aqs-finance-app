@@ -245,8 +245,95 @@ async function _fullyApproveRepayment(repayment: any) {
 }
 
 
-// ─── MAIN ROUTER ─────────────────────────────────────────────────────────────
+/// ─── Payslip bulk analysis helper (extracted to avoid circular appRouter.createCaller reference) ──
+async function _analyzePayslipBulk(input: { fileUrl: string; mimeType: string }) {
+  const contentType = input.mimeType.startsWith("application/pdf") ? "file_url" : "image_url";
+  const prompt = `You are a UK payroll document parser. This document may contain payslips for MULTIPLE employees (one per page or section).
+Extract ALL employees and return a JSON array called "employees".
+CRITICAL RULE FOR MONTH/YEAR: Use the PAYMENT DATE (e.g. "Paid on 31/01/2026") to determine month and year — NOT any internal month number like "Month 10". If the payment date says 31/01/2026 then month=1 and year=2026.
+For each employee return:
+{
+  "employeeName": "string or null",
+  "employeeId": "string or null",
+  "taxCode": "string or null",
+  "niNumber": "string or null",
+  "period": "string or null (e.g. January 2026)",
+  "month": number 1-12 (from payment date, NOT internal month number),
+  "year": number (from payment date),
+  "grossPay": number or null,
+  "incomeTax": number or null,
+  "nationalInsurance": number or null,
+  "pensionContribution": number or null,
+  "otherDeductions": number or null,
+  "netPay": number or null,
+  "paymentMethod": "bank_transfer|cheque|cash or null"
+}
+Return: { "employees": [ ...array of employee objects... ] }`;
+  const userContent = contentType === "image_url"
+    ? [{ type: "image_url" as const, image_url: { url: input.fileUrl } }]
+    : [{ type: "file_url" as const, file_url: { url: input.fileUrl, mime_type: "application/pdf" as const } }];
+  const llmResponse = await invokeLLM({
+    messages: [
+      { role: "system", content: prompt },
+      { role: "user", content: userContent },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "bulk_payslip_data",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            employees: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  employeeName: { type: ["string", "null"] },
+                  employeeId: { type: ["string", "null"] },
+                  taxCode: { type: ["string", "null"] },
+                  niNumber: { type: ["string", "null"] },
+                  period: { type: ["string", "null"] },
+                  month: { type: ["number", "null"] },
+                  year: { type: ["number", "null"] },
+                  grossPay: { type: ["number", "null"] },
+                  incomeTax: { type: ["number", "null"] },
+                  nationalInsurance: { type: ["number", "null"] },
+                  pensionContribution: { type: ["number", "null"] },
+                  otherDeductions: { type: ["number", "null"] },
+                  netPay: { type: ["number", "null"] },
+                  paymentMethod: { type: ["string", "null"] },
+                },
+                required: ["employeeName", "employeeId", "taxCode", "niNumber", "period", "month", "year", "grossPay", "incomeTax", "nationalInsurance", "pensionContribution", "otherDeductions", "netPay", "paymentMethod"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["employees"],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+  const content = llmResponse.choices[0]?.message?.content ?? '{"employees":[]}';
+  let parsed: { employees: Array<{
+    employeeName: string | null; employeeId: string | null; taxCode: string | null; niNumber: string | null;
+    period: string | null; month: number | null; year: number | null;
+    grossPay: number | null; incomeTax: number | null; nationalInsurance: number | null;
+    pensionContribution: number | null; otherDeductions: number | null; netPay: number | null;
+    paymentMethod: string | null;
+  }> };
+  try {
+    parsed = typeof content === "string" ? JSON.parse(content) : content;
+    if (!parsed.employees) parsed = { employees: [] };
+  } catch {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI returned malformed data \u2014 please try again or fill fields manually" });
+  }
+  return parsed;
+}
 
+// ─── MAIN ROUTER ─────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
   localAuth: localAuthRouter,
@@ -317,6 +404,30 @@ export const appRouter = router({
         });
       }),
 
+    create: protectedProcedure
+      .input(z.object({
+        amount: z.union([z.string(), z.number()]).transform(v => String(v)),
+        description: z.string().optional(),
+        vendor: z.string().optional(),
+        date: z.string().optional(),
+        department: z.union([z.string(), z.number()]).optional().transform(v => v != null ? String(v) : undefined),
+        notes: z.string().optional(),
+        imageUrl: z.string().optional(),
+        categoryName: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await createReceipt({
+          userId: ctx.user.id,
+          amount: input.amount,
+          vendor: input.vendor ?? input.description,
+          departmentName: input.department,
+          notes: input.notes,
+          imageUrl: input.imageUrl,
+          categoryName: input.categoryName,
+          status: "pending",
+        });
+        return { id };
+      }),
     // Admin-only: list all active users (for filter dropdown)
     adminUserList: adminProcedure.query(async () => {
       const { rows } = await listAllUsers(200, 0);
@@ -1771,7 +1882,8 @@ export const appRouter = router({
         notes: z.string().optional(),
       })),
     })).mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
       const { incomeDonors: incomeDonorsTable, donors: donorsTable } = await import("../drizzle/schema");
       const results: number[] = [];
       for (const d of input.donors) {
@@ -1815,7 +1927,8 @@ export const appRouter = router({
     }),
     // List donors linked to a specific income record
     byIncome: protectedProcedure.input(z.object({ incomeRecordId: z.number() })).query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
+      if (!db) return [];
       const { incomeDonors: incomeDonorsTable, donors: donorsTable } = await import("../drizzle/schema");
       const rows = await db.select({
         id: donorsTable.id, name: donorsTable.name, email: donorsTable.email, phone: donorsTable.phone,
@@ -1857,102 +1970,14 @@ export const appRouter = router({
 
     analyzePayslipBulk: adminProcedure
       .input(z.object({ fileUrl: z.string(), mimeType: z.string().default("application/pdf") }))
-      .mutation(async ({ input }) => {
-        const contentType = input.mimeType.startsWith("application/pdf") ? "file_url" : "image_url";
-        const prompt = `You are a UK payroll document parser. This document may contain payslips for MULTIPLE employees (one per page or section).
-Extract ALL employees and return a JSON array called "employees".
-
-CRITICAL RULE FOR MONTH/YEAR: Use the PAYMENT DATE (e.g. "Paid on 31/01/2026") to determine month and year — NOT any internal month number like "Month 10". If the payment date says 31/01/2026 then month=1 and year=2026.
-
-For each employee return:
-{
-  "employeeName": "string or null",
-  "employeeId": "string or null",
-  "taxCode": "string or null",
-  "niNumber": "string or null",
-  "period": "string or null (e.g. January 2026)",
-  "month": number 1-12 (from payment date, NOT internal month number),
-  "year": number (from payment date),
-  "grossPay": number or null,
-  "incomeTax": number or null,
-  "nationalInsurance": number or null,
-  "pensionContribution": number or null,
-  "otherDeductions": number or null,
-  "netPay": number or null,
-  "paymentMethod": "bank_transfer|cheque|cash or null"
-}
-
-Return: { "employees": [ ...array of employee objects... ] }`;
-        const userContent = contentType === "image_url"
-          ? [{ type: "image_url" as const, image_url: { url: input.fileUrl } }]
-          : [{ type: "file_url" as const, file_url: { url: input.fileUrl, mime_type: "application/pdf" as const } }];
-        const llmResponse = await invokeLLM({
-          messages: [
-            { role: "system", content: prompt },
-            { role: "user", content: userContent },
-          ],
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "bulk_payslip_data",
-              strict: true,
-              schema: {
-                type: "object",
-                properties: {
-                  employees: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        employeeName: { type: ["string", "null"] },
-                        employeeId: { type: ["string", "null"] },
-                        taxCode: { type: ["string", "null"] },
-                        niNumber: { type: ["string", "null"] },
-                        period: { type: ["string", "null"] },
-                        month: { type: ["number", "null"] },
-                        year: { type: ["number", "null"] },
-                        grossPay: { type: ["number", "null"] },
-                        incomeTax: { type: ["number", "null"] },
-                        nationalInsurance: { type: ["number", "null"] },
-                        pensionContribution: { type: ["number", "null"] },
-                        otherDeductions: { type: ["number", "null"] },
-                        netPay: { type: ["number", "null"] },
-                        paymentMethod: { type: ["string", "null"] },
-                      },
-                      required: ["employeeName", "employeeId", "taxCode", "niNumber", "period", "month", "year", "grossPay", "incomeTax", "nationalInsurance", "pensionContribution", "otherDeductions", "netPay", "paymentMethod"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["employees"],
-                additionalProperties: false,
-              },
-            },
-          },
-        });
-        const content = llmResponse.choices[0]?.message?.content ?? '{"employees":[]}';
-        let parsed: { employees: Array<{
-          employeeName: string | null; employeeId: string | null; taxCode: string | null; niNumber: string | null;
-          period: string | null; month: number | null; year: number | null;
-          grossPay: number | null; incomeTax: number | null; nationalInsurance: number | null;
-          pensionContribution: number | null; otherDeductions: number | null; netPay: number | null;
-          paymentMethod: string | null;
-        }> };
-        try {
-          parsed = typeof content === "string" ? JSON.parse(content) : content;
-          if (!parsed.employees) parsed = { employees: [] };
-        } catch {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI returned malformed data \u2014 please try again or fill fields manually" });
-        }
-        return parsed;
-      }),
+      .mutation(async ({ input }) => { return _analyzePayslipBulk(input); }),
 
     // Keep single-employee alias for backward compat
     analyzePayslip: adminProcedure
       .input(z.object({ fileUrl: z.string(), mimeType: z.string().default("application/pdf") }))
-      .mutation(async ({ input, ctx }) => {
-        // delegate to bulk, return first employee
-        const bulk = await appRouter.createCaller(ctx).payroll.analyzePayslipBulk(input);
+      .mutation(async ({ input }) => {
+        // Inline the bulk logic to avoid circular appRouter.createCaller reference
+        const bulk = await _analyzePayslipBulk(input);
         return bulk.employees[0] ?? null;
       }),
 
@@ -1990,9 +2015,11 @@ Return: { "employees": [ ...array of employee objects... ] }`;
       .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const { reconciliationSessions } = await import('../drizzle/schema');
+        const { and: andFn } = await import('drizzle-orm');
         const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         const existing = await db.select().from(reconciliationSessions)
-          .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)))
+          .where(andFn(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)))
           .limit(1);
         if (existing[0]) return existing[0];
         const [result] = await db.insert(reconciliationSessions).values({
@@ -2008,23 +2035,25 @@ Return: { "employees": [ ...array of employee objects... ] }`;
       .input(z.object({ month: z.number(), year: z.number(), bankBalance: z.string() }))
       .mutation(async ({ input }) => {
         const { reconciliationSessions } = await import('../drizzle/schema');
+        const { and: andFn2 } = await import('drizzle-orm');
         const db = await import('./db').then(m => m.getDb());
         if (!db) return { success: true };
         await db.update(reconciliationSessions)
           .set({ bankBalance: input.bankBalance })
-          .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));
+          .where(andFn2(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));
         return { success: true };
       }),
 
     allPayments: adminProcedure
       .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
       .query(async ({ input }) => {
-        const { payrollRecords, loanRepayments, loanApplications, receipts, volunteerPayments, staffProfiles, reconciliationSessions } = await import('../drizzle/schema');
+        const { payrollRecords, loanRepayments, loanApplications, receipts, volunteerPayments, staffProfiles, reconciliationSessions, users } = await import('../drizzle/schema');
+        const { sql, and: andOp } = await import('drizzle-orm');
         const db = await import('./db').then(m => m.getDb());
         if (!db) return { payroll: [], loans: [], expenses: [], volunteers: [], session: null };
 
         const sessions = await db.select().from(reconciliationSessions)
-          .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)))
+          .where(andOp(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)))
           .limit(1);
         const session = sessions[0] ?? null;
 
@@ -2044,7 +2073,7 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         }).from(payrollRecords)
           .leftJoin(users, eq(payrollRecords.userId, users.id))
           .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
-          .where(and(eq(payrollRecords.month, input.month), eq(payrollRecords.year, input.year)));
+          .where(andOp(eq(payrollRecords.month, input.month), eq(payrollRecords.year, input.year)));
 
         const loans = await db.select({
           id: loanRepayments.id, type: sql`'loan'`,
@@ -2061,13 +2090,13 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           priority: sql`2`,
         }).from(loanRepayments)
           .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
-          .where(and(eq(loanRepayments.month, input.month), eq(loanRepayments.year, input.year)));
+          .where(andOp(eq(loanRepayments.month, input.month), eq(loanRepayments.year, input.year)));
 
         const expenses = await db.select({
           id: receipts.id, type: sql`'expense'`,
           payee: sql`COALESCE(${receipts.vendor}, 'Supplier')`,
           amount: receipts.totalAmount,
-          paymentMethod: receipts.paymentMethod,
+          paymentMethod: sql`'cash'`,
           paymentStatus: receipts.paymentStatus,
           chequeImageUrl: receipts.chequeImageUrl,
           invoiceUrl: receipts.imageUrl,
@@ -2077,10 +2106,9 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           notes: receipts.notes,
           priority: sql`3`,
         }).from(receipts)
-          .where(and(
+          .where(andOp(
             sql`MONTH(${receipts.receiptDate}) = ${input.month}`,
             sql`YEAR(${receipts.receiptDate}) = ${input.year}`,
-            sql`${receipts.paymentMethod} IN ('cheque', 'cash')`,
           ));
 
         const volunteers = await db.select({
@@ -2097,7 +2125,7 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           notes: volunteerPayments.notes,
           priority: sql`4`,
         }).from(volunteerPayments)
-          .where(and(eq(volunteerPayments.month, input.month), eq(volunteerPayments.year, input.year)));
+          .where(andOp(eq(volunteerPayments.month, input.month), eq(volunteerPayments.year, input.year)));
 
         return { payroll, loans, expenses, volunteers, session };
       }),
@@ -2141,16 +2169,16 @@ Return: { "employees": [ ...array of employee objects... ] }`;
 
     finalise: adminProcedure
       .input(z.object({ month: z.number(), year: z.number(), notes: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => {
+       .mutation(async ({ ctx, input }) => {
         const { reconciliationSessions } = await import('../drizzle/schema');
+        const { and: andFn3 } = await import('drizzle-orm');
         const db = await import('./db').then(m => m.getDb());
         if (!db) return { success: true };
         await db.update(reconciliationSessions)
-          .set({ status: 'finalised', finalisedAt: new Date(), finalisedById: ctx.user.id, notes: input.notes ?? null })
-          .where(and(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));
+          .set({ status: 'finalised', finalisedAt: new Date(), finalisedById: ctx.user.id, notes: input.notes ?? null } as any)
+          .where(andFn3(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));
         return { success: true };
       }),
-
     // Full month-end financial statement: income + all expenditure with payment method breakdown
     fullStatement: adminProcedure
       .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
@@ -2158,27 +2186,26 @@ Return: { "employees": [ ...array of employee objects... ] }`;
         const { month, year } = input;
         const db = await import('./db').then(m => m.getDb());
         if (!db) return null;
-        const {
+         const {
           payrollRecords, receipts: receiptsTable, incomeRecords, fridayCollections,
           fundraisingDonations, loanRepayments, loanApplications, volunteerPayments,
           staffProfiles, reconciliationSessions, users: usersTable, invoices: invoicesTable,
         } = await import('../drizzle/schema');
-
+        const { and: andS, gte: gteS, lte: lteS, sql: sqlS } = await import('drizzle-orm');
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 0, 23, 59, 59);
 
         // ── SESSION ──
         const sessions = await db.select().from(reconciliationSessions)
-          .where(and(eq(reconciliationSessions.month, month), eq(reconciliationSessions.year, year))).limit(1);
+          .where(andS(eq(reconciliationSessions.month, month), eq(reconciliationSessions.year, year))).limit(1);
         const session = sessions[0] ?? null;
-
         // ── INCOME ──
         const incomeRows = await db.select().from(incomeRecords)
-          .where(and(gte(incomeRecords.createdAt, startDate), lte(incomeRecords.createdAt, endDate)));
+          .where(andS(gteS(incomeRecords.createdAt, startDate), lteS(incomeRecords.createdAt, endDate)));
         const fridayRows = await db.select().from(fridayCollections)
-          .where(and(gte(fridayCollections.createdAt, startDate), lte(fridayCollections.createdAt, endDate)));
+          .where(andS(gteS(fridayCollections.createdAt, startDate), lteS(fridayCollections.createdAt, endDate)));
         const donationRows = await db.select().from(fundraisingDonations)
-          .where(and(gte(fundraisingDonations.donatedAt, startDate), lte(fundraisingDonations.donatedAt, endDate)));
+          .where(andS(gteS(fundraisingDonations.donatedAt, startDate), lteS(fundraisingDonations.donatedAt, endDate)));;
 
         const incomeBreakdown = [
           ...incomeRows.map(r => ({ id: r.id, label: r.tenantName ?? 'Income', category: r.categoryName ?? 'Rental/Income', amount: parseFloat(String(r.amount ?? 0)), paymentMethod: r.paymentMethod ?? 'bank_transfer', source: 'income' as const })),
@@ -2203,12 +2230,11 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           fullName: staffProfiles.fullName,
         }).from(payrollRecords)
           .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
-          .where(and(eq(payrollRecords.month, month), eq(payrollRecords.year, year)));
-
+          .where(andS(eq(payrollRecords.month, month), eq(payrollRecords.year, year)));
         // All receipts (all users, all payment methods)
         const receiptRows = await db.select({
           id: receiptsTable.id, vendor: receiptsTable.vendor,
-          amount: receiptsTable.totalAmount, paymentMethod: receiptsTable.paymentMethod,
+          amount: receiptsTable.totalAmount, paymentMethod: sqlS`'cash'`,
           paymentStatus: receiptsTable.paymentStatus, paidAt: receiptsTable.paidAt,
           withheldAt: receiptsTable.withheldAt, withheldReason: receiptsTable.withheldReason,
           chequeImageUrl: receiptsTable.chequeImageUrl, invoiceUrl: receiptsTable.imageUrl,
@@ -2217,30 +2243,29 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           submitterName: usersTable.name,
         }).from(receiptsTable)
           .leftJoin(usersTable, eq(receiptsTable.userId, usersTable.id))
-          .where(and(
-            sql`MONTH(${receiptsTable.receiptDate}) = ${month}`,
-            sql`YEAR(${receiptsTable.receiptDate}) = ${year}`,
+          .where(andS(
+            sqlS`MONTH(${receiptsTable.receiptDate}) = ${month}`,
+            sqlS`YEAR(${receiptsTable.receiptDate}) = ${year}`,
           ));
-
         // Qarde Hasan repayments
         const loanRows = await db.select({
           id: loanRepayments.id, borrowerName: loanApplications.borrowerName,
-          amount: loanRepayments.amount, paymentMethod: sql`'cheque'`,
+          amount: loanRepayments.amount, paymentMethod: sqlS`'cheque'`,
           paymentStatus: loanRepayments.status, paidAt: loanRepayments.paidAt,
           evidenceUrl: loanRepayments.evidenceUrl, notes: loanRepayments.notes,
         }).from(loanRepayments)
           .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
-          .where(and(eq(loanRepayments.month, month), eq(loanRepayments.year, year)));
+          .where(andS(eq(loanRepayments.month, month), eq(loanRepayments.year, year)));
 
         // Volunteer payments
         const volunteerRows = await db.select().from(volunteerPayments)
-          .where(and(eq(volunteerPayments.month, month), eq(volunteerPayments.year, year)));
+          .where(andS(eq(volunteerPayments.month, month), eq(volunteerPayments.year, year)));
 
         // Invoices (current month + deferred to this month)
         const invoiceCurrentRows = await db.select().from(invoicesTable)
-          .where(and(eq(invoicesTable.month, month), eq(invoicesTable.year, year)));
+          .where(andS(eq(invoicesTable.month, month), eq(invoicesTable.year, year)));
         const invoiceDeferredRows = await db.select().from(invoicesTable)
-          .where(and(eq(invoicesTable.deferredToMonth, month), eq(invoicesTable.deferredToYear, year)));
+          .where(andS(eq(invoicesTable.deferredToMonth, month), eq(invoicesTable.deferredToYear, year)));
         const invoiceIds = new Set(invoiceCurrentRows.map(r => r.id));
         const invoiceRows = [...invoiceCurrentRows, ...invoiceDeferredRows.filter(r => !invoiceIds.has(r.id))];
 
@@ -2258,13 +2283,13 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           fullName: staffProfiles.fullName,
         }).from(payrollRecords)
           .leftJoin(staffProfiles, eq(payrollRecords.userId, staffProfiles.userId))
-          .where(and(
+          .where(andS(
             eq(payrollRecords.month, prevMonth), eq(payrollRecords.year, prevYear),
-            sql`${payrollRecords.paymentStatus} IN ('pending', 'withheld')`,
+            sqlS`${payrollRecords.paymentStatus} IN ('pending', 'withheld')`,
           ));
         const carriedReceipts = await db.select({
           id: receiptsTable.id, vendor: receiptsTable.vendor,
-          amount: receiptsTable.totalAmount, paymentMethod: receiptsTable.paymentMethod,
+          amount: receiptsTable.totalAmount, paymentMethod: sqlS`'cash'`,
           paymentStatus: receiptsTable.paymentStatus, paidAt: receiptsTable.paidAt,
           withheldAt: receiptsTable.withheldAt, withheldReason: receiptsTable.withheldReason,
           chequeImageUrl: receiptsTable.chequeImageUrl, invoiceUrl: receiptsTable.imageUrl,
@@ -2273,31 +2298,31 @@ Return: { "employees": [ ...array of employee objects... ] }`;
           submitterName: usersTable.name,
         }).from(receiptsTable)
           .leftJoin(usersTable, eq(receiptsTable.userId, usersTable.id))
-          .where(and(
-            sql`MONTH(${receiptsTable.receiptDate}) = ${prevMonth}`,
-            sql`YEAR(${receiptsTable.receiptDate}) = ${prevYear}`,
-            sql`${receiptsTable.paymentStatus} IN ('pending', 'withheld')`,
+          .where(andS(
+            sqlS`MONTH(${receiptsTable.receiptDate}) = ${prevMonth}`,
+            sqlS`YEAR(${receiptsTable.receiptDate}) = ${prevYear}`,
+            sqlS`${receiptsTable.paymentStatus} IN ('pending', 'withheld')`,
           ));
         const carriedLoans = await db.select({
           id: loanRepayments.id, borrowerName: loanApplications.borrowerName,
-          amount: loanRepayments.amount, paymentMethod: sql`'cheque'`,
+          amount: loanRepayments.amount, paymentMethod: sqlS`'cheque'`,
           paymentStatus: loanRepayments.status, paidAt: loanRepayments.paidAt,
           evidenceUrl: loanRepayments.evidenceUrl, notes: loanRepayments.notes,
         }).from(loanRepayments)
           .innerJoin(loanApplications, eq(loanRepayments.loanId, loanApplications.id))
-          .where(and(
+          .where(andS(
             eq(loanRepayments.month, prevMonth), eq(loanRepayments.year, prevYear),
-            sql`${loanRepayments.status} IN ('pending', 'withheld', 'approved')`,
+            sqlS`${loanRepayments.status} IN ('pending', 'withheld', 'approved')`,
           ));
         const carriedVolunteers = await db.select().from(volunteerPayments)
-          .where(and(
+          .where(andS(
             eq(volunteerPayments.month, prevMonth), eq(volunteerPayments.year, prevYear),
-            sql`${volunteerPayments.paymentStatus} IN ('pending', 'withheld')`,
+            sqlS`${volunteerPayments.paymentStatus} IN ('pending', 'withheld')`,
           ));
         const carriedInvoices = await db.select().from(invoicesTable)
-          .where(and(
+          .where(andS(
             eq(invoicesTable.month, prevMonth), eq(invoicesTable.year, prevYear),
-            sql`${invoicesTable.paymentStatus} IN ('pending', 'withheld')`,
+            sqlS`${invoicesTable.paymentStatus} IN ('pending', 'withheld')`,
           ));
 
         // Totals
@@ -2605,7 +2630,7 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
             response_format: { type: 'json_schema', json_schema: { name: 'csv_extraction', strict: false, schema: { type: 'object', properties: { records: { type: 'array', items: { type: 'object' } } }, required: ['records'], additionalProperties: true } } },
           });
           const content = csvResult?.choices?.[0]?.message?.content;
-          extractedData = typeof content === 'string' ? JSON.parse(content) : (content as Record<string, unknown>);
+          extractedData = typeof content === 'string' ? JSON.parse(content) : (content as unknown as Record<string, unknown>);
           confidence = 0.9;
         } else {
           // Image or PDF
@@ -2622,7 +2647,7 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
           const content = llmResult?.choices?.[0]?.message?.content;
           if (!content) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI extraction failed — no response from model' });
           try {
-            extractedData = typeof content === 'string' ? JSON.parse(content) : (content as Record<string, unknown>);
+            extractedData = typeof content === 'string' ? JSON.parse(content) : (content as unknown as Record<string, unknown>);
           } catch {
             // Try to extract JSON from the response
             const match = (content as string).match(/\{[\s\S]*\}/);

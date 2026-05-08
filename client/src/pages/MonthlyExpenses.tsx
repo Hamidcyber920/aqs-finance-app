@@ -117,23 +117,23 @@ export default function MonthlyExpensesPage() {
   const [rejectItem, setRejectItem] = useState<any>(null);
   const [rejectComment, setRejectComment] = useState("");
 
-  const { data, refetch } = trpc.monthlyExpenses.list.useQuery({ month, year });
+  const { data, refetch } = trpc.expenses.allItems.useQuery({ month, year });
 
-  const authoriseMutation = trpc.monthlyExpenses.authorise?.useMutation?.({
+  const authoriseMutation = trpc.expenses.authorise.useMutation({
     onSuccess: () => { toast.success("Payment authorised"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const rejectMutation = trpc.monthlyExpenses.reject?.useMutation?.({
+  const rejectMutation = trpc.expenses.reject.useMutation({
     onSuccess: () => { toast.success("Payment deferred"); setRejectOpen(false); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const markPaidMutation = trpc.monthlyExpenses.markPaid?.useMutation?.({
+  const markPaidMutation = trpc.expenses.nowPaid.useMutation({
     onSuccess: () => { toast.success("Marked as paid"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const payroll = data?.payroll ?? [];
-  const invoices = data?.invoices ?? [];
+  const invoices = data?.receipts ?? [];
   const volunteers = data?.volunteers ?? [];
   const loans = data?.loans ?? [];
 
@@ -216,7 +216,7 @@ export default function MonthlyExpensesPage() {
                 <textarea value={rejectComment} onChange={e=>setRejectComment(e.target.value)} rows={3} placeholder="e.g. Insufficient funds this month"
                   style={{ marginTop:6,width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,padding:"10px 14px",fontSize:14,resize:"vertical",boxSizing:"border-box" }}/>
               </div>
-              <Button onClick={() => rejectMutation?.mutate?.({ id:rejectItem?.id, type:rejectItem?._type??"invoice", comment:rejectComment })}
+              <Button onClick={() => rejectMutation?.mutate?.({ id:rejectItem?.id, type:rejectItem?._type??"invoice", comment:rejectComment, month, year })}
                 disabled={!rejectComment||rejectMutation?.isPending}
                 style={{ background:"rgba(255,80,80,0.15)",border:"1px solid rgba(255,80,80,0.3)",color:"#ff5050",fontWeight:700,height:46,borderRadius:12,fontSize:15 }}>
                 {rejectMutation?.isPending?"Deferring…":"Defer to Next Month"}
