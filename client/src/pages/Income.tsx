@@ -567,7 +567,7 @@ export default function IncomePage() {
                   <tr><td colSpan={7} style={{ textAlign:"center",padding:40,color:T.muted,fontSize:14 }}>No income records for this period</td></tr>
                 ) : filtered.map((r:any,i:number)=>{
                   const isExpanded = expandedRow === (r.id ?? i);
-                  const fmtDate = (d:string|null|undefined) => d ? new Date(d+(d.includes("T")?"":"T12:00:00")).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) : "—";
+                  const fmtDate = (d:string|Date|null|undefined) => { if (!d) return "—"; if (d instanceof Date) return d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}); const s = String(d); return new Date(s+(s.includes("T")?"":"T12:00:00")).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}); };
                   return (
                   <>
                     <tr key={r.id??i} onClick={()=>setExpandedRow(isExpanded ? null : (r.id??i))} style={{ cursor:"pointer",transition:"background 0.15s" }}
