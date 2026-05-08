@@ -143,6 +143,11 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onSuccess: () => { toast.success("Trustee approval recorded"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
+  const sendEmailMutation = trpc.loans.sendEmail?.useMutation?.({
+    onSuccess: (res: any) => toast.success(`Email sent to ${res?.sentTo ?? loan?.borrowerEmail}`),
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const confirmRepMutation = trpc.loans.confirmRepaymentReceived?.useMutation?.({
     onSuccess: () => { toast.success("Repayment confirmed"); refetchRep(); },
     onError: (e: any) => toast.error(e.message),
@@ -249,17 +254,31 @@ export default function LoanDetailPage({ id }: { id: number }) {
           {/* Actions */}
           {fullyApproved && (
             <div style={{ display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",animation:"fadeUp 0.5s ease 280ms both" }}>
-              <Button onClick={() => window.open(`/api/loans/${id}/pdf`, "_blank")}
-                style={{ background:"rgba(99,91,255,0.15)",border:"1px solid rgba(99,91,255,0.3)",color:T.purple,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
-                <FileText size={14}/> View PDF
-              </Button>
-              <Button onClick={() => window.open(`https://wa.me/${loan.borrowerPhone?.replace(/\D/g,"")}`, "_blank")}
-                style={{ background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
-                <MessageCircle size={14}/> WhatsApp
-              </Button>
-              <Button style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
-                <Mail size={14}/> Email Borrower
-              </Button>
+              {(loan as any).agreementPdfUrl ? (
+                <Button onClick={() => window.open((loan as any).agreementPdfUrl, "_blank")}
+                  style={{ background:"rgba(99,91,255,0.15)",border:"1px solid rgba(99,91,255,0.3)",color:T.purple,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                  <FileText size={14}/> View PDF
+                </Button>
+              ) : (
+                <Button disabled
+                  style={{ background:"rgba(99,91,255,0.06)",border:"1px solid rgba(99,91,255,0.15)",color:"rgba(99,91,255,0.4)",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7,cursor:"not-allowed" }}>
+                  <FileText size={14}/> PDF Generating…
+                </Button>
+              )}
+              {loan.borrowerPhone ? (
+                <Button onClick={() => window.open(`https://wa.me/${loan.borrowerPhone!.replace(/\D/g,"")}`, "_blank")}
+                  style={{ background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                  <MessageCircle size={14}/> WhatsApp
+                </Button>
+              ) : null}
+              {loan.borrowerEmail ? (
+                <Button
+                  onClick={() => sendEmailMutation?.mutate?.({ id, type: "approved" })}
+                  disabled={sendEmailMutation?.isPending}
+                  style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.white,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                  <Mail size={14}/> {sendEmailMutation?.isPending ? "Sending…" : "Email Borrower"}
+                </Button>
+              ) : null}
             </div>
           )}
 
