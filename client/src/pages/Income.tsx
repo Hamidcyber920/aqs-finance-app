@@ -306,6 +306,20 @@ export default function IncomePage() {
   const [cashWithheldReason, setCashWithheldReason] = useState<string>("");
   // Total banked date
   const [totalBankedDate, setTotalBankedDate] = useState<string>("");
+  // Sign-off tick boxes with timestamps
+  const [signFarid, setSignFarid] = useState<string>("");       // ISO timestamp when ticked
+  const [signMumin, setSignMumin] = useState<string>("");       // ISO timestamp when ticked
+  const [signAbdul, setSignAbdul] = useState<string>("");       // ISO timestamp when ticked
+  const [signGhalib, setSignGhalib] = useState<string>("");     // ISO timestamp when ticked
+  const [signOtherName, setSignOtherName] = useState<string>("");  // free-text trustee name
+  const [signOther, setSignOther] = useState<string>("");       // ISO timestamp when ticked
+
+  function fmtStamp(iso: string) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short", year:"numeric" })
+      + " " + d.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" });
+  }
 
   const { data, refetch } = trpc.income.list.useQuery({ month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
@@ -322,6 +336,7 @@ export default function IncomePage() {
       setEvidencePreview("");
       setCashWithheldReason("");
       setTotalBankedDate("");
+      setSignFarid(""); setSignMumin(""); setSignAbdul(""); setSignGhalib(""); setSignOther(""); setSignOtherName("");
       refetch();
       reset();
     },
@@ -376,6 +391,7 @@ export default function IncomePage() {
       setEvidencePreview("");
       setCashWithheldReason("");
       setTotalBankedDate("");
+      setSignFarid(""); setSignMumin(""); setSignAbdul(""); setSignGhalib(""); setSignOther(""); setSignOtherName("");
       reset();
     }
   }
@@ -501,10 +517,20 @@ export default function IncomePage() {
                   payload.receiptUrl = evidenceUrl || undefined;
                   payload.cashWithheldReason = cashWithheldReason || undefined;
                   payload.totalBankedDate = totalBankedDate || undefined;
-                  // If trustee is "other", use the free text field
-                  if (d.signedByTrustee === "__other__") {
-                    payload.signedByTrustee = d.signedByTrusteeOther || "";
-                  }
+                  // Build manager sign-off string from tick boxes
+                  const mgrs = [
+                    signFarid ? `Farid Ahmed (${fmtStamp(signFarid)})` : "",
+                    signMumin ? `Mumin Khan (${fmtStamp(signMumin)})` : "",
+                  ].filter(Boolean).join(", ");
+                  payload.signedByManager = mgrs || undefined;
+                  // Build trustee sign-off string from tick boxes
+                  const trustees = [
+                    signAbdul ? `Dr Abdul Hamid (${fmtStamp(signAbdul)})` : "",
+                    signGhalib ? `Ghalib Khan (${fmtStamp(signGhalib)})` : "",
+                    signOther && signOtherName ? `${signOtherName} (${fmtStamp(signOther)})` : "",
+                  ].filter(Boolean).join(", ");
+                  payload.signedByTrustee = trustees || undefined;
+                  delete payload.signedByTrusteeOther;
                 }
                 createMutation.mutate(payload);
               })} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
@@ -711,32 +737,65 @@ export default function IncomePage() {
                     </div>
 
                     {/* Sign-off section */}
-                    <div style={{ background:"rgba(99,91,255,0.06)",border:`1px solid rgba(99,91,255,0.2)`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:12 }}>
-                      <p style={{ margin:"0 0 4px",fontSize:11,color:"#a5b4fc",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em" }}>Signed By</p>
+                    <div style={{ background:"rgba(99,91,255,0.06)",border:`1px solid rgba(99,91,255,0.2)`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:14 }}>
+                      <p style={{ margin:"0 0 2px",fontSize:11,color:"#a5b4fc",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em" }}>Signed By</p>
+
+                      {/* Manager tick boxes */}
                       <div>
-                        <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Manager</Label>
-                        <select {...register("signedByManager")}
-                          style={{ marginTop:4,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:8,color: watch("signedByManager") ? T.white : T.muted,height:40,padding:"0 10px",fontSize:13 }}>
-                          <option value="">Select manager…</option>
-                          <option value="Farid Ahmed">Farid Ahmed</option>
-                          <option value="Mumin Khan">Mumin Khan</option>
-                        </select>
+                        <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",display:"block",marginBottom:8 }}>Manager</Label>
+                        {([
+                          { label:"Farid Ahmed", state:signFarid, setter:setSignFarid },
+                          { label:"Mumin Khan",  state:signMumin, setter:setSignMumin },
+                        ] as { label:string; state:string; setter:(v:string)=>void }[]).map(({ label, state, setter }) => (
+                          <div key={label} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background: state ? "rgba(0,255,194,0.07)" : "rgba(255,255,255,0.03)",border:`1px solid ${state ? "rgba(0,255,194,0.3)" : T.border}`,marginBottom:6,cursor:"pointer" }}
+                            onClick={() => setter(state ? "" : new Date().toISOString())}>
+                            {/* Custom checkbox */}
+                            <div style={{ width:20,height:20,borderRadius:5,border:`2px solid ${state ? T.mint : "rgba(255,255,255,0.25)"}`,background: state ? T.mint : "transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s" }}>
+                              {state && <svg width="11" height="8" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#081526" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <span style={{ fontSize:13,color: state ? T.white : T.muted,fontWeight: state ? 600 : 400 }}>{label}</span>
+                              {state && <span style={{ display:"block",fontSize:10,color:T.mint,marginTop:1 }}>{fmtStamp(state)}</span>}
+                            </div>
+                          </div>
+                        ))}
                       </div>
+
+                      {/* Trustee tick boxes */}
                       <div>
-                        <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Trustee</Label>
-                        <select {...register("signedByTrustee")}
-                          style={{ marginTop:4,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:8,color: watch("signedByTrustee") ? T.white : T.muted,height:40,padding:"0 10px",fontSize:13 }}>
-                          <option value="">Select trustee…</option>
-                          <option value="Dr Abdul Hamid">Dr Abdul Hamid</option>
-                          <option value="Ghalib Khan">Ghalib Khan</option>
-                          <option value="__other__">Other (free text)…</option>
-                        </select>
-                        {watch("signedByTrustee") === "__other__" && (
-                          <Input {...register("signedByTrusteeOther")} placeholder="Enter trustee name…"
-                            style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,height:40,fontSize:13 }}/>
-                        )}
+                        <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",display:"block",marginBottom:8 }}>Trustee</Label>
+                        {([
+                          { label:"Dr Abdul Hamid", state:signAbdul, setter:setSignAbdul },
+                          { label:"Ghalib Khan",    state:signGhalib, setter:setSignGhalib },
+                        ] as { label:string; state:string; setter:(v:string)=>void }[]).map(({ label, state, setter }) => (
+                          <div key={label} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:8,background: state ? "rgba(99,91,255,0.1)" : "rgba(255,255,255,0.03)",border:`1px solid ${state ? "rgba(99,91,255,0.4)" : T.border}`,marginBottom:6,cursor:"pointer" }}
+                            onClick={() => setter(state ? "" : new Date().toISOString())}>
+                            <div style={{ width:20,height:20,borderRadius:5,border:`2px solid ${state ? "#a5b4fc" : "rgba(255,255,255,0.25)"}`,background: state ? "#635BFF" : "transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s" }}>
+                              {state && <svg width="11" height="8" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                            </div>
+                            <div style={{ flex:1 }}>
+                              <span style={{ fontSize:13,color: state ? T.white : T.muted,fontWeight: state ? 600 : 400 }}>{label}</span>
+                              {state && <span style={{ display:"block",fontSize:10,color:"#a5b4fc",marginTop:1 }}>{fmtStamp(state)}</span>}
+                            </div>
+                          </div>
+                        ))}
+                        {/* Other trustee (free text) */}
+                        <div style={{ display:"flex",alignItems:"flex-start",gap:10,padding:"8px 10px",borderRadius:8,background: signOther ? "rgba(99,91,255,0.1)" : "rgba(255,255,255,0.03)",border:`1px solid ${signOther ? "rgba(99,91,255,0.4)" : T.border}`,cursor:"pointer" }}
+                          onClick={() => { if (!signOther) setSignOther(new Date().toISOString()); else { setSignOther(""); setSignOtherName(""); } }}>
+                          <div style={{ width:20,height:20,borderRadius:5,border:`2px solid ${signOther ? "#a5b4fc" : "rgba(255,255,255,0.25)"}`,background: signOther ? "#635BFF" : "transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:2,transition:"all 0.15s" }}>
+                            {signOther && <svg width="11" height="8" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                          <div style={{ flex:1 }} onClick={e => e.stopPropagation()}>
+                            <input
+                              placeholder="Other trustee name…"
+                              value={signOtherName}
+                              onChange={e => { setSignOtherName(e.target.value); if (!signOther) setSignOther(new Date().toISOString()); }}
+                              style={{ background:"transparent",border:"none",outline:"none",color: signOther ? T.white : T.muted,fontSize:13,width:"100%",fontWeight: signOther ? 600 : 400 }}
+                            />
+                            {signOther && <span style={{ display:"block",fontSize:10,color:"#a5b4fc",marginTop:1 }}>{fmtStamp(signOther)}</span>}
+                          </div>
+                        </div>
                       </div>
-                      <p style={{ margin:0,fontSize:10,color:T.muted,fontStyle:"italic" }}>Date &amp; time stamp will be recorded automatically on submission.</p>
                     </div>
 
                     {/* Notes */}
