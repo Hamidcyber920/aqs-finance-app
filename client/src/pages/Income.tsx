@@ -381,7 +381,7 @@ export default function IncomePage() {
   const { register, handleSubmit, reset, watch, setValue } = useForm<any>();
   const watchCat = watch("category");
 
-  const records = data?.records ?? [];
+  const records = Array.isArray(data) ? data : (data?.records ?? []);
   const totalIncome = records.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
   const paidCount = records.filter((r: any) => r.paymentStatus === "paid").length;
 
