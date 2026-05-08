@@ -290,6 +290,7 @@ export default function IncomePage() {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
+  const [showAll, setShowAll] = useState(false);
 
   // Subcategory drill-down state
   const [subPanel, setSubPanel] = useState<string | null>(null); // parent category name when drill-down is open
@@ -347,7 +348,7 @@ export default function IncomePage() {
       + " " + d.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" });
   }
 
-  const { data, refetch } = trpc.income.list.useQuery({ month, year });
+  const { data, refetch } = trpc.income.list.useQuery(showAll ? {} : { month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
   const createMutation = trpc.income.create.useMutation({
     onSuccess: async (result: any) => {
@@ -357,7 +358,7 @@ export default function IncomePage() {
           await linkDonorsMutation.mutateAsync({ incomeRecordId: result.id, donors });
         } catch { /* non-fatal */ }
       }
-      toast.success("Income record added");
+      toast.success(`Income record added — £${Number(result?.amount ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2 })}`);
       setOpen(false);
       setSubPanel(null);
       setSelectedSub("");
@@ -459,6 +460,10 @@ export default function IncomePage() {
               <input type="number" value={year} onChange={e=>setYear(Number(e.target.value))}
                 style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",width:52 }} />
             </div>
+            <button onClick={()=>setShowAll(v=>!v)}
+              style={{ padding:"8px 14px",borderRadius:12,fontSize:12,fontWeight:600,border:`1px solid ${showAll ? T.mint : T.border}`,background:showAll ? `rgba(52,211,153,0.15)` : `rgba(255,255,255,0.06)`,color:showAll ? T.mint : T.muted,cursor:"pointer",transition:"all 0.2s" }}>
+              {showAll ? "Showing All" : "Show All"}
+            </button>
             <Button onClick={()=>setOpen(true)}
               style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
               <Plus size={16}/> Add Income
@@ -518,7 +523,7 @@ export default function IncomePage() {
                     <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.period??"—"}</td>
                     <td style={{ padding:"12px 12px 12px 0",fontSize:14,fontWeight:700,color:T.mint,borderBottom:`1px solid ${T.border}` }}>£{Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td>
                     <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}><Badge status={r.paymentStatus??"paid"}/></td>
-                    <td style={{ padding:"12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.createdAt?new Date(r.createdAt).toLocaleDateString("en-GB"):"—"}</td>
+                    <td style={{ padding:"12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.incomeDate ? new Date(r.incomeDate+"T12:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) : r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
