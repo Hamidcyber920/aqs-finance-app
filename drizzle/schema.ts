@@ -349,6 +349,7 @@ export const loanRepayments = mysqlTable("loan_repayments", {
   confirmationPdfUrl: text("confirmationPdfUrl"),
   whatsappSentAt: timestamp("whatsappSentAt"),
   dueDate: timestamp("dueDate"),
+  lenderConfirmedAt: timestamp("lenderConfirmedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

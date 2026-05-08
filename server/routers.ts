@@ -1162,6 +1162,84 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
         }
       }),
+
+    confirmLenderReceipt: adminProcedure
+      .input(z.object({ repaymentId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(loanRepayments)
+          .set({ lenderConfirmedAt: new Date() } as any)
+          .where(eq(loanRepayments.id, input.repaymentId));
+        return { success: true };
+      }),
+
+    generateLoanStatement: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const loan = await getLoanById(input.id);
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        const repayments = await db.select().from(loanRepayments).where(eq((loanRepayments as any).loanId, input.id)).orderBy((loanRepayments as any).createdAt);
+        const termMonths = loan.termUnit === 'years' ? (loan.termValue ?? 6) * 12 : (loan.termValue ?? loan.termMonths ?? 6);
+        const monthly = (Number(loan.amount) / termMonths).toFixed(2);
+        const totalPaid = repayments.filter((r: any) => r.trusteeApprovedAt).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+        const outstanding = Number(loan.amount) - totalPaid;
+        const rows = repayments.map((r: any, i: number) => {
+          const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
+          const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
+          const paid = r.paidAt ? new Date(r.paidAt).toLocaleString('en-GB') : '—';
+          const lenderConf = r.lenderConfirmedAt ? new Date(r.lenderConfirmedAt).toLocaleDateString('en-GB') : '—';
+          return `<tr style="border-bottom:1px solid #e5e7eb">
+            <td style="padding:8px 12px;font-size:13px">${i + 1}</td>
+            <td style="padding:8px 12px;font-size:13px">&pound;${Number(r.amount ?? 0).toFixed(2)}</td>
+            <td style="padding:8px 12px;font-size:13px">${due}</td>
+            <td style="padding:8px 12px;font-size:13px">${paid}</td>
+            <td style="padding:8px 12px;font-size:13px">${r.paymentMethod?.replace(/_/g,' ') ?? '—'}</td>
+            <td style="padding:8px 12px;font-size:13px;color:${r.trusteeApprovedAt?'#059669':r.adminApprovedAt?'#d97706':'#6b7280'}">${status}</td>
+            <td style="padding:8px 12px;font-size:13px">${lenderConf}</td>
+          </tr>`;
+        }).join('');
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Loan Statement</title></head><body style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:32px;color:#111">
+          <div style="background:#1a4731;padding:24px;border-radius:8px;margin-bottom:24px">
+            <h1 style="color:#fff;margin:0;font-size:22px">Abdullah Quilliam Society</h1>
+            <p style="color:#c9a84c;margin:4px 0 0;font-size:14px">Qarde Hasan Loan Statement</p>
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280;width:160px">Lender / Donor</td><td style="padding:6px 0;font-size:14px;font-weight:600">${loan.borrowerName ?? '—'}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Email</td><td style="padding:6px 0;font-size:14px">${loan.borrowerEmail ?? '—'}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Loan Amount</td><td style="padding:6px 0;font-size:14px;font-weight:700;color:#059669">&pound;${Number(loan.amount).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Term</td><td style="padding:6px 0;font-size:14px">${loan.termValue} ${loan.termUnit ?? 'months'}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Monthly</td><td style="padding:6px 0;font-size:14px">&pound;${monthly}/mo</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Purpose</td><td style="padding:6px 0;font-size:14px">${loan.purpose ?? '—'}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Total Paid</td><td style="padding:6px 0;font-size:14px;font-weight:700">&pound;${totalPaid.toFixed(2)}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Outstanding</td><td style="padding:6px 0;font-size:14px;font-weight:700;color:${outstanding > 0 ? '#dc2626' : '#059669'}">&pound;${outstanding.toFixed(2)}</td></tr>
+            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Generated</td><td style="padding:6px 0;font-size:14px">${new Date().toLocaleString('en-GB')}</td></tr>
+          </table>
+          <h2 style="font-size:15px;font-weight:700;margin-bottom:12px">Repayment Schedule</h2>
+          <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px">
+            <thead><tr style="background:#f9fafb">
+              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">#</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Amount</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Due Date</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Paid At</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Method</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Status</th>
+              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Lender Confirmed</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center">
+            This is an official record from the AQ Society Finance System. Qarde Hasan — Interest-Free Loan.
+          </div>
+        </body></html>`;
+        // Upload HTML as a file to S3
+        const { storagePut } = await import('./storage');
+        const key = `loan-statements/loan-${input.id}-statement-${Date.now()}.html`;
+        const { url } = await storagePut(key, Buffer.from(html, 'utf8'), 'text/html');
+        return { url };
+      }),
   }),
 
   // ─── MONTHLY EXPENSES PANE ──────────────────────────────────────────────────

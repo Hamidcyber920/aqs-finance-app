@@ -78,7 +78,7 @@ function ApprovalBox({ label, approved, approvedBy, approvedAt, onApprove, canAp
   );
 }
 
-function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin, onSendReminder, onDownloadReceipt, borrowerPhone }: any) {
+function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin, onSendReminder, onDownloadReceipt, onConfirmLender, borrowerPhone }: any) {
   const [adminName, setAdminName] = useState("");
   const [trusteeName, setTrusteeName] = useState("");
   const isPending = !repayment.trusteeApprovedAt;
@@ -216,6 +216,21 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
               <Download size={12}/> Receipt PDF
             </button>
           )}
+          {repayment.trusteeApprovedAt && (
+            <button
+              onClick={() => onConfirmLender && onConfirmLender(repayment)}
+              disabled={!!repayment.lenderConfirmedAt}
+              style={{ padding:"5px 12px",borderRadius:8,
+                background:repayment.lenderConfirmedAt?"rgba(0,255,194,0.04)":"rgba(255,255,255,0.06)",
+                border:`1px solid ${repayment.lenderConfirmedAt?"rgba(0,255,194,0.2)":T.border}`,
+                color:repayment.lenderConfirmedAt?T.mint:T.muted,
+                fontSize:11,fontWeight:600,cursor:repayment.lenderConfirmedAt?"default":"pointer",
+                display:"flex",alignItems:"center",gap:5 }}>
+              {repayment.lenderConfirmedAt
+                ? <><span style={{color:T.mint}}>✓</span> Lender Confirmed {new Date(repayment.lenderConfirmedAt).toLocaleDateString("en-GB")}</>
+                : <>☐ Mark Lender Confirmed</>}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -271,6 +286,16 @@ export default function LoanDetailPage({ id }: { id: number }) {
 
   const sendReminderMutation = trpc.loans.sendRepaymentReminder?.useMutation?.({
     onSuccess: (res: any) => toast.success(`Reminder sent to ${res?.sentTo}`),
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const confirmLenderMutation = trpc.loans.confirmLenderReceipt?.useMutation?.({
+    onSuccess: () => { toast.success("Lender receipt confirmed"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const generateStatementMutation = trpc.loans.generateLoanStatement?.useMutation?.({
+    onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank"); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -429,6 +454,14 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   <Mail size={14}/> {sendEmailMutation?.isPending ? "Sending…" : "Email Lender"}
                 </Button>
               ) : null}
+              {fullyApproved && (
+                <Button
+                  onClick={() => generateStatementMutation?.mutate?.({ id })}
+                  disabled={generateStatementMutation?.isPending}
+                  style={{ background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                  <FileText size={14}/> {generateStatementMutation?.isPending ? "Generating…" : "Loan Statement"}
+                </Button>
+              )}
             </div>
           )}
 
@@ -502,6 +535,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   if (r.confirmationPdfUrl) { window.open(r.confirmationPdfUrl, "_blank"); }
                   else { genRepPdfMutation?.mutate?.({ repaymentId: r.id }); }
                 }}
+                onConfirmLender={(r: any) => confirmLenderMutation?.mutate?.({ repaymentId: r.id })}
               />
             ))}
 

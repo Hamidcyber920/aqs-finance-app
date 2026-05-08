@@ -1,0 +1,1 @@
+ALTER TABLE `loan_repayments` ADD `lenderConfirmedAt` timestamp;

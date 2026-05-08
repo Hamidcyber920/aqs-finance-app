@@ -561,3 +561,9 @@
 
 ## Terminology Update (May 2026 — round 6)
 - [x] Rename all "Borrower" UI labels to "Lender / Donor" in LoanDetail, Loans pages and email/WhatsApp messages
+
+## Lender Confirmation & Statement PDF (May 2026 — round 7)
+- [x] Add lenderConfirmed boolean column to loanRepayments table
+- [x] Add confirmLenderReceipt tRPC procedure
+- [x] Add Lender Confirmed checkbox to each RepaymentRow
+- [x] Add Loan Statement PDF button to LoanDetail page (generates full statement with all instalments)
