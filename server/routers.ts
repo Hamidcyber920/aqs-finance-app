@@ -1148,14 +1148,15 @@ export const appRouter = router({
         if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
         if (!loan.borrowerEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "Borrower has no email address on file" });
         const firstName = (loan.borrowerName ?? '').split(' ')[0];
-        const dueDate = (rep as any).dueDate ? new Date((rep as any).dueDate).toLocaleDateString('en-GB') : 'soon';
+        const instalmentNum = (rep as any).instalmentNumber ?? '';
         const amount = parseFloat(String((rep as any).amount ?? 0)).toFixed(2);
         const baseStyle = `font-family:Arial,sans-serif;max-width:600px;margin:0 auto`;
         const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan</p></div>`;
         const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>`;
-        const htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum, ${firstName},</p><p>This is a friendly reminder that your Qarde Hasan loan repayment of <strong>&pound;${amount}</strong> is due on <strong>${dueDate}</strong>.</p><p>Please arrange payment at your earliest convenience. If you have any difficulties, please contact us.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+        const instalmentLabel = instalmentNum ? ` (Instalment ${instalmentNum})` : '';
+        const htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear ${firstName},</p><p>Assalamu Alaikum,</p><p>This is to confirm that your Qarde Hasan loan repayment of <strong>&pound;${amount}</strong>${instalmentLabel} has been paid.</p><p>Please confirm receipt of the payment at your earliest convenience. If you have any questions, please do not hesitate to contact us.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
         try {
-          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Repayment Reminder — Due ${dueDate}`, htmlBody);
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Repayment Confirmation — £${amount}${instalmentLabel}`, htmlBody);
           return { success: true, sentTo: loan.borrowerEmail };
         } catch (e: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });

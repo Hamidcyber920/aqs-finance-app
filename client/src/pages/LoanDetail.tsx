@@ -113,7 +113,9 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
     if (phone.startsWith("0")) phone = "44" + phone.slice(1);
     else if (!phone.startsWith("44") && phone.length <= 10) phone = "44" + phone;
     const amount = Number(repayment.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2});
-    const msg = encodeURIComponent(`Assalamu Alaikum, this is a reminder that your Qarde Hasan loan repayment of £${amount} (Instalment ${repayment.instalment}) is due. Please arrange payment at your earliest convenience. JazakAllahu Khayran — AQ Society Finance Team`);
+    const borrowerName = (repayment.borrowerName ?? "").trim();
+    const greeting = borrowerName ? `Assalamu Alaikum ${borrowerName.split(" ")[0]},` : "Assalamu Alaikum,";
+    const msg = encodeURIComponent(`${greeting} this is a reminder that your Qarde Hasan loan repayment of £${amount} (Instalment ${repayment.instalment}) has been paid. Please confirm receipt of the payment at your earliest convenience. JazakAllahu Khayran — AQ Society Finance Team`);
     window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
   };
 
@@ -488,7 +490,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
             ) : repayments.map((rep: any, i: number) => (
               <RepaymentRow
                 key={rep.id??i}
-                repayment={{ ...rep, instalment: i+1 }}
+                repayment={{ ...rep, instalment: i+1, borrowerName: (loan as any).borrowerName }}
                 isAdmin={isAdmin}
                 isTrustee={isTrustee}
                 borrowerPhone={(loan as any).borrowerPhone}

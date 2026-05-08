@@ -555,3 +555,6 @@
 - [x] Set dueDate on repayment creation (trusteeApprovedAt + instalment × 1 month)
 - [x] Backfill dueDate for existing repayments that have no dueDate
 - [x] Highlight overdue repayment rows in amber/red when dueDate < now and status is Pending
+
+## Repayment Message Update (May 2026 — round 5)
+- [x] Update WhatsApp and email messages to confirm payment made and ask lender to confirm receipt
