@@ -11,11 +11,40 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
-const INCOME_CATEGORIES = [
-  "Student Accommodation","Stalls","Office Rental","Coffee Shop",
-  "Hall Hire","Friday Collection","Accountants Office Hire",
-  "Community Hire","Restaurant/Bistro","Donations","Other"
+const INCOME_CATEGORY_GROUPS = [
+  {
+    group: "Friday Income",
+    items: [
+      "Friday Collections",
+      "Mussallah Sales £20",
+      "£100 Rimmers Mussallah",
+      "Direct Donations",
+      "Restaurant/Bistro 87",
+      "Biryani Sale",
+      "Other Campaign Sales",
+      "Stalls",
+      "Coffee Shop",
+    ],
+  },
+  {
+    group: "Kiosk Donations",
+    items: ["Kiosk Donations"],
+  },
+  {
+    group: "Rental Income",
+    items: [
+      "Student Accommodation",
+      "Dar Al Zahra",
+      "Office Rental",
+      "Hall Hire",
+      "Weddings",
+      "Community Hire",
+      "Accountants Office Hire",
+      "Other",
+    ],
+  },
 ];
+const INCOME_CATEGORIES = INCOME_CATEGORY_GROUPS.flatMap(g => g.items);
 
 const PERIODS = ["Daily","Weekly","Monthly","One-off"];
 
@@ -159,7 +188,12 @@ export default function IncomePage() {
                 <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Category</Label>
                 <select {...register("category",{required:true})}
                   style={{ marginTop:6,width:"100%",background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,padding:"0 12px",fontSize:14 }}>
-                  {INCOME_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                  <option value="" disabled>Select category…</option>
+                  {INCOME_CATEGORY_GROUPS.map(g => (
+                    <optgroup key={g.group} label={`── ${g.group} ──`} style={{ color: T.mint, fontWeight: 700, background: "#081526" }}>
+                      {g.items.map(c => <option key={c} value={c} style={{ background: "#0D2240", color: T.white }}>{c}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
               {watchCat==="Community Hire" && (
