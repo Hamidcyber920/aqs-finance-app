@@ -144,7 +144,7 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
           )}
           {/* Evidence */}
           <div style={{ marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-            <input ref={rowFileRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display:"none" }}
+            <input ref={rowFileRef} type="file" accept="image/*,application/pdf" style={{ display:"none" }}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleRowEvidence(f); }}/>
             <button
               onClick={() => rowFileRef.current?.click()}
@@ -164,43 +164,45 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
             color:repayment.trusteeApprovedAt?T.mint:repayment.adminApprovedAt?"#fbbf24":isOverdue?"#ef4444":T.muted }}>
             {repayment.trusteeApprovedAt?"Confirmed":repayment.adminApprovedAt?"Partial":isOverdue?"Overdue":"Pending"}
           </span>
+          {/* Admin authorisation — always show when not yet admin-approved */}
           {isAdmin && !repayment.adminApprovedAt && (
-            <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
-              <button onClick={()=>onConfirm(repayment)}
-                style={{ padding:"5px 12px",borderRadius:8,background:"rgba(99,91,255,0.12)",border:"1px solid rgba(99,91,255,0.25)",color:T.purple,fontSize:12,fontWeight:600,cursor:"pointer" }}>
-                Confirm Received
-              </button>
-              {onSendReminder && (
-                <button onClick={()=>onSendReminder(repayment)}
-                  style={{ padding:"5px 12px",borderRadius:8,background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",fontSize:12,fontWeight:600,cursor:"pointer" }}>
-                  ✉️ Email
+            <div style={{ display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end" }}>
+              <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                <select value={adminName} onChange={e=>setAdminName(e.target.value)}
+                  style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:adminName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:130 }}>
+                  <option value="" disabled style={{background:"#0A192F"}}>Admin authorised by…</option>
+                  {ADMIN_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
+                </select>
+                <button onClick={()=>{ if(adminName) onApproveAdmin({...repayment, approvedByName: adminName}); }}
+                  disabled={!adminName}
+                  style={{ padding:"4px 10px",borderRadius:8,background:adminName?"rgba(0,255,194,0.15)":"rgba(255,255,255,0.04)",border:`1px solid ${adminName?"rgba(0,255,194,0.3)":T.border}`,color:adminName?T.mint:T.muted,fontSize:11,fontWeight:600,cursor:adminName?"pointer":"not-allowed" }}>
+                  Admin Sign ✓
                 </button>
-              )}
-              <button onClick={openWhatsApp}
-                style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:600,cursor:"pointer" }}>
-                💬 WhatsApp
-              </button>
+              </div>
+              <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                <button onClick={()=>onConfirm(repayment)}
+                  style={{ padding:"5px 12px",borderRadius:8,background:"rgba(99,91,255,0.12)",border:"1px solid rgba(99,91,255,0.25)",color:T.purple,fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                  Confirm Received
+                </button>
+                {onSendReminder && (
+                  <button onClick={()=>onSendReminder(repayment)}
+                    style={{ padding:"5px 12px",borderRadius:8,background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                    ✉️ Email
+                  </button>
+                )}
+                <button onClick={openWhatsApp}
+                  style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                  💬 WhatsApp
+                </button>
+              </div>
             </div>
           )}
-          {isAdmin && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
-            <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-              <select value={adminName} onChange={e=>setAdminName(e.target.value)}
-                style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:adminName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:130 }}>
-                <option value="" disabled style={{background:"#0A192F"}}>Select admin…</option>
-                {ADMIN_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
-              </select>
-              <button onClick={()=>{ if(adminName) onApproveAdmin({...repayment, approvedByName: adminName}); }}
-                disabled={!adminName}
-                style={{ padding:"4px 10px",borderRadius:8,background:adminName?"rgba(0,255,194,0.15)":"rgba(255,255,255,0.04)",border:`1px solid ${adminName?"rgba(0,255,194,0.3)":T.border}`,color:adminName?T.mint:T.muted,fontSize:11,fontWeight:600,cursor:adminName?"pointer":"not-allowed" }}>
-                Admin Sign ✓
-              </button>
-            </div>
-          )}
-          {isTrustee && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
+          {/* Trustee authorisation — show after admin approved, before trustee approved */}
+          {(isAdmin || isTrustee) && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
             <div style={{ display:"flex",gap:6,alignItems:"center" }}>
               <select value={trusteeName} onChange={e=>setTrusteeName(e.target.value)}
                 style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:trusteeName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:140 }}>
-                <option value="" disabled style={{background:"#0A192F"}}>Select trustee…</option>
+                <option value="" disabled style={{background:"#0A192F"}}>Trustee authorised by…</option>
                 {TRUSTEE_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
               </select>
               <button onClick={()=>{ if(trusteeName) onApproveTrustee({...repayment, trusteeName}); }}
@@ -607,7 +609,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
                 </div>
                 {/* Evidence upload */}
                 <div style={{ marginTop:10,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap" }}>
-                  <input ref={evidenceFileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }}
+                  <input ref={evidenceFileRef} type="file" accept="image/*,application/pdf" style={{ display:"none" }}
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;

@@ -574,3 +574,8 @@
 - [x] Add "Send Statement by Email" button to LoanDetail actions bar
 - [x] Add "Remind All Overdue" button to Repayment Schedule section header
 - [x] Add summary cards (paid/total, outstanding, overdue count) to each loan row on Loans list page
+
+## Evidence & Auth Fixes (May 2026 — round 9)
+- [x] Fix Add Evidence button to accept files and images (not camera-only) — remove capture attribute, add accept="image/*,application/pdf"
+- [x] Add per-repayment Admin authorisation dropdown (Farid Ahmed / Mumin Khan) on each repayment row
+- [x] Add per-repayment Trustee authorisation dropdown (Dr Abdul Hamid / Galib Khan) on each repayment row
