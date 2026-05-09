@@ -331,6 +331,15 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const convertToWaqfMutation = trpc.loans.convertToWaqf?.useMutation?.({
+    onSuccess: (res: any) => {
+      toast.success("Alhamdulillah! Loan converted to Waqf. Certificate generated and emailed to lender.");
+      if (res?.certUrl) window.open(res.certUrl, "_blank");
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const [repaymentAmount, setRepaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const [repaymentNotes, setRepaymentNotes] = useState("");
@@ -338,6 +347,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
   const [evidenceUploading, setEvidenceUploading] = useState(false);
   const evidenceFileRef = useRef<HTMLInputElement>(null);
   const [editBorrowerOpen, setEditBorrowerOpen] = useState(false);
+  const [waqfConfirmOpen, setWaqfConfirmOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -360,6 +370,8 @@ export default function LoanDetailPage({ id }: { id: number }) {
   const termMonths = loan.termUnit==="years" ? (loan.termValue??6)*12 : (loan.termValue??loan.termMonths??6);
   const monthly = (Number(loan.amount)/termMonths).toFixed(2);
   const fullyApproved = loan.adminApprovedAt && loan.trusteeApprovedAt;
+  const waqfConverted = !!(loan as any).waqfConvertedAt;
+  const waqfCertUrl = (loan as any).waqfCertificateUrl as string | null | undefined;
 
   return (
     <>
@@ -388,6 +400,11 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   color:fullyApproved?T.mint:!fullyApproved?"#fbbf24":"#a78bfa" }}>
                   {fullyApproved?"Fully Approved":loan.status}
                 </span>
+                {waqfConverted && (
+                  <span style={{ padding:"5px 14px",borderRadius:999,fontSize:12,fontWeight:700,background:"rgba(201,168,76,0.15)",color:"#c9a84c",display:"flex",alignItems:"center",gap:5 }}>
+                    🕌 Waqf Endowment
+                  </span>
+                )}
                 {isAdmin && (
                   <button onClick={() => { setEditName(loan.borrowerName??''); setEditEmail(loan.borrowerEmail??''); setEditPhone((loan as any).borrowerPhone??''); setEditAddress((loan as any).borrowerAddress??''); setEditBorrowerOpen(true); }} // label: Edit Lender Details
                     style={{ padding:"5px 12px",borderRadius:999,fontSize:11,fontWeight:600,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer" }}>
@@ -466,10 +483,21 @@ export default function LoanDetailPage({ id }: { id: number }) {
               <Button onClick={() => {
                   let phone = (loan as any).borrowerPhone?.replace(/\D/g,"") ?? "";
                   if (!phone) { toast.error("No phone number on file for this lender"); return; }
-                  // Handle UK numbers: 07xxx → 447xxx, already international 44xxx stays
                   if (phone.startsWith("0")) phone = "44" + phone.slice(1);
                   else if (!phone.startsWith("44") && phone.length <= 10) phone = "44" + phone;
-                  window.open(`https://wa.me/${phone}`, "_blank");
+                  const lenderName = (loan as any).borrowerName ?? "";
+                  const firstName = lenderName.split(" ")[0] || "";
+                  const amt = Number((loan as any).amount ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2 });
+                  const waMsg = encodeURIComponent(
+`Assalamu Alaikum ${firstName},
+
+May Allah reward your immense generosity. This is to confirm that your interest-free loan (Qarde Hasan) of £${amt} has been safely registered towards the Rimmers building purchase.
+
+By helping us secure this space for prayer and community, you are laying bricks for your own home in Jannah, Insha'Allah. Your funds are held as an Amanah (trust) and will be managed with the highest transparency.
+
+BarakAllahu Feekum,
+The AQS Team`);
+                  window.open(`https://wa.me/${phone}?text=${waMsg}`, "_blank");
                 }}
                 style={{ background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
                 <MessageCircle size={14}/> WhatsApp
@@ -496,6 +524,20 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   disabled={emailStatementMutation?.isPending}
                   style={{ background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.15)",color:"#fbbf24",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
                   <Mail size={14}/> {emailStatementMutation?.isPending ? "Sending…" : "Email Statement"}
+                </Button>
+              )}
+              {fullyApproved && !waqfConverted && (
+                <Button
+                  onClick={() => setWaqfConfirmOpen(true)}
+                  style={{ background:"rgba(201,168,76,0.1)",border:"1px solid rgba(201,168,76,0.3)",color:"#c9a84c",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                  🕌 Convert to Waqf
+                </Button>
+              )}
+              {waqfConverted && waqfCertUrl && (
+                <Button
+                  onClick={() => window.open(waqfCertUrl, "_blank")}
+                  style={{ background:"rgba(201,168,76,0.15)",border:"1px solid rgba(201,168,76,0.4)",color:"#c9a84c",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                  <FileText size={14}/> Certificate of Waqf
                 </Button>
               )}
             </div>
@@ -537,6 +579,56 @@ export default function LoanDetailPage({ id }: { id: number }) {
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Waqf Conversion Confirmation Dialog */}
+          <Dialog open={waqfConfirmOpen} onOpenChange={setWaqfConfirmOpen}>
+            <DialogContent style={{ background:"#0D2240",border:"1px solid rgba(201,168,76,0.3)",borderRadius:20,maxWidth:480 }}>
+              <DialogHeader>
+                <DialogTitle style={{ color:"#c9a84c",fontSize:17,fontWeight:800 }}>🕌 Convert Loan to Waqf (Endowment)</DialogTitle>
+              </DialogHeader>
+              <div style={{ display:"flex",flexDirection:"column",gap:16,marginTop:8 }}>
+                <p style={{ fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.7,margin:0 }}>
+                  You are about to permanently convert <strong style={{color:"#c9a84c"}}>{loan.borrowerName}</strong>'s
+                  Qarde Hasan Amanah of <strong style={{color:"#c9a84c"}}>£{Number(loan.amount).toLocaleString("en-GB",{minimumFractionDigits:2})}</strong> to
+                  a <strong style={{color:"#c9a84c"}}>Waqf (Permanent Endowment)</strong> for the Rimmers Building Project.
+                </p>
+                <div style={{ background:"rgba(201,168,76,0.08)",border:"1px solid rgba(201,168,76,0.2)",borderRadius:12,padding:"14px 16px" }}>
+                  <p style={{ fontSize:12,color:"#c9a84c",margin:0,lineHeight:1.6 }}>
+                    <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em>
+                  </p>
+                  <p style={{ fontSize:11,color:"rgba(255,255,255,0.5)",margin:"6px 0 0" }}>— Hadith</p>
+                </div>
+                <p style={{ fontSize:12,color:"rgba(255,255,255,0.5)",margin:0 }}>
+                  This action is <strong style={{color:"#f87171"}}>irreversible</strong>. A Certificate of Waqf will be generated
+                  and emailed to the lender. The balance will be moved to the AQS Endowment Register.
+                </p>
+                <div style={{ display:"flex",gap:10,marginTop:4 }}>
+                  <Button
+                    onClick={() => setWaqfConfirmOpen(false)}
+                    style={{ flex:1,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,borderRadius:10,height:42,fontWeight:600 }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    disabled={convertToWaqfMutation?.isPending}
+                    onClick={() => { convertToWaqfMutation?.mutate?.({ id }); setWaqfConfirmOpen(false); }}
+                    style={{ flex:2,background:"linear-gradient(135deg,#c9a84c,#e8c56a)",color:"#1a1a1a",border:"none",borderRadius:10,height:42,fontWeight:700,fontSize:14 }}>
+                    {convertToWaqfMutation?.isPending ? "Converting…" : "🕌 Confirm Waqf Conversion"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Waqf Banner (shown after conversion) */}
+          {waqfConverted && (
+            <div style={{ background:"rgba(201,168,76,0.08)",border:"1px solid rgba(201,168,76,0.25)",borderRadius:14,padding:"16px 20px",marginBottom:20,animation:"fadeUp 0.4s ease both" }}>
+              <p style={{ fontSize:13,fontWeight:700,color:"#c9a84c",margin:"0 0 4px" }}>🕌 This Amanah has been converted to a Waqf (Permanent Endowment)</p>
+              <p style={{ fontSize:12,color:"rgba(255,255,255,0.5)",margin:0 }}>
+                Converted on {new Date((loan as any).waqfConvertedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})}
+                {waqfCertUrl && <> &middot; <a href={waqfCertUrl} target="_blank" rel="noreferrer" style={{color:"#c9a84c",textDecoration:"underline"}}>View Certificate of Waqf</a></>}
+              </p>
+            </div>
+          )}
 
           {/* Notes */}
           {loan.termNotes && (

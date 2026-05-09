@@ -435,3 +435,133 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     doc.end();
   });
 }
+
+// ── Certificate of Waqf / Endowment PDF ──────────────────────────────────────
+
+export interface WaqfCertificateData {
+  loanId: number;
+  lenderName: string;
+  lenderEmail?: string | null;
+  lenderAddress?: string | null;
+  lenderPhone?: string | null;
+  originalAmount: string | number;
+  totalRepaid: string | number;
+  convertedAt: Date;
+  adminApprovedByName?: string | null;
+  trusteeName?: string | null;
+}
+
+export async function generateWaqfCertificate(data: WaqfCertificateData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin: 60 });
+    const buffers: Buffer[] = [];
+    doc.on("data", (chunk: Buffer) => buffers.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(buffers)));
+    doc.on("error", reject);
+
+    const GREEN = "#1a4731";
+    const GOLD = "#c9a84c";
+    const MUTED = "#666666";
+    const TEXT = "#1a1a1a";
+    const pageWidth = doc.page.width - 120;
+    const remaining = Math.max(0, parseFloat(String(data.originalAmount)) - parseFloat(String(data.totalRepaid)));
+
+    // ── Decorative border ────────────────────────────────────────────────────
+    doc.rect(30, 30, doc.page.width - 60, doc.page.height - 60).lineWidth(3).stroke(GOLD);
+    doc.rect(36, 36, doc.page.width - 72, doc.page.height - 72).lineWidth(1).stroke(GREEN);
+
+    // ── Header ───────────────────────────────────────────────────────────────
+    doc.rect(60, 50, pageWidth, 90).fill(GREEN);
+    doc.fillColor("#ffffff").fontSize(22).font("Helvetica-Bold")
+      .text("CERTIFICATE OF WAQF", 80, 62, { width: pageWidth - 40, align: "center" });
+    doc.fontSize(11).font("Helvetica")
+      .text("Permanent Endowment — Rimmers Building Project", 80, 90, { width: pageWidth - 40, align: "center" });
+    doc.fontSize(8).font("Helvetica").fillColor(GOLD)
+      .text("\"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah.\" — Hadith", 80, 110, { width: pageWidth - 40, align: "center" });
+
+    doc.rect(60, 140, pageWidth, 3).fill(GOLD);
+    doc.moveDown(1);
+
+    // ── Bismillah ────────────────────────────────────────────────────────────
+    doc.fillColor(GREEN).fontSize(13).font("Helvetica-Bold")
+      .text("Bismillah ir-Rahman ir-Rahim", { align: "center" });
+    doc.fillColor(MUTED).fontSize(9).font("Helvetica")
+      .text("In the Name of Allah, the Most Gracious, the Most Merciful", { align: "center" });
+    doc.moveDown(1.2);
+
+    // ── Certificate body ─────────────────────────────────────────────────────
+    doc.fillColor(TEXT).fontSize(11).font("Helvetica")
+      .text("This is to certify that", { align: "center" });
+    doc.moveDown(0.5);
+
+    doc.fillColor(GREEN).fontSize(18).font("Helvetica-Bold")
+      .text(data.lenderName, { align: "center" });
+    doc.moveDown(0.5);
+
+    doc.fillColor(TEXT).fontSize(11).font("Helvetica")
+      .text("has graciously converted their Qarde Hasan (interest-free loan) to a permanent", { align: "center" });
+    doc.fillColor(GREEN).fontSize(11).font("Helvetica-Bold")
+      .text("Waqf (Endowment) for the AQS Rimmers Building Project.", { align: "center" });
+    doc.moveDown(1);
+
+    // ── Gold box with amount ─────────────────────────────────────────────────
+    const boxY = doc.y;
+    doc.rect(120, boxY, pageWidth - 60, 60).fill("#fffbf0").stroke(GOLD);
+    doc.fillColor(MUTED).fontSize(9).font("Helvetica")
+      .text("Endowed Amount (Waqf)", 130, boxY + 8, { width: pageWidth - 80 });
+    doc.fillColor(GREEN).fontSize(22).font("Helvetica-Bold")
+      .text(`£${parseFloat(String(remaining > 0 ? remaining : data.originalAmount)).toFixed(2)}`, 130, boxY + 22, { width: pageWidth - 80, align: "center" });
+    doc.moveDown(4.5);
+
+    // ── Narrative ────────────────────────────────────────────────────────────
+    doc.fillColor(TEXT).fontSize(10).font("Helvetica")
+      .text(
+        `By this act of generosity, ${data.lenderName.split(" ")[0]} has permanently endowed a portion of the Rimmers Building — a House of Allah — for the benefit of the Muslim community and all who seek knowledge and worship therein. This Waqf shall be recorded in the AQS Endowment Register and acknowledged before Allah (SWT) as a Sadaqah Jariyah that shall continue to benefit the donor and their family for generations to come, in sha Allah.`,
+        70, doc.y, { width: pageWidth - 20, align: "justify" }
+      );
+    doc.moveDown(1);
+
+    doc.fillColor(MUTED).fontSize(9).font("Helvetica")
+      .text(
+        `Original Amanah: £${parseFloat(String(data.originalAmount)).toFixed(2)}   |   Amount Repaid: £${parseFloat(String(data.totalRepaid)).toFixed(2)}   |   Endowed Balance: £${parseFloat(String(remaining > 0 ? remaining : data.originalAmount)).toFixed(2)}`,
+        70, doc.y, { width: pageWidth - 20, align: "center" }
+      );
+    doc.moveDown(0.5);
+    doc.fillColor(MUTED).fontSize(9).font("Helvetica")
+      .text(`Date of Conversion: ${data.convertedAt.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, 70, doc.y, { width: pageWidth - 20, align: "center" });
+    doc.moveDown(1.5);
+
+    // ── Authorisation ────────────────────────────────────────────────────────
+    doc.rect(60, doc.y, pageWidth, 1).fill(GOLD);
+    doc.moveDown(0.5);
+
+    const sigY = doc.y;
+    const col1 = 70;
+    const col2 = 310;
+
+    doc.fillColor(MUTED).fontSize(8).font("Helvetica").text("Authorised by (Finance Lead)", col1, sigY);
+    doc.rect(col1, sigY + 14, 180, 40).stroke(MUTED);
+    if (data.adminApprovedByName) {
+      doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold").text(`✓ ${data.adminApprovedByName}`, col1 + 4, sigY + 22);
+    }
+    doc.fillColor(MUTED).fontSize(7).font("Helvetica").text("Signature & Date", col1, sigY + 60);
+
+    doc.fillColor(MUTED).fontSize(8).font("Helvetica").text("Confirmed by (Trustee)", col2, sigY);
+    doc.rect(col2, sigY + 14, 180, 40).stroke(MUTED);
+    if (data.trusteeName) {
+      doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold").text(`✓ ${data.trusteeName}`, col2 + 4, sigY + 22);
+    }
+    doc.fillColor(MUTED).fontSize(7).font("Helvetica").text("Signature & Date", col2, sigY + 60);
+
+    doc.moveDown(5.5);
+
+    // ── Footer ───────────────────────────────────────────────────────────────
+    doc.rect(60, doc.page.height - 80, pageWidth, 1).fill(GOLD);
+    doc.fillColor(GREEN).fontSize(9).font("Helvetica-Bold")
+      .text("JazakAllahu Khayran — May Allah (SWT) accept this Waqf and bless the donor abundantly in this life and the next.", 60, doc.page.height - 68, { width: pageWidth, align: "center" });
+    doc.fillColor(MUTED).fontSize(7.5).font("Helvetica")
+      .text(`Abdullah Quilliam Society  |  Certificate of Waqf  |  Ref: AQS-WAQF-${String(data.loanId).padStart(4, "0")}  |  ${data.convertedAt.toLocaleDateString("en-GB")}`, 60, doc.page.height - 50, { width: pageWidth, align: "center" });
+
+    doc.end();
+  });
+}

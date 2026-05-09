@@ -299,6 +299,9 @@ export const loanApplications = mysqlTable("loan_applications", {
   trusteeApprovedAt: timestamp("trusteeApprovedAt"),
   agreementPdfUrl: text("agreementPdfUrl"),
   whatsappSentAt: timestamp("whatsappSentAt"),
+  // Waqf / Donation Conversion
+  waqfConvertedAt: timestamp("waqfConvertedAt"),
+  waqfCertificateUrl: text("waqfCertificateUrl"),
   // Repayments
   totalRepaid: decimal("totalRepaid", { precision: 10, scale: 2 }).default("0"),
   lastRepaymentDate: timestamp("lastRepaymentDate"),

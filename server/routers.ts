@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { generateLoanPdf, generateRepaymentPdf } from "./loanPdf";
+import { generateLoanPdf, generateRepaymentPdf, generateWaqfCertificate } from "./loanPdf";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -1114,9 +1114,11 @@ export const appRouter = router({
           const fn1 = (loan.borrowerName ?? '').split(' ')[0];
           htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn1},</p><p>May Allah (SWT) bless you and your family abundantly. We are writing to confirm that your Qarde Hasan Amanah application for <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> for the <strong>Rimmers Building Project</strong> has been received and is currently under review by our Finance Committee.</p><p>By supporting this project, you are investing in a House of Allah — and the Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em></p><p>We will be in touch shortly, in sha Allah. JazakAllahu Khayran for your generosity and trust in the AQ Society.</p><p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div>${footer}</div>`;
         } else if (input.type === "approved") {
-          subject = "Alhamdulillah — Your Qarde Hasan Amanah Has Been Approved — AQ Society";
-          const fn2 = (loan.borrowerName ?? '').split(' ')[0];
-          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn2},</p><p>Alhamdulillah — we are delighted to inform you that your Qarde Hasan Amanah of <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> for the <strong>Rimmers Building Project</strong> has been <strong style="color:#1a4731">approved</strong> by our Finance Committee and Trustees.</p><p>You are now a pillar of this House of Allah. The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em> May Allah (SWT) reward you with the very best in this world and the next.</p><p>Please contact us to arrange the transfer of funds, in sha Allah. JazakAllahu Khayran for your generous support and trust in the AQ Society.</p><p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div>${footer}</div>`;
+          subject = "An Investment in the House of Allah – Your Qarde Hasan Agreement";
+          const nameParts2 = (loan.borrowerName ?? '').trim().split(' ');
+          const surname2 = nameParts2.length > 1 ? nameParts2[nameParts2.length - 1] : nameParts2[0];
+          const pdfLink = (loan as any).agreementPdfUrl ? `<p style="margin:20px 0"><a href="${(loan as any).agreementPdfUrl}" style="background:#1a4731;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">View Your Qarde Hasan Agreement</a></p>` : '';
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear Brother/Sister ${surname2},</p><p>We pray this finds you in the best of health and Iman.</p><p>Attached is the formal agreement for the interest-free loan you have graciously provided for the <strong>AQS Rimmers Building Project</strong>. While this is a technical requirement for our records, we recognise it primarily as a testament to your commitment to the Ummah.</p><p>The AQS Financial System (Hibba Integration) ensures your contribution is tracked with 100% accuracy and backed up in real-time.</p><p>May Allah (SWT) accept this from you as a <strong>Sadaqah Jariyah</strong> that continues to benefit you and your family for generations.</p>${pdfLink}<p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div>${footer}</div>`;
         } else if (input.type === "reminder") {
           const fn3 = (loan.borrowerName ?? '').split(' ')[0];
           const remaining = Math.max(0, parseFloat(String(loan.amount)) - parseFloat(String((loan as any).totalRepaid ?? 0)));
@@ -1409,6 +1411,55 @@ export const appRouter = router({
         const key = `loan-schedules/schedule-${input.id}-${Date.now()}.html`;
         const { url } = await storagePut(key, Buffer.from(html, 'utf-8'), 'text/html');
         return { url };
+      }),
+
+    convertToWaqf: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const { loanApplications } = await import("../drizzle/schema");
+        const { eq: eqOp } = await import("drizzle-orm");
+        const [loan] = await db.select().from(loanApplications).where(eqOp(loanApplications.id, input.id));
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        if ((loan as any).waqfConvertedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This loan has already been converted to Waqf" });
+        const convertedAt = new Date();
+        const totalRepaid = parseFloat(String(loan.totalRepaid ?? 0));
+        // Generate Certificate of Waqf PDF
+        const certBuffer = await generateWaqfCertificate({
+          loanId: loan.id,
+          lenderName: loan.borrowerName,
+          lenderEmail: loan.borrowerEmail,
+          lenderAddress: loan.borrowerAddress,
+          lenderPhone: loan.borrowerPhone,
+          originalAmount: loan.amount,
+          totalRepaid: loan.totalRepaid ?? 0,
+          convertedAt,
+          adminApprovedByName: loan.adminApprovedByName,
+          trusteeName: loan.trusteeName,
+        });
+        const certKey = `loans/waqf-certificate-${loan.id}-${Date.now()}.pdf`;
+        const { url: certUrl } = await storagePut(certKey, certBuffer, "application/pdf");
+        // Update loan record
+        await db.update(loanApplications)
+          .set({ waqfConvertedAt: convertedAt, waqfCertificateUrl: certUrl } as any)
+          .where(eqOp(loanApplications.id, input.id));
+        // Send email notification if lender has email
+        if (loan.borrowerEmail) {
+          const firstName = (loan.borrowerName ?? '').split(' ')[0];
+          const nameParts = (loan.borrowerName ?? '').trim().split(' ');
+          const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
+          const remaining = Math.max(0, parseFloat(String(loan.amount)) - totalRepaid);
+          const baseStyle = `font-family:Arial,sans-serif;max-width:600px;margin:0 auto`;
+          const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Certificate of Waqf — Rimmers Building Project</p></div>`;
+          const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div>`;
+          const certLink = `<p style="margin:20px 0"><a href="${certUrl}" style="background:#1a4731;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block">Download Your Certificate of Waqf</a></p>`;
+          const htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p><p>Alhamdulillah — we are deeply honoured to inform you that your Qarde Hasan Amanah of <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> for the <strong>Rimmers Building Project</strong> has been permanently converted to a <strong>Waqf (Endowment)</strong>.</p><p>By this noble act, you have permanently endowed a portion of the House of Allah. The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em> May Allah (SWT) accept this as a <strong>Sadaqah Jariyah</strong> that continues to benefit you and your family for generations to come, in sha Allah.</p><p>Please find attached your <strong>Certificate of Waqf</strong> for your records. The endowed amount of <strong>&pound;${remaining.toFixed(2)}</strong> has been transferred to the AQS Endowment Register.</p>${certLink}<p>JazakAllahu Khayran, Dear Brother/Sister ${surname}, for your immense generosity and trust in the AQ Society.</p><p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div>${footer}</div>`;
+          try {
+            await sendGmail(loan.borrowerEmail, loan.borrowerName, `Certificate of Waqf — Rimmers Building Project — AQ Society`, htmlBody);
+          } catch {}
+        }
+        return { success: true, certUrl };
       }),
   }),
   // ─── MONTHLY EXPENSES PANEE ──────────────────────────────────────────────────
