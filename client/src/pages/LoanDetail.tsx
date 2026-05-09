@@ -153,8 +153,15 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
               <Upload size={11}/> {rowUploading ? "Uploading…" : rowEvidenceUrl ? "📷 Replace Evidence" : "📷 Add Evidence"}
             </button>
             {rowEvidenceUrl && (
-              <a href={rowEvidenceUrl} target="_blank" rel="noreferrer"
-                style={{ fontSize:11,color:T.mint,textDecoration:"none" }}>View ↗</a>
+              <>
+                <a href={rowEvidenceUrl} target="_blank" rel="noreferrer" style={{ display:"flex",alignItems:"center",gap:4,textDecoration:"none" }}>
+                  {/\.(jpg|jpeg|png|gif|webp)$/i.test(rowEvidenceUrl) ? (
+                    <img src={rowEvidenceUrl} alt="Evidence" style={{ width:36,height:36,objectFit:"cover",borderRadius:6,border:`1px solid ${T.border}` }}/>
+                  ) : (
+                    <span style={{ fontSize:11,color:T.mint }}>📎 View Evidence ↗</span>
+                  )}
+                </a>
+              </>
             )}
           </div>
         </div>
@@ -319,8 +326,14 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const exportScheduleMutation = trpc.loans.exportSchedule?.useMutation?.({
+    onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const [repaymentAmount, setRepaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [repaymentNotes, setRepaymentNotes] = useState("");
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [evidenceUploading, setEvidenceUploading] = useState(false);
   const evidenceFileRef = useRef<HTMLInputElement>(null);
@@ -537,14 +550,24 @@ export default function LoanDetailPage({ id }: { id: number }) {
           <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:24,animation:"fadeUp 0.5s ease 400ms both" }}>
             <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:4 }}>
               <h2 style={{ fontSize:15,fontWeight:700,color:T.white,margin:0 }}>Repayment Schedule</h2>
-              {isAdmin && fullyApproved && loan.borrowerEmail && (
-                <button
-                  onClick={() => remindAllOverdueMutation?.mutate?.({ loanId: id })}
-                  disabled={remindAllOverdueMutation?.isPending}
-                  style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:9,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.25)",color:"#f87171",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>
-                  <Mail size={12}/> {remindAllOverdueMutation?.isPending ? "Sending…" : "Remind All Overdue"}
-                </button>
-              )}
+              <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                {isAdmin && (
+                  <button
+                    onClick={() => exportScheduleMutation?.mutate?.({ id })}
+                    disabled={exportScheduleMutation?.isPending}
+                    style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:9,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>
+                    <Download size={12}/> {exportScheduleMutation?.isPending ? "Generating…" : "Export Schedule"}
+                  </button>
+                )}
+                {isAdmin && fullyApproved && loan.borrowerEmail && (
+                  <button
+                    onClick={() => remindAllOverdueMutation?.mutate?.({ loanId: id })}
+                    disabled={remindAllOverdueMutation?.isPending}
+                    style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:9,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.25)",color:"#f87171",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>
+                    <Mail size={12}/> {remindAllOverdueMutation?.isPending ? "Sending…" : "Remind All Overdue"}
+                  </button>
+                )}
+              </div>
             </div>
             <p style={{ fontSize:12,color:T.muted,margin:"0 0 16px" }}>
               {termMonths} monthly payments of £{monthly} · Started {loan.createdAt ? new Date(loan.createdAt).toLocaleDateString("en-GB") : "—"}
@@ -592,6 +615,17 @@ export default function LoanDetailPage({ id }: { id: number }) {
                     <option value="cash" style={{background:"#0A192F"}}>Cash</option>
                     <option value="cheque" style={{background:"#0A192F"}}>Cheque</option>
                   </select>
+                </div>
+                {/* Notes field */}
+                <div style={{ marginTop:8 }}>
+                  <textarea
+                    placeholder="Notes (optional) — e.g. partial payment, reference number…"
+                    value={repaymentNotes}
+                    onChange={e => setRepaymentNotes(e.target.value)}
+                    rows={2}
+                    style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,padding:"8px 12px",fontSize:12,resize:"vertical",outline:"none",fontFamily:"inherit",boxSizing:"border-box" }}/>
+                </div>
+                <div style={{ display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap",marginTop:8 }}>
                   <Button
                     disabled={!repaymentAmount || recordRepaymentMutation?.isPending}
                     onClick={() => {
@@ -600,6 +634,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
                         loanId: id,
                         amount: repaymentAmount,
                         paymentMethod,
+                        notes: repaymentNotes || undefined,
                         evidenceUrl: evidenceUrl || undefined,
                       });
                     }}

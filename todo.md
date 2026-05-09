@@ -579,3 +579,8 @@
 - [x] Fix Add Evidence button to accept files and images (not camera-only) — remove capture attribute, add accept="image/*,application/pdf"
 - [x] Add per-repayment Admin authorisation dropdown (Farid Ahmed / Mumin Khan) on each repayment row
 - [x] Add per-repayment Trustee authorisation dropdown (Dr Abdul Hamid / Galib Khan) on each repayment row
+
+## Repayment Enhancements Round 10 (May 2026)
+- [x] Show evidence thumbnail / "View Evidence" link on confirmed repayment rows
+- [x] Add notes text field to Record Repayment form (stored in DB, shown on row and in receipt PDF)
+- [x] Add Export Schedule to PDF button on Repayment Schedule section header

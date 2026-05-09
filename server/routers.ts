@@ -1359,9 +1359,54 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
         }
       }),
-  }),
 
-  // ─── MONTHLY EXPENSES PANE ──────────────────────────────────────────────────
+    exportSchedule: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const { loanApplications, loanRepayments: lrTable } = await import("../drizzle/schema");
+        const { eq: eqOp } = await import("drizzle-orm");
+        const [loan] = await db.select().from(loanApplications).where(eqOp(loanApplications.id, input.id));
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        const repayments = await db.select().from(lrTable).where(eqOp(lrTable.loanId, input.id)).orderBy(lrTable.paidAt);
+        const paid = repayments.filter(r => r.trusteeApprovedAt).reduce((s, r) => s + parseFloat(r.amount), 0);
+        const outstanding = parseFloat(loan.amount) - paid;
+        const rows = repayments.map((r, i) => `
+          <tr style="border-bottom:1px solid #e5e7eb">
+            <td style="padding:8px 12px">${i + 1}</td>
+            <td style="padding:8px 12px">${r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '\u2014'}</td>
+            <td style="padding:8px 12px">${r.paidAt ? new Date(r.paidAt).toLocaleDateString('en-GB') : '\u2014'}</td>
+            <td style="padding:8px 12px">\u00a3${parseFloat(r.amount).toFixed(2)}</td>
+            <td style="padding:8px 12px;text-transform:capitalize">${(r.paymentMethod ?? '').replace(/_/g,' ')}</td>
+            <td style="padding:8px 12px">${r.adminApprovedByName ?? '\u2014'}</td>
+            <td style="padding:8px 12px">${r.trusteeName ?? '\u2014'}</td>
+            <td style="padding:8px 12px;color:${r.trusteeApprovedAt ? '#059669' : '#d97706'}">${r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending'}</td>
+            <td style="padding:8px 12px">${r.notes ?? ''}</td>
+          </tr>`);
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Repayment Schedule</title>
+          <style>body{font-family:Arial,sans-serif;padding:32px;color:#111}h1{font-size:20px;margin-bottom:4px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#f3f4f6;padding:8px 12px;text-align:left;font-weight:600}td{vertical-align:top}</style></head>
+          <body>
+          <h1>Qarde Hasan Loan \u2014 Repayment Schedule</h1>
+          <p style="color:#6b7280;margin-bottom:16px">Generated ${new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'long',year:'numeric'})}</p>
+          <table style="margin-bottom:20px;font-size:13px"><tr><td style="padding:4px 16px 4px 0"><strong>Lender / Donor</strong></td><td>${loan.borrowerName}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Email</strong></td><td>${loan.borrowerEmail ?? '\u2014'}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Phone</strong></td><td>${loan.borrowerPhone ?? '\u2014'}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Loan Amount</strong></td><td>\u00a3${parseFloat(loan.amount).toFixed(2)}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Term</strong></td><td>${loan.termMonths} months</td></tr>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Purpose</strong></td><td>${loan.purpose ?? '\u2014'}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Total Paid</strong></td><td>\u00a3${paid.toFixed(2)}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Outstanding</strong></td><td style="color:${outstanding > 0 ? '#d97706' : '#059669'}">\u00a3${outstanding.toFixed(2)}</td></tr></table>
+          <table><thead><tr><th>#</th><th>Due Date</th><th>Paid Date</th><th>Amount</th><th>Method</th><th>Admin Auth</th><th>Trustee Auth</th><th>Status</th><th>Notes</th></tr></thead>
+          <tbody>${rows.join('')}</tbody></table>
+          <p style="margin-top:24px;font-size:11px;color:#9ca3af">AQ Society Finance Team \u2014 Qarde Hasan Interest-Free Loan Programme</p>
+          </body></html>`;
+        const key = `loan-schedules/schedule-${input.id}-${Date.now()}.html`;
+        const { url } = await storagePut(key, Buffer.from(html, 'utf-8'), 'text/html');
+        return { url };
+      }),
+  }),
+  // ─── MONTHLY EXPENSES PANEE ──────────────────────────────────────────────────
 
   expenses: router({
     // Aggregate all pending cheque/cash payments from payroll + receipts
