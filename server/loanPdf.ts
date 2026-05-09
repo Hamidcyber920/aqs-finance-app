@@ -84,11 +84,16 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       doc.moveDown(0.55);
     };
 
-    // ── 1. Borrower details ──────────────────────────────────────────────────
-    sectionHeading("1. Borrower Details");
-    row("Full Name", loan.borrowerName);
+    // ── 1. Lender / Donor details ────────────────────────────────────────────
+    sectionHeading("1. Lender / Donor Details");
+    // Extract title from name if present (e.g. "Dr", "Mr", "Mrs", "Ms", "Prof")
+    const titleMatch = loan.borrowerName.match(/^(Dr|Mr|Mrs|Ms|Miss|Prof|Rev|Sir|Lady|Lord)\.?\s+/i);
+    const titleStr = titleMatch ? titleMatch[1] : '';
+    const fullNameStr = loan.borrowerName;
+    if (titleStr) row("Title", titleStr);
+    row("Full Name", fullNameStr);
+    if (loan.borrowerPhone) row("Telephone", loan.borrowerPhone);
     if (loan.borrowerEmail) row("Email Address", loan.borrowerEmail);
-    if (loan.borrowerPhone) row("Phone Number", loan.borrowerPhone);
     if (loan.borrowerAddress) row("Address", loan.borrowerAddress);
     doc.moveDown(0.5);
 
@@ -168,11 +173,11 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
     sectionHeading("4. Shariah Compliance & Terms");
     const terms = [
       "This loan is provided on a Qarde Hasan (interest-free) basis in full accordance with Islamic finance principles and the Shariah. No interest, profit, or additional charges are attached to this loan.",
-      "The borrower agrees to repay the full principal amount within the agreed repayment period. No increase in the repayment amount beyond the original loan is permissible.",
+      "The AQ Society agrees to repay the full principal amount within the agreed repayment period. No increase in the repayment amount beyond the original loan is permissible.",
       "Monthly repayments are due on the 25th of each calendar month. All payments should be made by bank transfer or cheque to the Abdullah Quilliam Society.",
       "Early repayment is permitted and encouraged at no additional cost.",
-      "In the event of genuine financial hardship, the borrower must notify the Society immediately in writing to discuss revised arrangements. The Society may, at its discretion, extend the repayment period.",
-      "This agreement is a trust (amanah) between the borrower and the Society. The borrower is morally and contractually obligated to honour this commitment.",
+      "In the event of genuine financial hardship, the AQ Society must notify the Lender immediately in writing to discuss revised arrangements. The Lender may, at their discretion, extend the repayment period.",
+      "This agreement is a trust (amanah) between the Lender / Donor and the Society. The Society is morally and contractually obligated to honour this commitment.",
       "This agreement is governed by the internal policies of the Abdullah Quilliam Society. Any disputes shall be referred to the Board of Trustees.",
     ];
     terms.forEach((term, i) => {
@@ -250,8 +255,8 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       }
     };
 
-    // Borrower
-    doc.fillColor(MUTED).fontSize(8).font("Helvetica").text("Borrower", col1, sigY);
+    // Lender / Donor
+    doc.fillColor(MUTED).fontSize(8).font("Helvetica").text("Lender / Donor", col1, sigY);
     drawSigBox(col1, sigY + 14, 160, 45, borrowerSigBuf);
     doc.fillColor(MUTED).fontSize(7).text("Signature", col1, sigY + 65);
     doc.rect(col1, sigY + 76, 160, 1).stroke(MUTED);

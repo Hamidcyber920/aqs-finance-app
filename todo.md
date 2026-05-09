@@ -584,3 +584,9 @@
 - [x] Show evidence thumbnail / "View Evidence" link on confirmed repayment rows
 - [x] Add notes text field to Record Repayment form (stored in DB, shown on row and in receipt PDF)
 - [x] Add Export Schedule to PDF button on Repayment Schedule section header
+
+## Loan Agreement PDF Update (May 2026 — round 11)
+- [x] Rename "BORROWER DETAILS" to "LENDER / DONOR DETAILS" in the PDF
+- [x] Add Title, Full Name, Address, Telephone, Email Address fields in the lender details section
+- [x] Fix "Borrower" label in signature section to "Lender / Donor"
+- [x] Fix document alignment (sections not overlapping, clean two-column layout)
