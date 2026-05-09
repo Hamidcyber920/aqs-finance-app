@@ -590,3 +590,10 @@
 - [x] Add Title, Full Name, Address, Telephone, Email Address fields in the lender details section
 - [x] Fix "Borrower" label in signature section to "Lender / Donor"
 - [x] Fix document alignment (sections not overlapping, clean two-column layout)
+
+## Islamic/Gentle Professional Persona (May 2026 — round 12)
+- [ ] Update loan agreement PDF: Islamic tone, Amanah language, Hadith anchor, Respected Donor/Lender
+- [ ] Update WhatsApp messages: Islamic greeting, Virtuous Cycle framing, JazakAllah Khair sign-off
+- [ ] Update email templates: Barakah opening prayer, Amanah language, Project Milestone framing
+- [ ] Add Sadaqah Jariyah conversion option on loan detail page
+- [ ] Replace "Payment Due" with "Project Milestone Update" in reminder messages

@@ -206,10 +206,10 @@ async function _fullyApproveLoan(loan: any) {
       const termLabel = loan.termValue && loan.termUnit ? `${loan.termValue} ${loan.termUnit}` : `${loan.termMonths} months`;
       const monthlyAmt = loan.monthlyRepayment ? parseFloat(String(loan.monthlyRepayment)) : parseFloat(String(loan.amount)) / loan.termMonths;
       const whatsappPhone = (loan.borrowerPhone ?? '').replace(/[^0-9]/g, '');
-      const waMsg = encodeURIComponent(`Assalamu Alaikum ${firstName}, your Qarde Hasan loan of £${parseFloat(String(loan.amount)).toFixed(2)} has been approved by Abdullah Quilliam Society. Please download your loan agreement: ${url}`);
+      const waMsg = encodeURIComponent(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh ${firstName}, Alhamdulillah — your Qarde Hasan loan of £${parseFloat(String(loan.amount)).toFixed(2)} has been approved by Abdullah Quilliam Society. Please download your loan agreement: ${url}`);
       const waLink = whatsappPhone ? `https://wa.me/${whatsappPhone}?text=${waMsg}` : `https://wa.me/?text=${waMsg}`;
-      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan &mdash; Fully Approved</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName},</p><p>Your Qarde Hasan loan application has been <strong style="color:#1a4731">fully approved</strong> by both the Super Admin and Trustee of the Abdullah Quilliam Society.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Loan Amount</td><td style="padding:8px">&pound;${parseFloat(String(loan.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${termLabel}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Monthly Repayment</td><td style="padding:8px">&pound;${monthlyAmt.toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Approved By (Admin)</td><td style="padding:8px">${loan.adminApprovedByName ?? 'N/A'}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Approved By (Trustee)</td><td style="padding:8px">${loan.trusteeName ?? 'N/A'}</td></tr></table><p><a href="${url}" style="display:inline-block;background:#1a4731;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold">Download Loan Agreement (PDF)</a></p>${whatsappPhone ? `<p style="margin-top:16px"><a href="${waLink}" style="display:inline-block;background:#25D366;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold">Open in WhatsApp</a></p>` : ''}<p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
-      await sendGmail(loan.borrowerEmail, loan.borrowerName, "Your Qarde Hasan Loan Has Been Fully Approved — Abdullah Quilliam Society", html).catch(() => {});
+      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Amanah &mdash; Alhamdulillah, Fully Approved</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p><p>Alhamdulillah — we are honoured to inform you that your Qarde Hasan Amanah for the <strong>Rimmers Building Project</strong> has been <strong style="color:#1a4731">fully approved</strong> by both the Authorised Signatory and Trustee of the Abdullah Quilliam Society.</p><p>You are now a pillar of this House of Allah. The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em> May Allah (SWT) reward you with the very best in this world and the Akhirah.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Loan Amount</td><td style="padding:8px">&pound;${parseFloat(String(loan.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Repayment Term</td><td style="padding:8px">${termLabel}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Monthly Repayment</td><td style="padding:8px">&pound;${monthlyAmt.toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Approved By (Admin)</td><td style="padding:8px">${loan.adminApprovedByName ?? 'N/A'}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Approved By (Trustee)</td><td style="padding:8px">${loan.trusteeName ?? 'N/A'}</td></tr></table><p><a href="${url}" style="display:inline-block;background:#1a4731;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold">Download Loan Agreement (PDF)</a></p>${whatsappPhone ? `<p style="margin-top:16px"><a href="${waLink}" style="display:inline-block;background:#25D366;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold">Open in WhatsApp</a></p>` : ''}<p>JazakAllahu Khayran for your generous Amanah and trust in the AQ Society. Please find your formal Amanah Agreement attached for your records.</p><p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div></div>`;
+      await sendGmail(loan.borrowerEmail, loan.borrowerName, "Alhamdulillah — Your Qarde Hasan Amanah Has Been Fully Approved — AQ Society", html).catch(() => {});
     }
   } catch (e) { console.error("[Loans] Failed to generate PDF or send email on full approval:", e); }
 }
@@ -236,10 +236,10 @@ async function _fullyApproveRepayment(repayment: any) {
       const firstName = (loan.borrowerName ?? '').split(' ')[0];
       const outstanding = Math.max(0, parseFloat(String(loan.amount)) - parseFloat(String(loan.totalRepaid ?? 0)));
       const whatsappPhone = (loan.borrowerPhone ?? '').replace(/[^0-9]/g, '');
-      const waMsg = encodeURIComponent(`Assalamu Alaikum ${firstName}, your repayment of £${parseFloat(String(repayment.amount)).toFixed(2)} to Abdullah Quilliam Society has been confirmed. Outstanding balance: £${outstanding.toFixed(2)}. Download receipt: ${url}`);
+      const waMsg = encodeURIComponent(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh ${firstName}, JazakAllahu Khayran for your Project Milestone Repayment of £${parseFloat(String(repayment.amount)).toFixed(2)} to the Abdullah Quilliam Society. Outstanding Amanah balance: £${outstanding.toFixed(2)}. May Allah (SWT) bless you and accept this as Sadaqah Jariyah. Download receipt: ${url}`);
       const waLink = whatsappPhone ? `https://wa.me/${whatsappPhone}?text=${waMsg}` : `https://wa.me/?text=${waMsg}`;
-      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan &mdash; Repayment Confirmed</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum, ${firstName},</p><p>Your repayment of <strong>&pound;${parseFloat(String(repayment.amount)).toFixed(2)}</strong> has been received and confirmed by the Society.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount Paid</td><td style="padding:8px">&pound;${parseFloat(String(repayment.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Outstanding Balance</td><td style="padding:8px">&pound;${outstanding.toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Confirmed By</td><td style="padding:8px">${repayment.adminApprovedByName ?? 'N/A'}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Trustee</td><td style="padding:8px">${repayment.trusteeName ?? 'N/A'}</td></tr></table><p><a href="${url}" style="display:inline-block;background:#1a4731;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold">Download Repayment Receipt (PDF)</a></p>${whatsappPhone ? `<p style="margin-top:16px"><a href="${waLink}" style="display:inline-block;background:#25D366;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold">Open in WhatsApp</a></p>` : ''}<p>Jazakallahu Khayran,<br><strong>Abdullah Quilliam Society Finance Team</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div></div>`;
-      await sendGmail(loan.borrowerEmail, loan.borrowerName, "Qarde Hasan Repayment Confirmed — Abdullah Quilliam Society", html).catch(() => {});
+      const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan &mdash; Repayment Confirmed</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p><p>May Allah (SWT) bless you and your family abundantly. We are pleased to confirm that your Project Milestone Repayment of <strong>&pound;${parseFloat(String(repayment.amount)).toFixed(2)}</strong> has been received and confirmed by the Abdullah Quilliam Society.</p><p>The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em> May Allah (SWT) accept this as Sadaqah Jariyah for you and your loved ones.</p><table style="width:100%;border-collapse:collapse;margin:16px 0"><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Amount Paid</td><td style="padding:8px">&pound;${parseFloat(String(repayment.amount)).toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Outstanding Balance</td><td style="padding:8px">&pound;${outstanding.toFixed(2)}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Confirmed By</td><td style="padding:8px">${repayment.adminApprovedByName ?? 'N/A'}</td></tr><tr><td style="padding:8px;background:#f5f5f5;font-weight:bold">Trustee</td><td style="padding:8px">${repayment.trusteeName ?? 'N/A'}</td></tr></table><p><a href="${url}" style="display:inline-block;background:#1a4731;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold">Download Repayment Receipt (PDF)</a></p>${whatsappPhone ? `<p style="margin-top:16px"><a href="${waLink}" style="display:inline-block;background:#25D366;color:#fff;padding:10px 20px;text-decoration:none;border-radius:4px;font-weight:bold">Open in WhatsApp</a></p>` : ''}<p>JazakAllahu Khayran,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div></div>`;
+      await sendGmail(loan.borrowerEmail, loan.borrowerName, "Project Milestone Repayment Confirmed — JazakAllahu Khayran — AQ Society", html).catch(() => {});
     }
   } catch (e) { console.error("[Loans] Failed to generate repayment PDF or send email:", e); }
 }
@@ -1105,22 +1105,23 @@ export const appRouter = router({
         if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
         if (!loan.borrowerEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "Borrower has no email address on file" });
         const baseStyle = `font-family:Arial,sans-serif;max-width:600px;margin:0 auto`;
-        const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan</p></div>`;
-        const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>`;
+        const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Amanah — Rimmers Building Project</p></div>`;
+        const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div>`;
+
         let subject = ""; let htmlBody = "";
         if (input.type === "application_received") {
-          subject = "Qarde Hasan Loan Application Received — Abdullah Quilliam Society";
+          subject = "Your Qarde Hasan Amanah Application Has Been Received — AQ Society";
           const fn1 = (loan.borrowerName ?? '').split(' ')[0];
-          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum, ${fn1},</p><p>Your loan application for <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> has been received and is under review.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn1},</p><p>May Allah (SWT) bless you and your family abundantly. We are writing to confirm that your Qarde Hasan Amanah application for <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> for the <strong>Rimmers Building Project</strong> has been received and is currently under review by our Finance Committee.</p><p>By supporting this project, you are investing in a House of Allah — and the Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em></p><p>We will be in touch shortly, in sha Allah. JazakAllahu Khayran for your generosity and trust in the AQ Society.</p><p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div>${footer}</div>`;
         } else if (input.type === "approved") {
-          subject = "Your Qarde Hasan Loan Has Been Approved — Abdullah Quilliam Society";
+          subject = "Alhamdulillah — Your Qarde Hasan Amanah Has Been Approved — AQ Society";
           const fn2 = (loan.borrowerName ?? '').split(' ')[0];
-          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum, ${fn2},</p><p>Your Qarde Hasan loan of <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> has been <strong style="color:#1a4731">approved</strong>. Please contact us to arrange collection.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn2},</p><p>Alhamdulillah — we are delighted to inform you that your Qarde Hasan Amanah of <strong>&pound;${parseFloat(String(loan.amount)).toFixed(2)}</strong> for the <strong>Rimmers Building Project</strong> has been <strong style="color:#1a4731">approved</strong> by our Finance Committee and Trustees.</p><p>You are now a pillar of this House of Allah. The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em> May Allah (SWT) reward you with the very best in this world and the next.</p><p>Please contact us to arrange the transfer of funds, in sha Allah. JazakAllahu Khayran for your generous support and trust in the AQ Society.</p><p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div>${footer}</div>`;
         } else if (input.type === "reminder") {
-          const remaining = parseFloat(String(loan.amount)) - parseFloat(String(loan.totalRepaid ?? 0));
-          subject = "Qarde Hasan Loan Repayment Reminder — Abdullah Quilliam Society";
           const fn3 = (loan.borrowerName ?? '').split(' ')[0];
-          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum, ${fn3},</p><p>This is a friendly reminder that your outstanding balance is <strong>&pound;${remaining.toFixed(2)}</strong>. If you have any difficulties, please contact us.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+          const remaining = Math.max(0, parseFloat(String(loan.amount)) - parseFloat(String((loan as any).totalRepaid ?? 0)));
+          subject = "Project Milestone Update — Qarde Hasan Amanah — AQ Society";
+          htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn3},</p><p>May Allah (SWT) bless you and reward you for your generous Amanah towards the Rimmers Building Project.</p><p>We are writing to provide a project milestone update. The outstanding balance on your Qarde Hasan Amanah is <strong>&pound;${remaining.toFixed(2)}</strong>. We are working diligently to fulfil this trust, in sha Allah.</p><p>If you have any questions or would like to discuss your Amanah, please do not hesitate to contact us. We are always here to serve you.</p><p>JazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.</p><p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div>${footer}</div>`;
         } else if (input.type === "custom" && input.customSubject && input.customBody) {
           subject = input.customSubject;
           htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px">${input.customBody}</div>${footer}</div>`;
@@ -1169,12 +1170,12 @@ export const appRouter = router({
         const instalmentNum = (rep as any).instalmentNumber ?? '';
         const amount = parseFloat(String((rep as any).amount ?? 0)).toFixed(2);
         const baseStyle = `font-family:Arial,sans-serif;max-width:600px;margin:0 auto`;
-        const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan</p></div>`;
-        const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>`;
+        const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Amanah — Rimmers Building Project</p></div>`;
+        const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div>`;
         const instalmentLabel = instalmentNum ? ` (Instalment ${instalmentNum})` : '';
-        const htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Dear ${firstName},</p><p>Assalamu Alaikum,</p><p>This is to confirm that your Qarde Hasan loan repayment of <strong>&pound;${amount}</strong>${instalmentLabel} has been paid.</p><p>Please confirm receipt of the payment at your earliest convenience. If you have any questions, please do not hesitate to contact us.</p><p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p></div>${footer}</div>`;
+        const htmlBody = `<div style="${baseStyle}">${header}<div style="padding:24px"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p><p>May Allah (SWT) bless you and your family abundantly. We are writing to confirm that a repayment of <strong>&pound;${amount}</strong>${instalmentLabel} has been made towards your Qarde Hasan Amanah for the <strong>Rimmers Building Project</strong>.</p><p>Your generosity and trust in the AQ Society is deeply appreciated. The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em></p><p>Please confirm receipt of this payment at your earliest convenience. If you have any questions or concerns, please do not hesitate to contact us — we are always here to serve you.</p><p>JazakAllahu Khayran,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p></div>${footer}</div>`;
         try {
-          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Repayment Confirmation — £${amount}${instalmentLabel}`, htmlBody);
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Amanah — Repayment Confirmation £${amount}${instalmentLabel} — AQ Society`, htmlBody);
           return { success: true, sentTo: loan.borrowerEmail };
         } catch (e: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
@@ -1286,8 +1287,9 @@ export const appRouter = router({
             <p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Statement</p>
           </div>
           <div style="padding:24px">
-            <p>Dear ${firstName},</p><p>Assalamu Alaikum,</p>
-            <p>Please find below your Qarde Hasan loan statement as of ${new Date().toLocaleDateString('en-GB')}.</p>
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p>May Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the <strong>Rimmers Building Project</strong> as of ${new Date().toLocaleDateString('en-GB')}.</p>
+            <p>Your generosity is a pillar of this House of Allah — the Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em></p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0">
               <tr><td style="padding:5px 0;font-size:13px;color:#6b7280;width:150px">Loan Amount</td><td style="font-size:14px;font-weight:700;color:#059669">&pound;${Number(loan.amount).toLocaleString('en-GB',{minimumFractionDigits:2})}</td></tr>
               <tr><td style="padding:5px 0;font-size:13px;color:#6b7280">Total Paid</td><td style="font-size:14px;font-weight:700">&pound;${totalPaid.toFixed(2)}</td></tr>
@@ -1305,13 +1307,14 @@ export const appRouter = router({
               </tr></thead>
               <tbody>${rows}</tbody>
             </table>
-            <p style="margin-top:24px">If you have any questions, please do not hesitate to contact us.</p>
-            <p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p>
+            <p style="margin-top:24px">If you have any questions or would like to discuss your Amanah, please do not hesitate to contact us. We are always here to serve you.</p>
+            <p>JazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.</p>
+            <p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p>
           </div>
-          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div>
         </div>`;
         try {
-          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Loan Statement — ${new Date().toLocaleDateString('en-GB')}`, html);
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Amanah Statement — ${new Date().toLocaleDateString('en-GB')} — AQ Society`, html);
           return { success: true, sentTo: loan.borrowerEmail };
         } catch (e: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
@@ -1340,20 +1343,22 @@ export const appRouter = router({
         const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
           <div style="background:#1a4731;padding:24px;text-align:center">
             <h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1>
-            <p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Loan Reminder</p>
+            <p style="color:#c9a84c;margin:4px 0 0">Qarde Hasan Amanah &mdash; Project Milestone Update</p>
           </div>
           <div style="padding:24px">
-            <p>Dear ${firstName},</p><p>Assalamu Alaikum,</p>
-            <p>This is a reminder that the following Qarde Hasan loan repayments are outstanding:</p>
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p>May Allah (SWT) bless you and your family. We are writing to provide a Project Milestone Update on your Qarde Hasan Amanah for the <strong>Rimmers Building Project</strong>.</p>
+            <p>The following milestones are currently outstanding:</p>
             <ul style="margin:12px 0;padding-left:20px">${overdueList}</ul>
             <p style="font-weight:700">Total outstanding: &pound;${totalOverdue.toFixed(2)}</p>
-            <p>Please arrange payment at your earliest convenience. If you have already made payment, please disregard this message.</p>
-            <p>Jazakallahu Khayran,<br><strong>AQ Society Finance Team</strong></p>
+            <p>We trust in your commitment to this Amanah and kindly request that you arrange the outstanding payments at your earliest convenience. If you have already made payment, please disregard this message, and JazakAllahu Khayran.</p>
+            <p>Your generosity is a pillar of this House of Allah — the Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em> May Allah (SWT) accept this as Sadaqah Jariyah for you and your family.</p>
+            <p>JazakAllahu Khayran,<br><strong>AQ Society Finance Team</strong><br><em>Abdullah Quilliam Society</em></p>
           </div>
-          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This is an automated message from the AQ Society Finance System.</div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div>
         </div>`;
         try {
-          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Overdue Repayment Reminder — ${overdueReps.length} instalment(s)`, html);
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Project Milestone Update — ${overdueReps.length} Outstanding Payment(s) — AQ Society Qarde Hasan`, html);
           return { success: true, count: overdueReps.length, sentTo: loan.borrowerEmail };
         } catch (e: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
