@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'comm_channels' AND COLUMN_NAME = 'channelMemberIds' LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'comm_channels' AND COLUMN_NAME = 'channelMemberIds' LIMIT 1;",
+  "rows": [
+    {
+      "COLUMN_NAME": "channelMemberIds"
+    }
+  ],
+  "messages": [],
+  "stdout": "COLUMN_NAME\nchannelMemberIds\n",
+  "stderr": "",
+  "execution_time_ms": 272
+}

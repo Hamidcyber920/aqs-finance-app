@@ -3170,11 +3170,20 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
     }),
 
     updateChannel: adminProcedure
-      .input(z.object({ id: z.number(), name: z.string().min(1), description: z.string().optional() }))
+      .input(z.object({
+        id: z.number(),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        channelMemberIds: z.array(z.number()).optional(),
+      }))
       .mutation(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
-        await db.update(commChannels).set({ name: input.name, description: input.description ?? null }).where(eq(commChannels.id, input.id));
+        const updateData: Record<string, any> = { name: input.name, description: input.description ?? null };
+        if (input.channelMemberIds !== undefined) {
+          updateData.channelMemberIds = JSON.stringify(input.channelMemberIds);
+        }
+        await db.update(commChannels).set(updateData).where(eq(commChannels.id, input.id));
         return { success: true };
       }),
 

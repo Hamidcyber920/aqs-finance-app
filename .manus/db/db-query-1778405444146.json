@@ -1,0 +1,35 @@
+{
+  "query": "SELECT id, name, memberRoles FROM comm_channels ORDER BY sortOrder;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, name, memberRoles FROM comm_channels ORDER BY sortOrder;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "🚨 Urgent",
+      "memberRoles": "trustee,chair,manager,deputy"
+    },
+    {
+      "id": "2",
+      "name": "📋 Trustees",
+      "memberRoles": "trustee,chair"
+    },
+    {
+      "id": "3",
+      "name": "👔 Managers",
+      "memberRoles": "manager"
+    },
+    {
+      "id": "4",
+      "name": "👥 Staff",
+      "memberRoles": "manager,deputy"
+    },
+    {
+      "id": "5",
+      "name": "🕌 Friday Comms",
+      "memberRoles": "trustee,chair,manager,deputy"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tmemberRoles\n1\t🚨 Urgent\ttrustee,chair,manager,deputy\n2\t📋 Trustees\ttrustee,chair\n3\t👔 Managers\tmanager\n4\t👥 Staff\tmanager,deputy\n5\t🕌 Friday Comms\ttrustee,chair,manager,deputy\n",
+  "stderr": "",
+  "execution_time_ms": 436
+}

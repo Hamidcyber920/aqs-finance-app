@@ -666,3 +666,11 @@
 
 ## Communications Hub Mobile Fix (May 2026)
 - [x] Fix Communications Hub layout: mobile-first stacked layout (channel list on top, message panel below), no horizontal clipping
+
+## Communications Hub Upgrade (May 2026)
+- [ ] Show full names on all recipient chips (not just surnames)
+- [ ] Add/remove channel members from the top of the channel panel
+- [ ] Structured AQS message template: Assalamu Alaikum pre-filled, Priority dropdown (Urgent/High/Normal/Low), Reply-by dropdown (Today/Tomorrow/3 Days/7 Days/2 Weeks), Action-by dropdown (from contacts), Message body, From dropdown (Manager/Trustee names)
+- [ ] Individual member selection: tap name to toggle as recipient (email and WhatsApp)
+- [ ] WhatsApp: open individual wa.me links per selected member with pre-filled structured message
+- [ ] Email: send to selected individual members with structured template

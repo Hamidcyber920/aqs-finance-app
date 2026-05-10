@@ -1,0 +1,1 @@
+ALTER TABLE `comm_channels` ADD `channelMemberIds` text;

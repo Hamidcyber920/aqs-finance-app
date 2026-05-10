@@ -739,6 +739,8 @@ export const commChannels = mysqlTable("comm_channels", {
   isEditable: boolean("isEditable").default(true).notNull(),
   // Comma-separated roles that belong to this channel (e.g. "trustee,chair")
   memberRoles: varchar("memberRoles", { length: 500 }),
+  // JSON array of trustee IDs explicitly added to channel (overrides role-based if set)
+  channelMemberIds: text("channelMemberIds"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
