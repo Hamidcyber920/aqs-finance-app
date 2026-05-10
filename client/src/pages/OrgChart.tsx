@@ -382,6 +382,10 @@ export default function OrgChartPage() {
 
   const superadmins = users.filter((u: any) => u.role === "superadmin" || u.role === "admin");
 
+  // DOB completeness check
+  const activeTrustees = allTrustees.filter((t: any) => t.isActive !== false);
+  const missingDob = activeTrustees.filter((t: any) => !t.dateOfBirth);
+
   const boardTrustees = allTrustees.filter((t: any) => {
     const r = (t.role ?? "").toLowerCase();
     return r.includes("trustee") || r.includes("chair");
@@ -412,6 +416,18 @@ export default function OrgChartPage() {
           </h1>
           <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Abdullah Quilliam Society — tap ▾ to expand, ✏️ to edit</p>
         </div>
+
+        {missingDob.length > 0 && (
+          <div style={{ background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:12,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"flex-start",gap:10 }}>
+            <span style={{ fontSize:16,flexShrink:0 }}>⚠️</span>
+            <div>
+              <p style={{ fontSize:12,fontWeight:700,color:"#fbbf24",margin:"0 0 2px" }}>Birthday alerts missing for {missingDob.length} trustee{missingDob.length>1?"s":""}</p>
+              <p style={{ fontSize:11,color:T.muted,margin:0 }}>
+                {missingDob.map((t:any)=>t.fullName).join(", ")} — tap ✏️ on their card to add a date of birth.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))",gap:12,marginBottom:28 }}>
           {[

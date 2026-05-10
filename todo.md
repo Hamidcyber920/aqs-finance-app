@@ -706,3 +706,8 @@
 ## Communications Hub UX Fixes (May 2026 #2)
 - [x] Channel header: make member avatars horizontally scrollable (finger swipe to see all)
 - [x] MemberManager: replace add-name chips with a proper + Add button that opens a dropdown/picker
+
+## Next Steps #2 (May 2026)
+- [x] WhatsApp group link: add editable field inside MemberManager so any channel's WA group link can be set/updated from the UI
+- [x] Trustee DOB: show warning badge/count on Trustees page for trustees missing date of birth
+- [x] Channel sidebar: drag-to-reorder channels, persist new order to DB via sortOrder column

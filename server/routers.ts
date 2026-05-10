@@ -3176,6 +3176,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         description: z.string().optional(),
         channelMemberIds: z.array(z.number()).optional(),
         whatsappGroupLink: z.string().url().optional().nullable(),
+        sortOrder: z.number().optional(),
       }))
       .mutation(async ({ input }) => {
         const db = await getDb();
@@ -3186,6 +3187,9 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         }
         if (input.whatsappGroupLink !== undefined) {
           updateData.whatsappGroupLink = input.whatsappGroupLink ?? null;
+        }
+        if (input.sortOrder !== undefined) {
+          updateData.sortOrder = input.sortOrder;
         }
         await db.update(commChannels).set(updateData).where(eq(commChannels.id, input.id));
         return { success: true };

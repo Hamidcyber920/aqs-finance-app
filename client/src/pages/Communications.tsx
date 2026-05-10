@@ -418,10 +418,15 @@ function MemberManager({
 }: { channel:any; allTrustees:any[]; channelMembers:any[]; onUpdate:()=>void }) {
   const [open, setOpen] = useState(false);
   const [showAddPicker, setShowAddPicker] = useState(false);
+  const [waLink, setWaLink] = useState(channel.whatsappGroupLink ?? "");
+  const [editingWa, setEditingWa] = useState(false);
   const updateChannel = trpc.comms.updateChannel.useMutation({
-    onSuccess:()=>{toast.success("Members updated");onUpdate();setShowAddPicker(false);},
+    onSuccess:()=>{toast.success("Members updated");onUpdate();setShowAddPicker(false);setEditingWa(false);},
     onError:(e)=>toast.error(e.message),
   });
+  const saveWaLink = () => {
+    updateChannel.mutate({id:channel.id,name:channel.name,description:channel.description??undefined,whatsappGroupLink:waLink.trim()||null});
+  };
 
   const currentIds = channelMembers.map((t:any)=>t.id);
 
@@ -466,6 +471,41 @@ function MemberManager({
             {!channelMembers.length&&<p style={{fontSize:12,color:T.muted,margin:0}}>No members yet.</p>}
           </div>
 
+          {/* WhatsApp Group Link */}
+          <div style={{marginTop:14,paddingTop:12,borderTop:`1px solid ${T.border}`}}>
+            <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>WhatsApp Group Link</p>
+            {!editingWa?(
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {channel.whatsappGroupLink?(
+                  <a href={channel.whatsappGroupLink} target="_blank" rel="noopener noreferrer"
+                    style={{fontSize:11,color:"#25d366",textDecoration:"none",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {channel.whatsappGroupLink}
+                  </a>
+                ):(
+                  <span style={{fontSize:11,color:T.muted,flex:1}}>No group link set</span>
+                )}
+                <button onClick={()=>setEditingWa(true)}
+                  style={{padding:"4px 10px",borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",fontSize:11,flexShrink:0}}>
+                  {channel.whatsappGroupLink?"Edit":"Add Link"}
+                </button>
+              </div>
+            ):(
+              <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input value={waLink} onChange={e=>setWaLink(e.target.value)}
+                  placeholder="https://chat.whatsapp.com/..."
+                  style={{flex:1,padding:"6px 10px",borderRadius:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,color:T.white,fontSize:12,outline:"none"}}/>
+                <button onClick={saveWaLink} disabled={updateChannel.isPending}
+                  style={{padding:"6px 12px",borderRadius:8,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:11,flexShrink:0}}>
+                  Save
+                </button>
+                <button onClick={()=>{setEditingWa(false);setWaLink(channel.whatsappGroupLink??"")}}
+                  style={{padding:"6px 10px",borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",fontSize:11,flexShrink:0}}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+
           {addCandidates.length>0&&(
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowAddPicker(!showAddPicker)}
@@ -506,6 +546,9 @@ export default function CommunicationsPage() {
   const [editDesc, setEditDesc] = useState("");
   const [showCompose, setShowCompose] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [orderedChannels, setOrderedChannels] = useState<any[]>([]);
+  const dragItem = useRef<number|null>(null);
+  const dragOver = useRef<number|null>(null);
 
   const {data:channels=[],refetch:refetchChannels} = trpc.comms.listChannels.useQuery();
   const {data:allTrustees=[]} = trpc.trustees.listActive.useQuery();
@@ -521,7 +564,30 @@ export default function CommunicationsPage() {
     onError:(e)=>toast.error(e.message),
   });
 
-  const selectedChannel = (channels as any[]).find((c:any)=>c.id===selectedChannelId);
+  // Keep orderedChannels in sync with server data
+  useEffect(()=>{ if ((channels as any[]).length) setOrderedChannels(channels as any[]); },[channels]);
+
+  const handleDragStart = (idx: number) => { dragItem.current = idx; };
+  const handleDragEnter = (idx: number) => { dragOver.current = idx; };
+  const handleDragEnd = () => {
+    if (dragItem.current === null || dragOver.current === null || dragItem.current === dragOver.current) {
+      dragItem.current = null; dragOver.current = null; return;
+    }
+    const updated = [...orderedChannels];
+    const [moved] = updated.splice(dragItem.current, 1);
+    updated.splice(dragOver.current, 0, moved);
+    setOrderedChannels(updated);
+    // Persist new order
+    updated.forEach((ch:any, i:number) => {
+      if (ch.sortOrder !== i) {
+        updateChannelMutation.mutate({id:ch.id,name:ch.name,description:ch.description??undefined,sortOrder:i});
+      }
+    });
+    dragItem.current = null; dragOver.current = null;
+  };
+
+  const selectedChannel = orderedChannels.find((c:any)=>c.id===selectedChannelId) ||
+    (channels as any[]).find((c:any)=>c.id===selectedChannelId);
 
   // Compute channel members
   const channelMembers = (() => {
@@ -590,12 +656,18 @@ export default function CommunicationsPage() {
           {/* ── Sidebar ── */}
           <div className="comms-sidebar" style={{display: showPanel ? "none" : undefined}} id="comms-sidebar-mobile">
             <style>{`@media(min-width:641px){#comms-sidebar-mobile{display:block!important}}`}</style>
-            <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.1em",margin:"0 0 8px 2px"}}>Channels</p>
-            {(channels as any[]).map((ch:any,i:number)=>{
+            <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.1em",margin:"0 0 8px 2px"}}>Channels <span style={{fontSize:9,opacity:0.5,fontWeight:400,textTransform:"none"}}>(drag to reorder)</span></p>
+            {orderedChannels.map((ch:any,i:number)=>{
               const isSelected = ch.id===selectedChannelId;
               const isEditing  = editingChannel===ch.id;
               return (
-                <div key={ch.id} style={{marginBottom:4,animation:`fadeUp 0.4s ease ${i*50}ms both`}}>
+                <div key={ch.id}
+                  draggable
+                  onDragStart={()=>handleDragStart(i)}
+                  onDragEnter={()=>handleDragEnter(i)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={e=>e.preventDefault()}
+                  style={{marginBottom:4,animation:`fadeUp 0.4s ease ${i*50}ms both`,cursor:"grab"}}>
                   {isEditing?(
                     <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
                       <input value={editName} onChange={e=>setEditName(e.target.value)}
