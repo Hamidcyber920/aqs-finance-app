@@ -673,6 +673,17 @@ export const trustees = mysqlTable("trustees", {
   role: varchar("role", { length: 100 }).default("Trustee").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   notes: text("notes"),
+  // Extended profile fields
+  dateOfBirth: date("dateOfBirth"),
+  addressLine1: varchar("addressLine1", { length: 255 }),
+  addressLine2: varchar("addressLine2", { length: 255 }),
+  city: varchar("city", { length: 100 }),
+  postcode: varchar("postcode", { length: 20 }),
+  // Next of kin
+  nokName: varchar("nokName", { length: 200 }),
+  nokPhone: varchar("nokPhone", { length: 30 }),
+  nokEmail: varchar("nokEmail", { length: 320 }),
+  nokRelationship: varchar("nokRelationship", { length: 100 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

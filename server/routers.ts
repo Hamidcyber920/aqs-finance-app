@@ -852,7 +852,26 @@ export const appRouter = router({
       .input(z.object({ fullName: z.string(), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ input }) => createTrustee({ fullName: input.fullName, email: input.email, phone: input.phone, role: input.role ?? "Trustee", notes: input.notes })),
     update: adminProcedure
-      .input(z.object({ id: z.number(), fullName: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional(), isActive: z.boolean().optional(), notes: z.string().optional() }))
+      .input(z.object({
+        id: z.number(),
+        fullName: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        role: z.string().optional(),
+        isActive: z.boolean().optional(),
+        notes: z.string().optional(),
+        // Extended profile
+        dateOfBirth: z.string().optional().nullable(),
+        addressLine1: z.string().optional().nullable(),
+        addressLine2: z.string().optional().nullable(),
+        city: z.string().optional().nullable(),
+        postcode: z.string().optional().nullable(),
+        // Next of kin
+        nokName: z.string().optional().nullable(),
+        nokPhone: z.string().optional().nullable(),
+        nokEmail: z.string().optional().nullable(),
+        nokRelationship: z.string().optional().nullable(),
+      }))
       .mutation(async ({ input }) => { const { id, ...data } = input; await updateTrustee(id, data as any); return { success: true }; }),
     delete: superAdminProcedure
       .input(z.object({ id: z.number() }))

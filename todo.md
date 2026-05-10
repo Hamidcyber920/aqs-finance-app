@@ -640,3 +640,10 @@
 - [x] Full-page / full-width layout (no horizontal scroll clipping on mobile)
 - [x] Each card expandable (tap to expand) showing full details
 - [x] Each card inline-editable (edit icon opens edit form within card or dialog)
+
+## OrgChart Contact Card Extended Fields (May 2026 — round 18)
+- [x] DB: add dateOfBirth, addressLine1, addressLine2, city, postcode, nokName, nokPhone, nokEmail columns to trustees table
+- [x] Backend: include new fields in trustees.list and trustees.update procedures
+- [x] Card front: show birthday countdown badge (e.g. "🎂 Birthday in 12 days") when within 30 days
+- [x] Card expanded view: show Title, Full Name, DOB + auto-calculated age, full address, next of kin (name, phone, email)
+- [x] Card edit form: all new fields editable inline (DOB date picker, address fields, NOK fields)

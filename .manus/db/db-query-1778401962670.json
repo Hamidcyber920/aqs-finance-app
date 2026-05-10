@@ -1,0 +1,9 @@
+{
+  "query": "\nALTER TABLE `trustees` ADD `dateOfBirth` date;\nALTER TABLE `trustees` ADD `addressLine1` varchar(255);\nALTER TABLE `trustees` ADD `addressLine2` varchar(255);\nALTER TABLE `trustees` ADD `city` varchar(100);\nALTER TABLE `trustees` ADD `postcode` varchar(20);\nALTER TABLE `trustees` ADD `nokName` varchar(200);\nALTER TABLE `trustees` ADD `nokPhone` varchar(30);\nALTER TABLE `trustees` ADD `nokEmail` varchar(320);\nALTER TABLE `trustees` ADD `nokRelationship` varchar(100);\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute \nALTER TABLE `trustees` ADD `dateOfBirth` date;\nALTER TABLE `trustees` ADD `addressLine1` varchar(255);\nALTER TABLE `trustees` ADD `addressLine2` varchar(255);\nALTER TABLE `trustees` ADD `city` varchar(100);\nALTER TABLE `trustees` ADD `postcode` varchar(20);\nALTER TABLE `trustees` ADD `nokName` varchar(200);\nALTER TABLE `trustees` ADD `nokPhone` varchar(30);\nALTER TABLE `trustees` ADD `nokEmail` varchar(320);\nALTER TABLE `trustees` ADD `nokRelationship` varchar(100);\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1968
+}
