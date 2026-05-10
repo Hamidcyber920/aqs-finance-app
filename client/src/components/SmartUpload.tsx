@@ -19,7 +19,11 @@ export type ModuleType =
   | "friday_collection"
   | "fundraising_donation"
   | "receipt"
-  | "bank_statement";
+  | "bank_statement"
+  | "handwritten_collection"
+  | "business_card"
+  | "bank_transfer_screenshot"
+  | "crm_donor";
 
 export interface ExtractedField {
   key: string;

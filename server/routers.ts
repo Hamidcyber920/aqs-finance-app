@@ -3086,7 +3086,8 @@ export const appRouter = router({
         moduleType: z.enum([
           'income_rental', 'loan_repayment', 'loan_application',
           'invoice', 'payroll', 'friday_collection',
-          'fundraising_donation', 'receipt', 'bank_statement'
+          'fundraising_donation', 'receipt', 'bank_statement',
+          'handwritten_collection', 'business_card', 'bank_transfer_screenshot', 'crm_donor'
         ]),
         // Optional: existing record IDs to check for discrepancies
         existingRecordIds: z.array(z.number()).optional(),
@@ -3163,14 +3164,18 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 - notes: any additional notes
 Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 
-          fundraising_donation: `You are a donation/fundraising extractor. Extract from this document:
+          fundraising_donation: `You are a donation/fundraising extractor for a UK Islamic charity. Extract from this document:
 - donorName: full name of donor
+- donorPhone: UK phone number of donor (e.g. +44 7700 000000) or null
+- donorEmail: email address of donor or null
+- donorAddress: full postal address of donor (for Gift Aid) or null
 - amount: donation amount in GBP (number)
 - donationDate: date of donation (YYYY-MM-DD)
 - paymentMethod: cash/bank_transfer/cheque/online or null
 - reference: payment reference or null
 - campaignName: fundraising campaign name or null
 - giftAid: whether gift aid applies (true/false or null)
+- beneficiaryName: if this is a Sadaqah Jariyah donation, the name of the person it is dedicated to (e.g. 'For my late father Ahmad') or null
 - notes: any additional notes
 Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 
@@ -3193,6 +3198,53 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 - bankName: name of the bank
 - openingBalance: opening balance in GBP (number or null)
 - transactions: array of up to 10 most recent transactions, each with {date, description, debit, credit} (or null)
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          handwritten_collection: `You are an expert at reading handwritten UK charity collection sheets. This image may be a handwritten form, table, or list. Extract ALL donor entries you can see. For each entry extract:
+- donorName: full name of donor (read carefully, even if handwriting is unclear)
+- donorPhone: phone number if visible (UK format preferred)
+- donorEmail: email address if visible
+- amount: donation amount in GBP (number, look for £ signs or numbers in amount columns)
+- donationDate: date (YYYY-MM-DD) if visible, otherwise null
+- campaignName: campaign or project name if written at top of sheet or next to entry
+- giftAid: true if there is a tick, 'GA', 'Gift Aid', or 'Y' next to the entry, false otherwise
+- paymentMethod: cash/cheque/bank_transfer based on any method column or notes
+- notes: any additional notes or comments next to this entry
+Return JSON with key "records" containing an array of all donors found. If only one donor is visible, still return as array. Use null for missing fields.`,
+
+          business_card: `You are an expert at reading business cards. Extract from this business card image:
+- donorName: full name (first and last name)
+- donorPhone: phone number (prefer mobile/WhatsApp number, UK format)
+- donorEmail: email address
+- donorAddress: business address if shown
+- organisation: company or organisation name
+- jobTitle: job title or role
+- website: website URL if shown
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          bank_transfer_screenshot: `You are an expert at reading UK bank transfer confirmation screenshots. Extract from this screenshot:
+- donorName: sender name or account name
+- amount: transferred amount in GBP (number)
+- donationDate: date of transfer (YYYY-MM-DD)
+- reference: payment reference or description text
+- senderBank: name of sender's bank if visible
+- senderSortCode: sort code if visible
+- senderAccountNumber: account number if visible
+- recipientName: recipient account name
+- transactionId: transaction ID or reference number
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
+          crm_donor: `You are an expert at extracting donor information for a UK Islamic charity CRM. This image may be a donor form, pledge card, or handwritten note. Extract:
+- donorName: full name
+- donorPhone: UK phone number (mobile preferred for WhatsApp)
+- donorEmail: email address
+- donorAddress: full postal address (important for Gift Aid)
+- amount: donation or pledge amount in GBP (number)
+- donationDate: date (YYYY-MM-DD)
+- campaignName: campaign or project name
+- giftAid: true if Gift Aid is ticked/declared, false otherwise
+- beneficiaryName: if this is a Sadaqah Jariyah dedication, the name of the person it is for
+- notes: any additional notes
 Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
         };
 

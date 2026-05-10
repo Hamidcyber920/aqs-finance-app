@@ -513,4 +513,101 @@ export const crmRouter = router({
   getGiftAidDeclarationText: publicProcedure.query(() => {
     return { text: GIFT_AID_DECLARATION_TEXT };
   }),
+
+  // ─── CRM PHONE MATCHING: look up existing donor by phone number ───────────
+  matchByPhone: protectedProcedure
+    .input(z.object({ phone: z.string().min(5) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { matched: false, lead: null, donor: null };
+      const cleaned = input.phone.replace(/\D/g, "");
+      const variants = [
+        cleaned,
+        cleaned.startsWith("44") ? "0" + cleaned.slice(2) : cleaned,
+        cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned,
+      ];
+      const leads = await db.select().from(donorLeads).limit(500);
+      const matchedLead = leads.find((l) => {
+        const ph = l.whatsapp || (l as any).phone || "";
+        if (!ph) return false;
+        const lc = ph.replace(/\D/g, "");
+        return variants.some((v) => lc === v || lc.endsWith(v.slice(-8)));
+      });
+      if (matchedLead) return { matched: true, lead: matchedLead, donor: null };
+      const allDonors = await db.select().from(donors).limit(500);
+      const matchedDonor = allDonors.find((d) => {
+        const ph = (d as any).phone || (d as any).mobile || "";
+        if (!ph) return false;
+        const dc = ph.replace(/\D/g, "");
+        return variants.some((v) => dc === v || dc.endsWith(v.slice(-8)));
+      });
+      if (matchedDonor) return { matched: true, lead: null, donor: matchedDonor };
+      return { matched: false, lead: null, donor: null };
+    }),
+
+  // ─── SAVE SCAN RESULT TO CRM ──────────────────────────────────────────────
+  saveScanToCRM: protectedProcedure
+    .input(
+      z.object({
+        donorName: z.string().min(1),
+        donorPhone: z.string().optional(),
+        donorEmail: z.string().optional(),
+        donorAddress: z.string().optional(),
+        amount: z.number().optional(),
+        donationDate: z.string().optional(),
+        campaignName: z.string().optional(),
+        giftAid: z.boolean().default(false),
+        beneficiaryName: z.string().optional(),
+        notes: z.string().optional(),
+        sourceType: z.enum(["handwritten_collection", "business_card", "bank_transfer_screenshot", "crm_donor", "fundraising_donation"]).default("crm_donor"),
+        existingLeadId: z.number().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      if (input.existingLeadId) {
+        await db
+          .update(donorLeads)
+          .set({
+            name: input.donorName,
+            whatsapp: input.donorPhone ?? undefined,
+            notes: input.notes ?? undefined,
+          })
+          .where(eq(donorLeads.id, input.existingLeadId));
+        return { action: "updated", leadId: input.existingLeadId };
+      }
+      // Map sourceType to the donorLeads source enum (only known values allowed)
+      const sourceMap: Record<string, "quickcapture" | "stripe" | "manual" | "portal"> = {
+        handwritten_collection: "manual",
+        business_card: "manual",
+        bank_transfer_screenshot: "manual",
+        crm_donor: "manual",
+        fundraising_donation: "manual",
+      };
+      const [inserted] = await db
+        .insert(donorLeads)
+        .values({
+          name: input.donorName,
+          whatsapp: input.donorPhone || "unknown",
+          notes: input.notes,
+          source: sourceMap[input.sourceType] ?? "manual",
+          profileComplete: !!(input.donorPhone && input.donorEmail && input.donorAddress),
+        })
+        .$returningId();
+      if (input.amount && input.amount > 0) {
+        await db.insert(fundraisingDonations).values({
+          donorName: input.donorName,
+          amount: String(input.amount),
+          donatedAt: input.donationDate ? new Date(input.donationDate) : new Date(),
+          campaignId: 0, // unassigned — will be linked later
+          giftAidDeclared: input.giftAid,
+          beneficiaryNames: input.beneficiaryName ? JSON.stringify([input.beneficiaryName]) : null,
+          donorLeadId: inserted.id,
+          notes: input.notes ? `${input.campaignName ? `[${input.campaignName}] ` : ""}${input.notes}` : input.campaignName ?? undefined,
+          paymentMethod: "cash",
+        });
+      }
+      return { action: "created", leadId: inserted.id };
+    }),
 });

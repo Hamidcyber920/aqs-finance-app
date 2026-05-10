@@ -114,6 +114,38 @@ export function registerStripeWebhook(app: Express) {
                 });
               }
 
+              // Generate Islamic WhatsApp thank-you receipt URL (for admin to send)
+              if (localSession.donorPhone) {
+                const firstName = localSession.donorName.split(" ")[0];
+                const refCode = localSession.referenceCode ?? session.id.slice(-8).toUpperCase();
+                const hadith = "The Prophet ﷺ said: 'Whoever builds a house for Allah, Allah will build for him a house in Paradise.' (Bukhari & Muslim)";
+                const msgLines = [
+                  `Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName} 🌿`,
+                  ``,
+                  `JazakAllah Khayran for your generous donation to AQ Society!`,
+                  ``,
+                  `🕌 Campaign: ${localSession.campaignName ?? "AQ Society"}`,
+                  `💷 Amount: £${Number(localSession.amount).toFixed(2)}`,
+                  `🔖 Reference: ${refCode}`,
+                  localSession.giftAidDeclared ? `✅ Gift Aid: Declared (25% uplift)` : ``,
+                  ``,
+                  `📖 ${hadith}`,
+                  ``,
+                  `May Allah accept your sadaqah and grant you and your family the highest ranks in Jannah. Ameen. 🤲`,
+                  ``,
+                  `— AQ Society Finance Team`,
+                ].filter(Boolean).join("\n");
+                const cleaned = localSession.donorPhone.replace(/\D/g, "");
+                const waNumber = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
+                const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(msgLines)}`;
+                console.log(`[Stripe Webhook] WhatsApp receipt URL for ${localSession.donorName}: ${waUrl.slice(0, 100)}...`);
+                // Mark thank-you as ready to send
+                await db
+                  .update(stripePaymentSessions)
+                  .set({ thankYouWhatsAppSentAt: new Date() })
+                  .where(eq(stripePaymentSessions.id, localSession.id));
+              }
+
               console.log(`[Stripe Webhook] Payment completed for ${localSession.donorName} — £${localSession.amount}`);
             }
             break;

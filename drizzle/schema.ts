@@ -220,6 +220,17 @@ export const fundraisingDonations = mysqlTable("fundraising_donations", {
   certificateUrl: text("certificateUrl"),
   thankYouSent: boolean("thankYouSent").default(false).notNull(),
   notes: text("notes"),
+  // CRM linkage
+  donorLeadId: int("donorLeadId"),
+  // Gift Aid
+  giftAidDeclared: boolean("giftAidDeclared").default(false).notNull(),
+  giftAidAddress: text("giftAidAddress"),
+  giftAidSignedAt: timestamp("giftAidSignedAt"),
+  giftAidIpAddress: varchar("giftAidIpAddress", { length: 45 }),
+  // Sadaqah Jariyah beneficiaries (JSON array of {name, relation, dua})
+  beneficiaryNames: text("beneficiaryNames"),
+  // Payment reference
+  referenceCode: varchar("referenceCode", { length: 50 }),
   donatedAt: timestamp("donatedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
