@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `succession_events` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`eventType` enum('delegate_assigned','delegate_removed','inactivity_alert','succession_triggered','manual_succession','owner_resumed') NOT NULL,\n\t`triggeredByUserId` int,\n\t`delegateUserId` int,\n\t`delegateTrusteeId` int,\n\t`notes` text,\n\t`notifiedTrusteesJson` text,\n\t`triggeredAt` timestamp NOT NULL DEFAULT (now()),\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `succession_events_id` PRIMARY KEY(`id`)\n);\nALTER TABLE `users` ADD `isOwnerDelegate` boolean DEFAULT false NOT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE `succession_events` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`eventType` enum('delegate_assigned','delegate_removed','inactivity_alert','succession_triggered','manual_succession','owner_resumed') NOT NULL,\n\t`triggeredByUserId` int,\n\t`delegateUserId` int,\n\t`delegateTrusteeId` int,\n\t`notes` text,\n\t`notifiedTrusteesJson` text,\n\t`triggeredAt` timestamp NOT NULL DEFAULT (now()),\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `succession_events_id` PRIMARY KEY(`id`)\n);\nALTER TABLE `users` ADD `isOwnerDelegate` boolean DEFAULT false NOT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 624
+}

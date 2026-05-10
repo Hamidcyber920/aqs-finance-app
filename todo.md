@@ -791,3 +791,26 @@
 - [x] Trustees channel: apply same Compose enhancements (templates, WA sequence, sent history)
 - [x] Trustees channel: add toggle dropdown to include any staff/manager as additional recipient
 - [x] Trustees channel: allow adding new trustees and managers to the channel member list
+
+## Communications — Template Categories, Reply Tracking & Scheduled Sends (May 2026)
+- [ ] DB: add category column to comm_templates (Friday Comms, Urgent, Payment, General)
+- [ ] DB: add scheduledAt (timestamp nullable) and sendStatus (pending/sent/failed) to comm_messages
+- [ ] Backend: update templates.save/list to include category; add comms.updateSentStatus procedure
+- [ ] Backend: scheduled send job — every minute check comm_messages where scheduledAt <= now and sendStatus=pending, send via Gmail/WA
+- [ ] Compose: template picker shows category filter tabs; saving a template prompts for category
+- [ ] Sent History: each card shows "Awaiting Reply" / "Replied" badge; tap to toggle status
+- [ ] Compose: "Send Later" button opens date/time picker; queues message with scheduledAt timestamp
+- [ ] Compose: scheduled messages show in Sent History with clock icon and scheduled time
+
+## Superadmin Full Access & Delegated Succession System (May 2026)
+- [ ] Audit all tRPC procedures: ensure superadmin + owner (openId = OWNER_OPEN_ID) bypass all role checks
+- [ ] DB: add isOwnerDelegate boolean to users table; add succession_events table (id, type, triggeredAt, triggeredBy, delegateId, notifiedAt, notes)
+- [ ] Backend: ownerProcedure helper that allows superadmin OR owner OR active delegate
+- [ ] Backend: setDelegate procedure (owner-only) — designates a trustee as emergency delegate
+- [ ] Backend: inactivity check scheduled job — runs daily, if superadmin/owner last active > 28 days, auto-promote delegate and email all trustees + next of kin
+- [ ] Backend: manual succession trigger — owner can trigger succession manually (e.g. planned absence)
+- [ ] Frontend: Succession & Delegation panel in Admin Panel — shows current delegate, last-active timestamps, activity log
+- [ ] Frontend: delegate picker — owner selects any trustee from dropdown; shows their name, role, and contact
+- [ ] Frontend: succession event log — table of all succession events with date, type, and who was notified
+- [ ] Frontend: superadmin/owner see edit/delete controls on ALL records throughout the app (receipts, expenses, income, trustees, staff, channels, templates, etc.)
+- [ ] Frontend: non-superadmin users see only their own records and permitted actions

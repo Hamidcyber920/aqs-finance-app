@@ -32,7 +32,8 @@ import {
   getDashboardStats,
 } from "./db";
 import { eq, and, sql } from "drizzle-orm";
-import { loanRepayments, commChannels, commMessages, commTemplates } from "../drizzle/schema";
+import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users } from "../drizzle/schema";
+import { ENV } from "./_core/env";
 // sendGmail is defined locally in this file (line ~123)
 
 // ─── Permission helpers ───────────────────────────────────────────────────────
@@ -41,19 +42,35 @@ const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
 
 function isAdmin(role: string) { return ADMIN_ROLES.includes(role); }
 
+/** Returns true if the user is the app owner (Dr Abdul Hamid) by openId, or is superadmin */
+function isOwnerOrSuperAdmin(user: { role: string; openId?: string | null }): boolean {
+  return user.role === "superadmin" || user.role === "admin" || (!!ENV.ownerOpenId && user.openId === ENV.ownerOpenId);
+}
+
+/** Returns true if user is owner, superadmin, or the designated owner delegate */
+function isOwnerOrDelegate(user: { role: string; openId?: string | null; isOwnerDelegate?: boolean }): boolean {
+  return isOwnerOrSuperAdmin(user) || user.isOwnerDelegate === true;
+}
+
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (!isAdmin(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
   return next({ ctx });
 });
 
 const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "superadmin" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Super admin access required" });
+  if (!isOwnerOrSuperAdmin(ctx.user)) throw new TRPCError({ code: "FORBIDDEN", message: "Super admin access required" });
+  return next({ ctx });
+});
+
+/** Owner-level procedure: only the app owner (by openId), superadmin, or the active owner delegate */
+const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!isOwnerOrDelegate(ctx.user)) throw new TRPCError({ code: "FORBIDDEN", message: "Owner-level access required" });
   return next({ ctx });
 });
 
 // Superadmin or Trustee only — used for AI document import and sensitive data entry
 const seniorProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "superadmin" && ctx.user.role !== "trustee")
+  if (!isOwnerOrSuperAdmin(ctx.user) && ctx.user.role !== "trustee")
     throw new TRPCError({ code: "FORBIDDEN", message: "Only superadmins and trustees can perform this action" });
   return next({ ctx });
 });
@@ -341,6 +358,110 @@ export const appRouter = router({
   admin: adminRouter,
   backup: backupRouter,
   voiceAgent: voiceAgentRouter,
+
+  // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
+  succession: router({
+    /** Get current succession status: who is the delegate, last owner activity, inactivity days */
+    getStatus: ownerProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+      // Find current delegate user
+      const allUsers = await db.select().from(users);
+      const delegate = allUsers.find((u: any) => u.isOwnerDelegate);
+      // Find owner user
+      const owner = allUsers.find((u: any) => u.openId === ENV.ownerOpenId);
+      // Last 10 succession events
+      const events = await db.select().from(successionEvents).orderBy(sql`triggeredAt DESC`).limit(10);
+      // Get trustees for delegate picker
+      const { trustees } = await import('../drizzle/schema');
+      const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
+      return {
+        delegate: delegate ? { id: delegate.id, name: delegate.name, role: delegate.role } : null,
+        owner: owner ? { id: owner.id, name: owner.name, lastActiveAt: owner.lastSignedIn ?? null } : null,
+        inactivityDays: owner?.lastSignedIn ? Math.floor((Date.now() - new Date(owner.lastSignedIn).getTime()) / 86400000) : null,
+        events,
+        trustees: allTrustees.map((t: any) => ({ id: t.id, name: t.fullName, role: t.role, email: t.email })),
+      };
+    }),
+
+    /** Assign a trustee (by trustees.id) as the owner delegate */
+    setDelegate: ownerProcedure
+      .input(z.object({ trusteesId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { trustees } = await import('../drizzle/schema');
+        const trustee = await db.select().from(trustees).where(eq(trustees.id, input.trusteesId)).limit(1);
+        if (!trustee[0]) throw new TRPCError({ code: 'NOT_FOUND', message: 'Trustee not found' });
+        // Clear any existing delegate
+        await db.update(users).set({ isOwnerDelegate: false });
+        // Try to find matching user account by email
+        let delegateUser: any = null;
+        if (trustee[0].email) {
+          const found = await db.select().from(users).where(eq(users.email, trustee[0].email)).limit(1);
+          if (found[0]) {
+            await db.update(users).set({ isOwnerDelegate: true }).where(eq(users.id, found[0].id));
+            delegateUser = found[0];
+          }
+        }
+        // Log succession event
+        await db.insert(successionEvents).values({
+          eventType: 'delegate_assigned',
+          triggeredByUserId: ctx.user.id,
+          delegateTrusteeId: trustee[0].id,
+          delegateUserId: delegateUser?.id ?? null,
+          notes: `Delegate assigned: ${trustee[0].fullName} (${trustee[0].role})`,
+        });
+        return { success: true, delegateName: trustee[0].fullName };
+      }),
+
+    /** Remove the current delegate */
+    removeDelegate: ownerProcedure.mutation(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+      await db.update(users).set({ isOwnerDelegate: false });
+      await db.insert(successionEvents).values({
+        eventType: 'delegate_removed',
+        triggeredByUserId: ctx.user.id,
+        notes: 'Delegate removed by owner',
+      });
+      return { success: true };
+    }),
+
+    /** Manually trigger succession (e.g. planned absence) — emails all trustees + NOK */
+    triggerManual: ownerProcedure
+      .input(z.object({ reason: z.string().min(1), notifyNok: z.boolean().default(false) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { trustees } = await import('../drizzle/schema');
+        const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
+        const notified: { name: string; email: string }[] = [];
+        for (const t of allTrustees) {
+          if (!t.email) continue;
+          const firstName = (t.fullName ?? '').split(' ').find((p: string) => !['Mr','Dr','Mrs','Ms'].includes(p)) ?? t.fullName ?? 'Trustee';
+          const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1a1a2e;padding:24px;"><h1 style="color:#c9a84c;margin:0;">AQ Society — Succession Notice</h1></div><div style="padding:24px;"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p><p>This is an official notice that a <strong>succession event</strong> has been triggered for the AQ Society administration system.</p><p><strong>Reason:</strong> ${input.reason}</p><p>The designated delegate trustee has been granted temporary administrative access. Please contact the AQ Society management team for further information.</p><p>JazakAllahu Khayran,<br><strong>AQ Society System</strong></p></div></div>`;
+          try {
+            await sendGmail(t.email, t.fullName ?? firstName, 'AQ Society — Succession Notice', html);
+            notified.push({ name: t.fullName ?? firstName, email: t.email });
+          } catch (e) { /* continue */ }
+          // Notify NOK if requested
+          if (input.notifyNok && t.nokEmail) {
+            try {
+              await sendGmail(t.nokEmail, t.nokName ?? 'Next of Kin', 'AQ Society — Succession Notice (Next of Kin)', html);
+              notified.push({ name: t.nokName ?? 'NOK', email: t.nokEmail });
+            } catch (e) { /* continue */ }
+          }
+        }
+        await db.insert(successionEvents).values({
+          eventType: 'manual_succession',
+          triggeredByUserId: ctx.user.id,
+          notes: input.reason,
+          notifiedTrusteesJson: JSON.stringify(notified),
+        });
+        return { success: true, notifiedCount: notified.length };
+      }),
+  }),
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),

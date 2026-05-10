@@ -27,6 +27,7 @@ export const users = mysqlTable("users", {
   approvedById: int("approvedById"),
   approvedAt: timestamp("approvedAt"),
   delegateApproverId: int("delegateApproverId"), // superadmin can delegate approval to this user
+  isOwnerDelegate: boolean("isOwnerDelegate").default(false).notNull(), // designated emergency succession delegate
   // Local auth
   passwordHash: varchar("passwordHash", { length: 255 }),
   resetToken: varchar("resetToken", { length: 128 }),
@@ -764,6 +765,11 @@ export const commMessages = mysqlTable("comm_messages", {
   isRead: boolean("isRead").default(true).notNull(),
   isReplied: boolean("isReplied").default(false).notNull(),
   repliedAt: timestamp("repliedAt"),
+  // Scheduled send support
+  scheduledAt: timestamp("scheduledAt"),   // null = send immediately
+  sendStatus: mysqlEnum("sendStatus", ["pending", "sent", "failed"]).default("sent").notNull(),
+  // Reply tracking
+  replyStatus: mysqlEnum("replyStatus", ["awaiting", "replied", "none"]).default("none").notNull(),
   sentAt: timestamp("sentAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -775,6 +781,7 @@ export type InsertCommMessage = typeof commMessages.$inferInsert;
 export const commTemplates = mysqlTable("comm_templates", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
+  category: varchar("category", { length: 100 }).default("General").notNull(),
   subject: varchar("subject", { length: 500 }),
   body: text("body"),
   priority: varchar("priority", { length: 50 }).default("Normal"),
@@ -785,3 +792,26 @@ export const commTemplates = mysqlTable("comm_templates", {
 });
 export type CommTemplate = typeof commTemplates.$inferSelect;
 export type InsertCommTemplate = typeof commTemplates.$inferInsert;
+
+// ─── SUCCESSION EVENTS ───────────────────────────────────────────────────────
+
+export const successionEvents = mysqlTable("succession_events", {
+  id: int("id").autoincrement().primaryKey(),
+  eventType: mysqlEnum("eventType", [
+    "delegate_assigned",
+    "delegate_removed",
+    "inactivity_alert",
+    "succession_triggered",
+    "manual_succession",
+    "owner_resumed",
+  ]).notNull(),
+  triggeredByUserId: int("triggeredByUserId"),   // who triggered it (null = system)
+  delegateUserId: int("delegateUserId"),           // the trustee delegate involved
+  delegateTrusteeId: int("delegateTrusteeId"),     // trustees table id (if from trustees table)
+  notes: text("notes"),
+  notifiedTrusteesJson: text("notifiedTrusteesJson"), // JSON array of {name, email} notified
+  triggeredAt: timestamp("triggeredAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type SuccessionEvent = typeof successionEvents.$inferSelect;
+export type InsertSuccessionEvent = typeof successionEvents.$inferInsert;

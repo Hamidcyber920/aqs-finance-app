@@ -246,6 +246,20 @@
       "when": 1778421168362,
       "tag": "0034_low_silver_samurai",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "5",
+      "when": 1778422411382,
+      "tag": "0035_far_frog_thor",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1778422768876,
+      "tag": "0036_fine_wolfpack",
+      "breakpoints": true
     }
   ]
 }
