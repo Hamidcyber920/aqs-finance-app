@@ -134,7 +134,10 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
 
   return (
     <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:16,padding:"18px 20px",width:"100%" }}>
-      <div style={{ display:"flex",alignItems:"flex-start",gap:14,marginBottom:12 }}>
+      <div
+        onClick={()=>{ if(!editingRole) setExpanded(e=>!e); }}
+        style={{ display:"flex",alignItems:"flex-start",gap:14,marginBottom:12,cursor:"pointer",userSelect:"none" }}
+      >
         <div style={{ width:56,height:56,borderRadius:"50%",flexShrink:0,background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:T.white }}>
           {getInitials(name)}
         </div>
@@ -162,10 +165,10 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
           {age !== null && <p style={{ fontSize:12,color:T.muted,margin:"4px 0 0" }}>Age {age}</p>}
         </div>
         <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-          <button onClick={startEdit} style={{ width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+          <button onClick={e=>{e.stopPropagation();startEdit();}} style={{ width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
             <Pencil size={13}/>
           </button>
-          <button onClick={()=>setExpanded(!expanded)} style={{ width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+          <button onClick={e=>{e.stopPropagation();setExpanded(v=>!v);}} style={{ width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
             {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
           </button>
         </div>

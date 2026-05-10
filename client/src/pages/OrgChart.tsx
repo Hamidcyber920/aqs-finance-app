@@ -139,7 +139,10 @@ function PersonCard({ person, isRoot = false, onSaved }: { person: any; isRoot?:
     }}>
 
       {/* ── Card header ── */}
-      <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:10 }}>
+      <div
+        onClick={()=>setExpanded(v=>!v)}
+        style={{ display:"flex",alignItems:"center",gap:12,marginBottom:10,cursor:"pointer",userSelect:"none" }}
+      >
         <div style={{
           width:48,height:48,borderRadius:"50%",flexShrink:0,
           background:`linear-gradient(135deg,${T.purple},#4f46e5)`,
@@ -160,12 +163,12 @@ function PersonCard({ person, isRoot = false, onSaved }: { person: any; isRoot?:
         </div>
         <div style={{ display:"flex",gap:6,flexShrink:0 }}>
           {isTrusteeRecord && (
-            <button onClick={() => { setEditing(!editing); setExpanded(true); setForm({ fullName:name,email,phone,role,notes:person.notes??"",dateOfBirth:dob??"",addressLine1:person.addressLine1??"",addressLine2:person.addressLine2??"",city:person.city??"",postcode:person.postcode??"",nokName:person.nokName??"",nokPhone:person.nokPhone??"",nokEmail:person.nokEmail??"",nokRelationship:person.nokRelationship??"" }); }}
+            <button onClick={e=>{ e.stopPropagation(); setEditing(!editing); setExpanded(true); setForm({ fullName:name,email,phone,role,notes:person.notes??"",dateOfBirth:dob??"",addressLine1:person.addressLine1??"",addressLine2:person.addressLine2??"",city:person.city??"",postcode:person.postcode??"",nokName:person.nokName??"",nokPhone:person.nokPhone??"",nokEmail:person.nokEmail??"",nokRelationship:person.nokRelationship??"" }); }}
               style={{ width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }} title="Edit contact">
               <Pencil size={12}/>
             </button>
           )}
-          <button onClick={() => setExpanded(!expanded)}
+          <button onClick={e=>{ e.stopPropagation(); setExpanded(v=>!v); }}
             style={{ width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }} title={expanded?"Collapse":"Expand"}>
             {expanded ? <ChevronUp size={12}/> : <ChevronDown size={12}/>}
           </button>

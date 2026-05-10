@@ -814,3 +814,8 @@
 - [ ] Frontend: succession event log — table of all succession events with date, type, and who was notified
 - [ ] Frontend: superadmin/owner see edit/delete controls on ALL records throughout the app (receipts, expenses, income, trustees, staff, channels, templates, etc.)
 - [ ] Frontend: non-superadmin users see only their own records and permitted actions
+
+## Collapsible Sections — Full Row Tap (May 2026)
+- [x] Monthly Expenses: entire category section header row tappable to toggle collapse/expand (was already full-row button)
+- [x] Trustees & Staff Contacts: entire card header row tappable to toggle expand/collapse
+- [x] Org Chart: entire card header row tappable to toggle expand/collapse
