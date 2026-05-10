@@ -287,6 +287,8 @@ export default function IncomePage() {
   const { user } = useAuth();
   const { canDelete: canDeleteIncome } = usePermissions();
   const [open, setOpen] = useState(false);
+  const [dialogKey, setDialogKey] = useState(0); // increment to force dialog remount with fresh state
+  const [dialogInitialCat, setDialogInitialCat] = useState<string>(""); // category to pre-select when dialog opens
   const [catFilter, setCatFilter] = useState("All");
   const [period, setPeriod] = useState("Monthly");
   const now = new Date();
@@ -389,27 +391,30 @@ export default function IncomePage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const { register, handleSubmit, reset, watch, setValue } = useForm<any>();
-  const [selectedCat, setSelectedCat] = useState<string>("");
+  const { register, handleSubmit, reset, watch, setValue } = useForm<any>({
+    defaultValues: { category: dialogInitialCat }
+  });
+  const [selectedCat, setSelectedCat] = useState<string>(dialogInitialCat);
   const watchCat = selectedCat; // driven by state, not watch(), to ensure reliable re-renders
 
-  // Open the dialog with a pre-selected category so the correct fields show on the very first render
-  function openDialog(preselect?: string) {
-    const cat = preselect ?? (catFilter !== "All" ? catFilter : "");
-    if (cat) {
-      setValue("category", cat);
-      setSelectedCat(cat);
-      if (SUBCATEGORY_MAP[cat]) {
-        setSubPanel(cat);
-        setSelectedSub("");
+  // Sync subPanel with the initial category on mount
+  useEffect(() => {
+    if (dialogInitialCat) {
+      if (SUBCATEGORY_MAP[dialogInitialCat]) {
+        setSubPanel(dialogInitialCat);
       } else {
         setSubPanel(null);
-        setSelectedSub("");
       }
-    } else {
-      setSelectedCat("");
-      setSubPanel(null);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Open the dialog with a pre-selected category so the correct fields show on the very first render.
+  // We increment dialogKey to force a full remount of the dialog with fresh state.
+  function openDialog(preselect?: string) {
+    const cat = preselect ?? (catFilter !== "All" ? catFilter : "");
+    setDialogInitialCat(cat);
+    setDialogKey(k => k + 1);
     setOpen(true);
   }
 
@@ -644,8 +649,8 @@ export default function IncomePage() {
           </div>
         </div>
 
-        {/* Add income dialog */}
-        <Dialog open={open} onOpenChange={handleDialogClose}>
+        {/* Add income dialog — key forces full remount so selectedCat initialises correctly */}
+        <Dialog key={dialogKey} open={open} onOpenChange={handleDialogClose}>
           <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:480 }}>
             <DialogHeader>
               <DialogTitle style={{ color:T.white,fontSize:18,fontWeight:800 }}>
