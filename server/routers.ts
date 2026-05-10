@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { generateLoanPdf, generateRepaymentPdf, generateWaqfCertificate } from "./loanPdf";
+import { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport } from "./scheduledJobs";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -1460,6 +1461,20 @@ export const appRouter = router({
           } catch {}
         }
         return { success: true, certUrl };
+      }),
+
+    // Manual trigger: send weekly repayment alert now
+    triggerWeeklyAlert: adminProcedure
+      .mutation(async () => {
+        await sendWeeklyRepaymentAlert();
+        return { success: true };
+      }),
+
+    // Manual trigger: send monthly trustee report now
+    triggerMonthlyReport: adminProcedure
+      .mutation(async () => {
+        await sendMonthlyTrusteeReport();
+        return { success: true };
       }),
   }),
   // ─── MONTHLY EXPENSES PANEE ──────────────────────────────────────────────────

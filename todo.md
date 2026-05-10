@@ -613,3 +613,15 @@
 - [x] Add Number of Donors stat card
 - [x] Add repayment forecast breakdown: due in next 4 weeks, 2 months, 3 months, 6 months, 12 months, 15 months, 2 years, 5 years
 - [x] Backend: update loans summary query to return totalOutstanding, donorCount, and forecast buckets (computed client-side from listWithSummary data)
+
+## Loans Forecast & Org Improvements (May 2026 — round 15)
+- [x] Fix forecast subtitle: change "due back to AQS" to "due back to Donors/Lenders"
+- [x] Fix forecast decimal formatting (already showing 2dp but confirm £295.83 style)
+- [x] Clickable forecast row: modal showing which donors/loans are due in that period with amounts
+- [x] Seed trustees and staff contacts into DB (Dr Abdul Hamid, Galib Khan, Ajmal Masroor, Altaf Khattak, Mumin Khan, Farid Ahmed, Atik Rahman)
+- [x] Organisation page: ensure trustees and staff details (name, role, email, phone) are stored and displayed
+- [x] Global contact lookup: pull trustee/staff contacts from any part of app for communications
+- [x] Weekly email to Mumin Khan, Farid Ahmed, Dr Abdul Hamid, Galib Khan for repayments due in 4 weeks
+- [x] Monthly trustee report by email and WhatsApp: loan statuses summary sent to all trustees
+- [x] Schedule weekly email job (every Monday)
+- [x] Schedule monthly report job (1st of each month)

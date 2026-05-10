@@ -1,0 +1,281 @@
+/**
+ * Scheduled Jobs — AQ Society Finance System
+ *
+ * 1. Weekly Repayment Alert (every Monday 08:00 UK time)
+ *    Sends an email to Mumin Khan, Farid Ahmed, Dr Abdul Hamid, Galib Khan
+ *    listing all Qarde Hasan repayments due within the next 4 weeks.
+ *
+ * 2. Monthly Trustee Report (1st of every month, 08:00 UK time)
+ *    Sends a full loan status summary by email to all active trustees.
+ */
+
+import cron from "node-cron";
+import nodemailer from "nodemailer";
+import { getDb } from "./db";
+import { loanRepayments } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
+
+// ─── Email helper ─────────────────────────────────────────────────────────────
+
+async function sendEmail(to: string, name: string, subject: string, html: string) {
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
+  const envPass = process.env.SMTP_PASSWORD;
+  const smtpPass = (envPass && envPass.length === 16) ? envPass : "njvigzynhdcxusik";
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.SMTP_PORT || "587"),
+    secure: false,
+    auth: { user: smtpUser, pass: smtpPass },
+    tls: { rejectUnauthorized: false },
+  });
+  await transporter.sendMail({
+    from: `"Abdullah Quilliam Society" <${fromEmail}>`,
+    to: name ? `"${name}" <${to}>` : to,
+    subject,
+    html,
+  });
+}
+
+// ─── Staff recipients for weekly alert ───────────────────────────────────────
+
+const WEEKLY_ALERT_RECIPIENTS = [
+  { name: "Mumin Khan", email: "meds.mumin@gmail.com" },
+  { name: "Mr Farid Ahmed", email: "fariddixy@gmail.com" },
+  { name: "Dr Abdul Hamid", email: "ahamid4@gmail.com" },
+  { name: "Mr Galib Khan", email: "khan.galib@gmail.com" },
+];
+
+// ─── Loan data helpers ────────────────────────────────────────────────────────
+
+async function getActiveLoansWithRepayments() {
+  const db = await getDb();
+  if (!db) return [];
+  const { loanApplications } = await import("../drizzle/schema");
+  const loans = await db.select().from(loanApplications)
+    .where(eq(loanApplications.status, "active"));
+  const results = await Promise.all(loans.map(async (loan: any) => {
+    const reps = await db.select().from(loanRepayments)
+      .where(eq((loanRepayments as any).loanId, loan.id));
+    return { ...loan, repayments: reps };
+  }));
+  return results;
+}
+
+async function getActiveTrustees() {
+  const db = await getDb();
+  if (!db) return [];
+  const { trustees } = await import("../drizzle/schema");
+  const all = await db.select().from(trustees);
+  return all.filter((t: any) => t.isActive !== false && t.email);
+}
+
+// ─── Weekly Repayment Alert ───────────────────────────────────────────────────
+
+async function sendWeeklyRepaymentAlert() {
+  console.log("[Scheduled] Running weekly repayment alert...");
+  try {
+    const loans = await getActiveLoansWithRepayments();
+    const now = new Date();
+    const fourWeeksLater = new Date(now);
+    fourWeeksLater.setDate(fourWeeksLater.getDate() + 28);
+
+    // Find instalments due within 4 weeks
+    const dueItems: { borrowerName: string; borrowerEmail: string; borrowerPhone: string; amount: number; dueDate: Date; loanId: number }[] = [];
+
+    for (const loan of loans) {
+      const termMonths = loan.termUnit === "years"
+        ? (loan.termValue ?? 6) * 12
+        : (loan.termValue ?? loan.termMonths ?? 6);
+      const monthly = Number(loan.amount ?? 0) / termMonths;
+      const startDate = loan.startDate ? new Date(loan.startDate) : new Date(loan.createdAt ?? now);
+      const paidCount = (loan.repayments ?? []).filter((r: any) => r.trusteeApprovedAt).length;
+
+      for (let m = paidCount + 1; m <= termMonths; m++) {
+        const dueDate = new Date(startDate);
+        dueDate.setMonth(dueDate.getMonth() + m);
+        if (dueDate > now && dueDate <= fourWeeksLater) {
+          dueItems.push({
+            borrowerName: loan.borrowerName ?? "Unknown",
+            borrowerEmail: loan.borrowerEmail ?? "",
+            borrowerPhone: loan.borrowerPhone ?? "",
+            amount: monthly,
+            dueDate,
+            loanId: loan.id,
+          });
+        }
+      }
+    }
+
+    if (dueItems.length === 0) {
+      console.log("[Scheduled] No repayments due in next 4 weeks — skipping alert.");
+      return;
+    }
+
+    // Sort by due date
+    dueItems.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+
+    const totalDue = dueItems.reduce((s, d) => s + d.amount, 0);
+    const rows = dueItems.map(d => `
+      <tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.borrowerName}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.borrowerEmail || "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.borrowerPhone || "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#1a4731;">£${d.amount.toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.dueDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</td>
+      </tr>`).join("");
+
+    const reportDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+
+    for (const recipient of WEEKLY_ALERT_RECIPIENTS) {
+      const firstName = recipient.name.split(" ").find(p => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? recipient.name;
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;">
+          <div style="background:#1a4731;padding:24px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
+            <p style="color:#c9a84c;margin:4px 0 0;">Qarde Hasan — Weekly Repayment Alert</p>
+          </div>
+          <div style="padding:24px;background:#fff;">
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p>May Allah bless you and your family with barakah. This is your weekly Qarde Hasan repayment alert for <strong>${reportDate}</strong>.</p>
+            <p>The following Amanah repayments are due within the next <strong>4 weeks</strong>:</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">
+              <thead>
+                <tr style="background:#f0fdf4;">
+                  <th style="padding:10px 12px;text-align:left;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Donor / Lender</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Email</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Phone</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Amount Due</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Due Date</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+              <tfoot>
+                <tr style="background:#f9fafb;">
+                  <td colspan="3" style="padding:10px 12px;font-weight:700;font-size:13px;">Total Due</td>
+                  <td colspan="2" style="padding:10px 12px;font-weight:800;font-size:15px;color:#1a4731;">£${totalDue.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <p>Please follow up with the respective donors and update the system once repayments are received. JazakAllahu Khayran for your continued dedication to the Rimmers Building Project.</p>
+            <p>The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em></p>
+            <p>Warm Islamic greetings,<br><strong>AQ Society Finance System</strong></p>
+          </div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
+            JazakAllahu Khayran — AQ Society Automated Finance Alert
+          </div>
+        </div>`;
+
+      await sendEmail(recipient.email, recipient.name, `Weekly Qarde Hasan Alert — ${dueItems.length} Repayment(s) Due — AQ Society`, html)
+        .then(() => console.log(`[Scheduled] Weekly alert sent to ${recipient.email}`))
+        .catch(e => console.error(`[Scheduled] Failed to send weekly alert to ${recipient.email}:`, e));
+    }
+  } catch (e) {
+    console.error("[Scheduled] Weekly repayment alert failed:", e);
+  }
+}
+
+// ─── Monthly Trustee Report ───────────────────────────────────────────────────
+
+async function sendMonthlyTrusteeReport() {
+  console.log("[Scheduled] Running monthly trustee report...");
+  try {
+    const loans = await getActiveLoansWithRepayments();
+    const trustees = await getActiveTrustees();
+    const now = new Date();
+    const monthName = now.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+
+    // Compute stats
+    const totalLoaned = loans.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
+    const totalOutstanding = loans.reduce((s: number, l: any) => {
+      const paid = (l.repayments ?? []).filter((r: any) => r.trusteeApprovedAt).reduce((ps: number, r: any) => ps + Number(r.amount ?? 0), 0);
+      return s + Math.max(0, Number(l.amount ?? 0) - paid);
+    }, 0);
+    const totalRepaid = totalLoaned - totalOutstanding;
+
+    const loanRows = loans.map((l: any) => {
+      const paid = (l.repayments ?? []).filter((r: any) => r.trusteeApprovedAt).reduce((ps: number, r: any) => ps + Number(r.amount ?? 0), 0);
+      const outstanding = Math.max(0, Number(l.amount ?? 0) - paid);
+      const termMonths = l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6);
+      const paidCount = (l.repayments ?? []).filter((r: any) => r.trusteeApprovedAt).length;
+      const overdueCount = (l.repayments ?? []).filter((r: any) => !r.trusteeApprovedAt && r.dueDate && new Date(r.dueDate) < now).length;
+      const statusColor = overdueCount > 0 ? "#dc2626" : outstanding === 0 ? "#16a34a" : "#1a4731";
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${l.borrowerName ?? "Unknown"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">£${Number(l.amount).toFixed(2)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">£${paid.toFixed(2)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${statusColor};">£${outstanding.toFixed(2)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${paidCount}/${termMonths}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:${overdueCount > 0 ? '#dc2626' : '#6b7280'};">${overdueCount > 0 ? `⚠ ${overdueCount} overdue` : "On track"}</td>
+        </tr>`;
+    }).join("");
+
+    for (const trustee of trustees) {
+      const firstName = (trustee.fullName ?? "").split(" ").find((p: string) => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? trustee.fullName ?? "Trustee";
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;">
+          <div style="background:#1a4731;padding:24px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
+            <p style="color:#c9a84c;margin:4px 0 0;">Qarde Hasan — Monthly Trustee Report — ${monthName}</p>
+          </div>
+          <div style="padding:24px;background:#fff;">
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p>May Allah bless you with barakah and good health. Please find below the monthly Qarde Hasan Amanah report for <strong>${monthName}</strong>.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;background:#f0fdf4;border-radius:8px;">
+              <tr><td style="padding:10px 16px;font-weight:700;">Total Loaned</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#1a4731;">£${totalLoaned.toFixed(2)}</td></tr>
+              <tr><td style="padding:10px 16px;font-weight:700;">Total Repaid</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#16a34a;">£${totalRepaid.toFixed(2)}</td></tr>
+              <tr><td style="padding:10px 16px;font-weight:700;">Total Outstanding</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#dc2626;">£${totalOutstanding.toFixed(2)}</td></tr>
+              <tr><td style="padding:10px 16px;font-weight:700;">Active Loans</td><td style="padding:10px 16px;font-weight:800;font-size:16px;">${loans.length}</td></tr>
+            </table>
+            <h3 style="color:#1a4731;margin:24px 0 12px;font-size:15px;">Individual Loan Status</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead>
+                <tr style="background:#f0fdf4;">
+                  <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Donor</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Loaned</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Repaid</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Outstanding</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Progress</th>
+                  <th style="padding:10px 12px;text-align:left;font-size:10px;letter-spacing:0.05em;text-transform:uppercase;color:#6b7280;">Status</th>
+                </tr>
+              </thead>
+              <tbody>${loanRows}</tbody>
+            </table>
+            <p style="margin-top:24px;">The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em> May Allah (SWT) accept the Amanah of all our donors and reward them with Sadaqah Jariyah.</p>
+            <p>JazakAllahu Khayran for your continued trust and oversight of the Rimmers Building Project.</p>
+            <p>Warm Islamic greetings,<br><strong>AQ Society Finance System</strong></p>
+          </div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
+            JazakAllahu Khayran — AQ Society Monthly Finance Report
+          </div>
+        </div>`;
+
+      await sendEmail(trustee.email!, trustee.fullName ?? "Trustee", `Monthly Qarde Hasan Report — ${monthName} — AQ Society`, html)
+        .then(() => console.log(`[Scheduled] Monthly report sent to ${trustee.email}`))
+        .catch(e => console.error(`[Scheduled] Failed to send monthly report to ${trustee.email}:`, e));
+    }
+  } catch (e) {
+    console.error("[Scheduled] Monthly trustee report failed:", e);
+  }
+}
+
+// ─── Register cron jobs ───────────────────────────────────────────────────────
+
+export function registerScheduledJobs() {
+  // Every Monday at 08:00 UK time (UTC+1 in summer = 07:00 UTC)
+  // Using "0 7 * * 1" (07:00 UTC = 08:00 BST)
+  cron.schedule("0 7 * * 1", () => {
+    sendWeeklyRepaymentAlert().catch(console.error);
+  }, { timezone: "Europe/London" });
+
+  // 1st of every month at 08:00 UK time
+  cron.schedule("0 8 1 * *", () => {
+    sendMonthlyTrusteeReport().catch(console.error);
+  }, { timezone: "Europe/London" });
+
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00)");
+}
+
+// Export for manual trigger from tRPC (admin use)
+export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport };

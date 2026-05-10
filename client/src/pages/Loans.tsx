@@ -76,6 +76,7 @@ export default function LoansPage() {
   const isAdmin = ["superadmin", "trustee", "manager"].includes(user?.role ?? "");
   const [open, setOpen] = useState(false);
   const [termUnit, setTermUnit] = useState<"months" | "years">("months");
+  const [forecastDrilldown, setForecastDrilldown] = useState<{ label: string; donors: { name: string; email: string; amount: number; dueDate: Date }[] } | null>(null);
 
   const { data, refetch } = trpc.loans.listWithSummary.useQuery({});
 
@@ -167,6 +168,55 @@ export default function LoansPage() {
     cumulativeForecast.push([label, runningTotal]);
   }
 
+  // Per-bucket donor breakdown for drill-down modal
+  // donorBuckets[label] = array of { name, email, amount (cumulative within period), dueDate (earliest in period) }
+  const donorBuckets: Record<string, { name: string; email: string; loanId: number; amount: number; dueDate: Date }[]> = {};
+  for (const [label] of bucketMonths) donorBuckets[label] = [];
+  loans.forEach((l: any) => {
+    if (l.status !== "active" && l.status !== "approved") return;
+    const s = l._summary ?? {};
+    const outstanding = s.outstanding ?? Math.max(0, Number(l.amount ?? 0) - Number(l.totalRepaid ?? 0));
+    if (outstanding <= 0) return;
+    const termMonths = s.termMonths ?? (l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6));
+    const monthly = Number(l.amount ?? 0) / termMonths;
+    const startDate = l.startDate ? new Date(l.startDate) : new Date(l.createdAt ?? now);
+    const perBucketAmt: Record<string, { amount: number; earliest: Date | null }> = {};
+    for (const [label] of bucketMonths) perBucketAmt[label] = { amount: 0, earliest: null };
+    for (let m = 1; m <= termMonths; m++) {
+      const dueDate = new Date(startDate);
+      dueDate.setMonth(dueDate.getMonth() + m);
+      if (dueDate <= now) continue;
+      const monthsFromNow = (dueDate.getFullYear() - now.getFullYear()) * 12 + (dueDate.getMonth() - now.getMonth());
+      for (const [label, maxMonths] of bucketMonths) {
+        if (monthsFromNow <= maxMonths) {
+          perBucketAmt[label].amount += monthly;
+          if (!perBucketAmt[label].earliest || dueDate < perBucketAmt[label].earliest!) perBucketAmt[label].earliest = dueDate;
+          break;
+        }
+      }
+    }
+    for (const [label] of bucketMonths) {
+      if (perBucketAmt[label].amount > 0) {
+        donorBuckets[label].push({ name: l.borrowerName ?? "Unknown", email: l.borrowerEmail ?? "", loanId: l.id, amount: perBucketAmt[label].amount, dueDate: perBucketAmt[label].earliest! });
+      }
+    }
+  });
+  // For cumulative drill-down: each period shows all donors due UP TO that period
+  const cumulativeDonorBuckets: Record<string, { name: string; email: string; loanId: number; amount: number; dueDate: Date }[]> = {};
+  for (let i = 0; i < bucketMonths.length; i++) {
+    const [label] = bucketMonths[i];
+    const seen = new Map<number, { name: string; email: string; loanId: number; amount: number; dueDate: Date }>();
+    for (let j = 0; j <= i; j++) {
+      const [bl] = bucketMonths[j];
+      for (const d of donorBuckets[bl]) {
+        const existing = seen.get(d.loanId);
+        if (existing) { existing.amount += d.amount; if (d.dueDate < existing.dueDate) existing.dueDate = d.dueDate; }
+        else seen.set(d.loanId, { ...d });
+      }
+    }
+    cumulativeDonorBuckets[label] = Array.from(seen.values()).sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+  }
+
   return (
     <>
       <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
@@ -200,7 +250,7 @@ export default function LoansPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <BarChart2 size={16} style={{ color: T.mint }} />
             <h2 style={{ fontSize: 14, fontWeight: 700, color: T.white, margin: 0 }}>Repayment Forecast</h2>
-            <span style={{ fontSize: 11, color: T.muted, marginLeft: 4 }}>Cumulative amount due back to AQS within each period</span>
+            <span style={{ fontSize: 11, color: T.muted, marginLeft: 4 }}>Cumulative amount due back to Donors / Lenders within each period</span>
           </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
@@ -219,8 +269,13 @@ export default function LoansPage() {
                   dueDate.setMonth(dueDate.getMonth() + months);
                   const isHighlight = label === "12 months" || label === "6 months";
                   return (
-                    <tr key={label}>
-                      <td style={{ padding: "10px 16px 10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 13, fontWeight: isHighlight ? 700 : 500, color: isHighlight ? T.white : T.muted }}>{label}</td>
+                    <tr key={label} style={{ cursor: "pointer" }}
+                      onClick={() => setForecastDrilldown({ label, donors: cumulativeDonorBuckets[label] ?? [] })}
+                      onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                      <td style={{ padding: "10px 16px 10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 13, fontWeight: isHighlight ? 700 : 500, color: isHighlight ? T.white : T.muted }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{label} <span style={{ fontSize: 9, color: T.mint, opacity: 0.7 }}>▶ details</span></span>
+                      </td>
                       <td style={{ padding: "10px 16px 10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12, color: T.muted }}>{dueDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</td>
                       <td style={{ padding: "10px 16px 10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 14, fontWeight: 700, color: amount > 0 ? T.mint : T.muted }}>
                         £{amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -243,6 +298,62 @@ export default function LoansPage() {
             </table>
           </div>
         </div>
+
+        {/* Forecast Drill-down Modal */}
+        {forecastDrilldown && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+            onClick={() => setForecastDrilldown(null)}>
+            <div style={{ background: "#0D2240", border: `1px solid ${T.border}`, borderRadius: 20, padding: 28, maxWidth: 560, width: "100%", maxHeight: "80vh", overflowY: "auto" }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, color: T.white, margin: 0 }}>Due within {forecastDrilldown.label}</h3>
+                  <p style={{ fontSize: 12, color: T.muted, margin: "4px 0 0" }}>Donors / Lenders with repayments due in this period</p>
+                </div>
+                <button onClick={() => setForecastDrilldown(null)}
+                  style={{ background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 8, color: T.muted, cursor: "pointer", padding: "6px 12px", fontSize: 13 }}>✕ Close</button>
+              </div>
+              {forecastDrilldown.donors.length === 0 ? (
+                <p style={{ color: T.muted, textAlign: "center", padding: "24px 0", fontSize: 13 }}>No repayments due in this period</p>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      {["Donor / Lender", "Amount Due", "Next Due Date"].map(h => (
+                        <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.08em", textTransform: "uppercase", padding: "0 12px 10px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {forecastDrilldown.donors.map((d, idx) => (
+                      <tr key={idx} style={{ cursor: "pointer" }} onClick={() => { setForecastDrilldown(null); setLocation(`/loans/${(d as any).loanId}`); }}>
+                        <td style={{ padding: "10px 12px 10px 0", borderBottom: `1px solid ${T.border}` }}>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: T.white, margin: 0 }}>{d.name}</p>
+                          <p style={{ fontSize: 11, color: T.muted, margin: 0 }}>{d.email}</p>
+                        </td>
+                        <td style={{ padding: "10px 12px 10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 14, fontWeight: 700, color: T.mint }}>
+                          £{d.amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ padding: "10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12, color: T.muted }}>
+                          {d.dueDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td style={{ padding: "12px 0 0", fontSize: 12, color: T.muted, fontWeight: 600 }}>Total</td>
+                      <td style={{ padding: "12px 0 0", fontSize: 14, fontWeight: 800, color: T.mint }}>
+                        £{forecastDrilldown.donors.reduce((s, d) => s + d.amount, 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Loans table */}
         <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: 24, animation: "fadeUp 0.5s ease 200ms both" }}>

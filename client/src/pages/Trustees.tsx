@@ -40,9 +40,9 @@ export default function TrusteesPage() {
         <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:28,flexWrap:"wrap",gap:12,animation:"fadeUp 0.4s ease both" }}>
           <div>
             <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
-              Trustees <span style={{ color:T.mint }}>Register</span>
+              Organisation <span style={{ color:T.mint }}>Contacts</span>
             </h1>
-            <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Board of trustees — Qarde Hasan co-signatories</p>
+            <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Trustees, managers & staff — available for communications across the system</p>
           </div>
           <Button onClick={() => { reset(); setOpen(true); }}
             style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
@@ -53,8 +53,10 @@ export default function TrusteesPage() {
         {/* Stats */}
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:16,marginBottom:28 }}>
           {[
-            { label:"Total Trustees", value:trustees.length, color:T.purple },
+            { label:"Total Contacts", value:trustees.length, color:T.purple },
             { label:"Active", value:active, color:T.mint },
+            { label:"Trustees", value:trustees.filter((t:any)=>t.role?.toLowerCase().includes('trustee')||t.role?.toLowerCase().includes('chair')).length, color:"#a78bfa" },
+            { label:"Staff / Managers", value:trustees.filter((t:any)=>!t.role?.toLowerCase().includes('trustee')&&!t.role?.toLowerCase().includes('chair')).length, color:"#fbbf24" },
           ].map((s,i) => (
             <div key={s.label} style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",animation:`fadeUp 0.5s ease ${i*80}ms both` }}>
               <p style={{ fontSize:28,fontWeight:800,color:s.color,margin:0,letterSpacing:"-0.03em" }}>{s.value}</p>
@@ -75,15 +77,15 @@ export default function TrusteesPage() {
               <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16 }}>
                 <div style={{ display:"flex",alignItems:"center",gap:12 }}>
                   <div style={{ width:48,height:48,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:800,color:T.white,flexShrink:0 }}>
-                    {(t.name??"?")[0].toUpperCase()}
+                    {(t.fullName??"?")[0].toUpperCase()}
                   </div>
                   <div>
-                    <p style={{ fontSize:15,fontWeight:700,color:T.white,margin:0 }}>{t.name}</p>
+                    <p style={{ fontSize:15,fontWeight:700,color:T.white,margin:0 }}>{t.fullName}</p>
                     <p style={{ fontSize:11,color:T.purple,margin:0,fontWeight:600 }}>{t.role??"Trustee"}</p>
                   </div>
                 </div>
                 <div style={{ display:"flex",gap:6 }}>
-                  <button onClick={() => { setEditing(t); setValue("name",t.name); setValue("email",t.email); setValue("phone",t.phone); setValue("role",t.role); setOpen(true); }}
+                  <button onClick={() => { setEditing(t); setValue("fullName",t.fullName); setValue("email",t.email); setValue("phone",t.phone); setValue("role",t.role); setOpen(true); }}
                     style={{ width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
                     <Pencil size={12}/>
                   </button>
@@ -97,15 +99,19 @@ export default function TrusteesPage() {
                 {t.email && (
                   <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                     <Mail size={13} style={{ color:T.muted,flexShrink:0 }}/>
-                    <span style={{ fontSize:13,color:T.muted }}>{t.email}</span>
+                    <a href={`mailto:${t.email}`} style={{ fontSize:13,color:T.muted,textDecoration:"none" }} onClick={e=>e.stopPropagation()}>{t.email}</a>
                   </div>
                 )}
                 {t.phone && (
                   <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                     <Phone size={13} style={{ color:T.muted,flexShrink:0 }}/>
                     <span style={{ fontSize:13,color:T.muted }}>{t.phone}</span>
+                    <a href={`https://wa.me/44${t.phone.replace(/^0/,'').replace(/\s/g,'')}`} target="_blank" rel="noreferrer"
+                      style={{ marginLeft:"auto",fontSize:11,padding:"2px 8px",borderRadius:6,background:"rgba(37,211,102,0.12)",color:"#25d366",fontWeight:600,textDecoration:"none" }}
+                      onClick={e=>e.stopPropagation()}>WhatsApp</a>
                   </div>
                 )}
+                {t.notes && <p style={{ fontSize:11,color:T.muted,margin:0,fontStyle:"italic" }}>{t.notes}</p>}
               </div>
               <div style={{ marginTop:14,display:"flex",alignItems:"center",gap:6 }}>
                 <span style={{ width:8,height:8,borderRadius:"50%",background:t.isActive!==false?T.mint:"#ff5050",boxShadow:t.isActive!==false?`0 0 6px ${T.mint}`:undefined }}/>
@@ -126,7 +132,7 @@ export default function TrusteesPage() {
             <form onSubmit={handleSubmit(d => editing ? updateMutation.mutate({id:editing.id,...d}) : createMutation.mutate(d))} style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
               <div>
                 <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Full Name</Label>
-                <Input {...register("name",{required:true})} placeholder="Full name"
+                <Input {...register("fullName",{required:true})} placeholder="Full name"
                   style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44 }}/>
               </div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>

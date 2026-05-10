@@ -11,6 +11,7 @@ import { serveStatic, setupVite } from "./vite";
 import { uploadRouter } from "../uploadHandler";
 import { registerScheduledBackupRoute } from "./scheduledBackup";
 import { registerBackupOnMutationMiddleware } from "./backupMiddleware";
+import { registerScheduledJobs } from "../scheduledJobs";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -68,6 +69,9 @@ async function startServer() {
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
+
+  // Register scheduled cron jobs (weekly repayment alert + monthly trustee report)
+  registerScheduledJobs();
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
