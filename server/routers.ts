@@ -2306,7 +2306,7 @@ export const appRouter = router({
         payerName: z.string().optional(), tenantName: z.string().optional(),
         payerEmail: z.string().optional(), payerPhone: z.string().optional(),
         reference: z.string().optional(),
-        periodStart: z.date().optional(), periodEnd: z.date().optional(),
+        periodStart: z.string().optional(), periodEnd: z.string().optional(),
         receiptUrl: z.string().optional(), notes: z.string().optional(),
         incomeDate: z.string().optional(),
         month: z.number().optional(), year: z.number().optional(),
@@ -2362,6 +2362,8 @@ export const appRouter = router({
           signedByManager: input.signedByManager ?? null,
           signedByTrustee: input.signedByTrustee ?? null,
           signedAt: hasSignOff ? new Date() : null,
+          periodStart: input.periodStart ? new Date(input.periodStart + 'T12:00:00') : null,
+          periodEnd: input.periodEnd ? new Date(input.periodEnd + 'T12:00:00') : null,
         } as any);
       }),
     update: adminProcedure

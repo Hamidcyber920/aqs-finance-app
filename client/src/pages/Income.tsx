@@ -79,6 +79,11 @@ const FRIDAY_INCOME_CATS = new Set([
   "Kiosk Donations",
 ]);
 
+const RENTAL_INCOME_CATS = new Set([
+  "Student Accommodation","Dar Al Zahra","Office Rental",
+  "Hall Hire","Weddings","Community Hire","Accountants Office Hire",
+]);
+
 function Badge({ status }: { status: string }) {
   const map: Record<string,{bg:string;color:string}> = {
     paid:{bg:"rgba(0,255,194,0.1)",color:T.mint},
@@ -675,6 +680,11 @@ export default function IncomePage() {
             ) : (
               <form onSubmit={handleSubmit(d => {
                 const payload: any = { ...d, month, year };
+                // Pass rental date range as periodStart/periodEnd for Rental Income categories
+                if (RENTAL_INCOME_CATS.has(watchCat)) {
+                  if (d.rentalFrom) payload.periodStart = d.rentalFrom;
+                  if (d.rentalTo) payload.periodEnd = d.rentalTo;
+                }
                 if (watchCat === "Friday Collections") {
                   payload.receiptUrl = evidenceUrl || undefined;
                   payload.cashWithheldReason = cashWithheldReason || undefined;
@@ -805,6 +815,38 @@ export default function IncomePage() {
                     )}
                   </div>
                 </div>
+                {/* Rental Income date range */}
+                {RENTAL_INCOME_CATS.has(watchCat) && (
+                  <div style={{ background:"rgba(99,91,255,0.04)",border:`1px solid rgba(99,91,255,0.15)`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:12 }}>
+                    <p style={{ margin:"0 0 4px",fontSize:11,color:"#a5b4fc",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.1em" }}>Rental Period</p>
+                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                      <div>
+                        <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>From</Label>
+                        <label style={{ position:"relative",display:"block",cursor:"pointer",marginTop:4 }}>
+                          <div style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${watch("rentalFrom") ? "#a5b4fc" : T.border}`,borderRadius:10,color:watch("rentalFrom") ? T.white : T.muted,height:44,padding:"0 10px",fontSize:12,display:"flex",alignItems:"center",gap:6,pointerEvents:"none" }}>
+                            <Calendar size={13} style={{ color:watch("rentalFrom") ? "#a5b4fc" : T.muted,flexShrink:0 }}/>
+                            <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                              {watch("rentalFrom") ? new Date(watch("rentalFrom")+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "Select date…"}
+                            </span>
+                          </div>
+                          <input type="date" {...register("rentalFrom")} style={{ position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",cursor:"pointer" }}/>
+                        </label>
+                      </div>
+                      <div>
+                        <Label style={{ fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>To</Label>
+                        <label style={{ position:"relative",display:"block",cursor:"pointer",marginTop:4 }}>
+                          <div style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${watch("rentalTo") ? "#a5b4fc" : T.border}`,borderRadius:10,color:watch("rentalTo") ? T.white : T.muted,height:44,padding:"0 10px",fontSize:12,display:"flex",alignItems:"center",gap:6,pointerEvents:"none" }}>
+                            <Calendar size={13} style={{ color:watch("rentalTo") ? "#a5b4fc" : T.muted,flexShrink:0 }}/>
+                            <span style={{ overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                              {watch("rentalTo") ? new Date(watch("rentalTo")+"T12:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "Select date…"}
+                            </span>
+                          </div>
+                          <input type="date" {...register("rentalTo")} style={{ position:"absolute",inset:0,opacity:0,width:"100%",height:"100%",cursor:"pointer" }}/>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {/* Friday Collections specific fields */}
                 {watchCat === "Friday Collections" ? (
                   <>
