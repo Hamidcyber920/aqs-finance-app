@@ -50,6 +50,8 @@ export default function CapturePage() {
   const [submitted, setSubmitted] = useState(false);
   const [waSentRows, setWaSentRows] = useState<Set<number>>(new Set());
   const [sendingWaAll, setSendingWaAll] = useState(false);
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [rowEdits, setRowEdits] = useState<Record<number, { name?: string; amount?: string; campaign?: string }>>({});
 
   const extractMutation = trpc.documents.extract.useMutation();
   const saveCrmMutation = trpc.crm.saveScanToCRM.useMutation();
@@ -285,21 +287,44 @@ export default function CapturePage() {
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12 }}>
                 <thead>
                   <tr style={{ borderBottom:`1px solid ${T.border}` }}>
-                    {["#","Name","Phone","Amount","Campaign","Gift Aid","Actions"].map(h=>(
+                    {["#","Name","Phone","Amount","Campaign","Gift Aid","WA","Edit"].map(h=>(
                       <th key={h} style={{ padding:"6px 8px",textAlign:"left",color:T.muted,fontWeight:600,whiteSpace:"nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {multiRecords.map((r,i)=>(
+                  {multiRecords.map((r,i)=>{
+                    const conf = typeof r.confidence === "number" ? r.confidence : undefined;
+                    const confColor = conf === undefined ? T.muted : conf >= 0.85 ? "#10B981" : conf >= 0.6 ? "#F59E0B" : "#EF4444";
+                    const confLabel = conf === undefined ? "" : conf >= 0.85 ? "High" : conf >= 0.6 ? "Med" : "Low";
+                    const edit = rowEdits[i] || {};
+                    const isEditing = editingRow === i;
+                    return (
                     <tr key={i}
-                      onClick={()=>{setSelectedRecord(i);setExtracted(r);}}
+                      onClick={()=>{ if(!isEditing){setSelectedRecord(i);setExtracted({...r,...(rowEdits[i]||{})});} }}
                       style={{ borderBottom:`1px solid ${T.border}`,cursor:"pointer",background:selectedRecord===i?"rgba(16,185,129,0.08)":"transparent" }}>
-                      <td style={{ padding:"8px",color:T.muted }}>{i+1}</td>
-                      <td style={{ padding:"8px",color:T.white,fontWeight:500 }}>{r.donorName||r.name||"—"}</td>
+                      <td style={{ padding:"8px",color:T.muted }}>
+                        <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
+                          <span>{i+1}</span>
+                          {confLabel && <span style={{ fontSize:9,fontWeight:700,color:confColor,background:`${confColor}22`,borderRadius:4,padding:"1px 4px" }}>{confLabel}</span>}
+                        </div>
+                      </td>
+                      <td style={{ padding:"8px",color:T.white,fontWeight:500 }}>
+                        {isEditing ? (
+                          <input value={edit.name ?? (r.donorName||r.name||"")} onChange={e=>setRowEdits(prev=>({...prev,[i]:{...prev[i],name:e.target.value}}))} onClick={e=>e.stopPropagation()} style={{ background:"#1a1a2e",border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 6px",color:T.white,fontSize:12,width:"100%" }}/>
+                        ) : (edit.name ?? r.donorName ?? r.name ?? "—")}
+                      </td>
                       <td style={{ padding:"8px",color:T.muted,whiteSpace:"nowrap" }}>{r.donorPhone||r.phone||"—"}</td>
-                      <td style={{ padding:"8px",color:"#10B981",fontWeight:600,whiteSpace:"nowrap" }}>{r.amount?`£${r.amount}`:"—"}</td>
-                      <td style={{ padding:"8px",color:T.muted,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.campaignName||"—"}</td>
+                      <td style={{ padding:"8px",color:"#10B981",fontWeight:600,whiteSpace:"nowrap" }}>
+                        {isEditing ? (
+                          <input value={edit.amount ?? (r.amount ? String(r.amount) : "")} onChange={e=>setRowEdits(prev=>({...prev,[i]:{...prev[i],amount:e.target.value}}))} onClick={e=>e.stopPropagation()} style={{ background:"#1a1a2e",border:`1px solid #10B98166`,borderRadius:6,padding:"2px 6px",color:"#10B981",fontSize:12,width:70 }}/>
+                        ) : (edit.amount ? `£${edit.amount}` : r.amount ? `£${r.amount}` : "—")}
+                      </td>
+                      <td style={{ padding:"8px",color:T.muted,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
+                        {isEditing ? (
+                          <input value={edit.campaign ?? (r.campaignName||"")} onChange={e=>setRowEdits(prev=>({...prev,[i]:{...prev[i],campaign:e.target.value}}))} onClick={e=>e.stopPropagation()} style={{ background:"#1a1a2e",border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 6px",color:T.white,fontSize:12,width:"100%" }}/>
+                        ) : (edit.campaign ?? r.campaignName ?? "—")}
+                      </td>
                       <td style={{ padding:"8px",textAlign:"center" }}>{r.giftAid===true?<span style={{ color:"#10B981" }}>✓</span>:<span style={{ color:T.muted }}>—</span>}</td>
                       <td style={{ padding:"8px" }}>
                         <button
@@ -325,8 +350,15 @@ export default function CapturePage() {
                           <MessageCircle size={12}/>{waSentRows.has(i)?"Sent":"WhatsApp"}
                         </button>
                       </td>
+                      <td style={{ padding:"8px" }}>
+                        <button
+                          onClick={e=>{ e.stopPropagation(); setEditingRow(isEditing ? null : i); }}
+                          style={{ background:isEditing?"#635BFF":"rgba(255,255,255,0.08)",color:"#fff",border:"none",borderRadius:8,padding:"4px 8px",cursor:"pointer",fontSize:11,whiteSpace:"nowrap" }}>
+                          {isEditing ? "Done" : "Edit"}
+                        </button>
+                      </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>

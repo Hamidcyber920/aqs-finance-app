@@ -939,8 +939,8 @@
 - [x] Backend: returns array of DonorRecord with per-field confidence scores + "Analyzing Amanah entries..." status messaging
 - [x] Backend: saveParsedDonors procedure — bulk-inserts verified donor records into donor_leads + creates pending stripe_payment_sessions
 - [x] Frontend: CollectionSheetScanner component in Capture page — upload/camera, shows "Analyzing Amanah entries..." spinner
-- [ ] Frontend: Verification table — 50 rows, each editable, confidence badges, "Ready for verification, Dr. Abdul Hamid." header
-- [ ] Frontend: Bulk approve + individual edit before saving
+- [x] Frontend: Verification table — 50 rows, each editable, confidence badges, "Ready for verification, Dr. Abdul Hamid." header
+- [x] Frontend: Bulk approve + individual edit before saving
 
 ### Step 3: WhatsApp Pledge Fulfilment
 - [x] Backend: sendPledgeWhatsApp procedure — generates /pay URL with pre-filled name+campaign+amount, builds Islamic pledge message
