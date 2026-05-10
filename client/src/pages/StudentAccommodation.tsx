@@ -594,7 +594,7 @@ function TenantDetailPanel({ tenant, onClose, onRefresh }: { tenant: any; onClos
   // WhatsApp message
   const sendWhatsApp = (phone: string, message: string) => {
     const clean = phone.replace(/\s+/g, "").replace(/^0/, "+44");
-    window.open(`https://wa.me/${clean.replace("+", "")}?text=${encodeURIComponent(message)}`, "_blank");
+    window.location.href = `https://wa.me/${clean.replace("+", "")}?text=${encodeURIComponent(message)}`;
   };
 
   const sendEmail = (email: string, subject: string, body: string) => {

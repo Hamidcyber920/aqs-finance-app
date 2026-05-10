@@ -222,7 +222,7 @@ function StripePaymentPanel() {
   const createSession = trpc.fintech.createCheckoutSession.useMutation({
     onSuccess: (data) => {
       if (data.checkoutUrl) {
-        window.open(data.checkoutUrl, "_blank");
+        window.location.href = data.checkoutUrl;
         toast.success(`Redirecting to secure payment... Reference: ${data.referenceCode}`);
       }
     },
@@ -523,7 +523,7 @@ function PaymentHistoryPanel() {
                       onClick={() => {
                         const firstName = s.donorName.split(" ")[0];
                         const msg = `Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName}!\n\nJazakAllah Khayran for your generous donation of £${Number(s.amount).toFixed(2)}${s.campaignName ? ` towards the ${s.campaignName}` : ""}.\n\nMay Allah accept your contribution and reward you abundantly. Ameen.\n\nAQ Society`;
-                        window.open(`https://wa.me/${s.donorPhone?.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`, "_blank");
+                        window.location.href = `https://wa.me/${s.donorPhone?.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
                         markSent.mutate({ sessionId: s.id });
                       }}
                     >

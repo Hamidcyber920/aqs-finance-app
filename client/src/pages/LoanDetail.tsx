@@ -116,7 +116,7 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
     const borrowerName = (repayment.borrowerName ?? "").trim();
     const greeting = borrowerName ? `Assalamu Alaikum ${borrowerName.split(" ")[0]},` : "Assalamu Alaikum,";
     const msg = encodeURIComponent(`${greeting} this is a reminder that your Qarde Hasan loan repayment of £${amount} (Instalment ${repayment.instalment}) has been paid. Please confirm receipt of the payment at your earliest convenience. JazakAllahu Khayran — AQ Society Finance Team`);
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+    window.location.href = `https://wa.me/${phone}?text=${msg}`;
   };
 
   return (
@@ -497,7 +497,7 @@ By helping us secure this space for prayer and community, you are laying bricks 
 
 BarakAllahu Feekum,
 The AQS Team`);
-                  window.open(`https://wa.me/${phone}?text=${waMsg}`, "_blank");
+                  window.location.href = `https://wa.me/${phone}?text=${waMsg}`;
                 }}
                 style={{ background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
                 <MessageCircle size={14}/> WhatsApp

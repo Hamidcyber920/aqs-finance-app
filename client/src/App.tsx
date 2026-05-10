@@ -33,8 +33,10 @@ import BackupsPage from "./pages/Backups";
 import StudentAccommodationPage from "./pages/StudentAccommodation";
 import FintechPage from "./pages/Fintech";
 import DonorCRMPage from "./pages/DonorCRM";
+import PaymentSuccessPage from "./pages/PaymentSuccess";
+import PaymentCancelledPage from "./pages/PaymentCancelled";
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled"];
 
 function Router() {
   const path = window.location.pathname;
@@ -78,6 +80,8 @@ function Router() {
         <Route path="/accommodation" component={StudentAccommodationPage} />
         <Route path="/fintech" component={FintechPage} />
         <Route path="/donor-crm" component={DonorCRMPage} />
+        <Route path="/payment/success" component={PaymentSuccessPage} />
+        <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />
         <Route path="/profile" component={ProfileSettingsPage} />
         <Route path="/settings" component={ProfileSettingsPage} />

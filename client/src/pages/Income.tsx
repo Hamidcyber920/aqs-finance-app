@@ -1166,7 +1166,7 @@ export default function IncomePage() {
                                   const authorisedBy = [donorSignManager, donorSignTrustee === "Other" ? donorSignTrusteeOther : donorSignTrustee].filter(Boolean).join(" & ");
                                   const amtStr = d.amount ? `£${parseFloat(d.amount).toFixed(2)}` : "your donation";
                                   const msg = encodeURIComponent(`Assalamu Alaikum ${d.name.split(" ")[0]}, JazakAllahu Khayran for your generous donation of ${amtStr} to Abdullah Quilliam Society (${watchCat}). This is your confirmation receipt.${authorisedBy ? ` Authorised by: ${authorisedBy}.` : ""} May Allah bless you.`);
-                                  window.open(`https://wa.me/${phone}?text=${msg}`,"_blank");
+                                  window.location.href = `https://wa.me/${phone}?text=${msg}`;
                                 }}
                                 style={{ flex:1,padding:"6px 10px",borderRadius:8,background:"rgba(37,211,102,0.1)",border:"1px solid rgba(37,211,102,0.3)",color:"#4ade80",fontSize:11,fontWeight:600,cursor:"pointer" }}>
                                 💬 Send WhatsApp

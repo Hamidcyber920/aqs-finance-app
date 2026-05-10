@@ -209,7 +209,7 @@ function DonorLeadsTable() {
                     size="sm"
                     variant="ghost"
                     className="h-7 px-2 text-xs"
-                    onClick={() => window.open(`https://wa.me/${lead.whatsapp.replace(/\D/g, "").replace(/^0/, "44")}`, "_blank")}
+                    onClick={() => window.location.href = `https://wa.me/${lead.whatsapp.replace(/\D/g, "").replace(/^0/, "44")}`}
                   >
                     <MessageCircle className="w-3 h-3" />
                   </Button>
@@ -839,7 +839,7 @@ function DonorPortalPanel() {
                   className="bg-green-600 hover:bg-green-700"
                   onClick={() => {
                     const msg = `Assalamu Alaikum! Here is your secure AQS donor portal link:\n\n${result.portalUrl}\n\nThis link expires in 30 days. JazakAllah Khayran.`;
-                    window.open(`https://wa.me/${whatsapp.replace(/\D/g, "").replace(/^0/, "44")}?text=${encodeURIComponent(msg)}`, "_blank");
+                    window.location.href = `https://wa.me/${whatsapp.replace(/\D/g, "").replace(/^0/, "44")}?text=${encodeURIComponent(msg)}`;
                   }}
                 >
                   <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Send via WhatsApp

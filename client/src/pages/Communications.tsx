@@ -324,7 +324,7 @@ function ComposePanel({
     const msg = buildWaBody();
     const normPhone = normaliseUkPhone(trustee.phone);
     const link = `https://wa.me/${normPhone}?text=${encodeURIComponent(msg)}`;
-    window.open(link, "_blank", "noopener,noreferrer");
+    window.location.href = link;
     logWaMutation.mutate({
       channelId: channel.id,
       recipients: [{name: trustee.fullName, phone: trustee.phone}],
@@ -345,7 +345,7 @@ function ComposePanel({
       const normPhone = raw.startsWith("0") ? "44" + raw.slice(1) : raw.startsWith("+") ? raw.slice(1) : raw;
       if (!normPhone) return;
       const link = `https://wa.me/${normPhone}?text=${encodeURIComponent(msg)}`;
-      setTimeout(() => { window.open(link, `_wa_${t.id}`, "noopener,noreferrer"); }, i * 300);
+      setTimeout(() => { window.location.href = link; }, i * 300);
       opened++;
     });
     logWaMutation.mutate({ channelId: channel.id, recipients: pool.map((t:any) => ({ name: t.fullName, phone: t.phone })), message: msg });
@@ -624,7 +624,7 @@ function ComposePanel({
                   // Best approach: copy message to clipboard, then open group so user can paste.
                   navigator.clipboard.writeText(msg).catch(()=>{});
                   toast.success("Message copied! Opening group — paste to send.");
-                  setTimeout(()=>window.open(channel.whatsappGroupLink,"_blank","noopener,noreferrer"),400);
+                  setTimeout(()=>window.location.href = channel.whatsappGroupLink,400);
                   logWaMutation.mutate({channelId:channel.id,recipients:waMembers.map((t:any)=>({name:t.fullName,phone:t.phone})),message:msg});
                   onSent();
                 }}
@@ -1187,7 +1187,7 @@ export default function CommunicationsPage() {
                         <RefreshCw size={12}/>
                       </button>
                       {(selectedChannel as any).whatsappGroupLink&&(
-                        <button onClick={()=>window.open((selectedChannel as any).whatsappGroupLink,"_blank","noopener,noreferrer")}
+                        <button onClick={()=>window.location.href = (selectedChannel as any).whatsappGroupLink}
                           style={{padding:"6px 10px",borderRadius:8,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:T.white,fontWeight:700,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",gap:5}}>
                           <MessageSquare size={11}/>WA Group
                         </button>
