@@ -32,7 +32,7 @@ import {
   getDashboardStats,
 } from "./db";
 import { eq, and, sql } from "drizzle-orm";
-import { loanRepayments, commChannels, commMessages } from "../drizzle/schema";
+import { loanRepayments, commChannels, commMessages, commTemplates } from "../drizzle/schema";
 // sendGmail is defined locally in this file (line ~123)
 
 // ─── Permission helpers ───────────────────────────────────────────────────────
@@ -3399,6 +3399,63 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         await db.update(commMessages)
           .set({ isReplied: true, repliedAt: new Date() })
           .where(eq(commMessages.id, input.messageId));
+        return { success: true };
+      }),
+
+    // ─── Sent log ────────────────────────────────────────────────────────────
+    listSent: protectedProcedure
+      .input(z.object({ channelId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        return db.select().from(commMessages)
+          .where(and(eq(commMessages.channelId, input.channelId), eq(commMessages.direction, 'sent')))
+          .orderBy(sql`${commMessages.sentAt} DESC`)
+          .limit(100);
+      }),
+
+    // ─── Message templates ────────────────────────────────────────────────────
+    listTemplates: protectedProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(commTemplates).orderBy(commTemplates.name);
+    }),
+    saveTemplate: adminProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        name: z.string().min(1),
+        subject: z.string().optional(),
+        body: z.string().optional(),
+        priority: z.string().optional(),
+        replyBy: z.string().optional(),
+        actionBy: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const vals: any = {
+          name: input.name,
+          subject: input.subject ?? null,
+          body: input.body ?? null,
+          priority: input.priority ?? 'Normal',
+          replyBy: input.replyBy ?? null,
+          actionBy: input.actionBy ?? null,
+        };
+        if (input.id) {
+          await db.update(commTemplates).set(vals).where(eq(commTemplates.id, input.id));
+          return { success: true, id: input.id };
+        } else {
+          await db.insert(commTemplates).values(vals);
+          const rows = await db.select().from(commTemplates).orderBy(sql`id DESC`).limit(1);
+          return { success: true, id: rows[0]?.id };
+        }
+      }),
+    deleteTemplate: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.delete(commTemplates).where(eq(commTemplates.id, input.id));
         return { success: true };
       }),
   }),

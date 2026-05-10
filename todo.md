@@ -773,3 +773,21 @@
 - [x] Bulk email: auto-copies the same pre-filled message body to WhatsApp bulk send
 - [x] Individual email/WhatsApp: show all staff+management + selected trustees as recipient chips
 - [x] Trustees channel: keep existing trustee-only recipient logic unchanged
+
+## Communications Hub — Three Improvements (May 2026)
+- [x] DB: comm_templates table (id, name, subject, body, priority, replyBy, createdAt)
+- [x] Backend: templates.list, templates.save, templates.delete tRPC procedures
+- [x] Compose: "Saved Templates" button opens a picker; selecting a template fills subject+body+priority+replyBy
+- [x] Compose: "Save as Template" button saves current subject+body+priority+replyBy with a name
+- [x] Compose: delete template from the picker
+- [x] Bulk WA: after bulk email send, WA tab shows "Send All (1/N)" sequence button that opens each recipient's WhatsApp one by one
+- [x] Sent log: per-channel "Sent Messages" history tab showing date, sender, subject, recipient count, and type (email/WA)
+- [x] Sent log: pull from existing comm_messages table (already stores sent messages)
+
+## Communications — Templates, WA Sequence, Sent History & Trustees Enhancements (May 2026)
+- [x] Add Templates library button in ComposePanel header (load, save, delete templates)
+- [x] Add bulk WhatsApp Send-All sequence button (opens one recipient at a time with progress)
+- [x] Add Sent Messages history tab in channel view (date, sender, subject, recipient count, type)
+- [x] Trustees channel: apply same Compose enhancements (templates, WA sequence, sent history)
+- [x] Trustees channel: add toggle dropdown to include any staff/manager as additional recipient
+- [x] Trustees channel: allow adding new trustees and managers to the channel member list

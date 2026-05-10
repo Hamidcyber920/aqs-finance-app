@@ -5,6 +5,7 @@ import {
   Mail, MessageSquare, Send, Users, Pencil, Check, X,
   AlertTriangle, Shield, Briefcase, Building2, Hash,
   Plus, RefreshCw, ArrowLeft, UserPlus, ChevronDown, LogIn, Trash2,
+  BookOpen, Save, History, ChevronRight,
 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -188,6 +189,25 @@ function ComposePanel({
   const [subject, setSubject]       = useState("");
   const [body, setBody]             = useState("");
 
+  // Templates library state
+  const [showTemplates, setShowTemplates]   = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+
+  // WA send-all sequence state
+  const [waSequenceIdx, setWaSequenceIdx] = useState<number|null>(null);
+
+  // Templates data
+  const { data: templates = [], refetch: refetchTemplates } = trpc.comms.listTemplates.useQuery();
+  const saveTemplateMutation = trpc.comms.saveTemplate.useMutation({
+    onSuccess: () => { toast.success("Template saved"); setSavingTemplate(false); setNewTemplateName(""); refetchTemplates(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteTemplateMutation = trpc.comms.deleteTemplate.useMutation({
+    onSuccess: () => { toast.success("Template deleted"); refetchTemplates(); },
+    onError: (e) => toast.error(e.message),
+  });
+
   // Determine if this is the Trustees channel
   const isTrusteesChannel = (channel.name??"").toLowerCase().includes("trust");
 
@@ -212,8 +232,20 @@ function ComposePanel({
     ...trusteesOnly.filter((t:any)=>selectedTrusteeIds.includes(t.id)),
   ];
 
-  // For Trustees channel: use channelMembers as before
-  const basePool = isTrusteesChannel ? channelMembers : nonTrusteeRecipientPool;
+  // For Trustees channel: allow adding staff/managers as extra recipients
+  const [selectedExtraIds, setSelectedExtraIds] = useState<number[]>([]);
+  const [showExtraDropdown, setShowExtraDropdown] = useState(false);
+  const extraCandidates = (allTrustees as any[]).filter((t:any) => {
+    const r = (t.role??"").toLowerCase();
+    return r.includes("manager") || r.includes("senior") || r.includes("deputy") || r.includes("staff") || r.includes("volunteer");
+  });
+  const trusteesBasePool = [
+    ...channelMembers,
+    ...extraCandidates.filter((t:any) => selectedExtraIds.includes(t.id)),
+  ];
+
+  // For Trustees channel: use channelMembers + selected extras; for others use nonTrusteeRecipientPool
+  const basePool = isTrusteesChannel ? trusteesBasePool : nonTrusteeRecipientPool;
 
   const emailMembers = basePool.filter((t:any)=>t.email);
   const waMembers    = basePool.filter((t:any)=>t.phone);
@@ -284,19 +316,38 @@ function ComposePanel({
   };
 
   // Open WhatsApp for a single recipient AND log it silently
-  const handleOpenWA = (trustee: any) => {
+  const handleOpenWA = (trustee: any, skipOnSent = false) => {
     if (!body.trim()){toast.error("Write a message body first");return;}
     const msg = buildWaBody();
     const normPhone = normaliseUkPhone(trustee.phone);
     const link = `https://wa.me/${normPhone}?text=${encodeURIComponent(msg)}`;
     window.open(link, "_blank", "noopener,noreferrer");
-    // Silent background log
     logWaMutation.mutate({
       channelId: channel.id,
       recipients: [{name: trustee.fullName, phone: trustee.phone}],
       message: msg,
     });
-    onSent();
+    if (!skipOnSent) onSent();
+  };
+
+  // Bulk WA send-all sequence
+  const startWaSequence = () => {
+    if (!body.trim()) { toast.error("Write a message body first"); return; }
+    const pool = waMembers.filter((t:any) => selectedWaIds.includes(t.id));
+    if (!pool.length) { toast.error("Select at least one recipient"); return; }
+    setWaSequenceIdx(0);
+  };
+  const handleWaSequenceNext = () => {
+    const pool = waMembers.filter((t:any) => selectedWaIds.includes(t.id));
+    const idx = waSequenceIdx ?? 0;
+    if (idx >= pool.length) {
+      setWaSequenceIdx(null);
+      toast.success("All WhatsApp messages sent!");
+      onSent();
+      return;
+    }
+    handleOpenWA(pool[idx], true);
+    setWaSequenceIdx(idx + 1);
   };
 
   const inp: React.CSSProperties = {width:"100%",background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,padding:"10px 12px",fontSize:13,boxSizing:"border-box"};
@@ -305,7 +356,71 @@ function ComposePanel({
 
   return (
     <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:20}}>
-      <p style={{fontSize:12,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.1em",margin:"0 0 14px"}}>Compose Message</p>
+      {/* Header row with Templates button */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <p style={{fontSize:12,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.1em",margin:0}}>Compose Message</p>
+        <button onClick={()=>setShowTemplates(!showTemplates)}
+          style={{display:"flex",alignItems:"center",gap:5,padding:"5px 10px",borderRadius:8,background:showTemplates?"rgba(99,91,255,0.2)":"rgba(255,255,255,0.05)",border:`1px solid ${showTemplates?T.purple:T.border}`,color:showTemplates?T.white:T.muted,cursor:"pointer",fontSize:11,fontWeight:700}}>
+          <BookOpen size={11}/> Templates
+        </button>
+      </div>
+
+      {/* ── Templates library ── */}
+      {showTemplates&&(
+        <div style={{marginBottom:16,background:"rgba(99,91,255,0.05)",border:"1px solid rgba(99,91,255,0.2)",borderRadius:12,padding:"12px 14px"}}>
+          <p style={{fontSize:10,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 10px"}}>📚 Saved Templates</p>
+          {(templates as any[]).length===0&&!savingTemplate&&(
+            <p style={{fontSize:12,color:T.muted,margin:"0 0 10px"}}>No templates yet. Fill in a message below and save it.</p>
+          )}
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+            {(templates as any[]).map((tmpl:any)=>(
+              <div key={tmpl.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:12,fontWeight:700,color:T.white,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tmpl.name}</p>
+                  {tmpl.subject&&<p style={{fontSize:10,color:T.muted,margin:"2px 0 0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tmpl.subject}</p>}
+                </div>
+                <button onClick={()=>{
+                  if(tmpl.subject) setSubject(tmpl.subject);
+                  if(tmpl.body) setBody(tmpl.body);
+                  if(tmpl.priority) setPriority(tmpl.priority);
+                  if(tmpl.replyBy) setReplyBy(tmpl.replyBy);
+                  setShowTemplates(false);
+                  toast.success(`Template "${tmpl.name}" loaded`);
+                }} style={{padding:"4px 10px",borderRadius:6,background:"rgba(99,91,255,0.2)",border:`1px solid rgba(99,91,255,0.4)`,color:T.white,fontWeight:700,cursor:"pointer",fontSize:11,flexShrink:0}}>
+                  Load
+                </button>
+                <button onClick={()=>{if(window.confirm(`Delete template "${tmpl.name}"?`))deleteTemplateMutation.mutate({id:tmpl.id});}}
+                  style={{width:24,height:24,borderRadius:6,background:"transparent",border:"none",color:"#EF4444",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.7}}>
+                  <Trash2 size={11}/>
+                </button>
+              </div>
+            ))}
+          </div>
+          {!savingTemplate?(
+            <button onClick={()=>setSavingTemplate(true)}
+              style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:`1px solid rgba(0,255,194,0.25)`,color:T.mint,cursor:"pointer",fontSize:11,fontWeight:700}}>
+              <Save size={11}/> Save Current as Template
+            </button>
+          ):(
+            <div style={{display:"flex",gap:6}}>
+              <input value={newTemplateName} onChange={e=>setNewTemplateName(e.target.value)}
+                placeholder="Template name…" autoFocus
+                style={{flex:1,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:6,color:T.white,padding:"6px 8px",fontSize:12}}/>
+              <button onClick={()=>{
+                if(!newTemplateName.trim()){toast.error("Enter a template name");return;}
+                saveTemplateMutation.mutate({name:newTemplateName.trim(),subject,body,priority,replyBy});
+              }} disabled={saveTemplateMutation.isPending}
+                style={{padding:"6px 12px",borderRadius:6,background:T.mint,color:"#081526",fontWeight:700,border:"none",cursor:"pointer",fontSize:11}}>
+                {saveTemplateMutation.isPending?"Saving…":"Save"}
+              </button>
+              <button onClick={()=>{setSavingTemplate(false);setNewTemplateName("");}}
+                style={{padding:"6px 10px",borderRadius:6,background:"rgba(255,255,255,0.06)",color:T.muted,fontWeight:700,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:11}}>
+                <X size={11}/>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{display:"flex",gap:6,marginBottom:16}}>
@@ -397,6 +512,38 @@ function ComposePanel({
             })}
           </div>
           <p style={{fontSize:10,color:T.muted,margin:"6px 0 0"}}>Dr Abdul Hamid &amp; Mr Galib Khan are included by default</p>
+        </div>
+      )}
+
+      {/* ── Trustees channel: add staff/manager toggle ── */}
+      {isTrusteesChannel&&(
+        <div style={{marginBottom:12,background:"rgba(0,255,194,0.04)",border:"1px solid rgba(0,255,194,0.15)",borderRadius:10,padding:"10px 12px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:showExtraDropdown?8:0}}>
+            <p style={{fontSize:10,fontWeight:700,color:T.mint,textTransform:"uppercase",letterSpacing:"0.08em",margin:0}}>👥 Also Include Staff / Managers</p>
+            <button onClick={()=>setShowExtraDropdown(!showExtraDropdown)}
+              style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:8,background:showExtraDropdown?"rgba(0,255,194,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${showExtraDropdown?T.mint:T.border}`,color:showExtraDropdown?T.mint:T.muted,cursor:"pointer",fontSize:11,fontWeight:700}}>
+              <UserPlus size={11}/> {selectedExtraIds.length>0?`${selectedExtraIds.length} added`:"Add"}
+              <ChevronDown size={10} style={{transform:showExtraDropdown?"rotate(180deg)":"none",transition:"transform 0.15s"}}/>
+            </button>
+          </div>
+          {showExtraDropdown&&(
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {extraCandidates.map((t:any)=>{
+                const isSel=selectedExtraIds.includes(t.id);
+                return(
+                  <button key={t.id}
+                    onClick={()=>setSelectedExtraIds(prev=>isSel?prev.filter(i=>i!==t.id):[...prev,t.id])}
+                    style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${isSel?T.mint:T.border}`,background:isSel?"rgba(0,255,194,0.12)":"transparent",color:isSel?T.mint:T.muted,transition:"all 0.15s"}}>
+                    <span style={{width:20,height:20,borderRadius:"50%",background:isSel?"rgba(0,255,194,0.25)":"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:isSel?T.mint:T.muted,flexShrink:0}}>{getInitials(t.fullName)}</span>
+                    {t.fullName}
+                    <span style={{fontSize:9,color:T.muted,opacity:0.7}}>({t.role})</span>
+                    {isSel&&<Check size={11} style={{color:T.mint}}/>}
+                  </button>
+                );
+              })}
+              {!extraCandidates.length&&<p style={{fontSize:12,color:T.muted}}>No staff or managers found.</p>}
+            </div>
+          )}
         </div>
       )}
 
@@ -500,8 +647,46 @@ function ComposePanel({
                 );
               })}
             </div>
-            {/* Open WhatsApp for each selected member */}
-            {selectedWaIds.length>0&&(
+            {/* Send All sequence button */}
+            {selectedWaIds.length>0&&waSequenceIdx===null&&(
+              <button onClick={startWaSequence}
+                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0",borderRadius:10,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:T.white,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:8}}>
+                <Send size={14}/> Send All ({selectedWaIds.length}) — One by One
+              </button>
+            )}
+            {/* Sequence progress UI */}
+            {waSequenceIdx!==null&&(()=>{
+              const pool=waMembers.filter((t:any)=>selectedWaIds.includes(t.id));
+              const done=waSequenceIdx>=pool.length;
+              const current=done?null:pool[waSequenceIdx];
+              return(
+                <div style={{background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.3)",borderRadius:12,padding:"14px 16px",marginBottom:8}}>
+                  {done?(
+                    <div style={{textAlign:"center"}}>
+                      <p style={{fontSize:14,fontWeight:700,color:"#25d366",margin:"0 0 10px"}}>✅ All {pool.length} messages sent!</p>
+                      <button onClick={()=>{setWaSequenceIdx(null);setSelectedWaIds([]);onSent();}}
+                        style={{padding:"8px 20px",borderRadius:8,background:"rgba(37,211,102,0.2)",border:"1px solid rgba(37,211,102,0.4)",color:"#25d366",fontWeight:700,cursor:"pointer",fontSize:12}}>Done</button>
+                    </div>
+                  ):(
+                    <>
+                      <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>{waSequenceIdx+1} of {pool.length}</p>
+                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                        <span style={{width:36,height:36,borderRadius:"50%",background:"rgba(37,211,102,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#25d366",flexShrink:0}}>{getInitials(current!.fullName)}</span>
+                        <div><p style={{fontSize:14,fontWeight:700,color:T.white,margin:0}}>{current!.fullName}</p><p style={{fontSize:11,color:T.muted,margin:0}}>{current!.phone}</p></div>
+                      </div>
+                      <button onClick={handleWaSequenceNext}
+                        style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0",borderRadius:10,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:T.white,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                        <MessageSquare size={14}/> Open WhatsApp for {current!.fullName} <ChevronRight size={14}/>
+                      </button>
+                      <button onClick={()=>setWaSequenceIdx(null)}
+                        style={{width:"100%",marginTop:6,padding:"6px 0",borderRadius:8,background:"transparent",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",fontSize:11}}>Cancel Sequence</button>
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+            {/* Individual open buttons (non-sequence mode) */}
+            {selectedWaIds.length>0&&waSequenceIdx===null&&(
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {waMembers.filter((t:any)=>selectedWaIds.includes(t.id)).map((t:any)=>(
                   <button key={t.id}
@@ -655,6 +840,88 @@ function MemberManager({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Thread + Sent History tabbed view ───────────────────────────────────────
+function ThreadWithHistory({
+  selectedChannelId, messages, messagesEndRef, onMarkReplied,
+}: {
+  selectedChannelId: number;
+  messages: any[];
+  messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  onMarkReplied: (id: number) => void;
+}) {
+  const [histTab, setHistTab] = useState<"thread"|"sent">("thread");
+  const { data: sentLog = [] } = trpc.comms.listSent.useQuery(
+    { channelId: selectedChannelId },
+    { enabled: histTab === "sent" }
+  );
+
+  return (
+    <div className="comms-thread" style={{display:"flex",flexDirection:"column"}}>
+      {/* Tab row */}
+      <div style={{display:"flex",gap:4,marginBottom:10,flexShrink:0}}>
+        {(["thread","sent"] as const).map(t=>(
+          <button key={t} onClick={()=>setHistTab(t)}
+            style={{padding:"5px 12px",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",border:`1px solid ${histTab===t?T.purple:T.border}`,background:histTab===t?"rgba(99,91,255,0.2)":"transparent",color:histTab===t?T.white:T.muted}}>
+            {t==="thread"?"💬 Replies":"📤 Sent History"}
+          </button>
+        ))}
+      </div>
+
+      {histTab==="thread"&&(
+        <div style={{flex:1,overflowY:"auto"}}>
+          {messages.length===0?(
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 0",gap:12,opacity:0.5}}>
+              <Mail size={36} style={{color:T.muted}}/>
+              <p style={{fontSize:13,color:T.muted,textAlign:"center"}}>No messages yet.<br/>Press Compose to send the first one.</p>
+            </div>
+          ):(
+            <>
+              {messages.map((msg:any)=><MessageBubble key={msg.id} msg={msg} onMarkReplied={onMarkReplied}/>)}
+              <div ref={messagesEndRef}/>
+            </>
+          )}
+        </div>
+      )}
+
+      {histTab==="sent"&&(
+        <div style={{flex:1,overflowY:"auto"}}>
+          {(sentLog as any[]).length===0?(
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 0",gap:12,opacity:0.5}}>
+              <Send size={36} style={{color:T.muted}}/>
+              <p style={{fontSize:13,color:T.muted,textAlign:"center"}}>No sent messages yet.</p>
+            </div>
+          ):(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {(sentLog as any[]).map((msg:any)=>(
+                <div key={msg.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}>
+                  <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:6}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                        <span style={{fontSize:10,fontWeight:700,color:msg.messageType==="whatsapp"?"#25d366":T.mint,textTransform:"uppercase",letterSpacing:"0.06em"}}>{msg.messageType==="whatsapp"?"📱 WhatsApp":"✉️ Email"}</span>
+                        {msg.isBulk&&<span style={{fontSize:9,fontWeight:700,color:T.gold,background:"rgba(251,191,36,0.12)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:4,padding:"1px 5px"}}>BULK</span>}
+                        {msg.subject&&<span style={{fontSize:12,fontWeight:700,color:T.white,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{msg.subject}</span>}
+                      </div>
+                    </div>
+                    <span style={{fontSize:10,color:T.muted,flexShrink:0}}>{new Date(msg.sentAt).toLocaleString()}</span>
+                  </div>
+                  {msg.recipients&&(
+                    <p style={{fontSize:10,color:T.muted,margin:"0 0 6px"}}>
+                      To: {(() => { try { return (JSON.parse(msg.recipients) as any[]).map((r:any)=>r.name||r.email||r.phone).join(", "); } catch { return msg.recipients; } })()}
+                    </p>
+                  )}
+                  {msg.body&&(
+                    <pre style={{fontSize:11,color:"rgba(255,255,255,0.7)",margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",lineHeight:1.6,maxHeight:120,overflow:"hidden",textOverflow:"ellipsis"}}>{msg.body.slice(0,300)}{msg.body.length>300?"…":""}</pre>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -973,20 +1240,13 @@ export default function CommunicationsPage() {
                   </div>
                 )}
 
-                {/* Thread */}
-                <div className="comms-thread">
-                  {(messages as any[]).length===0?(
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"40px 0",gap:12,opacity:0.5}}>
-                      <Mail size={36} style={{color:T.muted}}/>
-                      <p style={{fontSize:13,color:T.muted,textAlign:"center"}}>No messages yet.<br/>Press Compose to send the first one.</p>
-                    </div>
-                  ):(
-                    <>
-                      {(messages as any[]).map((msg:any)=><MessageBubble key={msg.id} msg={msg} onMarkReplied={(id)=>markRepliedMutation.mutate({messageId:id})}/>)}
-                      <div ref={messagesEndRef}/>
-                    </>
-                  )}
-                </div>
+                {/* Thread + Sent History tabs */}
+                <ThreadWithHistory
+                  selectedChannelId={selectedChannelId!}
+                  messages={messages as any[]}
+                  messagesEndRef={messagesEndRef}
+                  onMarkReplied={(id)=>markRepliedMutation.mutate({messageId:id})}
+                />
               </>
             ):(
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,padding:40}}>

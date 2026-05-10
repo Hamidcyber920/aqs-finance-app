@@ -769,3 +769,19 @@ export const commMessages = mysqlTable("comm_messages", {
 });
 export type CommMessage = typeof commMessages.$inferSelect;
 export type InsertCommMessage = typeof commMessages.$inferInsert;
+
+// ─── COMM TEMPLATES ──────────────────────────────────────────────────────────
+
+export const commTemplates = mysqlTable("comm_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  subject: varchar("subject", { length: 500 }),
+  body: text("body"),
+  priority: varchar("priority", { length: 50 }).default("Normal"),
+  replyBy: varchar("replyBy", { length: 100 }),
+  actionBy: varchar("actionBy", { length: 200 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CommTemplate = typeof commTemplates.$inferSelect;
+export type InsertCommTemplate = typeof commTemplates.$inferInsert;
