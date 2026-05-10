@@ -702,3 +702,7 @@
 - [x] Send Monthly Report Now: add manual trigger button on Qarde Hasan Loans page
 - [x] Send Monthly Report Now: tRPC procedure to fire the monthly trustee summary email on demand
 - [x] Birthday alerts: daily cron job checks trustees DOB, sends JazakAllahu Khayran email on birthday
+
+## Communications Hub UX Fixes (May 2026 #2)
+- [x] Channel header: make member avatars horizontally scrollable (finger swipe to see all)
+- [x] MemberManager: replace add-name chips with a proper + Add button that opens a dropdown/picker

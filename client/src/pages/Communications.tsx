@@ -417,8 +417,9 @@ function MemberManager({
   channel, allTrustees, channelMembers, onUpdate,
 }: { channel:any; allTrustees:any[]; channelMembers:any[]; onUpdate:()=>void }) {
   const [open, setOpen] = useState(false);
+  const [showAddPicker, setShowAddPicker] = useState(false);
   const updateChannel = trpc.comms.updateChannel.useMutation({
-    onSuccess:()=>{toast.success("Members updated");onUpdate();},
+    onSuccess:()=>{toast.success("Members updated");onUpdate();setShowAddPicker(false);},
     onError:(e)=>toast.error(e.message),
   });
 
@@ -466,17 +467,29 @@ function MemberManager({
           </div>
 
           {addCandidates.length>0&&(
-            <>
-              <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>Add Member</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {addCandidates.map((t:any)=>(
-                  <button key={t.id} onClick={()=>addMember(t.id)}
-                    style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:"rgba(0,255,194,0.06)",border:`1px solid rgba(0,255,194,0.2)`,color:T.mint,cursor:"pointer",fontSize:12,fontWeight:500}}>
-                    <UserPlus size={10}/> {t.fullName}
-                  </button>
-                ))}
-              </div>
-            </>
+            <div style={{position:"relative"}}>
+              <button onClick={()=>setShowAddPicker(!showAddPicker)}
+                style={{display:"flex",alignItems:"center",gap:6,padding:"7px 14px",borderRadius:10,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.25)",color:T.mint,cursor:"pointer",fontSize:12,fontWeight:700}}>
+                <UserPlus size={13}/> Add Member
+                <ChevronDown size={10} style={{transform:showAddPicker?"rotate(180deg)":"none",transition:"transform 0.2s"}}/>
+              </button>
+              {showAddPicker&&(
+                <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:50,background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:12,padding:8,minWidth:200,boxShadow:"0 8px 32px rgba(0,0,0,0.5)",maxHeight:220,overflowY:"auto"}}>
+                  {addCandidates.map((t:any)=>(
+                    <button key={t.id} onClick={()=>addMember(t.id)}
+                      style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,background:"transparent",border:"none",color:T.white,cursor:"pointer",fontSize:12,fontWeight:500,width:"100%",textAlign:"left",transition:"background 0.1s"}}
+                      onMouseEnter={e=>(e.currentTarget.style.background="rgba(0,255,194,0.08)")}
+                      onMouseLeave={e=>(e.currentTarget.style.background="transparent")}>
+                      <span style={{width:24,height:24,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:T.white,flexShrink:0}}>
+                        {getInitials(t.fullName)}
+                      </span>
+                      <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.fullName}</span>
+                      <Plus size={10} style={{color:T.mint,flexShrink:0}}/>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -640,13 +653,16 @@ export default function CommunicationsPage() {
                     <h2 style={{fontSize:15,fontWeight:700,color:T.white,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(selectedChannel as any).name}</h2>
                     {(selectedChannel as any).description&&<p style={{fontSize:11,color:T.muted,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(selectedChannel as any).description}</p>}
                   </div>
-                  <div style={{display:"flex",flexShrink:0}}>
-                    {channelMembers.slice(0,3).map((t:any,i:number)=>(
-                      <div key={t.id} title={t.fullName} style={{width:26,height:26,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:T.white,border:`2px solid ${T.navy}`,marginLeft:i>0?-6:0}}>
-                        {getInitials(t.fullName)}
-                      </div>
-                    ))}
-                    {channelMembers.length>3&&<div style={{width:26,height:26,borderRadius:"50%",background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,color:T.muted,border:`2px solid ${T.navy}`,marginLeft:-6}}>+{channelMembers.length-3}</div>}
+                  <div style={{display:"flex",flexShrink:0,overflowX:"auto",maxWidth:"min(220px,40vw)",scrollbarWidth:"none",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
+                    <style>{`#avatar-scroll::-webkit-scrollbar{display:none}`}</style>
+                    <div id="avatar-scroll" style={{display:"flex",alignItems:"center",gap:4,paddingRight:4}}>
+                      {channelMembers.map((t:any,i:number)=>(
+                        <div key={t.id} title={t.fullName}
+                          style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:T.white,border:`2px solid ${T.navy}`,flexShrink:0,cursor:"default"}}>
+                          {getInitials(t.fullName)}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   <button onClick={()=>refetchMessages()} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <RefreshCw size={12}/>
