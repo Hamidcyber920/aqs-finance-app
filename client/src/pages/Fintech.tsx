@@ -754,23 +754,25 @@ export default function Fintech() {
       </div>
 
       <Tabs defaultValue="stripe" className="space-y-4">
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="stripe" className="flex items-center gap-1.5">
-            <CreditCard className="w-3.5 h-3.5" /> Online Payment
-          </TabsTrigger>
-          <TabsTrigger value="quickcapture" className="flex items-center gap-1.5">
-            <Zap className="w-3.5 h-3.5" /> QuickCapture
-          </TabsTrigger>
-          <TabsTrigger value="bank" className="flex items-center gap-1.5">
-            <Building2 className="w-3.5 h-3.5" /> Bank Transfer
-          </TabsTrigger>
-          <TabsTrigger value="history" className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5" /> Payment History
-          </TabsTrigger>
-          <TabsTrigger value="giftaid" className="flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5" /> Gift Aid R68
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1 pb-1">
+          <TabsList className="inline-flex w-max min-w-full h-auto gap-1 p-1">
+            <TabsTrigger value="stripe" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
+              <CreditCard className="w-3.5 h-3.5 shrink-0" /> <span>Online Payment</span>
+            </TabsTrigger>
+            <TabsTrigger value="quickcapture" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
+              <Zap className="w-3.5 h-3.5 shrink-0" /> <span>QuickCapture</span>
+            </TabsTrigger>
+            <TabsTrigger value="bank" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
+              <Building2 className="w-3.5 h-3.5 shrink-0" /> <span>Bank Transfer</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
+              <Clock className="w-3.5 h-3.5 shrink-0" /> <span>History</span>
+            </TabsTrigger>
+            <TabsTrigger value="giftaid" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
+              <FileText className="w-3.5 h-3.5 shrink-0" /> <span>Gift Aid R68</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="stripe">
           <Card>
