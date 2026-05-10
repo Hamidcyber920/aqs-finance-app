@@ -903,3 +903,48 @@ export const accommodationRentPayments = mysqlTable("accommodation_rent_payments
 
 export type AccommodationRentPayment = typeof accommodationRentPayments.$inferSelect;
 export type InsertAccommodationRentPayment = typeof accommodationRentPayments.$inferInsert;
+
+// ─── STRIPE PAYMENT SESSIONS ──────────────────────────────────────────────────
+export const stripePaymentSessions = mysqlTable("stripe_payment_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  stripeSessionId: varchar("stripeSessionId", { length: 255 }),
+  donorName: varchar("donorName", { length: 200 }).notNull(),
+  donorEmail: varchar("donorEmail", { length: 320 }),
+  donorPhone: varchar("donorPhone", { length: 30 }),
+  campaignId: int("campaignId"),
+  campaignName: varchar("campaignName", { length: 200 }),
+  referenceCode: varchar("referenceCode", { length: 50 }),
+  amount: decimal("amount", { precision: 10, scale: 2 }),
+  currency: varchar("currency", { length: 3 }).default("gbp"),
+  giftAidDeclared: boolean("giftAidDeclared").default(false).notNull(),
+  giftAidAddress: text("giftAidAddress"),
+  status: mysqlEnum("status", ["pending", "completed", "failed", "cancelled"]).default("pending").notNull(),
+  paymentMethod: varchar("paymentMethod", { length: 50 }),
+  webhookConfirmedAt: timestamp("webhookConfirmedAt"),
+  thankYouWhatsAppSentAt: timestamp("thankYouWhatsAppSentAt"),
+  fundraisingDonationId: int("fundraisingDonationId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type StripePaymentSession = typeof stripePaymentSessions.$inferSelect;
+export type InsertStripePaymentSession = typeof stripePaymentSessions.$inferInsert;
+
+// ─── GIFT AID DECLARATIONS ────────────────────────────────────────────────────
+export const giftAidDeclarations = mysqlTable("gift_aid_declarations", {
+  id: int("id").autoincrement().primaryKey(),
+  donorName: varchar("donorName", { length: 200 }).notNull(),
+  donorEmail: varchar("donorEmail", { length: 320 }),
+  donorAddress: text("donorAddress"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  donationDate: date("donationDate").notNull(),
+  campaignName: varchar("campaignName", { length: 200 }),
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  stripeTransactionRef: varchar("stripeTransactionRef", { length: 255 }),
+  declarationMethod: mysqlEnum("declarationMethod", ["online_stripe", "manual", "paper"]).default("online_stripe").notNull(),
+  exportedAt: timestamp("exportedAt"),
+  exportBatch: varchar("exportBatch", { length: 50 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type GiftAidDeclaration = typeof giftAidDeclarations.$inferSelect;
+export type InsertGiftAidDeclaration = typeof giftAidDeclarations.$inferInsert;

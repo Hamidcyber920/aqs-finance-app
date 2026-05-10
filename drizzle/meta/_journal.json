@@ -274,6 +274,13 @@
       "when": 1778435521929,
       "tag": "0038_lean_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "5",
+      "when": 1778437442245,
+      "tag": "0039_previous_kylun",
+      "breakpoints": true
     }
   ]
 }

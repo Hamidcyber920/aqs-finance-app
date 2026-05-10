@@ -881,3 +881,12 @@
   - [x] Daily 08:30 UK: 7-day due notice emails to tenants
   - [x] Daily 08:30 UK: 8-14 day overdue reminder emails + status update
   - [x] Daily 08:30 UK: 14+ day escalation emails + notifyOwner notification
+
+## AQS Fintech Layer (May 2026)
+- [ ] Stripe Payment Element integration (card, Apple Pay, Google Pay, Direct Debit)
+- [ ] QuickCapture: generate trackable payment URL pre-populated with donor name + campaign
+- [ ] Bank transfer reference code generator (RIMMERS-123 style) with one-tap copy of IBAN/SWIFT
+- [ ] Enhance AI-OCR Scan: extract donor name, amount, currency, date, campaign from uploaded images/sheets
+- [ ] Gift Aid R68 monthly export (CSV with Stripe transaction IDs for HMRC)
+- [ ] Stripe webhook handler to auto-mark Qarde Hasan repayments as paid
+- [ ] JazakAllah WhatsApp message trigger on payment confirmation

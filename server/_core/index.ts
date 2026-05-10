@@ -12,6 +12,7 @@ import { uploadRouter } from "../uploadHandler";
 import { registerScheduledBackupRoute } from "./scheduledBackup";
 import { registerBackupOnMutationMiddleware } from "./backupMiddleware";
 import { registerScheduledJobs } from "../scheduledJobs";
+import { registerStripeWebhook } from "../stripeWebhook";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -35,6 +36,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  // Raw body parser for Stripe webhook signature verification (must be before express.json)
+  app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -48,6 +51,8 @@ async function startServer() {
   registerScheduledBackupRoute(app);
   // Real-time backup: fires triggerBackupSoon() after every successful tRPC mutation
   registerBackupOnMutationMiddleware(app);
+  // Stripe webhook endpoint
+  registerStripeWebhook(app);
   // tRPC API
   app.use(
     "/api/trpc",

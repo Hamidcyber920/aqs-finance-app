@@ -1,0 +1,40 @@
+CREATE TABLE `gift_aid_declarations` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`donorName` varchar(200) NOT NULL,
+	`donorEmail` varchar(320),
+	`donorAddress` text,
+	`amount` decimal(10,2) NOT NULL,
+	`donationDate` date NOT NULL,
+	`campaignName` varchar(200),
+	`stripePaymentIntentId` varchar(255),
+	`stripeTransactionRef` varchar(255),
+	`declarationMethod` enum('online_stripe','manual','paper') NOT NULL DEFAULT 'online_stripe',
+	`exportedAt` timestamp,
+	`exportBatch` varchar(50),
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `gift_aid_declarations_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `stripe_payment_sessions` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`stripePaymentIntentId` varchar(255),
+	`stripeSessionId` varchar(255),
+	`donorName` varchar(200) NOT NULL,
+	`donorEmail` varchar(320),
+	`donorPhone` varchar(30),
+	`campaignId` int,
+	`campaignName` varchar(200),
+	`referenceCode` varchar(50),
+	`amount` decimal(10,2),
+	`currency` varchar(3) DEFAULT 'gbp',
+	`giftAidDeclared` boolean NOT NULL DEFAULT false,
+	`giftAidAddress` text,
+	`status` enum('pending','completed','failed','cancelled') NOT NULL DEFAULT 'pending',
+	`paymentMethod` varchar(50),
+	`webhookConfirmedAt` timestamp,
+	`thankYouWhatsAppSentAt` timestamp,
+	`fundraisingDonationId` int,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `stripe_payment_sessions_id` PRIMARY KEY(`id`)
+);
