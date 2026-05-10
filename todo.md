@@ -738,3 +738,10 @@
 - [x] Ensure phone normalisation and No-phone warning works for all channel member types (staff, managers)
 - [x] Ensure copy+open group send button works for all channels (already code-generic, just needs WA group links set per channel)
 - [x] Add phone numbers for staff/managers missing phone via Trustees/Contacts page
+
+## Create New Channel (May 2026)
+- [x] Add createChannel tRPC procedure to insert a new comm_channel row
+- [x] Add "+ New Channel" button at bottom of sidebar with title input form
+- [x] New channel uses same full template (Manage Members, compose tabs, message thread)
+- [x] Add deleteChannel tRPC procedure (deletes channel + all its messages)
+- [x] Add delete (trash) button on custom/editable channels in sidebar with confirmation dialog

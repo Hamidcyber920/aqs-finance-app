@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Mail, MessageSquare, Send, Users, Pencil, Check, X,
   AlertTriangle, Shield, Briefcase, Building2, Hash,
-  Plus, RefreshCw, ArrowLeft, UserPlus, ChevronDown, LogIn,
+  Plus, RefreshCw, ArrowLeft, UserPlus, ChevronDown, LogIn, Trash2,
 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -602,6 +602,8 @@ export default function CommunicationsPage() {
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [showCompose, setShowCompose] = useState(false);
+  const [showNewChannel, setShowNewChannel] = useState(false);
+  const [newChannelName, setNewChannelName] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [orderedChannels, setOrderedChannels] = useState<any[]>([]);
   const dragItem = useRef<number|null>(null);
@@ -622,6 +624,19 @@ export default function CommunicationsPage() {
   });
   const updateChannelMutation = trpc.comms.updateChannel.useMutation({
     onSuccess:()=>{toast.success("Channel updated");setEditingChannel(null);refetchChannels();},
+    onError:(e)=>toast.error(e.message),
+  });
+  const createChannelMutation = trpc.comms.createChannel.useMutation({
+    onSuccess:(ch:any)=>{
+      refetchChannels();
+      setShowNewChannel(false);
+      setNewChannelName("");
+      toast.success(`Channel "${ch.name}" created`);
+    },
+    onError:(e)=>toast.error(e.message),
+  });
+  const deleteChannelMutation = trpc.comms.deleteChannel.useMutation({
+    onSuccess:()=>{ refetchChannels(); toast.success("Channel deleted"); },
     onError:(e)=>toast.error(e.message),
   });
 
@@ -757,16 +772,56 @@ export default function CommunicationsPage() {
                         </span>
                       )}
                       {ch.isEditable&&(
-                        <button onClick={e=>{e.stopPropagation();setEditingChannel(ch.id);setEditName(ch.name);setEditDesc(ch.description??"");}}
+                        <>
+                        <button onClick={e=>{e.stopPropagation();setEditingChannel(ch.id);setEditName(ch.name);setEditDesc(ch.description??"");}}  
                           style={{width:22,height:22,borderRadius:6,background:"transparent",border:"none",color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.6}}>
                           <Pencil size={10}/>
                         </button>
+                        <button onClick={e=>{e.stopPropagation();if(window.confirm(`Delete channel "${ch.name}"? This will also delete all its messages.`)){deleteChannelMutation.mutate({id:ch.id});if(selectedChannelId===ch.id)setSelectedChannelId(null);}}}
+                          style={{width:22,height:22,borderRadius:6,background:"transparent",border:"none",color:"#EF4444",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.6}}>
+                          <Trash2 size={10}/>
+                        </button>
+                        </>
                       )}
                     </div>
                   )}
                 </div>
               );
             })}
+          {/* ── New Channel button & form ── */}
+          {!showNewChannel?(
+            <button
+              onClick={()=>setShowNewChannel(true)}
+              style={{display:"flex",alignItems:"center",gap:6,width:"100%",marginTop:8,padding:"8px 12px",borderRadius:10,background:"rgba(0,255,194,0.06)",border:"1px dashed rgba(0,255,194,0.3)",color:T.mint,cursor:"pointer",fontSize:12,fontWeight:700,transition:"all 0.15s"}}
+              onMouseEnter={e=>(e.currentTarget.style.background="rgba(0,255,194,0.12)")}
+              onMouseLeave={e=>(e.currentTarget.style.background="rgba(0,255,194,0.06)")}>
+              <Plus size={12}/> New Channel
+            </button>
+          ):(
+            <div style={{marginTop:8,background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:"10px 12px"}}>
+              <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>New Channel</p>
+              <input
+                value={newChannelName}
+                onChange={e=>setNewChannelName(e.target.value)}
+                onKeyDown={e=>{ if(e.key==="Enter"&&newChannelName.trim()) createChannelMutation.mutate({name:newChannelName.trim()}); }}
+                placeholder="Channel name…"
+                autoFocus
+                style={{width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:6,color:T.white,padding:"6px 8px",fontSize:12,marginBottom:8,boxSizing:"border-box"}}/>
+              <div style={{display:"flex",gap:6}}>
+                <button
+                  onClick={()=>{ if(newChannelName.trim()) createChannelMutation.mutate({name:newChannelName.trim()}); }}
+                  disabled={!newChannelName.trim()||createChannelMutation.isPending}
+                  style={{flex:1,padding:"6px 0",borderRadius:6,background:newChannelName.trim()?T.mint:"rgba(0,255,194,0.2)",color:"#081526",fontWeight:700,border:"none",cursor:newChannelName.trim()?"pointer":"not-allowed",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                  <Check size={10}/>{createChannelMutation.isPending?"Creating…":"Create"}
+                </button>
+                <button
+                  onClick={()=>{setShowNewChannel(false);setNewChannelName("");}}
+                  style={{flex:1,padding:"6px 0",borderRadius:6,background:"rgba(255,255,255,0.06)",color:T.muted,fontWeight:700,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                  <X size={10}/>Cancel
+                </button>
+              </div>
+            </div>
+          )}
           </div>
 
           {/* ── Right panel ── */}

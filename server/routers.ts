@@ -3169,6 +3169,35 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
       return db.select().from(commChannels).orderBy(commChannels.sortOrder);
     }),
 
+    createChannel: adminProcedure
+      .input(z.object({
+        name: z.string().min(1),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        // Get max sortOrder to place new channel at the end
+        const existing = await db.select().from(commChannels).orderBy(commChannels.sortOrder);
+        const maxSort = existing.length ? Math.max(...existing.map((c: any) => c.sortOrder ?? 0)) : 0;
+        await db.insert(commChannels).values({
+          name: input.name,
+          description: input.description ?? null,
+          memberRoles: 'trustee,chair,manager,deputy',
+          sortOrder: maxSort + 10,
+        } as any);
+        const created = await db.select().from(commChannels).orderBy(commChannels.sortOrder);
+        return created[created.length - 1];
+      }),
+    deleteChannel: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.delete(commMessages).where(eq(commMessages.channelId, input.id));
+        await db.delete(commChannels).where(eq(commChannels.id, input.id));
+        return { success: true };
+      }),
     updateChannel: adminProcedure
       .input(z.object({
         id: z.number(),
