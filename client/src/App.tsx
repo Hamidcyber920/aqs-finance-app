@@ -35,8 +35,9 @@ import FintechPage from "./pages/Fintech";
 import DonorCRMPage from "./pages/DonorCRM";
 import PaymentSuccessPage from "./pages/PaymentSuccess";
 import PaymentCancelledPage from "./pages/PaymentCancelled";
+import PayPage from "./pages/Pay";
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay"];
 
 function Router() {
   const path = window.location.pathname;
@@ -49,6 +50,9 @@ function Router() {
         <Route path="/register" component={RegisterPage} />
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/pay" component={PayPage} />
+        <Route path="/payment/success" component={PaymentSuccessPage} />
+        <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route component={NotFound} />
       </Switch>
     );

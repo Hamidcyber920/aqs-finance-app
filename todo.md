@@ -890,3 +890,24 @@
 - [x] Gift Aid R68 monthly export (CSV with Stripe transaction IDs for HMRC)
 - [x] Stripe webhook handler to auto-mark Qarde Hasan repayments as paid
 - [x] JazakAllah WhatsApp message trigger on payment confirmation
+
+## Payment Orchestration & AI-OCR Data Population (May 2026)
+
+### Multi-Channel Payment Integration
+- [x] Backend: paypal.createOrder procedure — creates a PayPal order via REST API, returns approvalUrl + orderId
+- [x] Backend: paypal.captureOrder procedure — captures approved PayPal order, records in stripe_payment_sessions with provider=paypal
+- [x] Backend: openBanking.generateLink procedure — generates a Truelayer/GoCardless-style open banking payment link with pre-filled amount + reference
+- [x] Backend: fintech.getPaymentPageData procedure — accepts ref + donorName + campaignId query params, returns pre-populated donor details for the payment page
+- [x] Frontend: Fintech.tsx — add PayPal button inside StripePaymentPanel (Step 2) using @paypal/react-paypal-js
+- [x] Frontend: Fintech.tsx — add "Open Banking (Bank Transfer)" tab/button that shows generated open banking link with copy + WhatsApp share
+- [x] Frontend: Fintech.tsx — add PayPal and Open Banking as payment method badges in the method grid (alongside Card, Apple Pay, Google Pay, BACS)
+- [x] Frontend: Public payment page (/pay) — standalone page that reads ?ref=&name=&campaign= query params, pre-populates donor form, shows all payment options
+- [x] Frontend: QuickCapture — update generated URL to include ?name=&campaign=&amount= so the /pay page pre-fills automatically
+- [x] Frontend: QuickCapture — update WhatsApp message template to use /pay URL with pre-populated params
+- [x] Frontend: Payment success page — show PayPal order ID or open banking reference alongside Stripe reference
+
+### AI-OCR Data Population
+- [x] Backend: fintech.extractPaymentData procedure — accepts image/PDF URL, uses LLM vision to extract donor name, amount, currency, date, campaign, reference from donation receipts / bank screenshots
+- [x] Frontend: Fintech.tsx — add "Scan to Pre-fill" button in donor details form that opens camera/file picker, calls extractPaymentData, auto-fills form fields
+- [x] Frontend: show extraction confidence badge on each auto-filled field (green = high, amber = medium, red = low)
+- [x] Frontend: allow manual override of any AI-extracted field before proceeding to payment

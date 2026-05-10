@@ -295,6 +295,13 @@
       "when": 1778450800528,
       "tag": "0041_tan_lenny_balinger",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "5",
+      "when": 1778452835990,
+      "tag": "0042_wealthy_shotgun",
+      "breakpoints": true
     }
   ]
 }

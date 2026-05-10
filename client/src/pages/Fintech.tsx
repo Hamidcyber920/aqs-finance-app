@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { trpc } from "@/lib/trpc";
@@ -17,7 +18,7 @@ import { toast } from "sonner";
 import {
   CreditCard, Zap, Building2, FileText, CheckCircle2, Clock, XCircle,
   Copy, MessageCircle, ExternalLink, Download, RefreshCw, Plus, Send,
-  Smartphone, Globe, Landmark, QrCode
+  Smartphone, Globe, Landmark, QrCode, ScanLine, Banknote, Loader2
 } from "lucide-react";
 
 // Stripe publishable key — loaded once outside any component
@@ -53,6 +54,270 @@ function StatusBadge({ status }: { status: string }) {
   };
   const s = map[status] ?? { label: status, className: "bg-gray-100 text-gray-600" };
   return <Badge className={`text-xs font-medium ${s.className}`}>{s.label}</Badge>;
+}
+
+// ─── CONFIDENCE BADGE ────────────────────────────────────────────────────────
+function ConfidenceBadge({ confidence }: { confidence: string }) {
+  const map: Record<string, string> = {
+    high: "bg-green-100 text-green-800",
+    medium: "bg-amber-100 text-amber-800",
+    low: "bg-red-100 text-red-800",
+  };
+  return <Badge className={`text-xs font-medium ${map[confidence] ?? "bg-gray-100 text-gray-600"}`}>{confidence}</Badge>;
+}
+
+// ─── AI-OCR SCAN TO PRE-FILL ─────────────────────────────────────────────────
+interface OcrResult {
+  donorName: { value: string; confidence: string };
+  amount: { value: number; confidence: string };
+  currency: { value: string; confidence: string };
+  date: { value: string; confidence: string };
+  campaignName: { value: string; confidence: string };
+  reference: { value: string; confidence: string };
+  donorEmail: { value: string; confidence: string };
+  donorPhone: { value: string; confidence: string };
+  paymentMethod: { value: string; confidence: string };
+}
+interface ScanToFillProps {
+  onFill: (data: Partial<{ donorName: string; donorEmail: string; donorPhone: string; amount: string; campaignName: string }>) => void;
+}
+function ScanToFill({ onFill }: ScanToFillProps) {
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState<OcrResult | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const extract = trpc.fintech.extractPaymentData.useMutation({
+    onSuccess: (data) => {
+      setResult(data);
+      setScanning(false);
+      onFill({
+        donorName: data.donorName.confidence !== "low" ? data.donorName.value : undefined,
+        donorEmail: data.donorEmail.confidence !== "low" ? data.donorEmail.value : undefined,
+        donorPhone: data.donorPhone.confidence !== "low" ? data.donorPhone.value : undefined,
+        amount: data.amount.confidence !== "low" && data.amount.value > 0 ? String(data.amount.value) : undefined,
+        campaignName: data.campaignName.confidence !== "low" ? data.campaignName.value : undefined,
+      });
+      toast.success("Fields auto-filled from scanned document");
+    },
+    onError: (e) => { setScanning(false); toast.error("OCR error: " + e.message); },
+  });
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanning(true);
+    setResult(null);
+    const formData = new FormData();
+    formData.append("file", file);
+    const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+    if (!uploadRes.ok) { setScanning(false); toast.error("Upload failed"); return; }
+    const { url } = await uploadRes.json();
+    extract.mutate({ fileUrl: url, mimeType: file.type || "image/jpeg" });
+  }
+  return (
+    <div className="space-y-3">
+      <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFile} />
+      <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={scanning} className="border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+        {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ScanLine className="w-4 h-4 mr-2" />}
+        {scanning ? "Scanning..." : "Scan to Pre-fill"}
+      </Button>
+      {result && (
+        <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">AI Extraction Results</p>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              ["Donor Name", result.donorName],
+              ["Amount", { value: result.amount.value > 0 ? `${result.currency.value} ${result.amount.value}` : "", confidence: result.amount.confidence }],
+              ["Campaign", result.campaignName],
+              ["Date", result.date],
+              ["Email", result.donorEmail],
+              ["Phone", result.donorPhone],
+            ] as [string, { value: string; confidence: string }][]).map(([label, field]) => field.value ? (
+              <div key={label} className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">{label}:</span>
+                <span className="text-xs font-medium">{field.value}</span>
+                <ConfidenceBadge confidence={field.confidence} />
+              </div>
+            ) : null)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── PAYPAL PAYMENT PANEL ─────────────────────────────────────────────────────
+function PayPalPaymentPanel() {
+  const [donorName, setDonorName] = useState("");
+  const [donorEmail, setDonorEmail] = useState("");
+  const [donorPhone, setDonorPhone] = useState("");
+  const [campaignId, setCampaignId] = useState<number | undefined>();
+  const [amount, setAmount] = useState("");
+  const [giftAid, setGiftAid] = useState(false);
+  const [giftAidAddress, setGiftAidAddress] = useState("");
+  const [step, setStep] = useState<"form" | "paypal">("form");
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [referenceCode, setReferenceCode] = useState("");
+  const { data: campaigns } = trpc.fintech.listCampaigns.useQuery();
+  const selectedCampaign = campaigns?.find((c) => c.id === campaignId);
+  const createOrder = trpc.fintech.createPayPalOrder.useMutation({
+    onSuccess: (data) => { setSessionId(data.sessionId); setReferenceCode(data.referenceCode); setStep("paypal"); toast.success(`PayPal ready — Reference: ${data.referenceCode}`); },
+    onError: (e) => toast.error("PayPal error: " + e.message),
+  });
+  const captureOrder = trpc.fintech.capturePayPalOrder.useMutation({
+    onSuccess: (data) => { if (data.status === "COMPLETED") toast.success("Payment completed via PayPal! JazakAllah Khayran."); },
+    onError: (e) => toast.error("Capture error: " + e.message),
+  });
+  const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID as string;
+  const paypalReady = !!paypalClientId;
+  function handleProceed() {
+    if (!donorName.trim() || !amount || parseFloat(amount) < 0.5) { toast.error("Please enter donor name and amount (min £0.50)"); return; }
+    createOrder.mutate({ donorName: donorName.trim(), donorEmail: donorEmail.trim() || undefined, donorPhone: donorPhone.trim() || undefined, campaignId, campaignName: selectedCampaign?.name, amount: parseFloat(amount), giftAidDeclared: giftAid, giftAidAddress: giftAid ? giftAidAddress : undefined, origin: window.location.origin });
+  }
+  if (step === "paypal" && paypalReady) {
+    return (
+      <div className="space-y-5">
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-center justify-between">
+          <div><p className="text-xs text-blue-700 font-semibold uppercase tracking-wide">Reference</p><p className="font-mono font-bold text-blue-900">{referenceCode}</p></div>
+          <div className="text-right"><p className="text-xs text-blue-700 font-semibold uppercase tracking-wide">Amount</p><p className="font-bold text-blue-900 text-lg">£{parseFloat(amount).toFixed(2)}</p></div>
+        </div>
+        <PayPalScriptProvider options={{ clientId: paypalClientId, currency: "GBP" }}>
+          <PayPalButtons
+            style={{ layout: "vertical", color: "blue", shape: "rect", label: "donate" }}
+            createOrder={async () => {
+              const res = await createOrder.mutateAsync({ donorName: donorName.trim(), donorEmail: donorEmail.trim() || undefined, donorPhone: donorPhone.trim() || undefined, campaignId, campaignName: selectedCampaign?.name, amount: parseFloat(amount), giftAidDeclared: giftAid, giftAidAddress: giftAid ? giftAidAddress : undefined, origin: window.location.origin });
+              return res.orderId;
+            }}
+            onApprove={async (data) => { if (sessionId) await captureOrder.mutateAsync({ orderId: data.orderID, sessionId }); }}
+          />
+        </PayPalScriptProvider>
+        <button type="button" onClick={() => setStep("form")} className="w-full text-center text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground">← Back to donor details</button>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-6">
+      {!paypalReady && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <strong>PayPal credentials not yet configured.</strong> Add VITE_PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET in Settings → Secrets to activate PayPal payments.
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          <div><Label>Donor Name *</Label><Input placeholder="Full name" value={donorName} onChange={(e) => setDonorName(e.target.value)} className="mt-1" /></div>
+          <div><Label>Email Address</Label><Input type="email" placeholder="donor@example.com" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} className="mt-1" /></div>
+          <div><Label>Phone / WhatsApp</Label><Input placeholder="+44 7700 000000" value={donorPhone} onChange={(e) => setDonorPhone(e.target.value)} className="mt-1" /></div>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <Label>Campaign</Label>
+            <Select value={campaignId ? String(campaignId) : ""} onValueChange={(v) => setCampaignId(v ? parseInt(v) : undefined)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Select campaign (optional)" /></SelectTrigger>
+              <SelectContent>{campaigns?.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div><Label>Amount (£) *</Label><Input type="number" min="0.50" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1" /></div>
+          <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <Switch checked={giftAid} onCheckedChange={setGiftAid} id="paypal-gift-aid" />
+            <div><Label htmlFor="paypal-gift-aid" className="cursor-pointer font-semibold text-amber-900">Gift Aid Declaration</Label><p className="text-xs text-amber-700">Adds 25p for every £1 donated at no cost to the donor</p></div>
+          </div>
+          {giftAid && <Textarea placeholder="Home address for Gift Aid" value={giftAidAddress} onChange={(e) => setGiftAidAddress(e.target.value)} rows={2} />}
+        </div>
+      </div>
+      <Button onClick={handleProceed} disabled={createOrder.isPending || !paypalReady} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 text-base">
+        <Globe className="w-4 h-4 mr-2" />
+        {createOrder.isPending ? "Preparing PayPal..." : `Continue to PayPal${amount ? ` — £${parseFloat(amount || "0").toFixed(2)}` : ""}`}
+      </Button>
+      <p className="text-center text-xs text-muted-foreground">Powered by PayPal · Supports PayPal balance, cards, and Pay Later</p>
+    </div>
+  );
+}
+
+// ─── OPEN BANKING PANEL ───────────────────────────────────────────────────────
+function OpenBankingPanel() {
+  const [donorName, setDonorName] = useState("");
+  const [donorEmail, setDonorEmail] = useState("");
+  const [donorPhone, setDonorPhone] = useState("");
+  const [campaignId, setCampaignId] = useState<number | undefined>();
+  const [amount, setAmount] = useState("");
+  const [giftAid, setGiftAid] = useState(false);
+  const [giftAidAddress, setGiftAidAddress] = useState("");
+  const [result, setResult] = useState<{
+    openBankingLink: string;
+    referenceCode: string;
+    bankDetails: Record<string, string>;
+  } | null>(null);
+  const { data: campaigns } = trpc.fintech.listCampaigns.useQuery();
+  const selectedCampaign = campaigns?.find((c) => c.id === campaignId);
+  const generateLink = trpc.fintech.generateOpenBankingLink.useMutation({
+    onSuccess: (data) => { setResult(data); toast.success(`Open Banking link generated — Reference: ${data.referenceCode}`); },
+    onError: (e) => toast.error("Error: " + e.message),
+  });
+  function copy(text: string, label: string) { navigator.clipboard.writeText(text); toast.success(`${label} copied!`); }
+  function handleGenerate() {
+    if (!donorName.trim() || !amount || parseFloat(amount) < 0.5) { toast.error("Please enter donor name and amount (min £0.50)"); return; }
+    generateLink.mutate({ donorName: donorName.trim(), donorEmail: donorEmail.trim() || undefined, donorPhone: donorPhone.trim() || undefined, campaignId, campaignName: selectedCampaign?.name, amount: parseFloat(amount), giftAidDeclared: giftAid, giftAidAddress: giftAid ? giftAidAddress : undefined });
+  }
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-800">
+        <strong>Open Banking (Faster Payments)</strong> — The donor pays directly from their bank app (Monzo, Starling, HSBC, Barclays, etc.) with no card fees. Funds arrive instantly via UK Faster Payments.
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          <div><Label>Donor Name *</Label><Input placeholder="Full name" value={donorName} onChange={(e) => setDonorName(e.target.value)} className="mt-1" /></div>
+          <div><Label>Email Address</Label><Input type="email" placeholder="donor@example.com" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} className="mt-1" /></div>
+          <div><Label>Phone / WhatsApp</Label><Input placeholder="+44 7700 000000" value={donorPhone} onChange={(e) => setDonorPhone(e.target.value)} className="mt-1" /></div>
+          <div>
+            <Label>Campaign</Label>
+            <Select value={campaignId ? String(campaignId) : ""} onValueChange={(v) => setCampaignId(v ? parseInt(v) : undefined)}>
+              <SelectTrigger className="mt-1"><SelectValue placeholder="Select campaign (optional)" /></SelectTrigger>
+              <SelectContent>{campaigns?.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div><Label>Amount (£) *</Label><Input type="number" min="0.50" step="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1" /></div>
+          <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <Switch checked={giftAid} onCheckedChange={setGiftAid} id="ob-gift-aid" />
+            <div><Label htmlFor="ob-gift-aid" className="cursor-pointer font-semibold text-amber-900">Gift Aid Declaration</Label><p className="text-xs text-amber-700">Adds 25p for every £1 at no cost to donor</p></div>
+          </div>
+          {giftAid && <Textarea placeholder="Home address for Gift Aid" value={giftAidAddress} onChange={(e) => setGiftAidAddress(e.target.value)} rows={2} />}
+          <Button onClick={handleGenerate} disabled={generateLink.isPending} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Banknote className="w-4 h-4 mr-2" />
+            {generateLink.isPending ? "Generating..." : "Generate Open Banking Link"}
+          </Button>
+        </div>
+        {result && (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
+              <p className="text-sm font-semibold text-indigo-800 mb-1">Reference Code</p>
+              <div className="flex items-center gap-2">
+                <code className="text-lg font-bold text-indigo-900">{result.referenceCode}</code>
+                <Button size="sm" variant="ghost" onClick={() => copy(result.referenceCode, "Reference code")}><Copy className="w-3 h-3" /></Button>
+              </div>
+            </div>
+            <div className="rounded-lg border p-3 space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Open Banking Payment Link</p>
+              <p className="text-xs text-muted-foreground break-all">{result.openBankingLink}</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => copy(result.openBankingLink, "Open Banking link")}><Copy className="w-3 h-3 mr-1" /> Copy</Button>
+                <Button size="sm" variant="outline" asChild><a href={result.openBankingLink} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3 h-3 mr-1" /> Open</a></Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">AQ Society Bank Details</p>
+              {Object.entries(result.bankDetails).map(([key, val]) => (
+                <div key={key} className="flex items-center justify-between rounded-lg border bg-muted/20 px-3 py-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground capitalize">{key.replace(/([A-Z])/g, " $1")}</p>
+                    <p className={`font-mono text-sm font-semibold ${key === "reference" ? "text-indigo-700" : ""}`}>{val}</p>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => copy(val, key)}><Copy className="w-3 h-3" /></Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── QUICK CAPTURE PANEL ──────────────────────────────────────────────────────
@@ -212,7 +477,7 @@ function QuickCapturePanel() {
   );
 }
 
-// ─── STRIPE CHECKOUT FORM (inner — uses useStripe/useElements hooks) ──────────
+// ─── STRIPE CHECKOUT FORM (inner — uses useStripe/useElements hooks) ─────────
 interface CheckoutFormProps {
   referenceCode: string;
   amount: number;
@@ -286,12 +551,12 @@ function CheckoutForm({ referenceCode, amount, onBack }: CheckoutFormProps) {
   );
 }
 
-// ─── STRIPE PAYMENT FORM ──────────────────────────────────────────────────────
+/// ─── STRIPE PAYMENT FORM ──────────────────────────────────────────────────────
 function StripePaymentPanel() {
-
   const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [donorPhone, setDonorPhone] = useState("");
+  const [campaignNameOverride, setCampaignNameOverride] = useState("");
   const [campaignId, setCampaignId] = useState<number | undefined>();
   const [amount, setAmount] = useState("");
   const [giftAid, setGiftAid] = useState(false);
@@ -312,7 +577,13 @@ function StripePaymentPanel() {
   });
 
   const selectedCampaign = campaigns?.find((c) => c.id === campaignId);
-
+  function handleOcrFill(data: Partial<{ donorName: string; donorEmail: string; donorPhone: string; amount: string; campaignName: string }>) {
+    if (data.donorName) setDonorName(data.donorName);
+    if (data.donorEmail) setDonorEmail(data.donorEmail);
+    if (data.donorPhone) setDonorPhone(data.donorPhone);
+    if (data.amount) setAmount(data.amount);
+    if (data.campaignName) setCampaignNameOverride(data.campaignName);
+  }
   function handleProceed() {
     if (!donorName.trim() || !amount || parseFloat(amount) < 0.5) {
       toast.error("Required fields missing: Please enter donor name and amount (min £0.50)");
@@ -323,13 +594,12 @@ function StripePaymentPanel() {
       donorEmail: donorEmail.trim() || undefined,
       donorPhone: donorPhone.trim() || undefined,
       campaignId,
-      campaignName: selectedCampaign?.name,
+      campaignName: (selectedCampaign?.name ?? campaignNameOverride) || undefined,
       amount: parseFloat(amount),
       giftAidDeclared: giftAid,
       giftAidAddress: giftAid ? giftAidAddress : undefined,
     });
   }
-
   function handleBack() {
     setClientSecret(null);
     setReferenceCode("");
@@ -364,6 +634,7 @@ function StripePaymentPanel() {
   // ── Step 1: donor details form ──
   return (
     <div className="space-y-6">
+      <ScanToFill onFill={handleOcrFill} />
       <div className="grid grid-cols-2 gap-3 mb-4">
         {[
           { icon: CreditCard, label: "Debit / Credit Card" },
@@ -862,7 +1133,7 @@ export default function Fintech() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">AQS Fintech — Payment Hub</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Stripe Payment Element · QuickCapture Links · Bank Transfer Codes · Gift Aid R68 Export
+          Card · Apple Pay · Google Pay · BACS · PayPal · Open Banking · QuickCapture · Gift Aid R68
         </p>
       </div>
 
@@ -870,7 +1141,13 @@ export default function Fintech() {
         <div className="overflow-x-auto -mx-1 px-1 pb-1">
           <TabsList className="inline-flex w-max min-w-full h-auto gap-1 p-1">
             <TabsTrigger value="stripe" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
-              <CreditCard className="w-3.5 h-3.5 shrink-0" /> <span>Online Payment</span>
+              <CreditCard className="w-3.5 h-3.5 shrink-0" /> <span>Card / Apple / Google</span>
+            </TabsTrigger>
+            <TabsTrigger value="paypal" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
+              <Globe className="w-3.5 h-3.5 shrink-0" /> <span>PayPal</span>
+            </TabsTrigger>
+            <TabsTrigger value="openbanking" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
+              <Banknote className="w-3.5 h-3.5 shrink-0" /> <span>Open Banking</span>
             </TabsTrigger>
             <TabsTrigger value="quickcapture" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
               <Zap className="w-3.5 h-3.5 shrink-0" /> <span>QuickCapture</span>
@@ -892,15 +1169,51 @@ export default function Fintech() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-emerald-700" />
-                Secure Online Payment
+                Card, Apple Pay, Google Pay &amp; BACS
               </CardTitle>
               <CardDescription>
-                Accept card, Apple Pay, Google Pay, and BACS Direct Debit via Stripe Payment Element.
-                A secure checkout link will open in a new tab.
+                Embedded Stripe Payment Element — automatically shows the most relevant payment method
+                (Apple Pay, Google Pay, card, or BACS Direct Debit) based on the donor's device.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <StripePaymentPanel />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="paypal">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="w-5 h-5 text-blue-600" />
+                PayPal — International &amp; Pay Later
+              </CardTitle>
+              <CardDescription>
+                Accept PayPal balance, debit/credit cards via PayPal, and PayPal Pay Later.
+                Ideal for international donors or those who prefer PayPal.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PayPalPaymentPanel />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="openbanking">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Banknote className="w-5 h-5 text-indigo-600" />
+                Open Banking — Direct Bank Transfer
+              </CardTitle>
+              <CardDescription>
+                Generate a Faster Payments link. The donor pays directly from their banking app
+                (Monzo, Starling, HSBC, Barclays, etc.) with zero card fees.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <OpenBankingPanel />
             </CardContent>
           </Card>
         </TabsContent>

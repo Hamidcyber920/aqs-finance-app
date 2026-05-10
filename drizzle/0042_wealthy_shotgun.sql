@@ -1,0 +1,2 @@
+ALTER TABLE `stripe_payment_sessions` ADD `provider` enum('stripe','paypal','open_banking','bank_transfer') DEFAULT 'stripe' NOT NULL;--> statement-breakpoint
+ALTER TABLE `stripe_payment_sessions` ADD `externalOrderId` varchar(255);

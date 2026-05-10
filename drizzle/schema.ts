@@ -932,6 +932,8 @@ export const stripePaymentSessions = mysqlTable("stripe_payment_sessions", {
   giftAidAddress: text("giftAidAddress"),
   status: mysqlEnum("status", ["pending", "completed", "failed", "cancelled"]).default("pending").notNull(),
   paymentMethod: varchar("paymentMethod", { length: 50 }),
+  provider: mysqlEnum("provider", ["stripe", "paypal", "open_banking", "bank_transfer"]).default("stripe").notNull(),
+  externalOrderId: varchar("externalOrderId", { length: 255 }),
   webhookConfirmedAt: timestamp("webhookConfirmedAt"),
   thankYouWhatsAppSentAt: timestamp("thankYouWhatsAppSentAt"),
   fundraisingDonationId: int("fundraisingDonationId"),
