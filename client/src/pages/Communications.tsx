@@ -368,41 +368,75 @@ function ComposePanel({
       {/* ── WhatsApp tab: per-recipient buttons shown immediately ── */}
       {tab==="whatsapp"&&(
         <>
-          {/* Live message preview */}
-          <div style={{marginBottom:12,background:"rgba(37,211,102,0.06)",border:"1px solid rgba(37,211,102,0.2)",borderRadius:10,padding:"12px 14px"}}>
-            <p style={{fontSize:10,fontWeight:700,color:"#25d366",textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>📱 Message Preview (what will be sent)</p>
-            <pre style={{fontSize:12,color:T.white,margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",lineHeight:1.6}}>
-              {buildWaBody()}
-            </pre>
+          {/* ── Message Preview ── */}
+          <div style={{marginBottom:16,background:"rgba(37,211,102,0.06)",border:"1px solid rgba(37,211,102,0.2)",borderRadius:12,padding:"14px 16px"}}>
+            <p style={{fontSize:10,fontWeight:700,color:"#25d366",textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 10px"}}>📱 Message Preview</p>
+            <pre style={{fontSize:12,color:T.white,margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",lineHeight:1.7}}>{buildWaBody()}</pre>
           </div>
 
-          <p style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>
-            Tap a name below to open WhatsApp with this message
-          </p>
-          {!waMembers.length&&<p style={{fontSize:12,color:T.muted}}>No phone numbers in this channel.</p>}
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {waMembers.map((t:any)=>(
-              <button key={t.id}
-                onClick={()=>handleOpenWA(t)}
-                style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:12,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.25)",cursor:"pointer",width:"100%",textAlign:"left",transition:"background 0.15s"}}>
-                <span style={{width:36,height:36,borderRadius:"50%",background:"rgba(37,211,102,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#25d366",flexShrink:0}}>
-                  {getInitials(t.fullName)}
-                </span>
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontSize:13,fontWeight:700,color:T.white,margin:0}}>{t.fullName}</p>
-                  <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:0}}>{t.phone}</p>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:8,background:"rgba(37,211,102,0.15)",flexShrink:0}}>
-                  <MessageSquare size={12} style={{color:"#25d366"}}/>
-                  <span style={{fontSize:11,fontWeight:700,color:"#25d366"}}>Open WhatsApp</span>
-                </div>
+          {/* ── Bulk: Send to Group ── */}
+          {channel.whatsappGroupLink&&(
+            <div style={{marginBottom:16}}>
+              <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>Send to Entire Group</p>
+              <button
+                disabled={!body.trim()}
+                onClick={()=>{
+                  if(!body.trim()){toast.error("Write a message body first");return;}
+                  const msg=buildWaBody();
+                  const link=`${channel.whatsappGroupLink}?text=${encodeURIComponent(msg)}`;
+                  window.open(link,"_blank","noopener,noreferrer");
+                  logWaMutation.mutate({channelId:channel.id,recipients:waMembers.map((t:any)=>({name:t.fullName,phone:t.phone})),message:msg});
+                  onSent();
+                }}
+                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:"14px 0",borderRadius:12,background:body.trim()?"linear-gradient(135deg,#25d366,#128C7E)":"rgba(37,211,102,0.15)",border:"none",color:body.trim()?T.white:"rgba(37,211,102,0.5)",fontWeight:700,fontSize:14,cursor:body.trim()?"pointer":"not-allowed",transition:"all 0.2s"}}>
+                <MessageSquare size={18}/>
+                Send to Trustees Group
               </button>
-            ))}
+            </div>
+          )}
+
+          {/* ── Individual: toggle chips then open ── */}
+          <div>
+            <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>Send to Individual{selectedWaIds.length>0?` (${selectedWaIds.length} selected)`:""}</p>            {!waMembers.length&&<p style={{fontSize:12,color:T.muted}}>No phone numbers in this channel.</p>}
+            {/* Toggle chips */}
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:selectedWaIds.length>0?12:0}}>
+              {waMembers.map((t:any)=>{
+                const isSel=selectedWaIds.includes(t.id);
+                return(
+                  <button key={t.id}
+                    onClick={()=>setSelectedWaIds(prev=>isSel?prev.filter(i=>i!==t.id):[...prev,t.id])}
+                    style={{display:"flex",alignItems:"center",gap:6,padding:"7px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${isSel?"#25d366":T.border}`,background:isSel?"rgba(37,211,102,0.15)":"rgba(255,255,255,0.04)",color:isSel?"#25d366":T.muted,transition:"all 0.15s"}}>
+                    <span style={{width:22,height:22,borderRadius:"50%",background:isSel?"rgba(37,211,102,0.25)":"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:isSel?"#25d366":T.muted,flexShrink:0}}>{getInitials(t.fullName)}</span>
+                    {t.fullName}
+                    {isSel&&<Check size={12} style={{color:"#25d366"}}/>}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Open WhatsApp for each selected member */}
+            {selectedWaIds.length>0&&(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {waMembers.filter((t:any)=>selectedWaIds.includes(t.id)).map((t:any)=>(
+                  <button key={t.id}
+                    onClick={()=>handleOpenWA(t)}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:12,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.3)",cursor:"pointer",width:"100%",textAlign:"left"}}>
+                    <span style={{width:32,height:32,borderRadius:"50%",background:"rgba(37,211,102,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#25d366",flexShrink:0}}>{getInitials(t.fullName)}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontSize:13,fontWeight:700,color:T.white,margin:0}}>{t.fullName}</p>
+                      <p style={{fontSize:10,color:"rgba(255,255,255,0.35)",margin:0}}>{t.phone}</p>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:8,background:"rgba(37,211,102,0.18)",flexShrink:0}}>
+                      <MessageSquare size={12} style={{color:"#25d366"}}/>
+                      <span style={{fontSize:11,fontWeight:700,color:"#25d366"}}>Open WhatsApp</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+
           {!body.trim()&&(
-            <p style={{fontSize:11,color:"rgba(239,68,68,0.7)",margin:"10px 0 0",textAlign:"center"}}>
-              ⚠️ Fill in the Message Body above before opening WhatsApp
-            </p>
+            <p style={{fontSize:11,color:"rgba(239,68,68,0.7)",margin:"12px 0 0",textAlign:"center"}}>⚠️ Fill in the Message Body above before sending</p>
           )}
         </>
       )}

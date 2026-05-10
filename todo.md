@@ -718,3 +718,8 @@
 
 ## WhatsApp Fields Fix (May 2026 #4)
 - [x] WhatsApp tab: template fields (Priority, Reply By, Action By, From, Body) must appear inside the WhatsApp tab and their values must be passed into the wa.me pre-filled message
+
+## WhatsApp Tab Redesign (May 2026 #5)
+- [x] Add "Send to Group" bulk button that opens WA group link with pre-filled message
+- [x] Replace always-visible recipient list with toggle chips (tap to select, then Open WhatsApp button appears)
+- [x] Improve overall WhatsApp tab UI layout and spacing
