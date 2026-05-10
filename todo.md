@@ -766,3 +766,10 @@
 - [x] Trustees & Staff Contacts: add inline role-change dropdown on each contact card (pencil icon → role select → save instantly updates seniority order and channel membership)
 - [x] Communications Compose: add WhatsApp group link shortcut button that opens the channel's saved group link in a new tab
 - [x] Urgent & Friday Comms channels: keep as fully customisable (no auto-role filter) — Add Member shows all org members
+
+## Compose Panel Recipient Overhaul (May 2026)
+- [x] Non-Trustees channels: default recipients = all staff + management (auto-populated)
+- [x] Add optional trustee dropdown to recipient list; default pre-select Galib Khan and Dr Abdul Hamid
+- [x] Bulk email: auto-copies the same pre-filled message body to WhatsApp bulk send
+- [x] Individual email/WhatsApp: show all staff+management + selected trustees as recipient chips
+- [x] Trustees channel: keep existing trustee-only recipient logic unchanged

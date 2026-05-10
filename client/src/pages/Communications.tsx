@@ -172,6 +172,9 @@ function LogIncomingPanel({ channelId, allTrustees, onSaved }: { channelId: numb
 }
 
 // ── Compose panel ─────────────────────────────────────────────────────────────
+// Default trustee IDs that are always pre-selected in non-Trustees channels
+const DEFAULT_TRUSTEE_IDS = [30001, 30002]; // Dr Abdul Hamid, Mr Galib Khan
+
 function ComposePanel({
   channel, allTrustees, channelMembers, onSent,
 }: { channel:any; allTrustees:any[]; channelMembers:any[]; onSent:()=>void }) {
@@ -185,13 +188,40 @@ function ComposePanel({
   const [subject, setSubject]       = useState("");
   const [body, setBody]             = useState("");
 
-  // Email recipient selection
+  // Determine if this is the Trustees channel
+  const isTrusteesChannel = (channel.name??"").toLowerCase().includes("trust");
+
+  // For non-Trustees channels: staff+management are always included; trustees are optional (default pre-selected)
+  const staffAndManagement = (allTrustees as any[]).filter((t:any) => {
+    const r = (t.role??"").toLowerCase();
+    return r.includes("manager") || r.includes("senior") || r.includes("deputy") || r.includes("staff") || r.includes("volunteer");
+  });
+  const trusteesOnly = (allTrustees as any[]).filter((t:any) => {
+    const r = (t.role??"").toLowerCase();
+    return r.includes("trustee") || r.includes("chair");
+  });
+
+  // Selected trustee IDs for non-Trustees channels (default = Galib Khan + Dr Abdul Hamid)
+  const [selectedTrusteeIds, setSelectedTrusteeIds] = useState<number[]>(() =>
+    DEFAULT_TRUSTEE_IDS.filter(id => trusteesOnly.some((t:any)=>t.id===id))
+  );
+
+  // The full recipient pool for non-Trustees channels
+  const nonTrusteeRecipientPool = [
+    ...staffAndManagement,
+    ...trusteesOnly.filter((t:any)=>selectedTrusteeIds.includes(t.id)),
+  ];
+
+  // For Trustees channel: use channelMembers as before
+  const basePool = isTrusteesChannel ? channelMembers : nonTrusteeRecipientPool;
+
+  const emailMembers = basePool.filter((t:any)=>t.email);
+  const waMembers    = basePool.filter((t:any)=>t.phone);
+
+  // Email recipient selection (individual mode)
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   // WhatsApp recipient selection
   const [selectedWaIds, setSelectedWaIds] = useState<number[]>([]);
-
-  const emailMembers = channelMembers.filter((t:any)=>t.email);
-  const waMembers    = channelMembers.filter((t:any)=>t.phone);
 
   const sendEmailMutation = trpc.comms.sendEmail.useMutation({
     onSuccess:(res)=>{toast.success(`Sent to ${res.sent} recipient${res.sent!==1?"s":""}`);setBody("");setSubject("");setSelectedIds([]);onSent();},
@@ -348,34 +378,72 @@ function ComposePanel({
         </div>
       </div>
 
+      {/* ── Trustee add-on selector (non-Trustees channels only) ── */}
+      {!isTrusteesChannel&&(
+        <div style={{marginBottom:12,background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.15)",borderRadius:10,padding:"10px 12px"}}>
+          <p style={{fontSize:10,fontWeight:700,color:T.gold,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>👑 Include Trustees</p>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {trusteesOnly.map((t:any)=>{
+              const isSel=selectedTrusteeIds.includes(t.id);
+              return(
+                <button key={t.id}
+                  onClick={()=>setSelectedTrusteeIds(prev=>isSel?prev.filter(i=>i!==t.id):[...prev,t.id])}
+                  style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1.5px solid ${isSel?T.gold:T.border}`,background:isSel?"rgba(251,191,36,0.12)":"transparent",color:isSel?T.gold:T.muted,transition:"all 0.15s"}}>
+                  <span style={{width:20,height:20,borderRadius:"50%",background:isSel?"rgba(251,191,36,0.25)":"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:isSel?T.gold:T.muted,flexShrink:0}}>{getInitials(t.fullName)}</span>
+                  {t.fullName}
+                  {isSel&&<Check size={11} style={{color:T.gold}}/>}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{fontSize:10,color:T.muted,margin:"6px 0 0"}}>Dr Abdul Hamid &amp; Mr Galib Khan are included by default</p>
+        </div>
+      )}
+
       {/* ── Email tabs ── */}
       {tab!=="whatsapp"&&(
         <>
           {tab==="individual"&&(
             <div style={{marginBottom:12}}>
-              <p style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",margin:"0 0 6px"}}>Select Recipients (tap to toggle)</p>
+              <p style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",margin:"0 0 6px"}}>Recipients — tap to toggle</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                 {emailMembers.map((t:any)=>{
                   const isSel=selectedIds.includes(t.id);
+                  const isTrustee=(t.role??"").toLowerCase().includes("trust")||(t.role??"").toLowerCase().includes("chair");
                   return (
                     <button key={t.id} onClick={()=>setSelectedIds(prev=>isSel?prev.filter(i=>i!==t.id):[...prev,t.id])}
-                      style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1px solid ${isSel?T.mint:T.border}`,background:isSel?"rgba(0,255,194,0.12)":"transparent",color:isSel?T.mint:T.muted,transition:"all 0.15s"}}>
+                      style={{display:"flex",alignItems:"center",gap:5,padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1px solid ${isSel?(isTrustee?T.gold:T.mint):T.border}`,background:isSel?(isTrustee?"rgba(251,191,36,0.12)":"rgba(0,255,194,0.12)"):"transparent",color:isSel?(isTrustee?T.gold:T.mint):T.muted,transition:"all 0.15s"}}>
+                      <span style={{width:20,height:20,borderRadius:"50%",background:"rgba(255,255,255,0.08)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,color:isSel?(isTrustee?T.gold:T.mint):T.muted,flexShrink:0}}>{getInitials(t.fullName)}</span>
                       {t.fullName}
                     </button>
                   );
                 })}
-                {!emailMembers.length&&<p style={{fontSize:12,color:T.muted}}>No email addresses in this channel.</p>}
+                {!emailMembers.length&&<p style={{fontSize:12,color:T.muted}}>No email addresses available.</p>}
               </div>
             </div>
           )}
           {tab==="bulk"&&(
-            <div style={{background:"rgba(99,91,255,0.08)",border:"1px solid rgba(99,91,255,0.2)",borderRadius:8,padding:"10px 12px",marginBottom:12}}>
-              <p style={{fontSize:12,color:T.muted,margin:0}}>📨 Will send to all <strong style={{color:T.white}}>{emailMembers.length}</strong> channel members with email: {emailMembers.map((t:any)=>t.fullName).join(", ")}</p>
+            <div style={{marginBottom:12}}>
+              <div style={{background:"rgba(99,91,255,0.08)",border:"1px solid rgba(99,91,255,0.2)",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+                <p style={{fontSize:12,color:T.muted,margin:0}}>📨 Will email <strong style={{color:T.white}}>{emailMembers.length}</strong> recipients: {emailMembers.map((t:any)=>t.fullName).join(", ")}</p>
+              </div>
+              {/* Bulk auto-copies to WhatsApp */}
+              {waMembers.length>0&&(
+                <div style={{background:"rgba(37,211,102,0.06)",border:"1px solid rgba(37,211,102,0.2)",borderRadius:8,padding:"10px 12px"}}>
+                  <p style={{fontSize:12,color:"#25d366",margin:0}}>📱 Same message will also be ready to send via WhatsApp to <strong style={{color:T.white}}>{waMembers.length}</strong> recipients with phones</p>
+                </div>
+              )}
             </div>
           )}
-          <button onClick={handleSendEmail} disabled={sendEmailMutation.isPending}
+          <button onClick={()=>{
+            handleSendEmail();
+            // After bulk email, auto-switch to WhatsApp tab so user can send WA too
+            if(tab==="bulk"&&waMembers.length>0){
+              setTimeout(()=>setTab("whatsapp"),600);
+            }
+          }} disabled={sendEmailMutation.isPending}
             style={{width:"100%",padding:"12px 0",borderRadius:10,background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,border:"none",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            <Send size={14}/>{sendEmailMutation.isPending?"Sending…":"Send Email"}
+            <Send size={14}/>{sendEmailMutation.isPending?"Sending…":tab==="bulk"?"Send Bulk Email (+ prep WhatsApp)":"Send Email"}
           </button>
         </>
       )}
@@ -415,7 +483,8 @@ function ComposePanel({
 
           {/* ── Individual: toggle chips then open ── */}
           <div>
-            <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>Send to Individual{selectedWaIds.length>0?` (${selectedWaIds.length} selected)`:""}</p>            {!waMembers.length&&<p style={{fontSize:12,color:T.muted}}>No phone numbers in this channel.</p>}
+            <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>Send to Individual{selectedWaIds.length>0?` (${selectedWaIds.length} selected)`:""}</p>
+            {!waMembers.length&&<p style={{fontSize:12,color:T.muted}}>No phone numbers available.</p>}
             {/* Toggle chips */}
             <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:selectedWaIds.length>0?12:0}}>
               {waMembers.map((t:any)=>{
