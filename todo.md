@@ -668,9 +668,14 @@
 - [x] Fix Communications Hub layout: mobile-first stacked layout (channel list on top, message panel below), no horizontal clipping
 
 ## Communications Hub Upgrade (May 2026)
-- [ ] Show full names on all recipient chips (not just surnames)
-- [ ] Add/remove channel members from the top of the channel panel
-- [ ] Structured AQS message template: Assalamu Alaikum pre-filled, Priority dropdown (Urgent/High/Normal/Low), Reply-by dropdown (Today/Tomorrow/3 Days/7 Days/2 Weeks), Action-by dropdown (from contacts), Message body, From dropdown (Manager/Trustee names)
-- [ ] Individual member selection: tap name to toggle as recipient (email and WhatsApp)
-- [ ] WhatsApp: open individual wa.me links per selected member with pre-filled structured message
-- [ ] Email: send to selected individual members with structured template
+- [x] Show full names on all recipient chips (not just surnames)
+- [x] Add/remove channel members from the top of the channel panel
+- [x] Structured AQS message template: Assalamu Alaikum pre-filled, Priority dropdown (Urgent/High/Normal/Low), Reply-by dropdown (Today/Tomorrow/3 Days/7 Days/2 Weeks), Action-by dropdown (from contacts), Message body, From dropdown (Manager/Trustee names)
+- [x] Individual member selection: tap name to toggle as recipient (email and WhatsApp)
+- [x] WhatsApp: open individual wa.me links per selected member with pre-filled structured message
+- [x] Email: send to selected individual members with structured template
+
+## Communications Hub Fixes (May 2026)
+- [x] Remove Atik Rahman and Farid Ahmed from Trustees channel default members (DB update)
+- [x] Restrict "Add Member" in MemberManager to trustees only (role contains "trustee") for the Trustees channel; for other channels show all contacts
+- [x] Fix WhatsApp wa.me links not opening (URL encoding / popup blocker issue)

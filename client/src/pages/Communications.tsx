@@ -303,16 +303,21 @@ function ComposePanel({
               <p style={{fontSize:11,color:T.muted,margin:0}}>Tap each link to open WhatsApp:</p>
               {waMembers.filter((t:any)=>selectedWaIds.includes(t.id)).map((t:any)=>{
                 const msg=buildWaBody();
-                const link=`https://wa.me/44${t.phone.replace(/^0/,"").replace(/\s/g,"")}?text=${encodeURIComponent(msg)}`;
+                // Normalise UK phone: strip spaces/dashes, strip leading 0, prepend 44
+                const rawPhone=(t.phone??"").replace(/[\s\-().]/g,"");
+                const normPhone=rawPhone.startsWith("+")?rawPhone.slice(1):rawPhone.startsWith("44")?rawPhone:`44${rawPhone.replace(/^0/,"")}`;
+                const link=`https://wa.me/${normPhone}?text=${encodeURIComponent(msg)}`;
                 return (
-                  <a key={t.id} href={link} target="_blank" rel="noreferrer"
-                    style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:10,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.2)",textDecoration:"none"}}>
+                  <button key={t.id}
+                    onClick={()=>window.open(link,"_blank","noopener,noreferrer")}
+                    style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:10,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.2)",cursor:"pointer",width:"100%",textAlign:"left"}}>
                     <span style={{width:32,height:32,borderRadius:"50%",background:"rgba(37,211,102,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#25d366",flexShrink:0}}>{getInitials(t.fullName)}</span>
-                    <div>
+                    <div style={{flex:1,minWidth:0}}>
                       <p style={{fontSize:13,fontWeight:600,color:T.white,margin:0}}>{t.fullName}</p>
                       <p style={{fontSize:11,color:"#25d366",margin:0}}>{t.phone} → Open WhatsApp ↗</p>
                     </div>
-                  </a>
+                    <MessageSquare size={14} style={{color:"#25d366",flexShrink:0}}/>
+                  </button>
                 );
               })}
             </div>
@@ -334,7 +339,18 @@ function MemberManager({
   });
 
   const currentIds = channelMembers.map((t:any)=>t.id);
-  const notInChannel = allTrustees.filter((t:any)=>!currentIds.includes(t.id));
+
+  // For the Trustees channel, only allow adding actual trustees (not managers/deputies)
+  const isTrusteesChannel = (channel.name??"").toLowerCase().includes("trust");
+  const addCandidates = (allTrustees as any[]).filter((t:any) => {
+    if (currentIds.includes(t.id)) return false;
+    if (isTrusteesChannel) {
+      const r = (t.role??"").toLowerCase();
+      return r.includes("trustee") || r.includes("chair");
+    }
+    return true;
+  });
+  const notInChannel = addCandidates;
 
   const addMember = (trusteeId: number) => {
     const newIds = [...currentIds, trusteeId];

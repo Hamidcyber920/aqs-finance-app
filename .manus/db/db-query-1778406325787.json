@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, fullName, role FROM trustees ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, fullName, role FROM trustees ORDER BY id;",
+  "rows": [
+    {
+      "id": "30001",
+      "fullName": "Dr Abdul Hamid",
+      "role": "Chair / Trustee"
+    },
+    {
+      "id": "30002",
+      "fullName": "Mr Galib Khan",
+      "role": "Trustee"
+    },
+    {
+      "id": "30003",
+      "fullName": "Mr Ajmal Masroor",
+      "role": "Trustee"
+    },
+    {
+      "id": "30004",
+      "fullName": "Dr Altaf Khattak",
+      "role": "Trustee"
+    },
+    {
+      "id": "30005",
+      "fullName": "Mumin Khan",
+      "role": "Senior Manager"
+    },
+    {
+      "id": "30006",
+      "fullName": "Mr Farid Ahmed",
+      "role": "Deputy Manager"
+    },
+    {
+      "id": "30007",
+      "fullName": "Mr Atik Rahman",
+      "role": "Deputy Manager"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\trole\n30001\tDr Abdul Hamid\tChair / Trustee\n30002\tMr Galib Khan\tTrustee\n30003\tMr Ajmal Masroor\tTrustee\n30004\tDr Altaf Khattak\tTrustee\n30005\tMumin Khan\tSenior Manager\n30006\tMr Farid Ahmed\tDeputy Manager\n30007\tMr Atik Rahman\tDeputy Manager\n",
+  "stderr": "",
+  "execution_time_ms": 261
+}

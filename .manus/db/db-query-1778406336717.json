@@ -1,0 +1,40 @@
+{
+  "query": "SELECT id, name, memberRoles, channelMemberIds FROM comm_channels ORDER BY sortOrder;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, name, memberRoles, channelMemberIds FROM comm_channels ORDER BY sortOrder;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "🚨 Urgent",
+      "memberRoles": "trustee,chair,manager,deputy",
+      "channelMemberIds": "[30001,30007,30006,30002,30005]"
+    },
+    {
+      "id": "2",
+      "name": "📋 Trustees",
+      "memberRoles": "trustee,chair",
+      "channelMemberIds": "[30001,30004,30003,30002]"
+    },
+    {
+      "id": "3",
+      "name": "👔 Managers",
+      "memberRoles": "manager",
+      "channelMemberIds": "NULL"
+    },
+    {
+      "id": "4",
+      "name": "👥 Staff",
+      "memberRoles": "manager,deputy",
+      "channelMemberIds": "NULL"
+    },
+    {
+      "id": "5",
+      "name": "🕌 Friday Comms",
+      "memberRoles": "trustee,chair,manager,deputy",
+      "channelMemberIds": "[30001,30007,30006,30002,30005]"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tmemberRoles\tchannelMemberIds\n1\t🚨 Urgent\ttrustee,chair,manager,deputy\t[30001,30007,30006,30002,30005]\n2\t📋 Trustees\ttrustee,chair\t[30001,30004,30003,30002]\n3\t👔 Managers\tmanager\tNULL\n4\t👥 Staff\tmanager,deputy\tNULL\n5\t🕌 Friday Comms\ttrustee,chair,manager,deputy\t[30001,30007,30006,30002,30005]\n",
+  "stderr": "",
+  "execution_time_ms": 263
+}

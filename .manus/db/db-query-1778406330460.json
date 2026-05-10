@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, name, channelMemberIds FROM comm_channels WHERE name LIKE '%Trustee%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, name, channelMemberIds FROM comm_channels WHERE name LIKE '%Trustee%';",
+  "rows": [
+    {
+      "id": "2",
+      "name": "📋 Trustees",
+      "channelMemberIds": "[30001,30004,30003,30002,30005]"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tchannelMemberIds\n2\t📋 Trustees\t[30001,30004,30003,30002,30005]\n",
+  "stderr": "",
+  "execution_time_ms": 264
+}
