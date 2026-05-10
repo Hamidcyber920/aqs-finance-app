@@ -561,6 +561,9 @@ function StripePaymentPanel() {
   const [amount, setAmount] = useState("");
   const [giftAid, setGiftAid] = useState(false);
   const [giftAidAddress, setGiftAidAddress] = useState("");
+  const [donorTitle, setDonorTitle] = useState("");
+  const [donorHouseNumber, setDonorHouseNumber] = useState("");
+  const [donorPostcode, setDonorPostcode] = useState("");
 
   // After PaymentIntent is created we store the clientSecret + referenceCode
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -690,15 +693,34 @@ function StripePaymentPanel() {
             </div>
           </div>
           {giftAid && (
-            <div>
-              <Label>Home Address (required for Gift Aid)</Label>
-              <Textarea
-                placeholder="House number, street, postcode"
-                value={giftAidAddress}
-                onChange={(e) => setGiftAidAddress(e.target.value)}
-                className="mt-1"
-                rows={2}
-              />
+            <div className="space-y-3 rounded-lg border border-amber-300 bg-amber-50/80 p-4">
+              <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">Gift Aid — HMRC Required Details</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Title</Label>
+                  <select value={donorTitle} onChange={(e) => setDonorTitle(e.target.value)} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    <option value="">Select…</option>
+                    <option>Mr</option><option>Mrs</option><option>Miss</option><option>Ms</option><option>Dr</option><option>Prof</option><option>Sheikh</option><option>Haji</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs">House No / Name *</Label>
+                  <Input placeholder="e.g. 42 or Rosewood" value={donorHouseNumber} onChange={(e) => setDonorHouseNumber(e.target.value)} className="mt-1 text-sm" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Postcode *</Label>
+                <Input placeholder="e.g. M1 1AA" value={donorPostcode} onChange={(e) => setDonorPostcode(e.target.value.toUpperCase())} className="mt-1 text-sm uppercase" maxLength={8} />
+              </div>
+              <div>
+                <Label className="text-xs">Full Address (optional — for records)</Label>
+                <Textarea placeholder="Street, City" value={giftAidAddress} onChange={(e) => setGiftAidAddress(e.target.value)} className="mt-1 text-sm" rows={2} />
+              </div>
+              <div className="rounded border border-amber-400 bg-amber-100 p-3 text-xs text-amber-900 leading-relaxed">
+                <p className="font-semibold mb-1">📋 Gift Aid Declaration (Electronic Signature)</p>
+                <p>I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference. I confirm this donation was made by me under the Gift Aid scheme.</p>
+                <p className="mt-1 text-amber-700">By ticking the Gift Aid box and proceeding to payment, you are making a legally binding electronic declaration under the <strong>UK Electronic Communications Act 2000</strong>. This declaration is timestamped and stored with your Stripe Transaction ID as the HMRC Unique Reference Number.</p>
+              </div>
             </div>
           )}
         </div>
@@ -1032,33 +1054,50 @@ function GiftAidPanel() {
           No Gift Aid declarations found for {months[month - 1]} {year}
         </div>
       ) : (
+        <>
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 mb-3">
+          <p className="text-xs font-semibold text-blue-900 mb-1">🛡️ HMRC Compliance Notice</p>
+          <p className="text-xs text-blue-800">Each declaration below was made electronically under the <strong>UK Electronic Communications Act 2000</strong>. The Stripe Transaction ID serves as the HMRC Unique Reference Number (URN) for audit purposes. The downloaded CSV is formatted to HMRC R68 specification.</p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left">
                 <th className="pb-2 pr-4 font-semibold text-muted-foreground">Donor</th>
+                <th className="pb-2 pr-4 font-semibold text-muted-foreground">House / Postcode</th>
                 <th className="pb-2 pr-4 font-semibold text-muted-foreground">Amount</th>
                 <th className="pb-2 pr-4 font-semibold text-muted-foreground">Date</th>
                 <th className="pb-2 pr-4 font-semibold text-muted-foreground">Campaign</th>
-                <th className="pb-2 font-semibold text-muted-foreground">Reference</th>
+                <th className="pb-2 pr-4 font-semibold text-muted-foreground">Stripe URN</th>
+                <th className="pb-2 font-semibold text-muted-foreground">Consent</th>
               </tr>
             </thead>
             <tbody>
               {r68Data.declarations.map((d) => (
                 <tr key={d.id} className="border-b last:border-0">
                   <td className="py-2 pr-4">
-                    <p className="font-medium">{d.donorName}</p>
+                    <p className="font-medium">{[d.donorTitle, d.donorFirstName, d.donorSurname].filter(Boolean).join(" ") || d.donorName}</p>
                     {d.donorEmail && <p className="text-xs text-muted-foreground">{d.donorEmail}</p>}
+                  </td>
+                  <td className="py-2 pr-4 text-xs">
+                    <span className="font-medium">{d.donorHouseNumber ?? "—"}</span>
+                    {d.donorPostcode && <span className="ml-1 text-muted-foreground">{d.donorPostcode}</span>}
                   </td>
                   <td className="py-2 pr-4 font-semibold text-emerald-700">{fmtGBP(d.amount)}</td>
                   <td className="py-2 pr-4 text-muted-foreground">{String(d.donationDate)}</td>
                   <td className="py-2 pr-4 text-muted-foreground">{d.campaignName ?? "—"}</td>
-                  <td className="py-2 font-mono text-xs">{d.stripeTransactionRef ?? d.stripePaymentIntentId ?? `#${d.id}`}</td>
+                  <td className="py-2 pr-4 font-mono text-xs text-blue-700">{d.uniqueReferenceNumber ?? d.stripePaymentIntentId ?? d.stripeTransactionRef ?? `#${d.id}`}</td>
+                  <td className="py-2">
+                    {d.consentTimestamp
+                      ? <span className="inline-flex items-center gap-1 text-xs text-green-700"><CheckCircle2 className="w-3 h-3" />{new Date(d.consentTimestamp).toLocaleDateString("en-GB")}</span>
+                      : <span className="text-xs text-amber-600">Manual</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

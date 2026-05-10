@@ -604,20 +604,28 @@ export const fintechRouter = router({
         .from(giftAidDeclarations)
         .where(gte(giftAidDeclarations.createdAt, startDate))
         .orderBy(giftAidDeclarations.createdAt);
+      // HMRC R68 CSV format — all required columns
       const csvRows = [
-        "Title,First Name,Last Name,House Number or Name,Postcode,Donation Date,Donation Amount,Aggregated Donations,Sponsored Event,Gift Aid Declaration,Unique Reference",
+        "Title,First Name,Last Name,House Number or Name,Postcode,Donation Date,Donation Amount,Aggregated Donations,Sponsored Event,Gift Aid Declaration,Unique Reference,Consent Method,Consent Timestamp,IP Address",
       ];
       for (const d of declarations) {
+        // Prefer split name fields; fall back to parsing donorName
         const nameParts = d.donorName.trim().split(" ");
-        const firstName = nameParts.slice(0, -1).join(" ") || nameParts[0];
-        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : "";
+        const title = d.donorTitle ?? "";
+        const firstName = d.donorFirstName ?? (nameParts.slice(0, -1).join(" ") || nameParts[0]);
+        const lastName = d.donorSurname ?? (nameParts.length > 1 ? nameParts[nameParts.length - 1] : "");
+        // Prefer structured address fields; fall back to parsing donorAddress
         const addressParts = (d.donorAddress ?? "").split(",");
-        const houseNo = addressParts[0]?.trim() ?? "";
-        const postcode = addressParts[addressParts.length - 1]?.trim() ?? "";
+        const houseNo = d.donorHouseNumber ?? addressParts[0]?.trim() ?? "";
+        const postcode = d.donorPostcode ?? addressParts[addressParts.length - 1]?.trim() ?? "";
+        // HMRC Unique Reference Number = Stripe payment_intent ID
+        const urn = d.uniqueReferenceNumber ?? d.stripePaymentIntentId ?? d.stripeTransactionRef ?? String(d.id);
+        const consentMethod = d.declarationMethod === "online_stripe" ? "Electronic (ECA 2000)" : d.declarationMethod;
+        const consentTs = d.consentTimestamp ? new Date(d.consentTimestamp).toISOString() : "";
         csvRows.push(
-          ["", `"${firstName}"`, `"${lastName}"`, `"${houseNo}"`, `"${postcode}"`,
+          [`"${title}"`, `"${firstName}"`, `"${lastName}"`, `"${houseNo}"`, `"${postcode}"`,
             d.donationDate, Number(d.amount).toFixed(2), "No", "No", "Yes",
-            `"${d.stripeTransactionRef ?? d.stripePaymentIntentId ?? d.id}"`].join(",")
+            `"${urn}"`, `"${consentMethod}"`, `"${consentTs}"`, `"${d.donorIpAddress ?? ""}"`].join(",")
         );
       }
       const csvContent = csvRows.join("\n");
@@ -647,6 +655,142 @@ export const fintechRouter = router({
         .set({ thankYouWhatsAppSentAt: new Date() })
         .where(eq(stripePaymentSessions.id, input.sessionId));
       return { success: true };
+    }),
+
+  // ─── CREATE BANK TRANSFER SESSION (log a pending bank transfer) ─────────────
+  createBankTransferSession: protectedProcedure
+    .input(
+      z.object({
+        donorName: z.string().min(1),
+        donorEmail: z.string().email().optional(),
+        donorPhone: z.string().optional(),
+        campaignId: z.number().optional(),
+        campaignName: z.string().optional(),
+        amount: z.number().min(0.01).optional(),
+        referenceCode: z.string().min(1),
+        giftAidDeclared: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      const [inserted] = await db
+        .insert(stripePaymentSessions)
+        .values({
+          donorName: input.donorName,
+          donorEmail: input.donorEmail,
+          donorPhone: input.donorPhone,
+          campaignId: input.campaignId,
+          campaignName: input.campaignName,
+          amount: input.amount ? String(input.amount) : null,
+          currency: "gbp",
+          giftAidDeclared: input.giftAidDeclared,
+          status: "pending",
+          provider: "bank_transfer",
+          referenceCode: input.referenceCode,
+        })
+        .$returningId();
+      return { id: inserted.id, referenceCode: input.referenceCode };
+    }),
+
+  // ─── SEND PLEDGE FULFILMENT WHATSAPP ──────────────────────────────────────
+  sendPledgeWhatsApp: protectedProcedure
+    .input(
+      z.object({
+        donorName: z.string().min(1),
+        donorPhone: z.string().min(1),
+        campaignName: z.string().optional(),
+        amount: z.number().min(0.01).optional(),
+        origin: z.string(),
+        referenceCode: z.string().optional(),
+        giftAidDeclared: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const firstName = input.donorName.split(" ")[0];
+      const refCode = input.referenceCode ?? `AQS-${String(Date.now()).slice(-6)}`;
+      const params = new URLSearchParams({
+        ref: refCode,
+        name: input.donorName,
+        campaign: input.campaignName ?? "",
+        ...(input.amount ? { amount: String(input.amount) } : {}),
+        ...(input.giftAidDeclared ? { giftaid: "1" } : {}),
+      });
+      const paymentUrl = `${input.origin}/pay?${params.toString()}`;
+      const hadith = `"Whoever builds a house for Allah, Allah will build for him a house in Paradise." (Bukhari & Muslim)`;
+      const msgLines = [
+        `Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName} 🌿`,
+        ``,
+        `JazakAllah Khayran for your generous pledge${input.campaignName ? ` towards the *${input.campaignName}*` : ""}. Your Amanah is a source of immense barakah for our community.`,
+        ``,
+        `To fulfil your pledge${input.amount ? ` of *£${input.amount.toFixed(2)}*` : ""}, please tap the secure link below:`,
+        ``,
+        `👉 ${paymentUrl}`,
+        ``,
+        `🔖 Your Reference: *${refCode}*`,
+        input.giftAidDeclared ? `✅ Gift Aid: Pre-selected (25% uplift at no cost to you)` : ``,
+        ``,
+        `📖 ${hadith}`,
+        ``,
+        `May Allah accept this from you as a Sadaqah Jariyah. Ameen. 🤲`,
+        ``,
+        `— AQ Society Finance Team`,
+      ].filter(Boolean).join("\n");
+      const cleaned = input.donorPhone.replace(/\D/g, "");
+      const waNumber = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
+      const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(msgLines)}`;
+      return { whatsAppUrl: waUrl, message: msgLines, paymentUrl, referenceCode: refCode };
+    }),
+
+  // ─── GENERATE DONOR RECEIPT (HTML + Jannah Hadith) ─────────────────────────
+  generateDonorReceipt: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.number().optional(),
+        donorName: z.string().min(1),
+        donorEmail: z.string().optional(),
+        amount: z.number(),
+        campaignName: z.string().optional(),
+        referenceCode: z.string(),
+        giftAidDeclared: z.boolean().default(false),
+        paymentMethod: z.string().optional(),
+        paidAt: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const hadithOptions = [
+        { arabic: "مَنْ بَنَى مَسْجِدًا لِلَّهِ بَنَى اللَّهُ لَهُ بَيْتًا فِي الْجَنَّةِ", english: `"Whoever builds a mosque for Allah, Allah will build for him a house in Paradise."`, source: "Bukhari & Muslim" },
+        { arabic: "إِذَا مَاتَ الإِنْسَانُ انْقَطَعَ عَنْهُ عَمَلُهُ إِلاَّ مِنْ ثَلاَثَةٍ", english: `"When a person dies, his deeds come to an end except for three: Sadaqah Jariyah, knowledge that is benefited from, and a righteous child who prays for him."`, source: "Muslim" },
+        { arabic: "مَثَلُ الَّذِينَ يُنفِقُونَ أَمْوَالَهُمْ فِي سَبِيلِ اللَّهِ كَمَثَلِ حَبَّةٍ أَنبَتَتْ سَبْعَ سَنَابِلَ", english: `"The example of those who spend their wealth in the way of Allah is like a seed that grows seven spikes; in each spike is a hundred grains."`, source: "Quran 2:261" },
+      ];
+      const hadith = hadithOptions[Math.floor(Math.random() * hadithOptions.length)];
+      const paidDate = input.paidAt ? new Date(input.paidAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+      const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Donation Receipt — AQ Society</title><style>body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f4f0;margin:0;padding:24px}.card{max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)}.header{background:linear-gradient(135deg,#1a4731,#2d6a4f);padding:32px 24px;text-align:center;color:#fff}.header h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-0.02em}.header p{margin:4px 0 0;opacity:0.8;font-size:13px}.body{padding:28px 24px}.ref-badge{background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 16px;text-align:center;margin-bottom:20px}.ref-badge .label{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:#16a34a;font-weight:600}.ref-badge .code{font-size:22px;font-family:monospace;font-weight:800;color:#14532d;margin-top:4px}.table{width:100%;border-collapse:collapse;margin-bottom:20px}.table td{padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:14px}.table td:first-child{color:#6b7280;font-weight:500}.table td:last-child{text-align:right;font-weight:600;color:#111827}.amount-row td{background:#f0fdf4;font-size:16px}.gift-aid{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;margin-bottom:20px;font-size:13px;color:#1e40af}.hadith{background:linear-gradient(135deg,#fef9c3,#fef3c7);border-left:4px solid #d97706;border-radius:8px;padding:16px;margin-bottom:20px}.hadith .arabic{font-size:18px;text-align:right;direction:rtl;color:#92400e;margin-bottom:8px;font-family:serif}.hadith .english{font-size:13px;color:#78350f;font-style:italic;line-height:1.6}.hadith .source{font-size:11px;color:#b45309;margin-top:6px;font-weight:600}.footer{background:#f9fafb;padding:16px 24px;text-align:center;font-size:12px;color:#9ca3af;border-top:1px solid #f0f0f0}</style></head><body><div class="card"><div class="header"><h1>🕌 AQ Society</h1><p>Abdullah Quilliam Society — Donation Receipt</p></div><div class="body"><div class="ref-badge"><div class="label">Payment Reference</div><div class="code">${input.referenceCode}</div></div><table class="table"><tr><td>Donor</td><td>${input.donorName}</td></tr>${input.donorEmail ? `<tr><td>Email</td><td>${input.donorEmail}</td></tr>` : ""}<tr><td>Campaign</td><td>${input.campaignName ?? "AQ Society General Fund"}</td></tr><tr><td>Date</td><td>${paidDate}</td></tr><tr><td>Payment Method</td><td>${input.paymentMethod ?? "Online"}</td></tr><tr class="amount-row"><td>Amount</td><td>£${input.amount.toFixed(2)}</td></tr></table>${input.giftAidDeclared ? `<div class="gift-aid">✅ <strong>Gift Aid Declared</strong> — AQ Society can claim an additional 25p for every £1 donated, at no cost to you. Thank you for maximising your donation!</div>` : ""}<div class="hadith"><div class="arabic">${hadith.arabic}</div><div class="english">${hadith.english}</div><div class="source">— ${hadith.source}</div></div><p style="font-size:14px;color:#374151;line-height:1.7">JazakAllah Khayran, <strong>${input.donorName.split(" ")[0]}</strong>. May Allah accept your generous donation and grant you and your family the highest ranks in Jannah. Your contribution to the <strong>${input.campaignName ?? "AQ Society"}</strong> is a Sadaqah Jariyah that will continue to benefit the Ummah long after us. Ameen. 🤲</p></div><div class="footer">AQ Society · Abdullah Quilliam Society · Registered Charity · JazakAllahu Khayran</div></div></body></html>`;
+      return { html, hadith, referenceCode: input.referenceCode, donorName: input.donorName, amount: input.amount };
+    }),
+
+  // ─── MIRROR TO HIBBA BACKUP VAULT ─────────────────────────────────────────
+  mirrorToBackupVault: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.number(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+      const [session] = await db
+        .select()
+        .from(stripePaymentSessions)
+        .where(eq(stripePaymentSessions.id, input.sessionId));
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+      const { storagePut } = await import("../storage");
+      const now = new Date();
+      const datePath = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}`;
+      const fileKey = `backup-vault/${datePath}/${session.referenceCode ?? `session-${session.id}`}-${Date.now()}.json`;
+      const snapshot = JSON.stringify({ ...session, _backupAt: now.toISOString(), _source: "hibba-backup-vault" }, null, 2);
+      const { url } = await storagePut(fileKey, Buffer.from(snapshot), "application/json");
+      return { success: true, url, fileKey };
     }),
 
   // ─── ADD MANUAL GIFT AID DECLARATION ──────────────────────────────────────

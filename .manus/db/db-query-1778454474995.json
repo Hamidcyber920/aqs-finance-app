@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `gift_aid_declarations` ADD `donorTitle` varchar(20);\nALTER TABLE `gift_aid_declarations` ADD `donorFirstName` varchar(100);\nALTER TABLE `gift_aid_declarations` ADD `donorSurname` varchar(100);\nALTER TABLE `gift_aid_declarations` ADD `donorHouseNumber` varchar(100);\nALTER TABLE `gift_aid_declarations` ADD `donorPostcode` varchar(20);\nALTER TABLE `gift_aid_declarations` ADD `uniqueReferenceNumber` varchar(255);\nALTER TABLE `gift_aid_declarations` ADD `donorIpAddress` varchar(45);\nALTER TABLE `gift_aid_declarations` ADD `consentTimestamp` timestamp;\nALTER TABLE `gift_aid_declarations` ADD `consentStatement` text;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute ALTER TABLE `gift_aid_declarations` ADD `donorTitle` varchar(20);\nALTER TABLE `gift_aid_declarations` ADD `donorFirstName` varchar(100);\nALTER TABLE `gift_aid_declarations` ADD `donorSurname` varchar(100);\nALTER TABLE `gift_aid_declarations` ADD `donorHouseNumber` varchar(100);\nALTER TABLE `gift_aid_declarations` ADD `donorPostcode` varchar(20);\nALTER TABLE `gift_aid_declarations` ADD `uniqueReferenceNumber` varchar(255);\nALTER TABLE `gift_aid_declarations` ADD `donorIpAddress` varchar(45);\nALTER TABLE `gift_aid_declarations` ADD `consentTimestamp` timestamp;\nALTER TABLE `gift_aid_declarations` ADD `consentStatement` text;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2628
+}

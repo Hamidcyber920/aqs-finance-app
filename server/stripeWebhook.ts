@@ -1,7 +1,7 @@
 import { Express, Request, Response } from "express";
 import Stripe from "stripe";
 import { getDb } from "./db";
-import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns } from "../drizzle/schema";
+import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns, loanRepayments, loanApplications } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
@@ -101,15 +101,31 @@ export function registerStripeWebhook(app: Express) {
 
               // Create Gift Aid declaration if declared
               if (localSession.giftAidDeclared && localSession.amount) {
+                // Split donor name into title/first/surname for HMRC R68
+                const nameParts = localSession.donorName.trim().split(" ");
+                const donorSurname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
+                const donorFirstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(" ") : "";
+                const consentText = `I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference. I confirm this donation was made by me under the Gift Aid scheme. Electronic declaration made via AQ Society online payment system under the UK Electronic Communications Act 2000.`;
                 await db.insert(giftAidDeclarations).values({
                   donorName: localSession.donorName,
+                  donorTitle: (session.metadata?.donor_title as string) ?? undefined,
+                  donorFirstName,
+                  donorSurname,
                   donorEmail: localSession.donorEmail ?? undefined,
                   donorAddress: localSession.giftAidAddress ?? undefined,
+                  donorHouseNumber: (session.metadata?.donor_house_number as string) ?? undefined,
+                  donorPostcode: (session.metadata?.donor_postcode as string) ?? undefined,
                   amount: localSession.amount,
                   donationDate: new Date().toISOString().split("T")[0] as any,
                   campaignName: localSession.campaignName ?? undefined,
                   stripePaymentIntentId: paymentIntentId ?? undefined,
                   stripeTransactionRef: session.id,
+                  // HMRC Unique Reference Number = Stripe payment_intent ID
+                  uniqueReferenceNumber: paymentIntentId ?? session.id,
+                  // Electronic Communications Act 2000 audit
+                  donorIpAddress: (session.customer_details?.address?.country === "GB" ? session.metadata?.donor_ip : undefined) ?? undefined,
+                  consentTimestamp: new Date(),
+                  consentStatement: consentText,
                   declarationMethod: "online_stripe",
                 });
               }
@@ -144,6 +160,55 @@ export function registerStripeWebhook(app: Express) {
                   .update(stripePaymentSessions)
                   .set({ thankYouWhatsAppSentAt: new Date() })
                   .where(eq(stripePaymentSessions.id, localSession.id));
+              }
+
+              // ── Qarde Hasan reconciliation ──────────────────────────────────────────
+              if (localSession.loanRepaymentId) {
+                await db
+                  .update(loanRepayments)
+                  .set({
+                    status: "paid",
+                    receivedConfirmedAt: new Date(),
+                    notes: `Auto-reconciled via Stripe webhook. Payment Intent: ${paymentIntentId ?? session.id}`,
+                  })
+                  .where(eq(loanRepayments.id, localSession.loanRepaymentId));
+
+                // Fetch loan application for borrower contact details
+                const [repayment] = await db
+                  .select()
+                  .from(loanRepayments)
+                  .where(eq(loanRepayments.id, localSession.loanRepaymentId));
+                if (repayment?.loanId) {
+                  const [loan] = await db
+                    .select()
+                    .from(loanApplications)
+                    .where(eq(loanApplications.id, repayment.loanId));
+                  if (loan?.borrowerPhone) {
+                    const firstName = loan.borrowerName.split(" ")[0];
+                    const monthLabel = repayment.month && repayment.year
+                      ? `${new Date(repayment.year, (repayment.month ?? 1) - 1).toLocaleString("en-GB", { month: "long", year: "numeric" })}`
+                      : "this month";
+                    const hadith = "The Prophet ﷺ said: 'The best of people are those who are most beneficial to others.' (Al-Mu'jam Al-Awsat)";
+                    const msg = [
+                      `Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName} 🌿`,
+                      ``,
+                      `JazakAllah Khayran! Your Qarde Hasan repayment for ${monthLabel} has been received and confirmed.`,
+                      ``,
+                      `💷 Amount: £${Number(localSession.amount).toFixed(2)}`,
+                      `🔖 Reference: ${localSession.referenceCode ?? paymentIntentId ?? session.id.slice(-8).toUpperCase()}`,
+                      ``,
+                      `📖 ${hadith}`,
+                      ``,
+                      `May Allah bless you and your family abundantly. Ameen. 🤲`,
+                      ``,
+                      `— AQ Society Finance Team`,
+                    ].join("\n");
+                    const cleaned = loan.borrowerPhone.replace(/\D/g, "");
+                    const waNumber = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
+                    const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+                    console.log(`[Stripe Webhook] Qarde Hasan reconciled — loan ${loan.id}, repayment ${repayment.id}. WhatsApp: ${waUrl.slice(0, 80)}...`);
+                  }
+                }
               }
 
               console.log(`[Stripe Webhook] Payment completed for ${localSession.donorName} — £${localSession.amount}`);

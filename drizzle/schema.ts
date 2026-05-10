@@ -937,6 +937,8 @@ export const stripePaymentSessions = mysqlTable("stripe_payment_sessions", {
   webhookConfirmedAt: timestamp("webhookConfirmedAt"),
   thankYouWhatsAppSentAt: timestamp("thankYouWhatsAppSentAt"),
   fundraisingDonationId: int("fundraisingDonationId"),
+  loanRepaymentId: int("loanRepaymentId"),
+  loanApplicationId: int("loanApplicationId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -947,13 +949,26 @@ export type InsertStripePaymentSession = typeof stripePaymentSessions.$inferInse
 export const giftAidDeclarations = mysqlTable("gift_aid_declarations", {
   id: int("id").autoincrement().primaryKey(),
   donorName: varchar("donorName", { length: 200 }).notNull(),
+  // HMRC R68 split name fields
+  donorTitle: varchar("donorTitle", { length: 20 }),
+  donorFirstName: varchar("donorFirstName", { length: 100 }),
+  donorSurname: varchar("donorSurname", { length: 100 }),
   donorEmail: varchar("donorEmail", { length: 320 }),
   donorAddress: text("donorAddress"),
+  // HMRC R68 address fields
+  donorHouseNumber: varchar("donorHouseNumber", { length: 100 }),
+  donorPostcode: varchar("donorPostcode", { length: 20 }),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   donationDate: date("donationDate").notNull(),
   campaignName: varchar("campaignName", { length: 200 }),
   stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
   stripeTransactionRef: varchar("stripeTransactionRef", { length: 255 }),
+  // HMRC Unique Reference Number = Stripe payment_intent ID
+  uniqueReferenceNumber: varchar("uniqueReferenceNumber", { length: 255 }),
+  // Electronic Communications Act 2000 audit fields
+  donorIpAddress: varchar("donorIpAddress", { length: 45 }),
+  consentTimestamp: timestamp("consentTimestamp"),
+  consentStatement: text("consentStatement"),
   declarationMethod: mysqlEnum("declarationMethod", ["online_stripe", "manual", "paper"]).default("online_stripe").notNull(),
   exportedAt: timestamp("exportedAt"),
   exportBatch: varchar("exportBatch", { length: 50 }),

@@ -911,3 +911,68 @@
 - [x] Frontend: Fintech.tsx — add "Scan to Pre-fill" button in donor details form that opens camera/file picker, calls extractPaymentData, auto-fills form fields
 - [x] Frontend: show extraction confidence badge on each auto-filled field (green = high, amber = medium, red = low)
 - [x] Frontend: allow manual override of any AI-extracted field before proceeding to payment
+
+## Automated Banking Instructions & Real-Time Reconciliation (May 2026)
+
+### Automated Banking Instructions
+- [ ] Bank Transfer tab (/fintech + /pay): dynamic reference code (RIMMERS-123 style) generated per session
+- [ ] Bank Transfer tab: display AQS IBAN, SWIFT/BIC, Sort Code, Account Number in formatted card
+- [ ] Bank Transfer tab: one-tap copy for each field individually (clipboard API)
+- [ ] Bank Transfer tab: "Copy All Details" button copies formatted block to clipboard
+- [ ] Bank Transfer tab: WhatsApp share button pre-fills bank details + reference into WA message
+- [ ] Bank Transfer tab: QR code for the reference code (for in-person display)
+
+### Real-Time Reconciliation
+- [ ] Stripe webhook handler: /api/stripe/webhook endpoint (already exists — audit and extend)
+- [ ] Webhook: payment_intent.succeeded → look up stripePaymentSessions by paymentIntentId, mark completed
+- [ ] Webhook: checkout.session.completed → mark session completed, update externalOrderId
+- [ ] Webhook: auto-detect Qarde Hasan repayment by metadata.loan_repayment_id or reference code pattern
+- [ ] Webhook: on Qarde Hasan repayment confirmed → mark loanRepayments row as paid (status=paid, paidAt=now)
+- [ ] Webhook: on Qarde Hasan repayment confirmed → send JazakAllah WhatsApp message via wa.me link (server-side log + owner notification)
+- [ ] Loan repayment: add stripePaymentIntentId column to loan_repayments table for webhook matching
+- [ ] Fintech QuickCapture: when generating payment link for a loan repayment, embed metadata.loan_repayment_id in PaymentIntent
+
+## The Donor Journey — End-to-End Flow (May 2026)
+
+### Step 1-2: AI Collection Sheet Scanner
+- [ ] Backend: parseFridayCollectionSheet procedure — accepts image/PDF URL, uses LLM vision to extract all donor rows (name, phone, amount, campaign, gift aid) as a batch
+- [ ] Backend: returns array of DonorRecord with per-field confidence scores + "Analyzing Amanah entries..." status messaging
+- [ ] Backend: saveParsedDonors procedure — bulk-inserts verified donor records into donor_leads + creates pending stripe_payment_sessions
+- [ ] Frontend: CollectionSheetScanner component in Capture page — upload/camera, shows "Analyzing Amanah entries..." spinner
+- [ ] Frontend: Verification table — 50 rows, each editable, confidence badges, "Ready for verification, Dr. Abdul Hamid." header
+- [ ] Frontend: Bulk approve + individual edit before saving
+
+### Step 3: WhatsApp Pledge Fulfilment
+- [ ] Backend: sendPledgeWhatsApp procedure — generates /pay URL with pre-filled name+campaign+amount, builds Islamic pledge message
+- [ ] Backend: WhatsApp message template: "JazakAllah! To fulfil your pledge for the [Campaign], click here: [URL]" — gentle, encouraging, spiritual tone
+- [ ] Frontend: "Send WhatsApp" button per donor row in verification table
+- [ ] Frontend: "Send All WhatsApp" bulk button after verification
+
+### Step 4: Seamless Payment (already implemented)
+- [ ] /pay page: Apple Pay shown first in Payment Element tabs (already set via paymentMethodOrder)
+- [ ] /pay page: Gift Aid toggle pre-checked if donor declared on collection sheet
+
+### Step 5: Digital Receipt + Jannah Hadith
+- [ ] Backend: generateDonorReceipt procedure — builds HTML receipt with: donor name, amount, campaign, reference, Gift Aid status, Jannah Hadith quote, AQS logo
+- [ ] Backend: Stripe webhook on payment_intent.succeeded → auto-generate receipt + send via Gmail API to donor email
+- [ ] Backend: WhatsApp receipt URL generated and logged (admin can tap to send)
+- [ ] Frontend: PaymentSuccess page — show receipt card with Hadith + download PDF button
+
+### Step 6: Hibba Backup Vault
+- [ ] Backend: mirrorToBackupVault procedure — on every completed payment, write a JSON snapshot to S3 under /backup-vault/YYYY/MM/DD/{ref}.json
+- [ ] Backend: Stripe webhook on payment_intent.succeeded → call mirrorToBackupVault
+- [ ] Backend: Daily backup job: export all completed sessions for the day to S3 as a consolidated JSON
+- [ ] Frontend: Backups page — show vault entries with download links
+
+## Gift Aid HMRC Compliance — R68 Audit Trail (May 2026)
+
+- [x] Backend: store stripeTransactionId (payment_intent ID) as uniqueReferenceNumber in gift_aid_declarations
+- [x] Backend: store donorIpAddress and consentTimestamp in gift_aid_declarations for Electronic Communications Act 2000 compliance
+- [x] Backend: R68 export — include Stripe Transaction ID column as "Unique Reference Number" per HMRC R68 format
+- [x] Backend: R68 export — include IP address and consent timestamp columns for audit
+- [x] Backend: R68 export — generate HMRC-formatted CSV with all required columns (Title, First Name, Surname, House No/Name, Postcode, Donation Date, Amount, Unique Reference)
+- [x] Frontend: payment form — add full UK Electronic Communications Act 2000 consent statement above Gift Aid checkbox
+- [x] Frontend: payment form — require donor full address (house number/name + postcode) when Gift Aid is checked
+- [x] Frontend: R68 export page — show Stripe Transaction ID column in preview table
+- [x] Frontend: R68 export page — download button generates HMRC R68 CSV with all required fields
+- [x] Frontend: R68 export page — show compliance notice about Electronic Communications Act 2000

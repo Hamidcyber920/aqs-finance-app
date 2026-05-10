@@ -7,7 +7,8 @@ import { useForm } from "react-hook-form";
 import {
   Camera, Upload, Loader2, CheckCircle2, Sparkles, Receipt,
   FileText, CreditCard, Banknote, UserCheck, X,
-  Phone, Mail, MapPin, DollarSign, Calendar, Tag, Heart
+  Phone, Mail, MapPin, DollarSign, Calendar, Tag, Heart,
+  MessageCircle, Send
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,9 +48,12 @@ export default function CapturePage() {
   const [multiRecords, setMultiRecords] = useState<any[]>([]);
   const [selectedRecord, setSelectedRecord] = useState<number>(0);
   const [submitted, setSubmitted] = useState(false);
+  const [waSentRows, setWaSentRows] = useState<Set<number>>(new Set());
+  const [sendingWaAll, setSendingWaAll] = useState(false);
 
   const extractMutation = trpc.documents.extract.useMutation();
   const saveCrmMutation = trpc.crm.saveScanToCRM.useMutation();
+  const pledgeWaMutation = trpc.fintech.sendPledgeWhatsApp.useMutation();
   const { data: depts } = trpc.departments.list.useQuery();
   const createMutation = trpc.receipts.create.useMutation({
     onSuccess: () => { toast.success("Receipt submitted"); setSubmitted(true); setTimeout(() => setLocation("/receipts"), 1800); },
@@ -227,23 +231,105 @@ export default function CapturePage() {
         <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFile(f);}}/>
       </div>
 
-      {/* Multi-record selector */}
-      {multiRecords.length > 1 && (
+      {/* Multi-record selector — Collection Sheet Verification Table */}
+      {multiRecords.length > 0 && (
         <div className="px-4 mb-4">
-          <div style={{ background:T.card,borderRadius:12,padding:12,border:`1px solid ${T.border}` }}>
-            <p style={{ color:T.mint,fontSize:13,fontWeight:600,marginBottom:8 }}>{multiRecords.length} donors found:</p>
-            <div className="flex gap-2 flex-wrap">
-              {multiRecords.map((r,i)=>(
-                <button key={i} onClick={()=>{setSelectedRecord(i);setExtracted(r);}}
-                  style={{ background:selectedRecord===i?"#10B981":T.glass,border:`1px solid ${selectedRecord===i?"#10B981":T.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:T.white }}>
-                  {r.donorName||`Entry ${i+1}`}{r.amount?` — £${r.amount}`:""}
-                </button>
-              ))}
+          <div style={{ background:T.card,borderRadius:12,padding:12,border:`1px solid #10B98144` }}>
+            {/* Header */}
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8 }}>
+              <div>
+                <p style={{ color:T.mint,fontSize:14,fontWeight:700,margin:0 }}>✅ Ready for verification</p>
+                <p style={{ color:T.muted,fontSize:12,margin:"2px 0 0" }}>Analyzing Amanah entries — {multiRecords.length} donors found</p>
+              </div>
+              <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+                <Button onClick={handleSaveAllToCrm} disabled={savingToCrm||savedToCrm}
+                  style={{ background:"#10B981",color:T.white,borderRadius:10,fontSize:12,padding:"6px 12px",height:"auto" }}>
+                  {savingToCrm?<Loader2 size={14} className="animate-spin mr-1"/>:<CheckCircle2 size={14} className="mr-1"/>}
+                  Save All to CRM
+                </Button>
+                <Button
+                  disabled={sendingWaAll}
+                  onClick={async () => {
+                    setSendingWaAll(true);
+                    let sent = 0;
+                    for (let i = 0; i < multiRecords.length; i++) {
+                      const r = multiRecords[i];
+                      const phone = r.donorPhone || r.phone;
+                      if (!phone) continue;
+                      try {
+                        const res = await pledgeWaMutation.mutateAsync({
+                          donorName: r.donorName || r.name || "Donor",
+                          donorPhone: phone,
+                          campaignName: r.campaignName,
+                          amount: r.amount ? parseFloat(String(r.amount)) : undefined,
+                          origin: window.location.origin,
+                          giftAidDeclared: r.giftAid === true,
+                        });
+                        window.open(res.whatsAppUrl, "_blank");
+                        setWaSentRows(prev => new Set(Array.from(prev).concat(i)));
+                        sent++;
+                        await new Promise(resolve => setTimeout(resolve, 700));
+                      } catch { /* skip */ }
+                    }
+                    setSendingWaAll(false);
+                    toast.success(`JazakAllah — WhatsApp pledge links opened for ${sent} donors`);
+                  }}
+                  style={{ background:"#25D366",color:T.white,borderRadius:10,fontSize:12,padding:"6px 12px",height:"auto" }}>
+                  {sendingWaAll?<Loader2 size={14} className="animate-spin mr-1"/>:<Send size={14} className="mr-1"/>}
+                  Send All WhatsApp
+                </Button>
+              </div>
             </div>
-            <Button onClick={handleSaveAllToCrm} disabled={savingToCrm||savedToCrm} style={{ marginTop:10,background:"#10B981",color:T.white,width:"100%",borderRadius:10 }}>
-              {savingToCrm?<Loader2 size={16} className="animate-spin mr-2"/>:<CheckCircle2 size={16} className="mr-2"/>}
-              Save All {multiRecords.length} Donors to CRM
-            </Button>
+            {/* Verification table */}
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12 }}>
+                <thead>
+                  <tr style={{ borderBottom:`1px solid ${T.border}` }}>
+                    {["#","Name","Phone","Amount","Campaign","Gift Aid","Actions"].map(h=>(
+                      <th key={h} style={{ padding:"6px 8px",textAlign:"left",color:T.muted,fontWeight:600,whiteSpace:"nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {multiRecords.map((r,i)=>(
+                    <tr key={i}
+                      onClick={()=>{setSelectedRecord(i);setExtracted(r);}}
+                      style={{ borderBottom:`1px solid ${T.border}`,cursor:"pointer",background:selectedRecord===i?"rgba(16,185,129,0.08)":"transparent" }}>
+                      <td style={{ padding:"8px",color:T.muted }}>{i+1}</td>
+                      <td style={{ padding:"8px",color:T.white,fontWeight:500 }}>{r.donorName||r.name||"—"}</td>
+                      <td style={{ padding:"8px",color:T.muted,whiteSpace:"nowrap" }}>{r.donorPhone||r.phone||"—"}</td>
+                      <td style={{ padding:"8px",color:"#10B981",fontWeight:600,whiteSpace:"nowrap" }}>{r.amount?`£${r.amount}`:"—"}</td>
+                      <td style={{ padding:"8px",color:T.muted,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{r.campaignName||"—"}</td>
+                      <td style={{ padding:"8px",textAlign:"center" }}>{r.giftAid===true?<span style={{ color:"#10B981" }}>✓</span>:<span style={{ color:T.muted }}>—</span>}</td>
+                      <td style={{ padding:"8px" }}>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const phone = r.donorPhone || r.phone;
+                            if (!phone) { toast.error("No phone for this donor"); return; }
+                            try {
+                              const res = await pledgeWaMutation.mutateAsync({
+                                donorName: r.donorName || r.name || "Donor",
+                                donorPhone: phone,
+                                campaignName: r.campaignName,
+                                amount: r.amount ? parseFloat(String(r.amount)) : undefined,
+                                origin: window.location.origin,
+                                giftAidDeclared: r.giftAid === true,
+                              });
+                              window.open(res.whatsAppUrl, "_blank");
+                              setWaSentRows(prev => new Set(Array.from(prev).concat(i)));
+                              toast.success(`WhatsApp opened for ${r.donorName||"donor"}`);
+                            } catch (err: any) { toast.error(err?.message || "Failed"); }
+                          }}
+                          style={{ background:waSentRows.has(i)?"#16a34a":"#25D366",color:"#fff",border:"none",borderRadius:8,padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,fontSize:11,whiteSpace:"nowrap" }}>
+                          <MessageCircle size={12}/>{waSentRows.has(i)?"Sent":"WhatsApp"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
