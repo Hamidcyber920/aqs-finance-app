@@ -315,4 +315,77 @@ export const fintechRouter = router({
         .$returningId();
       return { id: inserted.id };
     }),
+
+  // ─── CREATE PAYMENT INTENT (embedded Payment Element) ─────────────────────
+  createPaymentIntent: protectedProcedure
+    .input(
+      z.object({
+        donorName: z.string().min(1),
+        donorEmail: z.string().email().optional(),
+        donorPhone: z.string().optional(),
+        campaignId: z.number().optional(),
+        campaignName: z.string().optional(),
+        amount: z.number().min(0.5),
+        giftAidDeclared: z.boolean().default(false),
+        giftAidAddress: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const [inserted] = await db
+        .insert(stripePaymentSessions)
+        .values({
+          donorName: input.donorName,
+          donorEmail: input.donorEmail,
+          donorPhone: input.donorPhone,
+          campaignId: input.campaignId,
+          campaignName: input.campaignName,
+          amount: String(input.amount),
+          currency: "gbp",
+          giftAidDeclared: input.giftAidDeclared,
+          giftAidAddress: input.giftAidAddress,
+          status: "pending",
+        })
+        .$returningId();
+
+      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id);
+      await db
+        .update(stripePaymentSessions)
+        .set({ referenceCode: refCode })
+        .where(eq(stripePaymentSessions.id, inserted.id));
+
+      // PaymentIntent with automatic_payment_methods enables Apple Pay,
+      // Google Pay, card, and BACS Direct Debit automatically based on device
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(input.amount * 100),
+        currency: "gbp",
+        automatic_payment_methods: { enabled: true },
+        receipt_email: input.donorEmail,
+        metadata: {
+          local_session_id: String(inserted.id),
+          donor_name: input.donorName,
+          donor_phone: input.donorPhone ?? "",
+          campaign_name: input.campaignName ?? "",
+          reference_code: refCode,
+          gift_aid: input.giftAidDeclared ? "yes" : "no",
+        },
+        description: input.campaignName
+          ? `Donation \u2014 ${input.campaignName} (${refCode})`
+          : `AQ Society Donation (${refCode})`,
+      });
+
+      await db
+        .update(stripePaymentSessions)
+        .set({ stripeSessionId: paymentIntent.id })
+        .where(eq(stripePaymentSessions.id, inserted.id));
+
+      return {
+        clientSecret: paymentIntent.client_secret!,
+        referenceCode: refCode,
+        sessionId: inserted.id,
+        paymentIntentId: paymentIntent.id,
+      };
+    }),
 });

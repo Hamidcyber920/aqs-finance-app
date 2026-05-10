@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -17,6 +19,9 @@ import {
   Copy, MessageCircle, ExternalLink, Download, RefreshCw, Plus, Send,
   Smartphone, Globe, Landmark, QrCode
 } from "lucide-react";
+
+// Stripe publishable key — loaded once outside any component
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string);
 
 // AQS Bank Details for bank transfer
 const AQS_BANK = {
@@ -207,6 +212,80 @@ function QuickCapturePanel() {
   );
 }
 
+// ─── STRIPE CHECKOUT FORM (inner — uses useStripe/useElements hooks) ──────────
+interface CheckoutFormProps {
+  referenceCode: string;
+  amount: number;
+  onBack: () => void;
+}
+function CheckoutForm({ referenceCode, amount, onBack }: CheckoutFormProps) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+    setIsProcessing(true);
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/payment/success?ref=${referenceCode}`,
+      },
+    });
+    if (error) {
+      toast.error(error.message ?? "Payment failed. Please try again.");
+      setIsProcessing(false);
+    }
+    // On success the browser is redirected by Stripe — no further action needed here.
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 flex items-center justify-between">
+        <div>
+          <p className="text-xs text-emerald-700 font-semibold uppercase tracking-wide">Reference</p>
+          <p className="font-mono font-bold text-emerald-900">{referenceCode}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs text-emerald-700 font-semibold uppercase tracking-wide">Amount</p>
+          <p className="font-bold text-emerald-900 text-lg">£{amount.toFixed(2)}</p>
+        </div>
+      </div>
+
+      <div className="rounded-lg border p-4 bg-background">
+        <PaymentElement
+          options={{
+            layout: "tabs",
+            paymentMethodOrder: ["apple_pay", "google_pay", "card", "bacs_debit"],
+          }}
+        />
+      </div>
+
+      <Button
+        type="submit"
+        disabled={!stripe || !elements || isProcessing}
+        className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-3 text-base"
+      >
+        <CreditCard className="w-4 h-4 mr-2" />
+        {isProcessing ? "Processing payment..." : `Pay £${amount.toFixed(2)} securely`}
+      </Button>
+
+      <button
+        type="button"
+        onClick={onBack}
+        className="w-full text-center text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+      >
+        ← Back to donor details
+      </button>
+
+      <p className="text-center text-xs text-muted-foreground">
+        Powered by Stripe · Encrypted & Secure · Test card: 4242 4242 4242 4242
+      </p>
+    </form>
+  );
+}
+
 // ─── STRIPE PAYMENT FORM ──────────────────────────────────────────────────────
 function StripePaymentPanel() {
 
@@ -218,25 +297,28 @@ function StripePaymentPanel() {
   const [giftAid, setGiftAid] = useState(false);
   const [giftAidAddress, setGiftAidAddress] = useState("");
 
+  // After PaymentIntent is created we store the clientSecret + referenceCode
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [referenceCode, setReferenceCode] = useState("");
+
   const { data: campaigns } = trpc.fintech.listCampaigns.useQuery();
-  const createSession = trpc.fintech.createCheckoutSession.useMutation({
+  const createIntent = trpc.fintech.createPaymentIntent.useMutation({
     onSuccess: (data) => {
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
-        toast.success(`Redirecting to secure payment... Reference: ${data.referenceCode}`);
-      }
+      setClientSecret(data.clientSecret);
+      setReferenceCode(data.referenceCode);
+      toast.success(`Payment ready — Reference: ${data.referenceCode}`);
     },
     onError: (e) => toast.error("Error: " + e.message),
   });
 
   const selectedCampaign = campaigns?.find((c) => c.id === campaignId);
 
-  function handlePay() {
+  function handleProceed() {
     if (!donorName.trim() || !amount || parseFloat(amount) < 0.5) {
       toast.error("Required fields missing: Please enter donor name and amount (min £0.50)");
       return;
     }
-    createSession.mutate({
+    createIntent.mutate({
       donorName: donorName.trim(),
       donorEmail: donorEmail.trim() || undefined,
       donorPhone: donorPhone.trim() || undefined,
@@ -245,10 +327,41 @@ function StripePaymentPanel() {
       amount: parseFloat(amount),
       giftAidDeclared: giftAid,
       giftAidAddress: giftAid ? giftAidAddress : undefined,
-      origin: window.location.origin,
     });
   }
 
+  function handleBack() {
+    setClientSecret(null);
+    setReferenceCode("");
+  }
+
+  // ── Step 2: embedded payment form ──
+  if (clientSecret) {
+    return (
+      <Elements
+        stripe={stripePromise}
+        options={{
+          clientSecret,
+          appearance: {
+            theme: "stripe",
+            variables: {
+              colorPrimary: "#047857",
+              colorBackground: "#ffffff",
+              borderRadius: "8px",
+            },
+          },
+        }}
+      >
+        <CheckoutForm
+          referenceCode={referenceCode}
+          amount={parseFloat(amount)}
+          onBack={handleBack}
+        />
+      </Elements>
+    );
+  }
+
+  // ── Step 1: donor details form ──
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-3 mb-4">
@@ -321,12 +434,12 @@ function StripePaymentPanel() {
       </div>
 
       <Button
-        onClick={handlePay}
-        disabled={createSession.isPending}
+        onClick={handleProceed}
+        disabled={createIntent.isPending}
         className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-3 text-base"
       >
         <CreditCard className="w-4 h-4 mr-2" />
-        {createSession.isPending ? "Creating secure checkout..." : `Proceed to Secure Payment${amount ? ` — £${parseFloat(amount || "0").toFixed(2)}` : ""}`}
+        {createIntent.isPending ? "Preparing payment..." : `Continue to Payment${amount ? ` — £${parseFloat(amount || "0").toFixed(2)}` : ""}`}
       </Button>
 
       <p className="text-center text-xs text-muted-foreground">
