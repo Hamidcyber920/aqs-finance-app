@@ -3288,6 +3288,29 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         });
         return { success: true };
       }),
+
+    logIncoming: adminProcedure
+      .input(z.object({
+        channelId: z.number(),
+        fromName: z.string().min(1),
+        body: z.string().min(1),
+        via: z.enum(['email', 'whatsapp']).default('whatsapp'),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.insert(commMessages).values({
+          channelId: input.channelId,
+          direction: 'received',
+          fromName: input.fromName,
+          fromEmail: null,
+          whatsappNumbersJson: input.via === 'whatsapp' ? JSON.stringify([{ name: input.fromName, phone: '' }]) : null,
+          subject: input.via === 'email' ? `Reply from ${input.fromName}` : 'WhatsApp Reply',
+          body: input.body,
+          isRead: false,
+        });
+        return { success: true };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

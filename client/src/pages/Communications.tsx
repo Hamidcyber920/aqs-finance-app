@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Mail, MessageSquare, Send, Users, Pencil, Check, X,
   AlertTriangle, Shield, Briefcase, Building2, Hash,
-  Plus, RefreshCw, ArrowLeft, UserPlus, UserMinus, ChevronDown,
+  Plus, RefreshCw, ArrowLeft, UserPlus, ChevronDown, LogIn,
 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -51,22 +51,107 @@ function getInitials(name: string) {
 function formatTime(ts: string|Date) {
   return new Date(ts).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
 }
+function normaliseUkPhone(phone: string) {
+  const raw = (phone??"").replace(/[\s\-().]/g,"");
+  if (raw.startsWith("+")) return raw.slice(1);
+  if (raw.startsWith("44")) return raw;
+  return `44${raw.replace(/^0/,"")}`;
+}
 
 // ── Message bubble ────────────────────────────────────────────────────────────
 function MessageBubble({ msg }: { msg: any }) {
   const isSent = msg.direction === "sent";
+  const isReceived = msg.direction === "received";
   const recipients: {name:string;email?:string}[] = msg.toEmailsJson ? JSON.parse(msg.toEmailsJson) : [];
   const waRecipients: {name:string;phone:string}[] = msg.whatsappNumbersJson ? JSON.parse(msg.whatsappNumbersJson) : [];
   const isWA = waRecipients.length>0 && !recipients.length;
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:isSent?"flex-end":"flex-start",marginBottom:16}}>
-      <div style={{maxWidth:"85%",background:isSent?`linear-gradient(135deg,${T.purple},#4f46e5)`:T.card,border:`1px solid ${T.border}`,borderRadius:isSent?"16px 16px 4px 16px":"16px 16px 16px 4px",padding:"12px 16px"}}>
+      {isReceived&&(
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,marginLeft:4}}>
+          <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:T.muted}}>
+            {getInitials(msg.fromName||"?")}
+          </div>
+          <span style={{fontSize:11,color:T.muted}}>{msg.fromName}</span>
+        </div>
+      )}
+      <div style={{maxWidth:"85%",background:isSent?`linear-gradient(135deg,${T.purple},#4f46e5)`:"rgba(255,255,255,0.07)",border:`1px solid ${isSent?"transparent":T.border}`,borderRadius:isSent?"16px 16px 4px 16px":"16px 16px 16px 4px",padding:"12px 16px"}}>
         {msg.subject&&<p style={{fontSize:12,fontWeight:700,color:isWA?"#25d366":T.mint,margin:"0 0 6px"}}>{isWA?"📱 WhatsApp":`📧 ${msg.subject}`}</p>}
         <p style={{fontSize:13,color:T.white,margin:0,whiteSpace:"pre-wrap",lineHeight:1.5}}>{msg.body}</p>
         {recipients.length>0&&<p style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:"8px 0 0"}}>To: {recipients.map((r:any)=>r.name).join(", ")}</p>}
-        {waRecipients.length>0&&<p style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:"8px 0 0"}}>Via WhatsApp: {waRecipients.map((r:any)=>r.name).join(", ")}</p>}
+        {waRecipients.length>0&&isSent&&<p style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:"8px 0 0"}}>Via WhatsApp: {waRecipients.map((r:any)=>r.name).join(", ")}</p>}
       </div>
-      <p style={{fontSize:10,color:T.muted,margin:"4px 8px 0"}}>{formatTime(msg.sentAt)}{msg.fromName?` · ${msg.fromName}`:""}</p>
+      <p style={{fontSize:10,color:T.muted,margin:"4px 8px 0"}}>{formatTime(msg.sentAt)}{msg.fromName&&isSent?` · ${msg.fromName}`:""}</p>
+    </div>
+  );
+}
+
+// ── Log Incoming Reply panel ──────────────────────────────────────────────────
+function LogIncomingPanel({ channelId, allTrustees, onSaved }: { channelId: number; allTrustees: any[]; onSaved: ()=>void }) {
+  const [open, setOpen] = useState(false);
+  const [fromName, setFromName] = useState("");
+  const [body, setBody] = useState("");
+  const [via, setVia] = useState<"whatsapp"|"email">("whatsapp");
+
+  const logMutation = trpc.comms.logIncoming.useMutation({
+    onSuccess:()=>{toast.success("Reply logged");setBody("");setFromName("");setOpen(false);onSaved();},
+    onError:(e)=>toast.error(e.message),
+  });
+
+  const inp: React.CSSProperties = {width:"100%",background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,padding:"10px 12px",fontSize:13,boxSizing:"border-box"};
+
+  return (
+    <div style={{marginBottom:12}}>
+      <button onClick={()=>setOpen(!open)}
+        style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",fontSize:11,fontWeight:600}}>
+        <LogIn size={12}/> Log Incoming Reply
+        <ChevronDown size={10} style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s"}}/>
+      </button>
+
+      {open&&(
+        <div style={{marginTop:8,background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14}}>
+          <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",margin:"0 0 10px"}}>Log a received reply</p>
+
+          {/* Via toggle */}
+          <div style={{display:"flex",gap:6,marginBottom:10}}>
+            {(["whatsapp","email"] as const).map(v=>(
+              <button key={v} onClick={()=>setVia(v)}
+                style={{flex:1,padding:"6px 0",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",border:`1px solid ${via===v?(v==="whatsapp"?"#25d366":T.mint):T.border}`,background:via===v?(v==="whatsapp"?"rgba(37,211,102,0.12)":"rgba(0,255,194,0.08)"):"transparent",color:via===v?(v==="whatsapp"?"#25d366":T.mint):T.muted}}>
+                {v==="whatsapp"?"📱 WhatsApp":"📧 Email"}
+              </button>
+            ))}
+          </div>
+
+          {/* From name */}
+          <div style={{marginBottom:8}}>
+            <label style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",display:"block",marginBottom:4}}>From</label>
+            <div style={{position:"relative"}}>
+              <select value={fromName} onChange={e=>setFromName(e.target.value)} style={{...inp,appearance:"none" as any,paddingRight:28,cursor:"pointer"}}>
+                <option value="" style={{color:T.muted,background:"#0A192F"}}>— Select sender —</option>
+                {allTrustees.map((t:any)=><option key={t.id} value={t.fullName} style={{color:T.white,background:"#0A192F"}}>{t.fullName}</option>)}
+                <option value="__other__" style={{color:T.white,background:"#0A192F"}}>Other (type below)</option>
+              </select>
+              <ChevronDown size={12} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:T.muted,pointerEvents:"none"}}/>
+            </div>
+            {fromName==="__other__"&&(
+              <input placeholder="Sender name" style={{...inp,marginTop:6}}
+                onChange={e=>setFromName(e.target.value==="__other__"?"":e.target.value)}/>
+            )}
+          </div>
+
+          {/* Message body */}
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",display:"block",marginBottom:4}}>Their Message</label>
+            <textarea value={body} onChange={e=>setBody(e.target.value)} rows={3} placeholder="Paste or type their reply here..." style={{...inp,resize:"vertical" as any}}/>
+          </div>
+
+          <button onClick={()=>{if(!fromName||fromName==="__other__"){toast.error("Please select a sender");return;}if(!body.trim()){toast.error("Message body required");return;}logMutation.mutate({channelId,fromName,body,via});}}
+            disabled={logMutation.isPending}
+            style={{width:"100%",padding:"10px 0",borderRadius:10,background:via==="whatsapp"?"linear-gradient(135deg,#25d366,#128C7E)":`linear-gradient(135deg,${T.mint},#00DDB0)`,color:via==="whatsapp"?T.white:"#081526",fontWeight:700,border:"none",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            <LogIn size={14}/>{logMutation.isPending?"Saving…":"Save Reply to Thread"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -85,11 +170,10 @@ function ComposePanel({
   const [subject, setSubject]       = useState("");
   const [body, setBody]             = useState("");
 
-  // Recipient selection (email)
+  // Email recipient selection
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   // WhatsApp recipient selection
   const [selectedWaIds, setSelectedWaIds] = useState<number[]>([]);
-  const [showWaLinks, setShowWaLinks]     = useState(false);
 
   const emailMembers = channelMembers.filter((t:any)=>t.email);
   const waMembers    = channelMembers.filter((t:any)=>t.phone);
@@ -99,8 +183,7 @@ function ComposePanel({
     onError:(e)=>toast.error(e.message),
   });
   const logWaMutation = trpc.comms.logWhatsApp.useMutation({
-    onSuccess:()=>{toast.success("WhatsApp messages logged");setBody("");setShowWaLinks(false);onSent();},
-    onError:(e)=>toast.error(e.message),
+    onError:(e)=>console.error("WA log error:",e.message),
   });
 
   // Build full message body from structured template
@@ -151,12 +234,20 @@ function ComposePanel({
     sendEmailMutation.mutate({channelId:channel.id,recipients,subject,body:buildEmailBody(),isBulk:tab==="bulk"});
   };
 
-  const handleSendWA = () => {
-    if (!body.trim()){toast.error("Message body is required");return;}
-    const recipients = waMembers.filter((t:any)=>selectedWaIds.includes(t.id));
-    if (!recipients.length){toast.error("Select at least one WhatsApp recipient");return;}
-    logWaMutation.mutate({channelId:channel.id,recipients:recipients.map((t:any)=>({name:t.fullName,phone:t.phone})),message:buildWaBody()});
-    setShowWaLinks(true);
+  // Open WhatsApp for a single recipient AND log it silently
+  const handleOpenWA = (trustee: any) => {
+    if (!body.trim()){toast.error("Write a message body first");return;}
+    const msg = buildWaBody();
+    const normPhone = normaliseUkPhone(trustee.phone);
+    const link = `https://wa.me/${normPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(link, "_blank", "noopener,noreferrer");
+    // Silent background log
+    logWaMutation.mutate({
+      channelId: channel.id,
+      recipients: [{name: trustee.fullName, phone: trustee.phone}],
+      message: msg,
+    });
+    onSent();
   };
 
   const inp: React.CSSProperties = {width:"100%",background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,padding:"10px 12px",fontSize:13,boxSizing:"border-box"};
@@ -170,19 +261,18 @@ function ComposePanel({
       {/* Tabs */}
       <div style={{display:"flex",gap:6,marginBottom:16}}>
         {(["individual","bulk","whatsapp"] as const).map(t=>(
-          <button key={t} onClick={()=>{setTab(t);setShowWaLinks(false);}}
+          <button key={t} onClick={()=>setTab(t)}
             style={{flex:1,padding:"8px 0",borderRadius:8,fontSize:11,fontWeight:700,cursor:"pointer",border:`1px solid ${tab===t?T.purple:T.border}`,background:tab===t?"rgba(99,91,255,0.2)":"transparent",color:tab===t?T.white:T.muted}}>
             {t==="individual"?"✉️ Individual":t==="bulk"?"📨 Bulk":"📱 WhatsApp"}
           </button>
         ))}
       </div>
 
-      {/* ── Structured template fields (shared across all tabs) ── */}
+      {/* ── Structured template fields ── */}
       <div style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${T.border}`,borderRadius:10,padding:"12px 14px",marginBottom:14}}>
         <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 10px"}}>Message Template</p>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          {/* Priority */}
           <div>
             <label style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",display:"block",marginBottom:4}}>Priority</label>
             <div style={{position:"relative"}}>
@@ -192,7 +282,6 @@ function ComposePanel({
               <ChevronDown size={12} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:T.muted,pointerEvents:"none"}}/>
             </div>
           </div>
-          {/* Reply by */}
           <div>
             <label style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",display:"block",marginBottom:4}}>Need Reply By</label>
             <div style={{position:"relative"}}>
@@ -205,7 +294,6 @@ function ComposePanel({
         </div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-          {/* Action by */}
           <div>
             <label style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",display:"block",marginBottom:4}}>Action By</label>
             <div style={{position:"relative"}}>
@@ -216,7 +304,6 @@ function ComposePanel({
               <ChevronDown size={12} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:T.muted,pointerEvents:"none"}}/>
             </div>
           </div>
-          {/* From */}
           <div>
             <label style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",display:"block",marginBottom:4}}>From</label>
             <div style={{position:"relative"}}>
@@ -229,7 +316,6 @@ function ComposePanel({
           </div>
         </div>
 
-        {/* Subject (email only) */}
         {tab!=="whatsapp"&&(
           <div style={{marginBottom:8}}>
             <label style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",display:"block",marginBottom:4}}>Subject</label>
@@ -237,14 +323,13 @@ function ComposePanel({
           </div>
         )}
 
-        {/* Message body */}
         <div>
           <label style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",display:"block",marginBottom:4}}>Message Body</label>
           <textarea value={body} onChange={e=>setBody(e.target.value)} rows={4} placeholder="Write your message here..." style={{...inp,resize:"vertical" as any}}/>
         </div>
       </div>
 
-      {/* ── Email: recipient selection ── */}
+      {/* ── Email tabs ── */}
       {tab!=="whatsapp"&&(
         <>
           {tab==="individual"&&(
@@ -252,10 +337,10 @@ function ComposePanel({
               <p style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",margin:"0 0 6px"}}>Select Recipients (tap to toggle)</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                 {emailMembers.map((t:any)=>{
-                  const sel2=selectedIds.includes(t.id);
+                  const isSel=selectedIds.includes(t.id);
                   return (
-                    <button key={t.id} onClick={()=>setSelectedIds(prev=>sel2?prev.filter(i=>i!==t.id):[...prev,t.id])}
-                      style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1px solid ${sel2?T.mint:T.border}`,background:sel2?"rgba(0,255,194,0.12)":"transparent",color:sel2?T.mint:T.muted,transition:"all 0.15s"}}>
+                    <button key={t.id} onClick={()=>setSelectedIds(prev=>isSel?prev.filter(i=>i!==t.id):[...prev,t.id])}
+                      style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1px solid ${isSel?T.mint:T.border}`,background:isSel?"rgba(0,255,194,0.12)":"transparent",color:isSel?T.mint:T.muted,transition:"all 0.15s"}}>
                       {t.fullName}
                     </button>
                   );
@@ -276,51 +361,36 @@ function ComposePanel({
         </>
       )}
 
-      {/* ── WhatsApp ── */}
+      {/* ── WhatsApp tab: per-recipient buttons shown immediately ── */}
       {tab==="whatsapp"&&(
         <>
-          <div style={{marginBottom:12}}>
-            <p style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",margin:"0 0 6px"}}>Select WhatsApp Recipients (tap to toggle)</p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {waMembers.map((t:any)=>{
-                const sel2=selectedWaIds.includes(t.id);
-                return (
-                  <button key={t.id} onClick={()=>setSelectedWaIds(prev=>sel2?prev.filter(i=>i!==t.id):[...prev,t.id])}
-                    style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:`1px solid ${sel2?"#25d366":T.border}`,background:sel2?"rgba(37,211,102,0.12)":"transparent",color:sel2?"#25d366":T.muted,transition:"all 0.15s"}}>
-                    {t.fullName}
-                  </button>
-                );
-              })}
-              {!waMembers.length&&<p style={{fontSize:12,color:T.muted}}>No phone numbers in this channel.</p>}
-            </div>
+          <p style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>
+            Tap a name to open WhatsApp — message is sent directly &amp; logged
+          </p>
+          {!waMembers.length&&<p style={{fontSize:12,color:T.muted}}>No phone numbers in this channel.</p>}
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {waMembers.map((t:any)=>(
+              <button key={t.id}
+                onClick={()=>handleOpenWA(t)}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderRadius:12,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.25)",cursor:"pointer",width:"100%",textAlign:"left",transition:"background 0.15s"}}>
+                <span style={{width:36,height:36,borderRadius:"50%",background:"rgba(37,211,102,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#25d366",flexShrink:0}}>
+                  {getInitials(t.fullName)}
+                </span>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:13,fontWeight:700,color:T.white,margin:0}}>{t.fullName}</p>
+                  <p style={{fontSize:11,color:"rgba(255,255,255,0.4)",margin:0}}>{t.phone}</p>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:8,background:"rgba(37,211,102,0.15)",flexShrink:0}}>
+                  <MessageSquare size={12} style={{color:"#25d366"}}/>
+                  <span style={{fontSize:11,fontWeight:700,color:"#25d366"}}>Open WhatsApp</span>
+                </div>
+              </button>
+            ))}
           </div>
-          <button onClick={handleSendWA} disabled={!selectedWaIds.length||logWaMutation.isPending}
-            style={{width:"100%",padding:"12px 0",borderRadius:10,background:"linear-gradient(135deg,#25d366,#128C7E)",color:T.white,fontWeight:700,border:"none",cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:12}}>
-            <MessageSquare size={14}/>{logWaMutation.isPending?"Logging…":"Open WhatsApp Links"}
-          </button>
-          {showWaLinks&&body&&selectedWaIds.length>0&&(
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <p style={{fontSize:11,color:T.muted,margin:0}}>Tap each link to open WhatsApp:</p>
-              {waMembers.filter((t:any)=>selectedWaIds.includes(t.id)).map((t:any)=>{
-                const msg=buildWaBody();
-                // Normalise UK phone: strip spaces/dashes, strip leading 0, prepend 44
-                const rawPhone=(t.phone??"").replace(/[\s\-().]/g,"");
-                const normPhone=rawPhone.startsWith("+")?rawPhone.slice(1):rawPhone.startsWith("44")?rawPhone:`44${rawPhone.replace(/^0/,"")}`;
-                const link=`https://wa.me/${normPhone}?text=${encodeURIComponent(msg)}`;
-                return (
-                  <button key={t.id}
-                    onClick={()=>window.open(link,"_blank","noopener,noreferrer")}
-                    style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:10,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.2)",cursor:"pointer",width:"100%",textAlign:"left"}}>
-                    <span style={{width:32,height:32,borderRadius:"50%",background:"rgba(37,211,102,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#25d366",flexShrink:0}}>{getInitials(t.fullName)}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontSize:13,fontWeight:600,color:T.white,margin:0}}>{t.fullName}</p>
-                      <p style={{fontSize:11,color:"#25d366",margin:0}}>{t.phone} → Open WhatsApp ↗</p>
-                    </div>
-                    <MessageSquare size={14} style={{color:"#25d366",flexShrink:0}}/>
-                  </button>
-                );
-              })}
-            </div>
+          {!body.trim()&&(
+            <p style={{fontSize:11,color:"rgba(239,68,68,0.7)",margin:"10px 0 0",textAlign:"center"}}>
+              ⚠️ Write a message body above before opening WhatsApp
+            </p>
           )}
         </>
       )}
@@ -350,15 +420,12 @@ function MemberManager({
     }
     return true;
   });
-  const notInChannel = addCandidates;
 
   const addMember = (trusteeId: number) => {
-    const newIds = [...currentIds, trusteeId];
-    updateChannel.mutate({id:channel.id,name:channel.name,description:channel.description??undefined,channelMemberIds:newIds});
+    updateChannel.mutate({id:channel.id,name:channel.name,description:channel.description??undefined,channelMemberIds:[...currentIds, trusteeId]});
   };
   const removeMember = (trusteeId: number) => {
-    const newIds = currentIds.filter((i:number)=>i!==trusteeId);
-    updateChannel.mutate({id:channel.id,name:channel.name,description:channel.description??undefined,channelMemberIds:newIds});
+    updateChannel.mutate({id:channel.id,name:channel.name,description:channel.description??undefined,channelMemberIds:currentIds.filter((i:number)=>i!==trusteeId)});
   };
 
   return (
@@ -384,11 +451,11 @@ function MemberManager({
             {!channelMembers.length&&<p style={{fontSize:12,color:T.muted,margin:0}}>No members yet.</p>}
           </div>
 
-          {notInChannel.length>0&&(
+          {addCandidates.length>0&&(
             <>
               <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>Add Member</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                {notInChannel.map((t:any)=>(
+                {addCandidates.map((t:any)=>(
                   <button key={t.id} onClick={()=>addMember(t.id)}
                     style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:20,background:"rgba(0,255,194,0.06)",border:`1px solid rgba(0,255,194,0.2)`,color:T.mint,cursor:"pointer",fontSize:12,fontWeight:500}}>
                     <UserPlus size={10}/> {t.fullName}
@@ -425,7 +492,7 @@ export default function CommunicationsPage() {
 
   const selectedChannel = (channels as any[]).find((c:any)=>c.id===selectedChannelId);
 
-  // Compute channel members: if channelMemberIds is set, use those; else fall back to role-based
+  // Compute channel members
   const channelMembers = (() => {
     if (!selectedChannel) return [];
     const ch = selectedChannel as any;
@@ -548,7 +615,6 @@ export default function CommunicationsPage() {
                     <h2 style={{fontSize:15,fontWeight:700,color:T.white,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(selectedChannel as any).name}</h2>
                     {(selectedChannel as any).description&&<p style={{fontSize:11,color:T.muted,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(selectedChannel as any).description}</p>}
                   </div>
-                  {/* Member avatars */}
                   <div style={{display:"flex",flexShrink:0}}>
                     {channelMembers.slice(0,3).map((t:any,i:number)=>(
                       <div key={t.id} title={t.fullName} style={{width:26,height:26,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:T.white,border:`2px solid ${T.navy}`,marginLeft:i>0?-6:0}}>
@@ -572,6 +638,13 @@ export default function CommunicationsPage() {
                   allTrustees={allTrustees as any[]}
                   channelMembers={channelMembers}
                   onUpdate={refetchChannels}
+                />
+
+                {/* Log incoming reply */}
+                <LogIncomingPanel
+                  channelId={selectedChannelId!}
+                  allTrustees={allTrustees as any[]}
+                  onSaved={()=>{refetchMessages();}}
                 />
 
                 {/* Compose */}

@@ -679,3 +679,13 @@
 - [x] Remove Atik Rahman and Farid Ahmed from Trustees channel default members (DB update)
 - [x] Restrict "Add Member" in MemberManager to trustees only (role contains "trustee") for the Trustees channel; for other channels show all contacts
 - [x] Fix WhatsApp wa.me links not opening (URL encoding / popup blocker issue)
+
+## WhatsApp Direct Send Fix (May 2026)
+- [x] Remove logWhatsApp mutation from WhatsApp tab — show per-recipient Open WhatsApp buttons immediately when a recipient is selected, no intermediate log step
+
+## Two-Way Messaging & WhatsApp UX (May 2026)
+- [x] WhatsApp tab: show per-recipient Open WhatsApp buttons immediately when recipient is tapped (no separate trigger button needed)
+- [x] WhatsApp tab: still log outbound message to thread in background when button is tapped
+- [x] Add logIncoming tRPC procedure to record received replies (direction=received, fromName, body, channel)
+- [x] Add "Log Incoming Reply" panel in thread view: paste sender name + message body, saves as received bubble
+- [x] Thread shows both sent (right, purple) and received (left, dark card) bubbles
