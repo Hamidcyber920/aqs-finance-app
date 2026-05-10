@@ -364,6 +364,20 @@ function ComposePanel({
       {/* ── WhatsApp tab: per-recipient buttons shown immediately ── */}
       {tab==="whatsapp"&&(
         <>
+          {/* Group link banner */}
+          {channel.whatsappGroupLink&&(
+            <div style={{marginBottom:12,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.25)",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+              <MessageSquare size={16} style={{color:"#25d366",flexShrink:0}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontSize:12,fontWeight:700,color:"#25d366",margin:0}}>WhatsApp Group</p>
+                <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{channel.whatsappGroupLink}</p>
+              </div>
+              <button onClick={()=>window.open(channel.whatsappGroupLink,"_blank","noopener,noreferrer")}
+                style={{padding:"6px 12px",borderRadius:8,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:11,flexShrink:0}}>
+                Open Group
+              </button>
+            </div>
+          )}
           <p style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>
             Tap a name to open WhatsApp — message is sent directly &amp; logged
           </p>
@@ -626,6 +640,12 @@ export default function CommunicationsPage() {
                   <button onClick={()=>refetchMessages()} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <RefreshCw size={12}/>
                   </button>
+                  {(selectedChannel as any).whatsappGroupLink&&(
+                    <button onClick={()=>window.open((selectedChannel as any).whatsappGroupLink,"_blank","noopener,noreferrer")}
+                      style={{padding:"7px 12px",borderRadius:8,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:T.white,fontWeight:700,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                      <MessageSquare size={12}/>WA Group
+                    </button>
+                  )}
                   <button onClick={()=>setShowCompose(!showCompose)}
                     style={{padding:"7px 12px",borderRadius:8,background:showCompose?"rgba(0,255,194,0.12)":`linear-gradient(135deg,${T.purple},#4f46e5)`,border:`1px solid ${showCompose?T.mint:"transparent"}`,color:showCompose?T.mint:T.white,fontWeight:700,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                     {showCompose?<><X size={12}/>Close</>:<><Plus size={12}/>Compose</>}

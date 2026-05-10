@@ -689,3 +689,8 @@
 - [x] Add logIncoming tRPC procedure to record received replies (direction=received, fromName, body, channel)
 - [x] Add "Log Incoming Reply" panel in thread view: paste sender name + message body, saves as received bubble
 - [x] Thread shows both sent (right, purple) and received (left, dark card) bubbles
+
+## WhatsApp Group Link (May 2026)
+- [x] Add whatsappGroupLink column to comm_channels table
+- [x] Store Trustees group link: https://chat.whatsapp.com/Lcrqxr7HpDTH6PkEPFflic?mode=gi_t
+- [x] Show "Open WhatsApp Group" button in channel header and WhatsApp tab when link is set

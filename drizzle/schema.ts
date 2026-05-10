@@ -741,6 +741,8 @@ export const commChannels = mysqlTable("comm_channels", {
   memberRoles: varchar("memberRoles", { length: 500 }),
   // JSON array of trustee IDs explicitly added to channel (overrides role-based if set)
   channelMemberIds: text("channelMemberIds"),
+  // Optional WhatsApp group invite link for this channel
+  whatsappGroupLink: varchar("whatsappGroupLink", { length: 500 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

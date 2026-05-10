@@ -1,0 +1,1 @@
+ALTER TABLE `comm_channels` ADD `whatsappGroupLink` varchar(500);

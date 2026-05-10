@@ -3175,6 +3175,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         name: z.string().min(1),
         description: z.string().optional(),
         channelMemberIds: z.array(z.number()).optional(),
+        whatsappGroupLink: z.string().url().optional().nullable(),
       }))
       .mutation(async ({ input }) => {
         const db = await getDb();
@@ -3182,6 +3183,9 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         const updateData: Record<string, any> = { name: input.name, description: input.description ?? null };
         if (input.channelMemberIds !== undefined) {
           updateData.channelMemberIds = JSON.stringify(input.channelMemberIds);
+        }
+        if (input.whatsappGroupLink !== undefined) {
+          updateData.whatsappGroupLink = input.whatsappGroupLink ?? null;
         }
         await db.update(commChannels).set(updateData).where(eq(commChannels.id, input.id));
         return { success: true };
