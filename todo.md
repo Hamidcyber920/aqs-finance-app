@@ -711,3 +711,7 @@
 - [x] WhatsApp group link: add editable field inside MemberManager so any channel's WA group link can be set/updated from the UI
 - [x] Trustee DOB: show warning badge/count on Trustees page for trustees missing date of birth
 - [x] Channel sidebar: drag-to-reorder channels, persist new order to DB via sortOrder column
+
+## Header & WhatsApp Fixes (May 2026 #3)
+- [x] Channel header: fix title/description being obstructed by avatar strip and buttons on mobile
+- [x] WhatsApp: open with pre-filled message text highlighted (red/attention indicator in the message)

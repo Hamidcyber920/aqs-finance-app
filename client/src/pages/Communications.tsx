@@ -211,12 +211,16 @@ function ComposePanel({
     const replyLabel    = REPLY_BY_OPTIONS.find(r=>r.value===replyBy)?.label ?? replyBy;
     const actionName    = allTrustees.find((t:any)=>String(t.id)===actionBy)?.fullName ?? actionBy;
     const fromName      = allTrustees.find((t:any)=>String(t.id)===fromPerson)?.fullName ?? fromPerson;
+    // Use WhatsApp bold + emoji flags to draw attention (red circle = 🔴, exclamation = ❗)
+    const priorityEmoji = priority === "urgent" ? "🔴" : priority === "high" ? "🟠" : priority === "normal" ? "🟡" : "🟢";
     return [
+      "🔔 *AQS — Action Required*",
+      "",
       "Assalamu Alaikum wa Rahmatullahi wa Barakatuh,",
       "",
-      `*Priority:* ${priorityLabel}`,
-      `*Need reply back by:* ${replyLabel}`,
-      actionName ? `*Action by:* ${actionName}` : "",
+      `${priorityEmoji} *Priority:* ${priorityLabel}`,
+      `⏰ *Need reply back by:* ${replyLabel}`,
+      actionName ? `👤 *Action by:* ${actionName}` : "",
       "",
       body,
       "",
@@ -714,41 +718,49 @@ export default function CommunicationsPage() {
             {selectedChannel?(
               <>
                 {/* Channel header */}
-                <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:12,borderBottom:`1px solid ${T.border}`,marginBottom:12,flexShrink:0,flexWrap:"wrap"}}>
-                  <button onClick={()=>setShowPanel(false)} id="comms-back-btn"
-                    style={{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"none",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <ArrowLeft size={14}/>
-                  </button>
-                  <style>{`@media(max-width:640px){#comms-back-btn{display:flex!important}}`}</style>
-                  <span style={{color:(selectedChannel as any).color,fontSize:18}}>{CHANNEL_ICONS[(selectedChannel as any).icon]??<Hash size={18}/>}</span>
-                  <div style={{flex:1,minWidth:0}}>
-                    <h2 style={{fontSize:15,fontWeight:700,color:T.white,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(selectedChannel as any).name}</h2>
-                    {(selectedChannel as any).description&&<p style={{fontSize:11,color:T.muted,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(selectedChannel as any).description}</p>}
-                  </div>
-                  <div style={{display:"flex",flexShrink:0,overflowX:"auto",maxWidth:"min(220px,40vw)",scrollbarWidth:"none",WebkitOverflowScrolling:"touch",paddingBottom:2}}>
-                    <style>{`#avatar-scroll::-webkit-scrollbar{display:none}`}</style>
-                    <div id="avatar-scroll" style={{display:"flex",alignItems:"center",gap:4,paddingRight:4}}>
-                      {channelMembers.map((t:any,i:number)=>(
-                        <div key={t.id} title={t.fullName}
-                          style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:T.white,border:`2px solid ${T.navy}`,flexShrink:0,cursor:"default"}}>
-                          {getInitials(t.fullName)}
-                        </div>
-                      ))}
+                <div style={{paddingBottom:12,borderBottom:`1px solid ${T.border}`,marginBottom:12,flexShrink:0}}>
+                  {/* Row 1: back + icon + title */}
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                    <button onClick={()=>setShowPanel(false)} id="comms-back-btn"
+                      style={{width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"none",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <ArrowLeft size={14}/>
+                    </button>
+                    <style>{`@media(max-width:640px){#comms-back-btn{display:flex!important}}`}</style>
+                    <span style={{color:(selectedChannel as any).color,fontSize:18,flexShrink:0}}>{CHANNEL_ICONS[(selectedChannel as any).icon]??<Hash size={18}/>}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <h2 style={{fontSize:16,fontWeight:800,color:T.white,margin:0}}>{(selectedChannel as any).name}</h2>
+                      {(selectedChannel as any).description&&<p style={{fontSize:11,color:T.muted,margin:"2px 0 0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{(selectedChannel as any).description}</p>}
                     </div>
                   </div>
-                  <button onClick={()=>refetchMessages()} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <RefreshCw size={12}/>
-                  </button>
-                  {(selectedChannel as any).whatsappGroupLink&&(
-                    <button onClick={()=>window.open((selectedChannel as any).whatsappGroupLink,"_blank","noopener,noreferrer")}
-                      style={{padding:"7px 12px",borderRadius:8,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:T.white,fontWeight:700,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                      <MessageSquare size={12}/>WA Group
-                    </button>
-                  )}
-                  <button onClick={()=>setShowCompose(!showCompose)}
-                    style={{padding:"7px 12px",borderRadius:8,background:showCompose?"rgba(0,255,194,0.12)":`linear-gradient(135deg,${T.purple},#4f46e5)`,border:`1px solid ${showCompose?T.mint:"transparent"}`,color:showCompose?T.mint:T.white,fontWeight:700,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                    {showCompose?<><X size={12}/>Close</>:<><Plus size={12}/>Compose</>}
-                  </button>
+                  {/* Row 2: avatars + action buttons */}
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <div style={{flex:1,overflowX:"auto",scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
+                      <style>{`#avatar-scroll::-webkit-scrollbar{display:none}`}</style>
+                      <div id="avatar-scroll" style={{display:"flex",alignItems:"center",gap:4,paddingBottom:2}}>
+                        {channelMembers.map((t:any)=>(
+                          <div key={t.id} title={t.fullName}
+                            style={{width:26,height:26,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},#4f46e5)`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:T.white,border:`2px solid ${T.navy}`,flexShrink:0,cursor:"default"}}>
+                            {getInitials(t.fullName)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
+                      <button onClick={()=>refetchMessages()} style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <RefreshCw size={12}/>
+                      </button>
+                      {(selectedChannel as any).whatsappGroupLink&&(
+                        <button onClick={()=>window.open((selectedChannel as any).whatsappGroupLink,"_blank","noopener,noreferrer")}
+                          style={{padding:"6px 10px",borderRadius:8,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:T.white,fontWeight:700,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",gap:5}}>
+                          <MessageSquare size={11}/>WA Group
+                        </button>
+                      )}
+                      <button onClick={()=>setShowCompose(!showCompose)}
+                        style={{padding:"6px 10px",borderRadius:8,background:showCompose?"rgba(0,255,194,0.12)":`linear-gradient(135deg,${T.purple},#4f46e5)`,border:`1px solid ${showCompose?T.mint:"transparent"}`,color:showCompose?T.mint:T.white,fontWeight:700,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",gap:5}}>
+                        {showCompose?<><X size={11}/>Close</>:<><Plus size={11}/>Compose</>}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Member manager */}
