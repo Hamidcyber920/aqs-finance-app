@@ -633,3 +633,10 @@
 - [x] Ensure fullName column is used for display (not username)
 - [x] Phone numbers visible on each org chart card
 - [x] Organisation page accessible from any part of app for communications lookup
+
+## OrgChart UX Fixes (May 2026 — round 17)
+- [x] Remove duplicate system-user entries from org chart (Mumin Khan manager, Farid Ahmed deputy, Test User assistant — use trustees table only for Management/Deputies)
+- [x] Phone numbers: tappable tel: links to initiate calls
+- [x] Full-page / full-width layout (no horizontal scroll clipping on mobile)
+- [x] Each card expandable (tap to expand) showing full details
+- [x] Each card inline-editable (edit icon opens edit form within card or dialog)
