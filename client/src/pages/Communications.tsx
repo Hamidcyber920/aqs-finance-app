@@ -480,14 +480,21 @@ function MemberManager({
 
   const currentIds = channelMembers.map((t:any)=>t.id);
 
-  // For the Trustees channel, only allow adding actual trustees (not managers/deputies)
-  const isTrusteesChannel = (channel.name??"").toLowerCase().includes("trust");
+  // Filter add-candidates based on channel type
+  const channelName = (channel.name??"").toLowerCase();
   const addCandidates = (allTrustees as any[]).filter((t:any) => {
     if (currentIds.includes(t.id)) return false;
-    if (isTrusteesChannel) {
-      const r = (t.role??"").toLowerCase();
+    const r = (t.role??"").toLowerCase();
+    if (channelName.includes("trust")) {
       return r.includes("trustee") || r.includes("chair");
     }
+    if (channelName.includes("manager")) {
+      return r.includes("manager") && !r.includes("deputy");
+    }
+    if (channelName.includes("staff")) {
+      return r.includes("manager") || r.includes("deputy");
+    }
+    // Urgent / Friday Comms: allow all
     return true;
   });
 

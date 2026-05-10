@@ -728,7 +728,13 @@
 - [x] Fix wa.me URL so message text loads correctly in WhatsApp for both group and individual sends
 
 ## Next Steps #3 (May 2026)
-- [ ] Trustees page: show warning badge for trustees missing phone number
-- [ ] WhatsApp tab: show "No phone" label on member chips missing a phone number
-- [ ] Incoming message bubbles: add "Mark as Replied" button that sets isReplied=true and shows a green tick
-- [ ] Add markReplied tRPC mutation to update comm_messages isReplied field
+- [x] Trustees page: show warning badge for trustees missing phone number
+- [x] WhatsApp tab: show "No phone" label on member chips missing a phone number
+- [x] Incoming message bubbles: add "Mark as Replied" button that sets isReplied=true and shows a green tick
+- [x] Add markReplied tRPC mutation to update comm_messages isReplied field
+
+## All-Channel WhatsApp Feature Parity (May 2026)
+- [x] Verify all channels (Urgent, Managers, Staff, Friday Comms) load correct members with phone data
+- [x] Ensure phone normalisation and No-phone warning works for all channel member types (staff, managers)
+- [x] Ensure copy+open group send button works for all channels (already code-generic, just needs WA group links set per channel)
+- [x] Add phone numbers for staff/managers missing phone via Trustees/Contacts page
