@@ -715,3 +715,6 @@
 ## Header & WhatsApp Fixes (May 2026 #3)
 - [x] Channel header: fix title/description being obstructed by avatar strip and buttons on mobile
 - [x] WhatsApp: open with pre-filled message text highlighted (red/attention indicator in the message)
+
+## WhatsApp Fields Fix (May 2026 #4)
+- [x] WhatsApp tab: template fields (Priority, Reply By, Action By, From, Body) must appear inside the WhatsApp tab and their values must be passed into the wa.me pre-filled message

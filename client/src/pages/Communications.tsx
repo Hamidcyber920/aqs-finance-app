@@ -382,8 +382,16 @@ function ComposePanel({
               </button>
             </div>
           )}
+          {/* Live message preview */}
+          <div style={{marginBottom:12,background:"rgba(37,211,102,0.06)",border:"1px solid rgba(37,211,102,0.2)",borderRadius:10,padding:"12px 14px"}}>
+            <p style={{fontSize:10,fontWeight:700,color:"#25d366",textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>📱 Message Preview (what will be sent)</p>
+            <pre style={{fontSize:12,color:T.white,margin:0,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"inherit",lineHeight:1.6}}>
+              {buildWaBody()}
+            </pre>
+          </div>
+
           <p style={{fontSize:10,fontWeight:600,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>
-            Tap a name to open WhatsApp — message is sent directly &amp; logged
+            Tap a name below to open WhatsApp with this message
           </p>
           {!waMembers.length&&<p style={{fontSize:12,color:T.muted}}>No phone numbers in this channel.</p>}
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -407,7 +415,7 @@ function ComposePanel({
           </div>
           {!body.trim()&&(
             <p style={{fontSize:11,color:"rgba(239,68,68,0.7)",margin:"10px 0 0",textAlign:"center"}}>
-              ⚠️ Write a message body above before opening WhatsApp
+              ⚠️ Fill in the Message Body above before opening WhatsApp
             </p>
           )}
         </>
