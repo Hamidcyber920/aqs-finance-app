@@ -28,7 +28,7 @@ import {
   BarChart3, BookOpen, Building2, Camera, ClipboardList, Scale,
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
   Settings, ShieldCheck, Users, Wallet, GitBranch,
-  ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard,
+  ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -51,6 +51,7 @@ const incomeItems = [
   { icon: DollarSign, label: "Income & Rentals", path: "/income" },
   { icon: Home, label: "Student Accommodation", path: "/accommodation" },
   { icon: CreditCard, label: "Payment Hub", path: "/fintech" },
+  { icon: UserCheck, label: "Donor CRM", path: "/donor-crm" },
 ];
 const expenseItems = [
   { icon: Wallet, label: "Payroll", path: "/payroll" },

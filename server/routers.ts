@@ -15,6 +15,7 @@ import { backupRouter, triggerBackupSoon } from "./routers/backup";
 import { voiceAgentRouter } from "./routers/voiceAgent";
 import { accommodationRouter } from "./routers/accommodation";
 import { fintechRouter } from "./routers/fintech";
+import { crmRouter } from "./routers/crm";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -356,6 +357,7 @@ export const appRouter = router({
   voiceAgent: voiceAgentRouter,
   accommodation: accommodationRouter,
   fintech: fintechRouter,
+  crm: crmRouter,
 
   // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
   succession: router({

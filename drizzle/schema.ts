@@ -948,3 +948,105 @@ export const giftAidDeclarations = mysqlTable("gift_aid_declarations", {
 });
 export type GiftAidDeclaration = typeof giftAidDeclarations.$inferSelect;
 export type InsertGiftAidDeclaration = typeof giftAidDeclarations.$inferInsert;
+
+// ─── DONOR LEADS (Two-Click QuickCapture — Progressive Profiling) ─────────────
+export const donorLeads = mysqlTable("donor_leads", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  whatsapp: varchar("whatsapp", { length: 30 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  title: varchar("title", { length: 20 }),
+  dateOfBirth: date("dateOfBirth"),
+  address: text("address"),
+  postcode: varchar("postcode", { length: 20 }),
+  isUkTaxpayer: boolean("isUkTaxpayer").default(false),
+  giftAidConsent: boolean("giftAidConsent").default(false),
+  marketingConsent: boolean("marketingConsent").default(false),
+  profileComplete: boolean("profileComplete").default(false).notNull(),
+  incompleteProfileFlaggedAt: timestamp("incompleteProfileFlaggedAt"),
+  welcomeMessageSentAt: timestamp("welcomeMessageSentAt"),
+  convertedToDonorId: int("convertedToDonorId"),
+  source: mysqlEnum("source", ["quickcapture", "stripe", "manual", "portal"]).default("quickcapture").notNull(),
+  campaignId: int("campaignId"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type DonorLead = typeof donorLeads.$inferSelect;
+export type InsertDonorLead = typeof donorLeads.$inferInsert;
+
+// ─── DONOR PORTAL TOKENS (Magic Link — no password required) ─────────────────
+export const donorPortalTokens = mysqlTable("donor_portal_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  donorId: int("donorId"),
+  donorLeadId: int("donorLeadId"),
+  email: varchar("email", { length: 320 }),
+  whatsapp: varchar("whatsapp", { length: 30 }),
+  purpose: mysqlEnum("purpose", ["profile_complete", "donation_history", "gift_aid_sign", "annual_summary"]).default("donation_history").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type DonorPortalToken = typeof donorPortalTokens.$inferSelect;
+export type InsertDonorPortalToken = typeof donorPortalTokens.$inferInsert;
+
+// ─── GIFT AID E-SIGNATURE CERTIFICATES ────────────────────────────────────────
+export const giftAidCertificates = mysqlTable("gift_aid_certificates", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId"),
+  donorLeadId: int("donorLeadId"),
+  donorName: varchar("donorName", { length: 200 }).notNull(),
+  donorAddress: text("donorAddress").notNull(),
+  donorPostcode: varchar("donorPostcode", { length: 20 }),
+  declarationText: text("declarationText").notNull(),
+  signatureMethod: mysqlEnum("signatureMethod", ["click_to_sign", "typed_name", "checkbox"]).default("click_to_sign").notNull(),
+  signedAt: timestamp("signedAt"),
+  signedIp: varchar("signedIp", { length: 45 }),
+  coversFrom: date("coversFrom"),
+  coversTo: date("coversTo"),
+  isActive: boolean("isActive").default(true).notNull(),
+  revokedAt: timestamp("revokedAt"),
+  certificateUrl: varchar("certificateUrl", { length: 500 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type GiftAidCertificate = typeof giftAidCertificates.$inferSelect;
+export type InsertGiftAidCertificate = typeof giftAidCertificates.$inferInsert;
+
+// ─── SADAQAH JARIYAH ENTRIES (Beneficiary Metadata for £1k+ donors) ──────────
+export const sadaqahJariyahEntries = mysqlTable("sadaqah_jariyah_entries", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId"),
+  donorLeadId: int("donorLeadId"),
+  campaignId: int("campaignId").notNull(),
+  donationId: int("donationId"),
+  stripeSessionId: int("stripeSessionId"),
+  beneficiaryName: varchar("beneficiaryName", { length: 200 }).notNull(),
+  beneficiaryRelation: varchar("beneficiaryRelation", { length: 100 }),
+  beneficiaryNotes: text("beneficiaryNotes"),
+  impactTitle: varchar("impactTitle", { length: 300 }),
+  impactDescription: text("impactDescription"),
+  impactImageUrl: varchar("impactImageUrl", { length: 500 }),
+  impactDate: date("impactDate"),
+  displayOnDonorWall: boolean("displayOnDonorWall").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type SadaqahJariyahEntry = typeof sadaqahJariyahEntries.$inferSelect;
+export type InsertSadaqahJariyahEntry = typeof sadaqahJariyahEntries.$inferInsert;
+
+// ─── CAMPAIGN MILESTONES (Impact Timeline for Donors) ────────────────────────
+export const campaignMilestones = mysqlTable("campaign_milestones", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId").notNull(),
+  title: varchar("title", { length: 300 }).notNull(),
+  description: text("description"),
+  imageUrl: varchar("imageUrl", { length: 500 }),
+  milestoneDate: date("milestoneDate").notNull(),
+  isPublished: boolean("isPublished").default(false).notNull(),
+  notifyDonors: boolean("notifyDonors").default(false).notNull(),
+  notifiedAt: timestamp("notifiedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type CampaignMilestone = typeof campaignMilestones.$inferSelect;
+export type InsertCampaignMilestone = typeof campaignMilestones.$inferInsert;
