@@ -194,8 +194,9 @@ function ComposePanel({
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
 
-  // WA send-all sequence state
-  const [waSequenceIdx, setWaSequenceIdx] = useState<number|null>(null);
+  // WA bulk-send state
+  const [waBulkSent, setWaBulkSent] = useState(false);
+  const [waBulkCount, setWaBulkCount] = useState(0);
 
   // Templates data
   const { data: templates = [], refetch: refetchTemplates } = trpc.comms.listTemplates.useQuery();
@@ -330,24 +331,26 @@ function ComposePanel({
     if (!skipOnSent) onSent();
   };
 
-  // Bulk WA send-all sequence
-  const startWaSequence = () => {
+  // Bulk WA simultaneous send-all
+  const handleSendAllWA = () => {
     if (!body.trim()) { toast.error("Write a message body first"); return; }
     const pool = waMembers.filter((t:any) => selectedWaIds.includes(t.id));
     if (!pool.length) { toast.error("Select at least one recipient"); return; }
-    setWaSequenceIdx(0);
-  };
-  const handleWaSequenceNext = () => {
-    const pool = waMembers.filter((t:any) => selectedWaIds.includes(t.id));
-    const idx = waSequenceIdx ?? 0;
-    if (idx >= pool.length) {
-      setWaSequenceIdx(null);
-      toast.success("All WhatsApp messages sent!");
-      onSent();
-      return;
-    }
-    handleOpenWA(pool[idx], true);
-    setWaSequenceIdx(idx + 1);
+    const msg = buildWaBody();
+    let opened = 0;
+    pool.forEach((t: any, i: number) => {
+      const raw = (t.phone ?? "").replace(/\s/g, "");
+      const normPhone = raw.startsWith("0") ? "44" + raw.slice(1) : raw.startsWith("+") ? raw.slice(1) : raw;
+      if (!normPhone) return;
+      const link = `https://wa.me/${normPhone}?text=${encodeURIComponent(msg)}`;
+      setTimeout(() => { window.open(link, `_wa_${t.id}`, "noopener,noreferrer"); }, i * 300);
+      opened++;
+    });
+    logWaMutation.mutate({ channelId: channel.id, recipients: pool.map((t:any) => ({ name: t.fullName, phone: t.phone })), message: msg });
+    setWaBulkSent(true);
+    setWaBulkCount(opened);
+    setTimeout(() => { setWaBulkSent(false); onSent(); }, 4000);
+    toast.success(`Opening WhatsApp for ${opened} recipient${opened === 1 ? "" : "s"}…`);
   };
 
   const inp: React.CSSProperties = {width:"100%",background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,borderRadius:8,color:T.white,padding:"10px 12px",fontSize:13,boxSizing:"border-box"};
@@ -628,12 +631,24 @@ function ComposePanel({
             </div>
           )}
 
-          {/* ── Individual: toggle chips then open ── */}
+          {/* ── Individual: select recipients then bulk-open all at once ── */}
           <div>
-            <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>Send to Individual{selectedWaIds.length>0?` (${selectedWaIds.length} selected)`:""}</p>
+            {/* Header row with Select All toggle */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:0}}>
+                Send to Individual{selectedWaIds.length>0?` (${selectedWaIds.length} selected)`:""}
+              </p>
+              {waMembers.length>0&&(
+                <button
+                  onClick={()=>setSelectedWaIds(selectedWaIds.length===waMembers.length?[]:waMembers.map((t:any)=>t.id))}
+                  style={{fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:6,background:selectedWaIds.length===waMembers.length?"rgba(37,211,102,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${selectedWaIds.length===waMembers.length?"#25d366":T.border}`,color:selectedWaIds.length===waMembers.length?"#25d366":T.muted,cursor:"pointer"}}>
+                  {selectedWaIds.length===waMembers.length?"Deselect All":"Select All"}
+                </button>
+              )}
+            </div>
             {!waMembers.length&&<p style={{fontSize:12,color:T.muted}}>No phone numbers available.</p>}
-            {/* Toggle chips */}
-            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:selectedWaIds.length>0?12:0}}>
+            {/* Recipient chips with checkboxes */}
+            <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:selectedWaIds.length>0?14:0}}>
               {waMembers.map((t:any)=>{
                 const isSel=selectedWaIds.includes(t.id);
                 return(
@@ -647,63 +662,26 @@ function ComposePanel({
                 );
               })}
             </div>
-            {/* Send All sequence button */}
-            {selectedWaIds.length>0&&waSequenceIdx===null&&(
-              <button onClick={startWaSequence}
-                style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0",borderRadius:10,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:T.white,fontWeight:700,fontSize:13,cursor:"pointer",marginBottom:8}}>
-                <Send size={14}/> Send All ({selectedWaIds.length}) — One by One
-              </button>
-            )}
-            {/* Sequence progress UI */}
-            {waSequenceIdx!==null&&(()=>{
-              const pool=waMembers.filter((t:any)=>selectedWaIds.includes(t.id));
-              const done=waSequenceIdx>=pool.length;
-              const current=done?null:pool[waSequenceIdx];
-              return(
-                <div style={{background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.3)",borderRadius:12,padding:"14px 16px",marginBottom:8}}>
-                  {done?(
-                    <div style={{textAlign:"center"}}>
-                      <p style={{fontSize:14,fontWeight:700,color:"#25d366",margin:"0 0 10px"}}>✅ All {pool.length} messages sent!</p>
-                      <button onClick={()=>{setWaSequenceIdx(null);setSelectedWaIds([]);onSent();}}
-                        style={{padding:"8px 20px",borderRadius:8,background:"rgba(37,211,102,0.2)",border:"1px solid rgba(37,211,102,0.4)",color:"#25d366",fontWeight:700,cursor:"pointer",fontSize:12}}>Done</button>
-                    </div>
-                  ):(
-                    <>
-                      <p style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",margin:"0 0 8px"}}>{waSequenceIdx+1} of {pool.length}</p>
-                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                        <span style={{width:36,height:36,borderRadius:"50%",background:"rgba(37,211,102,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#25d366",flexShrink:0}}>{getInitials(current!.fullName)}</span>
-                        <div><p style={{fontSize:14,fontWeight:700,color:T.white,margin:0}}>{current!.fullName}</p><p style={{fontSize:11,color:T.muted,margin:0}}>{current!.phone}</p></div>
-                      </div>
-                      <button onClick={handleWaSequenceNext}
-                        style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0",borderRadius:10,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:T.white,fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                        <MessageSquare size={14}/> Open WhatsApp for {current!.fullName} <ChevronRight size={14}/>
-                      </button>
-                      <button onClick={()=>setWaSequenceIdx(null)}
-                        style={{width:"100%",marginTop:6,padding:"6px 0",borderRadius:8,background:"transparent",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",fontSize:11}}>Cancel Sequence</button>
-                    </>
-                  )}
-                </div>
-              );
-            })()}
-            {/* Individual open buttons (non-sequence mode) */}
-            {selectedWaIds.length>0&&waSequenceIdx===null&&(
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                {waMembers.filter((t:any)=>selectedWaIds.includes(t.id)).map((t:any)=>(
-                  <button key={t.id}
-                    onClick={()=>handleOpenWA(t)}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",borderRadius:12,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.3)",cursor:"pointer",width:"100%",textAlign:"left"}}>
-                    <span style={{width:32,height:32,borderRadius:"50%",background:"rgba(37,211,102,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:"#25d366",flexShrink:0}}>{getInitials(t.fullName)}</span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontSize:13,fontWeight:700,color:T.white,margin:0}}>{t.fullName}</p>
-                      <p style={{fontSize:10,color:"rgba(255,255,255,0.35)",margin:0}}>{t.phone}</p>
-                    </div>
-                    <div style={{display:"flex",alignItems:"center",gap:4,padding:"6px 10px",borderRadius:8,background:"rgba(37,211,102,0.18)",flexShrink:0}}>
-                      <MessageSquare size={12} style={{color:"#25d366"}}/>
-                      <span style={{fontSize:11,fontWeight:700,color:"#25d366"}}>Open WhatsApp</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
+            {/* Bulk send-all button — opens ALL selected chats simultaneously */}
+            {selectedWaIds.length>0&&(
+              <>
+                {waBulkSent?(
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"12px 0",borderRadius:10,background:"rgba(37,211,102,0.12)",border:"1px solid rgba(37,211,102,0.3)"}}>
+                    <Check size={16} style={{color:"#25d366"}}/>
+                    <span style={{fontSize:13,fontWeight:700,color:"#25d366"}}>Opened {waBulkCount} WhatsApp chat{waBulkCount===1?"":"s"}!</span>
+                  </div>
+                ):(
+                  <>
+                    <button
+                      disabled={!body.trim()}
+                      onClick={handleSendAllWA}
+                      style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"13px 0",borderRadius:10,background:body.trim()?"linear-gradient(135deg,#25d366,#128C7E)":"rgba(37,211,102,0.15)",border:"none",color:body.trim()?T.white:"rgba(37,211,102,0.4)",fontWeight:700,fontSize:13,cursor:body.trim()?"pointer":"not-allowed",marginBottom:6}}>
+                      <MessageSquare size={14}/> Send to All {selectedWaIds.length} Selected — Open All at Once
+                    </button>
+                    <p style={{fontSize:10,color:T.muted,textAlign:"center",margin:0}}>Your browser may ask to allow pop-ups — tap Allow to open all chats simultaneously.</p>
+                  </>
+                )}
+              </>
             )}
           </div>
 

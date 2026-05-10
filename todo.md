@@ -819,3 +819,10 @@
 - [x] Monthly Expenses: entire category section header row tappable to toggle collapse/expand (was already full-row button)
 - [x] Trustees & Staff Contacts: entire card header row tappable to toggle expand/collapse
 - [x] Org Chart: entire card header row tappable to toggle expand/collapse
+
+## Bulk WhatsApp Send — Select All & Send Simultaneously (May 2026)
+- [x] Compose WA tab: show recipient list with checkboxes (all pre-checked by default)
+- [x] "Select All" / "Deselect All" toggle button
+- [x] "Send to All Selected (N)" button opens all selected recipients' WhatsApp chats at once using window.open
+- [x] Works for both channel members and the staff/manager toggle section
+- [x] Shows a browser popup-blocker warning if popups are blocked
