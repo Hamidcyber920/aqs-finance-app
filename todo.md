@@ -663,3 +663,6 @@
 - [x] Frontend: Add Communications link to Organisation section in sidebar
 - [x] Excel: generate pre-filled staff/trustee data collection spreadsheet with all known fields
 - [x] Excel: columns: Full Name, Title/Role, Email, Phone, Date of Birth, Address Line 1, Address Line 2, City, Postcode, Next of Kin Name, NOK Relationship, NOK Phone, NOK Email, Notes
+
+## Communications Hub Mobile Fix (May 2026)
+- [x] Fix Communications Hub layout: mobile-first stacked layout (channel list on top, message panel below), no horizontal clipping
