@@ -368,20 +368,6 @@ function ComposePanel({
       {/* ── WhatsApp tab: per-recipient buttons shown immediately ── */}
       {tab==="whatsapp"&&(
         <>
-          {/* Group link banner */}
-          {channel.whatsappGroupLink&&(
-            <div style={{marginBottom:12,background:"rgba(37,211,102,0.08)",border:"1px solid rgba(37,211,102,0.25)",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
-              <MessageSquare size={16} style={{color:"#25d366",flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <p style={{fontSize:12,fontWeight:700,color:"#25d366",margin:0}}>WhatsApp Group</p>
-                <p style={{fontSize:11,color:"rgba(255,255,255,0.5)",margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{channel.whatsappGroupLink}</p>
-              </div>
-              <button onClick={()=>window.open(channel.whatsappGroupLink,"_blank","noopener,noreferrer")}
-                style={{padding:"6px 12px",borderRadius:8,background:"linear-gradient(135deg,#25d366,#128C7E)",border:"none",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:11,flexShrink:0}}>
-                Open Group
-              </button>
-            </div>
-          )}
           {/* Live message preview */}
           <div style={{marginBottom:12,background:"rgba(37,211,102,0.06)",border:"1px solid rgba(37,211,102,0.2)",borderRadius:10,padding:"12px 14px"}}>
             <p style={{fontSize:10,fontWeight:700,color:"#25d366",textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>📱 Message Preview (what will be sent)</p>
