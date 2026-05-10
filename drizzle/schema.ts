@@ -726,3 +726,39 @@ export const systemBackups = mysqlTable("system_backups", {
 });
 export type SystemBackup = typeof systemBackups.$inferSelect;
 export type InsertSystemBackup = typeof systemBackups.$inferInsert;
+
+// ─── COMMUNICATIONS HUB ───────────────────────────────────────────────────────
+
+export const commChannels = mysqlTable("comm_channels", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: text("description"),
+  icon: varchar("icon", { length: 50 }).default("hash").notNull(),
+  color: varchar("color", { length: 30 }).default("#635BFF").notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  isEditable: boolean("isEditable").default(true).notNull(),
+  // Comma-separated roles that belong to this channel (e.g. "trustee,chair")
+  memberRoles: varchar("memberRoles", { length: 500 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CommChannel = typeof commChannels.$inferSelect;
+export type InsertCommChannel = typeof commChannels.$inferInsert;
+
+export const commMessages = mysqlTable("comm_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  channelId: int("channelId").notNull(),
+  // direction: "sent" = we sent it, "received" = incoming
+  direction: mysqlEnum("direction", ["sent", "received"]).default("sent").notNull(),
+  fromName: varchar("fromName", { length: 200 }),
+  fromEmail: varchar("fromEmail", { length: 320 }),
+  toEmailsJson: text("toEmailsJson"),       // JSON array of {name, email}
+  whatsappNumbersJson: text("whatsappNumbersJson"), // JSON array of {name, phone}
+  subject: varchar("subject", { length: 500 }),
+  body: text("body"),
+  isRead: boolean("isRead").default(true).notNull(),
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type CommMessage = typeof commMessages.$inferSelect;
+export type InsertCommMessage = typeof commMessages.$inferInsert;

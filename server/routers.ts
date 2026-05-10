@@ -32,7 +32,7 @@ import {
   getDashboardStats,
 } from "./db";
 import { eq } from "drizzle-orm";
-import { loanRepayments } from "../drizzle/schema";
+import { loanRepayments, commChannels, commMessages } from "../drizzle/schema";
 // sendGmail is defined locally in this file (line ~123)
 
 // ─── Permission helpers ───────────────────────────────────────────────────────
@@ -3157,6 +3157,126 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await deleteOrgMember(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ─── COMMUNICATIONS HUB ─────────────────────────────────────────────────────
+  comms: router({
+    listChannels: protectedProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(commChannels).orderBy(commChannels.sortOrder);
+    }),
+
+    updateChannel: adminProcedure
+      .input(z.object({ id: z.number(), name: z.string().min(1), description: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.update(commChannels).set({ name: input.name, description: input.description ?? null }).where(eq(commChannels.id, input.id));
+        return { success: true };
+      }),
+
+    listMessages: protectedProcedure
+      .input(z.object({ channelId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        return db.select().from(commMessages)
+          .where(eq(commMessages.channelId, input.channelId))
+          .orderBy(commMessages.sentAt);
+      }),
+
+    sendEmail: adminProcedure
+      .input(z.object({
+        channelId: z.number(),
+        recipients: z.array(z.object({ name: z.string(), email: z.string() })),
+        subject: z.string().min(1),
+        body: z.string().min(1),
+        isBulk: z.boolean().default(false),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const fromName = ctx.user.name || 'AQS Admin';
+        const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || 'noreply@aqs.org.uk';
+        const errors: string[] = [];
+        for (const r of input.recipients) {
+          try {
+            const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+              <div style="background:#1a4731;padding:24px;text-align:center">
+                <h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1>
+              </div>
+              <div style="padding:24px;background:#fff">
+                <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, Dear ${r.name},</p>
+                ${input.body.replace(/\n/g, '<br/>')}
+                <br/><br/>
+                <p>JazakAllahu Khayran,<br/><strong>${fromName}</strong><br/>Abdullah Quilliam Society</p>
+              </div>
+              <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">This message was sent via the AQS Communications Hub.</div>
+            </div>`;
+            await sendGmail(r.email, r.name, input.subject, html);
+          } catch (e: any) {
+            errors.push(`${r.email}: ${e.message}`);
+          }
+        }
+        // Log to DB
+        await db.insert(commMessages).values({
+          channelId: input.channelId,
+          direction: 'sent',
+          fromName,
+          fromEmail,
+          toEmailsJson: JSON.stringify(input.recipients),
+          subject: input.subject,
+          body: input.body,
+          isRead: true,
+        });
+        return { success: true, sent: input.recipients.length - errors.length, errors };
+      }),
+
+    getWhatsAppLinks: protectedProcedure
+      .input(z.object({ channelId: z.number(), message: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        const channel = await db.select().from(commChannels).where(eq(commChannels.id, input.channelId)).limit(1);
+        if (!channel[0]) return [];
+        const roles = (channel[0].memberRoles ?? '').split(',').map((r: string) => r.trim().toLowerCase());
+        const trustees = await db.select().from(commChannels);
+        // Get trustees matching channel roles
+        const { trustees: trusteesTable } = await import('../drizzle/schema');
+        const allTrustees = await db.select().from(trusteesTable).where(eq(trusteesTable.isActive, true));
+        const matching = allTrustees.filter((t: any) => {
+          const r = (t.role ?? '').toLowerCase();
+          return roles.some((role: string) => r.includes(role));
+        });
+        return matching.map((t: any) => ({
+          name: t.fullName,
+          phone: t.phone,
+          link: t.phone ? `https://wa.me/44${t.phone.replace(/^0/, '').replace(/\s/g, '')}?text=${encodeURIComponent(input.message)}` : null,
+        }));
+      }),
+
+    logWhatsApp: adminProcedure
+      .input(z.object({
+        channelId: z.number(),
+        recipients: z.array(z.object({ name: z.string(), phone: z.string() })),
+        message: z.string(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.insert(commMessages).values({
+          channelId: input.channelId,
+          direction: 'sent',
+          fromName: ctx.user.name || 'AQS Admin',
+          fromEmail: null,
+          whatsappNumbersJson: JSON.stringify(input.recipients),
+          subject: 'WhatsApp Message',
+          body: input.message,
+          isRead: true,
+        });
         return { success: true };
       }),
   }),

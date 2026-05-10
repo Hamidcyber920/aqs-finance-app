@@ -211,6 +211,13 @@
       "when": 1778401950449,
       "tag": "0029_volatile_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1778402895354,
+      "tag": "0030_neat_christian_walker",
+      "breakpoints": true
     }
   ]
 }

@@ -647,3 +647,19 @@
 - [x] Card front: show birthday countdown badge (e.g. "🎂 Birthday in 12 days") when within 30 days
 - [x] Card expanded view: show Title, Full Name, DOB + auto-calculated age, full address, next of kin (name, phone, email)
 - [x] Card edit form: all new fields editable inline (DOB date picker, address fields, NOK fields)
+
+## Communications Hub & Staff Spreadsheet (May 2026 — round 19)
+- [x] DB: create comm_channels table (id, name, type, color, icon, sortOrder, isEditable, createdAt)
+- [x] DB: create comm_messages table (id, channelId, fromEmail, fromName, toEmails JSON, subject, body, sentAt, direction, isRead, whatsappNumbers JSON)
+- [x] Backend: channels CRUD procedures (list, create, update, delete)
+- [x] Backend: messages list/send procedures per channel
+- [x] Backend: sendBulkEmail procedure (send to all members of a channel group)
+- [x] Backend: sendBulkWhatsApp procedure (generate wa.me bulk links)
+- [x] Frontend: Communications page with Slack-style left sidebar (channels: Urgent, Trustees, Managers, Staff, Friday Comms)
+- [x] Frontend: Channel header with Edit title button
+- [x] Frontend: Message thread view per channel (sent/received emails shown as chat bubbles)
+- [x] Frontend: Compose panel: individual email, bulk email to channel group, WhatsApp buttons
+- [x] Frontend: Bulk WhatsApp: generate individual wa.me links for each member in channel
+- [x] Frontend: Add Communications link to Organisation section in sidebar
+- [x] Excel: generate pre-filled staff/trustee data collection spreadsheet with all known fields
+- [x] Excel: columns: Full Name, Title/Role, Email, Phone, Date of Birth, Address Line 1, Address Line 2, City, Postcode, Next of Kin Name, NOK Relationship, NOK Phone, NOK Email, Notes

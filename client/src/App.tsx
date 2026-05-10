@@ -22,6 +22,7 @@ import IncomePage from "./pages/Income";
 import PayrollPage from "./pages/Payroll";
 import DonorsPage from "./pages/Donors";
 import OrgChartPage from "./pages/OrgChart";
+import CommunicationsPage from "./pages/Communications";
 import CampaignsPage from "./pages/Campaigns";
 import ProfileSettingsPage from "./pages/ProfileSettings";
 import PendingApprovalPage from "./pages/PendingApproval";
@@ -67,6 +68,7 @@ function Router() {
         <Route path="/donors" component={DonorsPage} />
         <Route path="/campaigns" component={CampaignsPage} />
         <Route path="/org-chart" component={OrgChartPage} />
+        <Route path="/communications" component={CommunicationsPage} />
         <Route path="/admin" component={AdminPanelPage} />
         <Route path="/trustees" component={TrusteesPage} />
         <Route path="/backups" component={BackupsPage} />
