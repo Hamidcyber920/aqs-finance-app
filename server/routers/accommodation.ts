@@ -8,6 +8,7 @@ import {
   getRentPaymentsForTenant, getAllRentPayments, createRentPayment, updateRentPayment,
   getUpcomingRentDue, getOverdueRentPayments,
 } from "../db.accommodation";
+import { getDb } from "../db";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -248,5 +249,53 @@ export const accommodationRouter = router({
       const key = `accommodation/${ctx.user.id}/${Date.now()}-${input.filename}`;
       const { url } = await storagePut(key, buf, input.mimeType);
       return { url };
+    }),
+
+  // ── Authorisation: Farid Ahmed tick ──────────────────────────────────────
+
+  checkFarid: protectedProcedure
+    .input(z.object({ id: z.number(), undo: z.boolean().default(false) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const { eq } = await import('drizzle-orm');
+      const { accommodationRentPayments } = await import('../../drizzle/schema');
+      await db.update(accommodationRentPayments)
+        .set({ checkedByFaridAt: input.undo ? null : new Date() })
+        .where(eq(accommodationRentPayments.id, input.id));
+      return { success: true };
+    }),
+
+  // ── Authorisation: Mumin Khan tick ───────────────────────────────────────
+
+  checkMumin: protectedProcedure
+    .input(z.object({ id: z.number(), undo: z.boolean().default(false) }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const { eq } = await import('drizzle-orm');
+      const { accommodationRentPayments } = await import('../../drizzle/schema');
+      await db.update(accommodationRentPayments)
+        .set({ checkedByMuminAt: input.undo ? null : new Date() })
+        .where(eq(accommodationRentPayments.id, input.id));
+      return { success: true };
+    }),
+
+  // ── Trustee verification (Dr Abdul Hamid OR Galib Khan) ───────────────────
+
+  trusteeVerify: protectedProcedure
+    .input(z.object({ id: z.number(), trusteeName: z.string().nullable() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const { eq } = await import('drizzle-orm');
+      const { accommodationRentPayments } = await import('../../drizzle/schema');
+      await db.update(accommodationRentPayments)
+        .set({
+          trusteeVerifiedBy: input.trusteeName,
+          trusteeVerifiedAt: input.trusteeName ? new Date() : null,
+        })
+        .where(eq(accommodationRentPayments.id, input.id));
+      return { success: true };
     }),
 });

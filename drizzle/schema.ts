@@ -403,10 +403,21 @@ export const incomeRecords = mysqlTable("income_records", {
   cashWithheldReason: varchar("cashWithheldReason", { length: 300 }),
   totalBanked: decimal("totalBanked", { precision: 10, scale: 2 }),
   totalBankedDate: varchar("totalBankedDate", { length: 50 }),
-  // Sign-off fields
+  // Sign-off fields (legacy)
   signedByManager: varchar("signedByManager", { length: 200 }),
   signedByTrustee: varchar("signedByTrustee", { length: 200 }),
   signedAt: timestamp("signedAt"),
+  // Two-step authorisation: Farid Ahmed + Mumin Khan
+  checkedByFaridAt: timestamp("checkedByFaridAt"),
+  checkedByMuminAt: timestamp("checkedByMuminAt"),
+  // Trustee verification (Dr Abdul Hamid OR Galib Khan)
+  trusteeVerifiedBy: varchar("trusteeVerifiedBy", { length: 200 }),
+  trusteeVerifiedAt: timestamp("trusteeVerifiedAt"),
+  // Rental date range
+  rentalDateFrom: date("rentalDateFrom"),
+  rentalDateTo: date("rentalDateTo"),
+  // Additional evidence
+  evidenceUrl2: text("evidenceUrl2"),
   recordedById: int("recordedById").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -874,6 +885,12 @@ export const accommodationRentPayments = mysqlTable("accommodation_rent_payments
   confirmedByUserId: int("confirmedByUserId"),
   confirmedByName: varchar("confirmedByName", { length: 200 }),
   confirmedAt: timestamp("confirmedAt"),
+  // Two-step authorisation: Farid Ahmed + Mumin Khan
+  checkedByFaridAt: timestamp("checkedByFaridAt"),
+  checkedByMuminAt: timestamp("checkedByMuminAt"),
+  // Trustee verification (Dr Abdul Hamid OR Galib Khan)
+  trusteeVerifiedBy: varchar("trusteeVerifiedBy", { length: 200 }),
+  trusteeVerifiedAt: timestamp("trusteeVerifiedAt"),
   // Reminders sent
   reminderSentAt: timestamp("reminderSentAt"),    // 7-day due reminder
   overdueSentAt: timestamp("overdueSentAt"),       // 8-day overdue reminder

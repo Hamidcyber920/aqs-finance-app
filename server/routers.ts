@@ -2384,6 +2384,64 @@ export const appRouter = router({
         await db.delete(incomeRecords).where(eq(incomeRecords.id, input.id));
         return { success: true };
       }),
+    // ── Authorisation: Farid Ahmed tick
+    checkFarid: adminProcedure
+      .input(z.object({ id: z.number(), undo: z.boolean().default(false) }))
+      .mutation(async ({ input }) => {
+        const db2 = await (await import('./db')).getDb();
+        if (!db2) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq: eq2 } = await import('drizzle-orm');
+        const { incomeRecords: ir } = await import('../drizzle/schema');
+        await db2.update(ir).set({ checkedByFaridAt: input.undo ? null : new Date() }).where(eq2(ir.id, input.id));
+        return { success: true };
+      }),
+    // ── Authorisation: Mumin Khan tick
+    checkMumin: adminProcedure
+      .input(z.object({ id: z.number(), undo: z.boolean().default(false) }))
+      .mutation(async ({ input }) => {
+        const db2 = await (await import('./db')).getDb();
+        if (!db2) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq: eq2 } = await import('drizzle-orm');
+        const { incomeRecords: ir } = await import('../drizzle/schema');
+        await db2.update(ir).set({ checkedByMuminAt: input.undo ? null : new Date() }).where(eq2(ir.id, input.id));
+        return { success: true };
+      }),
+    // ── Trustee verification (Dr Abdul Hamid OR Galib Khan)
+    trusteeVerify: adminProcedure
+      .input(z.object({ id: z.number(), trusteeName: z.string().nullable() }))
+      .mutation(async ({ input }) => {
+        const db2 = await (await import('./db')).getDb();
+        if (!db2) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq: eq2 } = await import('drizzle-orm');
+        const { incomeRecords: ir } = await import('../drizzle/schema');
+        await db2.update(ir).set({
+          trusteeVerifiedBy: input.trusteeName,
+          trusteeVerifiedAt: input.trusteeName ? new Date() : null,
+        }).where(eq2(ir.id, input.id));
+        return { success: true };
+      }),
+    // ── Update rental date range + evidence
+    updateRentalDetails: adminProcedure
+      .input(z.object({
+        id: z.number(),
+        rentalDateFrom: z.string().nullable().optional(),
+        rentalDateTo: z.string().nullable().optional(),
+        evidenceUrl: z.string().nullable().optional(),
+        evidenceUrl2: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db2 = await (await import('./db')).getDb();
+        if (!db2) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { eq: eq2 } = await import('drizzle-orm');
+        const { incomeRecords: ir } = await import('../drizzle/schema');
+        const updates: any = {};
+        if (input.rentalDateFrom !== undefined) updates.rentalDateFrom = input.rentalDateFrom ? new Date(input.rentalDateFrom + 'T12:00:00') : null;
+        if (input.rentalDateTo !== undefined) updates.rentalDateTo = input.rentalDateTo ? new Date(input.rentalDateTo + 'T12:00:00') : null;
+        if (input.evidenceUrl !== undefined) updates.evidenceUrl = input.evidenceUrl;
+        if (input.evidenceUrl2 !== undefined) updates.evidenceUrl2 = input.evidenceUrl2;
+        await db2.update(ir).set(updates).where(eq2(ir.id, input.id));
+        return { success: true };
+      }),
   }),
 
   // ─── DONORS ───────────────────────────────────────────────────────────────

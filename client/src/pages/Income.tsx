@@ -356,6 +356,14 @@ export default function IncomePage() {
     onSuccess: () => { toast.success("Record deleted"); refetch(); setExpandedRow(null); },
     onError: (e) => toast.error(e.message),
   });
+  const checkFaridMutation = trpc.income.checkFarid.useMutation({ onSuccess: () => refetch(), onError: (e) => toast.error(e.message) });
+  const checkMuminMutation = trpc.income.checkMumin.useMutation({ onSuccess: () => refetch(), onError: (e) => toast.error(e.message) });
+  const trusteeVerifyMutation = trpc.income.trusteeVerify.useMutation({ onSuccess: () => refetch(), onError: (e) => toast.error(e.message) });
+  const updateRentalDetailsMutation = trpc.income.updateRentalDetails.useMutation({ onSuccess: () => { toast.success("Rental details updated"); refetch(); }, onError: (e) => toast.error(e.message) });
+  const [editingRentalId, setEditingRentalId] = useState<number | null>(null);
+  const [rentalEditFrom, setRentalEditFrom] = useState<string>("");
+  const [rentalEditTo, setRentalEditTo] = useState<string>("");
+  const [uploadingEvidence2, setUploadingEvidence2] = useState<number | null>(null);
 
   function fmtStamp(iso: string) {
     if (!iso) return "";
@@ -633,7 +641,96 @@ export default function IncomePage() {
                             {r.totalBanked != null && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>TOTAL BANKED</span><span style={{color:T.white}}>£{Number(r.totalBanked).toLocaleString("en-GB",{minimumFractionDigits:2})}{r.totalBankedDate ? ` on ${fmtDate(r.totalBankedDate)}` : ""}</span></div>}
                             {r.signedByManager && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>SIGNED BY MANAGER</span><span style={{color:T.white}}>{r.signedByManager}</span></div>}
                             {r.signedByTrustee && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>SIGNED BY TRUSTEE</span><span style={{color:T.white}}>{r.signedByTrustee}</span></div>}
-                            {r.receiptUrl && <div style={{gridColumn:"1/-1"}}><span style={{color:T.muted,display:"block",marginBottom:4}}>ATTACHED EVIDENCE</span><a href={r.receiptUrl} target="_blank" rel="noreferrer" style={{color:T.mint,textDecoration:"underline"}}>View attached document</a></div>}
+                            {r.receiptUrl && <div style={{gridColumn:"1/-1"}}><span style={{color:T.muted,display:"block",marginBottom:4}}>EVIDENCE 1</span><a href={r.receiptUrl} target="_blank" rel="noreferrer" style={{color:T.mint,textDecoration:"underline"}}>View attached document</a></div>}
+                            {(r as any).evidenceUrl2 && <div style={{gridColumn:"1/-1"}}><span style={{color:T.muted,display:"block",marginBottom:4}}>EVIDENCE 2</span><a href={(r as any).evidenceUrl2} target="_blank" rel="noreferrer" style={{color:T.mint,textDecoration:"underline"}}>View second document</a></div>}
+                            {/* Rental date range + evidence upload for rental income categories */}
+                            {RENTAL_INCOME_CATS.has((r as any).categoryName ?? "") && (
+                              <div style={{gridColumn:"1/-1",background:"rgba(165,180,252,0.06)",border:"1px solid rgba(165,180,252,0.2)",borderRadius:10,padding:"12px 14px",marginTop:4}}>
+                                <span style={{color:"#a5b4fc",display:"block",marginBottom:8,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em"}}>Rental Period</span>
+                                {editingRentalId === r.id ? (
+                                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                                      <div><label style={{fontSize:10,color:T.muted,display:"block",marginBottom:2}}>From</label><input type="date" value={rentalEditFrom} onChange={e=>setRentalEditFrom(e.target.value)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(165,180,252,0.3)",borderRadius:6,color:T.white,padding:"6px 8px",fontSize:12}}/></div>
+                                      <div><label style={{fontSize:10,color:T.muted,display:"block",marginBottom:2}}>To</label><input type="date" value={rentalEditTo} onChange={e=>setRentalEditTo(e.target.value)} style={{width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(165,180,252,0.3)",borderRadius:6,color:T.white,padding:"6px 8px",fontSize:12}}/></div>
+                                    </div>
+                                    <div style={{display:"flex",gap:6}}>
+                                      <button onClick={()=>{ updateRentalDetailsMutation.mutate({id:r.id,rentalDateFrom:rentalEditFrom||null,rentalDateTo:rentalEditTo||null}); setEditingRentalId(null); }} style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:600,background:"rgba(165,180,252,0.2)",border:"1px solid rgba(165,180,252,0.4)",color:"#a5b4fc",cursor:"pointer"}}>Save</button>
+                                      <button onClick={()=>setEditingRentalId(null)} style={{padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:600,background:"transparent",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer"}}>Cancel</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                                    <span style={{color:T.white,fontSize:12}}>
+                                      {(r as any).rentalDateFrom ? fmtDate((r as any).rentalDateFrom) : "Not set"}
+                                      {" → "}
+                                      {(r as any).rentalDateTo ? fmtDate((r as any).rentalDateTo) : "Not set"}
+                                    </span>
+                                    <button onClick={()=>{ setEditingRentalId(r.id); setRentalEditFrom((r as any).rentalDateFrom?.slice(0,10)??"" ); setRentalEditTo((r as any).rentalDateTo?.slice(0,10)??"" ); }} style={{padding:"3px 8px",borderRadius:5,fontSize:10,fontWeight:600,background:"rgba(165,180,252,0.1)",border:"1px solid rgba(165,180,252,0.3)",color:"#a5b4fc",cursor:"pointer"}}>Edit Dates</button>
+                                  </div>
+                                )}
+                                {/* Evidence upload for rental records */}
+                                <div style={{marginTop:10,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                                  <span style={{fontSize:10,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em"}}>Upload Evidence:</span>
+                                  <label style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:6,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.25)",fontSize:11,color:T.mint,fontWeight:600}}>
+                                    <Upload size={11}/> {uploadingEvidence2===r.id ? "Uploading…" : "Add Evidence"}
+                                    <input type="file" accept="image/*,application/pdf" style={{position:"absolute",opacity:0,width:0,height:0}} onChange={async(e)=>{
+                                      const file=e.target.files?.[0]; if(!file) return;
+                                      setUploadingEvidence2(r.id);
+                                      try {
+                                        const fd=new FormData(); fd.append("file",file);
+                                        const res=await fetch("/api/upload",{method:"POST",body:fd,credentials:"include"});
+                                        const json=await res.json();
+                                        if(json.url) { updateRentalDetailsMutation.mutate({id:r.id,evidenceUrl2:json.url}); }
+                                        else toast.error("Upload failed");
+                                      } catch { toast.error("Upload failed"); } finally { setUploadingEvidence2(null); }
+                                    }}/>
+                                  </label>
+                                </div>
+                              </div>
+                            )}
+                            {/* Authorisation tick boxes — Farid Ahmed, Mumin Khan, Trustee */}
+                            <div style={{gridColumn:"1/-1",background:"rgba(99,91,255,0.06)",border:"1px solid rgba(99,91,255,0.2)",borderRadius:10,padding:"12px 14px",marginTop:4}}>
+                              <span style={{color:"#a5b4fc",display:"block",marginBottom:8,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.08em"}}>Authorisation</span>
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:8}}>
+                                {/* Farid Ahmed */}
+                                <div onClick={()=>checkFaridMutation.mutate({id:r.id,undo:!!(r as any).checkedByFaridAt})} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,background:(r as any).checkedByFaridAt?"rgba(0,255,194,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${(r as any).checkedByFaridAt?"rgba(0,255,194,0.4)":T.border}`,cursor:"pointer"}}>
+                                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${(r as any).checkedByFaridAt?T.mint:"rgba(255,255,255,0.25)"}`,background:(r as any).checkedByFaridAt?T.mint:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                    {(r as any).checkedByFaridAt && <svg width="11" height="8" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#081526" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                  </div>
+                                  <div style={{flex:1}}>
+                                    <span style={{fontSize:12,color:(r as any).checkedByFaridAt?T.white:T.muted,fontWeight:(r as any).checkedByFaridAt?600:400}}>Farid Ahmed</span>
+                                    {(r as any).checkedByFaridAt && <span style={{display:"block",fontSize:10,color:T.mint,marginTop:1}}>{new Date((r as any).checkedByFaridAt).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
+                                  </div>
+                                </div>
+                                {/* Mumin Khan */}
+                                <div onClick={()=>checkMuminMutation.mutate({id:r.id,undo:!!(r as any).checkedByMuminAt})} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,background:(r as any).checkedByMuminAt?"rgba(0,255,194,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${(r as any).checkedByMuminAt?"rgba(0,255,194,0.4)":T.border}`,cursor:"pointer"}}>
+                                  <div style={{width:20,height:20,borderRadius:5,border:`2px solid ${(r as any).checkedByMuminAt?T.mint:"rgba(255,255,255,0.25)"}`,background:(r as any).checkedByMuminAt?T.mint:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                    {(r as any).checkedByMuminAt && <svg width="11" height="8" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#081526" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                  </div>
+                                  <div style={{flex:1}}>
+                                    <span style={{fontSize:12,color:(r as any).checkedByMuminAt?T.white:T.muted,fontWeight:(r as any).checkedByMuminAt?600:400}}>Mumin Khan</span>
+                                    {(r as any).checkedByMuminAt && <span style={{display:"block",fontSize:10,color:T.mint,marginTop:1}}>{new Date((r as any).checkedByMuminAt).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
+                                  </div>
+                                </div>
+                                {/* Trustee toggle: Dr Abdul Hamid / Galib Khan */}
+                                <div style={{gridColumn:"1/-1"}}>
+                                  <span style={{fontSize:10,color:T.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",display:"block",marginBottom:6}}>Trustee Verification</span>
+                                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                    {(["Dr Abdul Hamid","Galib Khan"] as const).map(name=>(
+                                      <div key={name} onClick={()=>trusteeVerifyMutation.mutate({id:r.id,trusteeName:(r as any).trusteeVerifiedBy===name?null:name})} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:8,background:(r as any).trusteeVerifiedBy===name?"rgba(99,91,255,0.12)":"rgba(255,255,255,0.03)",border:`1px solid ${(r as any).trusteeVerifiedBy===name?"rgba(99,91,255,0.5)":T.border}`,cursor:"pointer"}}>
+                                        <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${(r as any).trusteeVerifiedBy===name?"#a5b4fc":"rgba(255,255,255,0.25)"}`,background:(r as any).trusteeVerifiedBy===name?"#635BFF":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                          {(r as any).trusteeVerifiedBy===name && <svg width="10" height="7" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                                        </div>
+                                        <div style={{flex:1}}>
+                                          <span style={{fontSize:12,color:(r as any).trusteeVerifiedBy===name?T.white:T.muted,fontWeight:(r as any).trusteeVerifiedBy===name?600:400}}>{name}</span>
+                                          {(r as any).trusteeVerifiedBy===name && (r as any).trusteeVerifiedAt && <span style={{display:"block",fontSize:10,color:"#a5b4fc",marginTop:1}}>{new Date((r as any).trusteeVerifiedAt).toLocaleString("en-GB",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</span>}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                             <div><span style={{color:T.muted,display:"block",marginBottom:2}}>RECORDED AT</span><span style={{color:T.white}}>{r.createdAt ? new Date(r.createdAt).toLocaleString("en-GB") : "—"}</span></div>
                             {/* Delete button — only superadmin/owner can delete */}
                             {canDeleteIncome && (

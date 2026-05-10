@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `accommodation_rent_payments` ADD `checkedByFaridAt` timestamp;\nALTER TABLE `accommodation_rent_payments` ADD `checkedByMuminAt` timestamp;\nALTER TABLE `accommodation_rent_payments` ADD `trusteeVerifiedBy` varchar(200);\nALTER TABLE `accommodation_rent_payments` ADD `trusteeVerifiedAt` timestamp;\nALTER TABLE `income_records` ADD `checkedByFaridAt` timestamp;\nALTER TABLE `income_records` ADD `checkedByMuminAt` timestamp;\nALTER TABLE `income_records` ADD `trusteeVerifiedBy` varchar(200);\nALTER TABLE `income_records` ADD `trusteeVerifiedAt` timestamp;\nALTER TABLE `income_records` ADD `rentalDateFrom` date;\nALTER TABLE `income_records` ADD `rentalDateTo` date;\nALTER TABLE `income_records` ADD `evidenceUrl2` text;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute ALTER TABLE `accommodation_rent_payments` ADD `checkedByFaridAt` timestamp;\nALTER TABLE `accommodation_rent_payments` ADD `checkedByMuminAt` timestamp;\nALTER TABLE `accommodation_rent_payments` ADD `trusteeVerifiedBy` varchar(200);\nALTER TABLE `accommodation_rent_payments` ADD `trusteeVerifiedAt` timestamp;\nALTER TABLE `income_records` ADD `checkedByFaridAt` timestamp;\nALTER TABLE `income_records` ADD `checkedByMuminAt` timestamp;\nALTER TABLE `income_records` ADD `trusteeVerifiedBy` varchar(200);\nALTER TABLE `income_records` ADD `trusteeVerifiedAt` timestamp;\nALTER TABLE `income_records` ADD `rentalDateFrom` date;\nALTER TABLE `income_records` ADD `rentalDateTo` date;\nALTER TABLE `income_records` ADD `evidenceUrl2` text;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2433
+}

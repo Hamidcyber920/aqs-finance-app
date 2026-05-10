@@ -267,6 +267,13 @@
       "when": 1778433448617,
       "tag": "0037_medical_hitman",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1778435521929,
+      "tag": "0038_lean_karma",
+      "breakpoints": true
     }
   ]
 }

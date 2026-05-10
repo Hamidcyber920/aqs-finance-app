@@ -584,6 +584,9 @@ function TenantDetailPanel({ tenant, onClose, onRefresh }: { tenant: any; onClos
     onSuccess: () => { toast.success("Marked as overdue"); refetchPayments(); },
     onError: (e) => toast.error(e.message),
   });
+  const checkFaridMutation = trpc.accommodation.checkFarid.useMutation({ onSuccess: () => refetchPayments(), onError: (e) => toast.error(e.message) });
+  const checkMuminMutation = trpc.accommodation.checkMumin.useMutation({ onSuccess: () => refetchPayments(), onError: (e) => toast.error(e.message) });
+  const trusteeVerifyMutation = trpc.accommodation.trusteeVerify.useMutation({ onSuccess: () => refetchPayments(), onError: (e) => toast.error(e.message) });
 
   const formatDate = (d: any) => d ? new Date(d).toLocaleDateString("en-GB") : "—";
   const formatCurrency = (v: any) => v ? `£${parseFloat(v).toFixed(2)}` : "—";
@@ -764,6 +767,44 @@ function TenantDetailPanel({ tenant, onClose, onRefresh }: { tenant: any; onClos
                     )}
                   </div>
                 )}
+                {/* Authorisation tick boxes — full width row below payment info */}
+                <div style={{ width: "100%", background: "rgba(99,91,255,0.06)", border: "1px solid rgba(99,91,255,0.2)", borderRadius: 8, padding: "8px 12px" }}>
+                  <span style={{ fontSize: 10, color: "#a5b4fc", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 6 }}>Authorisation</span>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {/* Farid Ahmed */}
+                    <div onClick={() => checkFaridMutation.mutate({ id: p.id, undo: !!p.checkedByFaridAt })} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, background: p.checkedByFaridAt ? "rgba(0,255,194,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${p.checkedByFaridAt ? "rgba(0,255,194,0.4)" : "rgba(255,255,255,0.08)"}`, cursor: "pointer", userSelect: "none" }}>
+                      <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${p.checkedByFaridAt ? T.mint : "rgba(255,255,255,0.25)"}`, background: p.checkedByFaridAt ? T.mint : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {p.checkedByFaridAt && <svg width="9" height="7" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#081526" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: p.checkedByFaridAt ? T.white : "rgba(255,255,255,0.5)", fontWeight: p.checkedByFaridAt ? 600 : 400 }}>Farid Ahmed</span>
+                        {p.checkedByFaridAt && <span style={{ display: "block", fontSize: 10, color: T.mint }}>{new Date(p.checkedByFaridAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                      </div>
+                    </div>
+                    {/* Mumin Khan */}
+                    <div onClick={() => checkMuminMutation.mutate({ id: p.id, undo: !!p.checkedByMuminAt })} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, background: p.checkedByMuminAt ? "rgba(0,255,194,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${p.checkedByMuminAt ? "rgba(0,255,194,0.4)" : "rgba(255,255,255,0.08)"}`, cursor: "pointer", userSelect: "none" }}>
+                      <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${p.checkedByMuminAt ? T.mint : "rgba(255,255,255,0.25)"}`, background: p.checkedByMuminAt ? T.mint : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {p.checkedByMuminAt && <svg width="9" height="7" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#081526" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      </div>
+                      <div>
+                        <span style={{ fontSize: 11, color: p.checkedByMuminAt ? T.white : "rgba(255,255,255,0.5)", fontWeight: p.checkedByMuminAt ? 600 : 400 }}>Mumin Khan</span>
+                        {p.checkedByMuminAt && <span style={{ display: "block", fontSize: 10, color: T.mint }}>{new Date(p.checkedByMuminAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                      </div>
+                    </div>
+                    {/* Trustee: Dr Abdul Hamid / Galib Khan */}
+                    {(["Dr Abdul Hamid", "Galib Khan"] as const).map(name => (
+                      <div key={name} onClick={() => trusteeVerifyMutation.mutate({ id: p.id, trusteeName: p.trusteeVerifiedBy === name ? null : name })} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 6, background: p.trusteeVerifiedBy === name ? "rgba(99,91,255,0.12)" : "rgba(255,255,255,0.03)", border: `1px solid ${p.trusteeVerifiedBy === name ? "rgba(99,91,255,0.5)" : "rgba(255,255,255,0.08)"}`, cursor: "pointer", userSelect: "none" }}>
+                        <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${p.trusteeVerifiedBy === name ? "#a5b4fc" : "rgba(255,255,255,0.25)"}`, background: p.trusteeVerifiedBy === name ? "#635BFF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {p.trusteeVerifiedBy === name && <svg width="9" height="7" viewBox="0 0 11 8" fill="none"><path d="M1 4L4 7L10 1" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                        </div>
+                        <div>
+                          <span style={{ fontSize: 11, color: p.trusteeVerifiedBy === name ? T.white : "rgba(255,255,255,0.5)", fontWeight: p.trusteeVerifiedBy === name ? 600 : 400 }}>{name}</span>
+                          {p.trusteeVerifiedBy === name && p.trusteeVerifiedAt && <span style={{ display: "block", fontSize: 10, color: "#a5b4fc" }}>{new Date(p.trusteeVerifiedAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
