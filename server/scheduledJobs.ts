@@ -260,6 +260,64 @@ async function sendMonthlyTrusteeReport() {
   }
 }
 
+// ─── Birthday Alert ──────────────────────────────────────────────────────────
+
+async function sendBirthdayAlerts() {
+  console.log("[Scheduled] Running birthday alert check...");
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const { trustees } = await import("../drizzle/schema");
+    const all = await db.select().from(trustees);
+    const now = new Date();
+    const todayMonth = now.getMonth() + 1; // 1-12
+    const todayDay = now.getDate();
+
+    const birthdayTrustees = all.filter((t: any) => {
+      if (!t.dateOfBirth || !t.email || t.isActive === false) return false;
+      const dob = new Date(t.dateOfBirth);
+      return dob.getMonth() + 1 === todayMonth && dob.getDate() === todayDay;
+    });
+
+    if (birthdayTrustees.length === 0) {
+      console.log("[Scheduled] No birthdays today.");
+      return;
+    }
+
+    for (const trustee of birthdayTrustees) {
+      const firstName = (trustee.fullName ?? "").split(" ").find((p: string) => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? trustee.fullName ?? "Trustee";
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <div style="background:#1a4731;padding:24px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
+            <p style="color:#c9a84c;margin:4px 0 0;">Birthday Mubarak 🎁</p>
+          </div>
+          <div style="padding:24px;background:#fff;">
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p style="font-size:18px;font-weight:700;color:#1a4731;">JazakAllahu Khayran — Wishing you a blessed birthday!</p>
+            <p>May Allah (SWT) bless you with good health, happiness, barakah, and continued success in your service to the community. May this year bring you and your family immense joy and reward in both this world and the Hereafter.</p>
+            <p>The Prophet (PBUH) said: <em>"Whoever is not grateful to people is not grateful to Allah."</em></p>
+            <p>With warm Islamic greetings and du'as,<br><strong>The AQ Society Team</strong></p>
+          </div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
+            JazakAllahu Khayran — Abdullah Quilliam Society
+          </div>
+        </div>`;
+
+      await sendEmail(
+        trustee.email!,
+        trustee.fullName ?? firstName,
+        `Birthday Mubarak, ${firstName}! 🎁 — AQ Society`,
+        html
+      )
+        .then(() => console.log(`[Scheduled] Birthday email sent to ${trustee.email}`))
+        .catch(e => console.error(`[Scheduled] Failed to send birthday email to ${trustee.email}:`, e));
+    }
+  } catch (e) {
+    console.error("[Scheduled] Birthday alert failed:", e);
+  }
+}
+
 // ─── Register cron jobs ───────────────────────────────────────────────────────
 
 export function registerScheduledJobs() {
@@ -274,8 +332,13 @@ export function registerScheduledJobs() {
     sendMonthlyTrusteeReport().catch(console.error);
   }, { timezone: "Europe/London" });
 
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00)");
+  // Daily at 09:00 UK time — birthday alerts
+  cron.schedule("0 9 * * *", () => {
+    sendBirthdayAlerts().catch(console.error);
+  }, { timezone: "Europe/London" });
+
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00)");
 }
 
 // Export for manual trigger from tRPC (admin use)
-export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport };
+export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };

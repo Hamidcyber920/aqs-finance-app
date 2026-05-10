@@ -31,7 +31,7 @@ import {
   getPayrollRecords, createPayrollRecord, updatePayrollRecord, getStaffProfile, upsertStaffProfile,
   getDashboardStats,
 } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { loanRepayments, commChannels, commMessages } from "../drizzle/schema";
 // sendGmail is defined locally in this file (line ~123)
 
@@ -3313,6 +3313,31 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           body: input.body,
           isRead: false,
         });
+        return { success: true };
+      }),
+
+    getUnreadCounts: protectedProcedure
+      .query(async () => {
+        const db = await getDb();
+        if (!db) return {};
+        const rows = await db
+          .select({ channelId: commMessages.channelId, count: sql<number>`COUNT(*)` })
+          .from(commMessages)
+          .where(and(eq(commMessages.direction, 'received'), eq(commMessages.isRead, false)))
+          .groupBy(commMessages.channelId);
+        const result: Record<number, number> = {};
+        rows.forEach(r => { result[r.channelId] = Number(r.count); });
+        return result;
+      }),
+
+    markChannelRead: protectedProcedure
+      .input(z.object({ channelId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { success: false };
+        await db.update(commMessages)
+          .set({ isRead: true })
+          .where(and(eq(commMessages.channelId, input.channelId), eq(commMessages.direction, 'received')));
         return { success: true };
       }),
   }),

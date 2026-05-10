@@ -694,3 +694,11 @@
 - [x] Add whatsappGroupLink column to comm_channels table
 - [x] Store Trustees group link: https://chat.whatsapp.com/Lcrqxr7HpDTH6PkEPFflic?mode=gi_t
 - [x] Show "Open WhatsApp Group" button in channel header and WhatsApp tab when link is set
+
+## Next Steps Implementation (May 2026)
+- [x] Unread badge: add getUnreadCounts tRPC query returning per-channel unread count
+- [x] Unread badge: add markChannelRead mutation to clear unread on channel open
+- [x] Unread badge: show red dot/count on channel sidebar items
+- [x] Send Monthly Report Now: add manual trigger button on Qarde Hasan Loans page
+- [x] Send Monthly Report Now: tRPC procedure to fire the monthly trustee summary email on demand
+- [x] Birthday alerts: daily cron job checks trustees DOB, sends JazakAllahu Khayran email on birthday

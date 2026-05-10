@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Plus, BookOpen, Clock, CheckCircle2,
+  Plus, BookOpen, Clock, CheckCircle2, Mail,
   ChevronRight, Download, Send, AlertCircle, Users, TrendingDown, BarChart2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,11 @@ export default function LoansPage() {
   const approveMutation = trpc.loans.approveAdmin.useMutation({
     onSuccess: () => { toast.success("Loan approved"); refetch(); },
     onError: (e) => toast.error(e.message),
+  });
+
+  const monthlyReportMutation = trpc.loans.triggerMonthlyReport.useMutation({
+    onSuccess: () => toast.success("Monthly trustee report sent successfully"),
+    onError: (e) => toast.error(`Failed to send report: ${e.message}`),
   });
 
   const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<any>({
@@ -230,10 +235,19 @@ export default function LoansPage() {
             </h1>
             <p style={{ fontSize: 13, color: T.muted, margin: "4px 0 0" }}>Interest-free loans — Amanah of the community</p>
           </div>
-          <Button onClick={() => setOpen(true)}
-            style={{ background: `linear-gradient(135deg,${T.purple},#4f46e5)`, color: T.white, border: "none", borderRadius: 12, padding: "10px 20px", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
-            <Plus size={16} /> New Application
-          </Button>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {isAdmin&&(
+              <Button onClick={() => monthlyReportMutation.mutate()}
+                disabled={monthlyReportMutation.isPending}
+                style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 12, padding: "10px 16px", fontWeight: 700, display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <Mail size={15} /> {monthlyReportMutation.isPending ? "Sending…" : "Send Monthly Report"}
+              </Button>
+            )}
+            <Button onClick={() => setOpen(true)}
+              style={{ background: `linear-gradient(135deg,${T.purple},#4f46e5)`, color: T.white, border: "none", borderRadius: 12, padding: "10px 20px", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+              <Plus size={16} /> New Application
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}

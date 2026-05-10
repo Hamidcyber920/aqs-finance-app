@@ -499,6 +499,10 @@ export default function CommunicationsPage() {
   const {data:messages=[],refetch:refetchMessages} = trpc.comms.listMessages.useQuery(
     {channelId:selectedChannelId!},{enabled:selectedChannelId!==null}
   );
+  const {data:unreadCounts={},refetch:refetchUnread} = trpc.comms.getUnreadCounts.useQuery(undefined,{refetchInterval:30000});
+  const markReadMutation = trpc.comms.markChannelRead.useMutation({
+    onSuccess:()=>refetchUnread(),
+  });
   const updateChannelMutation = trpc.comms.updateChannel.useMutation({
     onSuccess:()=>{toast.success("Channel updated");setEditingChannel(null);refetchChannels();},
     onError:(e)=>toast.error(e.message),
@@ -535,6 +539,8 @@ export default function CommunicationsPage() {
     setSelectedChannelId(id);
     setShowPanel(true);
     setShowCompose(false);
+    // Mark incoming messages as read for this channel
+    markReadMutation.mutate({ channelId: id });
   };
 
   return (
@@ -599,6 +605,11 @@ export default function CommunicationsPage() {
                       style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:10,cursor:"pointer",background:isSelected?"rgba(99,91,255,0.18)":"transparent",border:`1px solid ${isSelected?"rgba(99,91,255,0.35)":"transparent"}`,transition:"all 0.15s"}}>
                       <span style={{color:ch.color,flexShrink:0}}>{CHANNEL_ICONS[ch.icon]??<Hash size={14}/>}</span>
                       <span style={{fontSize:13,fontWeight:isSelected?700:500,color:isSelected?T.white:T.muted,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ch.name}</span>
+                      {(unreadCounts as Record<number,number>)[ch.id]>0&&(
+                        <span style={{minWidth:18,height:18,borderRadius:9,background:"#EF4444",color:"#fff",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",flexShrink:0}}>
+                          {(unreadCounts as Record<number,number>)[ch.id]}
+                        </span>
+                      )}
                       {ch.isEditable&&(
                         <button onClick={e=>{e.stopPropagation();setEditingChannel(ch.id);setEditName(ch.name);setEditDesc(ch.description??"");}}
                           style={{width:22,height:22,borderRadius:6,background:"transparent",border:"none",color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.6}}>
