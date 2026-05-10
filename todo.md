@@ -595,7 +595,7 @@
 - [x] Update loan agreement PDF: Islamic tone, Amanah language, Hadith anchor, Respected Donor/Lender
 - [x] Update WhatsApp messages: Islamic greeting, Virtuous Cycle framing, JazakAllah Khair sign-off
 - [x] Update email templates: Barakah opening prayer, Amanah language, Project Milestone framing
-- [ ] Add Sadaqah Jariyah conversion option on loan detail page
+- [x] Add Sadaqah Jariyah conversion option on loan detail page (implemented as Convert to Waqf feature)
 - [x] Replace "Payment Due" with "Project Milestone Update" in reminder messages
 
 ## Content Templates & Waqf Conversion (May 2026 — round 13)
@@ -606,3 +606,10 @@
 - [x] Backend: convertToWaqf procedure — marks loan as waqf, generates Certificate of Waqf PDF, emails lender
 - [x] Frontend: "Convert to Waqf / Donation" button on LoanDetail page (one-click, with confirmation dialog)
 - [x] Frontend: Show Waqf badge + Certificate download link when loan is converted
+
+## Loans Page Summary Update (May 2026 — round 14)
+- [x] Remove Trustees stat card from Loans summary page
+- [x] Add Total Outstanding (£) stat card
+- [x] Add Number of Donors stat card
+- [x] Add repayment forecast breakdown: due in next 4 weeks, 2 months, 3 months, 6 months, 12 months, 15 months, 2 years, 5 years
+- [x] Backend: update loans summary query to return totalOutstanding, donorCount, and forecast buckets (computed client-side from listWithSummary data)

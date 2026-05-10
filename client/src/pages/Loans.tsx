@@ -7,8 +7,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Plus, BookOpen, Clock, CheckCircle2, XCircle,
-  ChevronRight, Download, Send, AlertCircle, Users
+  Plus, BookOpen, Clock, CheckCircle2,
+  ChevronRight, Download, Send, AlertCircle, Users, TrendingDown, BarChart2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,7 +78,6 @@ export default function LoansPage() {
   const [termUnit, setTermUnit] = useState<"months" | "years">("months");
 
   const { data, refetch } = trpc.loans.listWithSummary.useQuery({});
-  const { data: trustees } = trpc.trustees.list.useQuery(undefined, { enabled: isAdmin });
 
   const createMutation = trpc.loans.create.useMutation({
     onSuccess: () => { toast.success("Loan application submitted"); setOpen(false); refetch(); reset(); },
@@ -106,6 +105,68 @@ export default function LoansPage() {
   const activeLoans = loans.filter((l: any) => l.status === "active" || l.status === "approved").length;
   const pendingLoans = loans.filter((l: any) => l.status === "pending").length;
 
+  // Total outstanding across all active loans
+  const totalOutstanding = loans.reduce((s: number, l: any) => {
+    const outstanding = l._summary?.outstanding ?? Math.max(0, Number(l.amount ?? 0) - Number(l.totalRepaid ?? 0));
+    return s + outstanding;
+  }, 0);
+
+  // Unique donor count (unique borrowerName or borrowerEmail)
+  const donorCount = new Set(loans.map((l: any) => l.borrowerEmail || l.borrowerName)).size;
+
+  // Repayment forecast buckets: for each active loan, distribute remaining repayments across months
+  const now = new Date();
+  const forecastBuckets = {
+    "4 weeks": 0,
+    "2 months": 0,
+    "3 months": 0,
+    "6 months": 0,
+    "12 months": 0,
+    "15 months": 0,
+    "2 years": 0,
+    "5 years": 0,
+  };
+  const bucketMonths: [string, number][] = [
+    ["4 weeks", 1],
+    ["2 months", 2],
+    ["3 months", 3],
+    ["6 months", 6],
+    ["12 months", 12],
+    ["15 months", 15],
+    ["2 years", 24],
+    ["5 years", 60],
+  ];
+  loans.forEach((l: any) => {
+    if (l.status !== "active" && l.status !== "approved") return;
+    const s = l._summary ?? {};
+    const outstanding = s.outstanding ?? Math.max(0, Number(l.amount ?? 0) - Number(l.totalRepaid ?? 0));
+    if (outstanding <= 0) return;
+    const termMonths = s.termMonths ?? (l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6));
+    const monthly = Number(l.amount ?? 0) / termMonths;
+    const startDate = l.startDate ? new Date(l.startDate) : new Date(l.createdAt ?? now);
+    // Distribute future monthly payments into buckets
+    for (let m = 1; m <= termMonths; m++) {
+      const dueDate = new Date(startDate);
+      dueDate.setMonth(dueDate.getMonth() + m);
+      if (dueDate <= now) continue; // already passed
+      const monthsFromNow = (dueDate.getFullYear() - now.getFullYear()) * 12 + (dueDate.getMonth() - now.getMonth());
+      // Add to the smallest bucket that covers this month
+      for (const [label, maxMonths] of bucketMonths) {
+        if (monthsFromNow <= maxMonths) {
+          (forecastBuckets as any)[label] += monthly;
+          break;
+        }
+      }
+    }
+  });
+  // Make buckets cumulative (each bucket = total due within that period from now)
+  const cumulativeForecast: [string, number][] = [];
+  let runningTotal = 0;
+  for (const [label] of bucketMonths) {
+    runningTotal += (forecastBuckets as any)[label];
+    cumulativeForecast.push([label, runningTotal]);
+  }
+
   return (
     <>
       <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
@@ -126,11 +187,61 @@ export default function LoansPage() {
         </div>
 
         {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 28 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
           <StatCard label="Total Loaned" value={`£${totalLoaned.toLocaleString()}`} icon={BookOpen} color={T.purple} />
+          <StatCard label="Total Outstanding" value={`£${totalOutstanding.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingDown} color="#f87171" />
           <StatCard label="Active Loans" value={activeLoans} icon={CheckCircle2} color={T.mint} />
+          <StatCard label="Number of Donors" value={donorCount} icon={Users} color="#a78bfa" />
           <StatCard label="Pending Review" value={pendingLoans} icon={Clock} color="#fbbf24" />
-          <StatCard label="Trustees" value={trustees?.length ?? 0} icon={Users} color="#a78bfa" />
+        </div>
+
+        {/* Repayment Forecast */}
+        <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: 24, marginBottom: 20, animation: "fadeUp 0.45s ease 100ms both" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <BarChart2 size={16} style={{ color: T.mint }} />
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: T.white, margin: 0 }}>Repayment Forecast</h2>
+            <span style={{ fontSize: 11, color: T.muted, marginLeft: 4 }}>Cumulative amount due back to AQS within each period</span>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
+              <thead>
+                <tr>
+                  {["Period", "Due by", "Cumulative Amount", "% of Outstanding"].map(h => (
+                    <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 16px 10px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cumulativeForecast.map(([label, amount], i) => {
+                  const pct = totalOutstanding > 0 ? (amount / totalOutstanding) * 100 : 0;
+                  const dueDate = new Date(now);
+                  const months = bucketMonths[i]?.[1] ?? 1;
+                  dueDate.setMonth(dueDate.getMonth() + months);
+                  const isHighlight = label === "12 months" || label === "6 months";
+                  return (
+                    <tr key={label}>
+                      <td style={{ padding: "10px 16px 10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 13, fontWeight: isHighlight ? 700 : 500, color: isHighlight ? T.white : T.muted }}>{label}</td>
+                      <td style={{ padding: "10px 16px 10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12, color: T.muted }}>{dueDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</td>
+                      <td style={{ padding: "10px 16px 10px 0", borderBottom: `1px solid ${T.border}`, fontSize: 14, fontWeight: 700, color: amount > 0 ? T.mint : T.muted }}>
+                        £{amount.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td style={{ padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.06)", maxWidth: 120 }}>
+                            <div style={{ height: "100%", borderRadius: 3, background: `linear-gradient(90deg,${T.mint},#00DDB0)`, width: `${Math.min(100, pct)}%`, transition: "width 0.4s ease" }} />
+                          </div>
+                          <span style={{ fontSize: 11, color: T.muted, minWidth: 36 }}>{pct.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {cumulativeForecast.every(([, v]) => v === 0) && (
+                  <tr><td colSpan={4} style={{ textAlign: "center", padding: "24px 0", color: T.muted, fontSize: 13 }}>No active loans with outstanding balances</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Loans table */}
