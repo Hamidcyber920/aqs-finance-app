@@ -52,9 +52,10 @@ function formatTime(ts: string|Date) {
   return new Date(ts).toLocaleString("en-GB",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});
 }
 function normaliseUkPhone(phone: string) {
-  const raw = (phone??"").replace(/[\s\-().]/g,"");
-  if (raw.startsWith("+")) return raw.slice(1);
-  if (raw.startsWith("44")) return raw;
+  const raw = (phone??"").replace(/[\s\-().+]/g,"");
+  // Already has country code 44 (e.g. 447740930779)
+  if (raw.startsWith("44") && raw.length >= 12) return raw;
+  // Remove leading zero and prepend 44
   return `44${raw.replace(/^0/,"")}`;
 }
 
@@ -383,14 +384,17 @@ function ComposePanel({
                 onClick={()=>{
                   if(!body.trim()){toast.error("Write a message body first");return;}
                   const msg=buildWaBody();
-                  const link=`${channel.whatsappGroupLink}?text=${encodeURIComponent(msg)}`;
-                  window.open(link,"_blank","noopener,noreferrer");
+                  // WhatsApp group invite links don't support ?text= param.
+                  // Best approach: copy message to clipboard, then open group so user can paste.
+                  navigator.clipboard.writeText(msg).catch(()=>{});
+                  toast.success("Message copied! Opening group — paste to send.");
+                  setTimeout(()=>window.open(channel.whatsappGroupLink,"_blank","noopener,noreferrer"),400);
                   logWaMutation.mutate({channelId:channel.id,recipients:waMembers.map((t:any)=>({name:t.fullName,phone:t.phone})),message:msg});
                   onSent();
                 }}
                 style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:"14px 0",borderRadius:12,background:body.trim()?"linear-gradient(135deg,#25d366,#128C7E)":"rgba(37,211,102,0.15)",border:"none",color:body.trim()?T.white:"rgba(37,211,102,0.5)",fontWeight:700,fontSize:14,cursor:body.trim()?"pointer":"not-allowed",transition:"all 0.2s"}}>
                 <MessageSquare size={18}/>
-                Send to Trustees Group
+                Copy Message &amp; Open Group
               </button>
             </div>
           )}

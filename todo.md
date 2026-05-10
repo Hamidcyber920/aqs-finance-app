@@ -723,3 +723,6 @@
 - [x] Add "Send to Group" bulk button that opens WA group link with pre-filled message
 - [x] Replace always-visible recipient list with toggle chips (tap to select, then Open WhatsApp button appears)
 - [x] Improve overall WhatsApp tab UI layout and spacing
+
+## WhatsApp Message Loading Fix (May 2026 #6)
+- [x] Fix wa.me URL so message text loads correctly in WhatsApp for both group and individual sends
