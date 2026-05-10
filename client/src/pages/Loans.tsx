@@ -54,9 +54,9 @@ function Badge({ status }: { status: string }) {
   );
 }
 
-function StatCard({ label, value, icon: Icon, color }: any) {
+function StatCard({ label, value, icon: Icon, color, onClick, active }: any) {
   return (
-    <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16 }}>
+    <div onClick={onClick} style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${active ? color : T.border}`, borderRadius: 16, padding: "20px 24px", display: "flex", alignItems: "center", gap: 16, cursor: onClick ? "pointer" : "default", transition: "border-color 0.2s", boxShadow: active ? `0 0 0 2px ${color}33` : "none" }}>
       <div style={{ width: 44, height: 44, borderRadius: 12, background: `${color}22`, border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Icon size={20} style={{ color }} />
       </div>
@@ -77,6 +77,7 @@ export default function LoansPage() {
   const [open, setOpen] = useState(false);
   const [termUnit, setTermUnit] = useState<"months" | "years">("months");
   const [forecastDrilldown, setForecastDrilldown] = useState<{ label: string; donors: { name: string; email: string; amount: number; dueDate: Date }[] } | null>(null);
+  const [tableFilter, setTableFilter] = useState<"all" | "active" | "pending" | "donors">("all");
 
   const { data, refetch } = trpc.loans.listWithSummary.useQuery({});
 
@@ -252,11 +253,16 @@ export default function LoansPage() {
 
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
-          <StatCard label="Total Loaned" value={`£${totalLoaned.toLocaleString()}`} icon={BookOpen} color={T.purple} />
-          <StatCard label="Total Outstanding" value={`£${totalOutstanding.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingDown} color="#f87171" />
-          <StatCard label="Active Loans" value={activeLoans} icon={CheckCircle2} color={T.mint} />
-          <StatCard label="Number of Donors" value={donorCount} icon={Users} color="#a78bfa" />
-          <StatCard label="Pending Review" value={pendingLoans} icon={Clock} color="#fbbf24" />
+          <StatCard label="Total Loaned" value={`£${totalLoaned.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={BookOpen} color={T.purple}
+            onClick={() => setTableFilter(f => f === "all" ? "all" : "all")} active={tableFilter === "all"} />
+          <StatCard label="Total Outstanding" value={`£${totalOutstanding.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingDown} color="#f87171"
+            onClick={() => setTableFilter(f => f === "all" ? "all" : "all")} active={false} />
+          <StatCard label="Active Loans" value={activeLoans} icon={CheckCircle2} color={T.mint}
+            onClick={() => setTableFilter(f => f === "active" ? "all" : "active")} active={tableFilter === "active"} />
+          <StatCard label="Number of Donors" value={donorCount} icon={Users} color="#a78bfa"
+            onClick={() => setTableFilter(f => f === "donors" ? "all" : "donors")} active={tableFilter === "donors"} />
+          <StatCard label="Pending Review" value={pendingLoans} icon={Clock} color="#fbbf24"
+            onClick={() => setTableFilter(f => f === "pending" ? "all" : "pending")} active={tableFilter === "pending"} />
         </div>
 
         {/* Repayment Forecast */}
@@ -370,8 +376,23 @@ export default function LoansPage() {
         )}
 
         {/* Loans table */}
+        {(() => {
+          const filteredLoans = tableFilter === "active"
+            ? loans.filter((l: any) => l.status === "active" || l.status === "approved")
+            : tableFilter === "pending"
+            ? loans.filter((l: any) => l.status === "pending")
+            : tableFilter === "donors"
+            ? Array.from(new Map(loans.map((l: any) => [l.borrowerEmail || l.borrowerName, l])).values())
+            : loans;
+          const filterLabel = tableFilter === "active" ? "Active Loans" : tableFilter === "pending" ? "Pending Review" : tableFilter === "donors" ? "Donors" : "All Loans";
+          return (
         <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: 24, animation: "fadeUp 0.5s ease 200ms both" }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: T.white, margin: "0 0 20px", letterSpacing: "-0.01em" }}>Loan Register</h2>
+          <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: T.white, margin: 0, letterSpacing: "-0.01em" }}>Loan Register — {filterLabel}</h2>
+            {tableFilter !== "all" && (
+              <button onClick={() => setTableFilter("all")} style={{ fontSize:11,color:T.muted,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,padding:"4px 10px",cursor:"pointer" }}>Show All</button>
+            )}
+          </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
               <thead>
@@ -382,9 +403,9 @@ export default function LoansPage() {
                 </tr>
               </thead>
               <tbody>
-                {loans.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: T.muted, fontSize: 14 }}>No loan applications yet</td></tr>
-                ) : loans.map((l: any) => {
+                {filteredLoans.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: T.muted, fontSize: 14 }}>{tableFilter !== "all" ? "No loans match this filter" : "No loan applications yet"}</td></tr>
+                ) : filteredLoans.map((l: any) => {
                   const s = l._summary ?? {};
                   const termMonths = s.termMonths ?? (l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6));
                   const monthly = (Number(l.amount) / termMonths).toFixed(2);
@@ -405,7 +426,7 @@ export default function LoansPage() {
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: "12px 12px 12px 0", fontSize: 14, fontWeight: 700, color: T.mint, borderBottom: `1px solid ${T.border}` }}>£{Number(l.amount).toLocaleString()}</td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 14, fontWeight: 700, color: T.mint, borderBottom: `1px solid ${T.border}` }}>£{Number(l.amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td style={{ padding: "12px 12px 12px 0", fontSize: 13, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
                         {l.termValue} {l.termUnit ?? "months"}
                       </td>
@@ -433,6 +454,8 @@ export default function LoansPage() {
             </table>
           </div>
         </div>
+          );
+        })()}
 
         {/* New loan dialog */}
         <Dialog open={open} onOpenChange={setOpen}>
