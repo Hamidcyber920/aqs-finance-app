@@ -1,0 +1,91 @@
+{
+  "query": "SELECT id, fullName, email, phone, role, notes, isActive FROM trustees ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, fullName, email, phone, role, notes, isActive FROM trustees ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "fullName": "Abdul Hamid",
+      "email": "ahamid4@gmail.com",
+      "phone": "+44 7958465328",
+      "role": "Trustee",
+      "notes": "Chair / super admin ",
+      "isActive": "1"
+    },
+    {
+      "id": "2",
+      "fullName": "Ajmal Masroor",
+      "email": "",
+      "phone": "+44 07956 987398",
+      "role": "Trustee",
+      "notes": "",
+      "isActive": "1"
+    },
+    {
+      "id": "30001",
+      "fullName": "Dr Abdul Hamid",
+      "email": "ahamid4@gmail.com",
+      "phone": "07958465328",
+      "role": "Chair / Trustee",
+      "notes": "Chair of Trustees. Superadmin.",
+      "isActive": "1"
+    },
+    {
+      "id": "30002",
+      "fullName": "Mr Galib Khan",
+      "email": "khan.galib@gmail.com",
+      "phone": "07900413038",
+      "role": "Trustee",
+      "notes": "NULL",
+      "isActive": "1"
+    },
+    {
+      "id": "30003",
+      "fullName": "Mr Ajmal Masroor",
+      "email": "ajmalmasroor40@gmail.com",
+      "phone": "07956987398",
+      "role": "Trustee",
+      "notes": "NULL",
+      "isActive": "1"
+    },
+    {
+      "id": "30004",
+      "fullName": "Dr Altaf Khattak",
+      "email": "altafqadir901@yahoo.com",
+      "phone": "07740930779",
+      "role": "Trustee",
+      "notes": "NULL",
+      "isActive": "1"
+    },
+    {
+      "id": "30005",
+      "fullName": "Mumin Khan",
+      "email": "meds.mumin@gmail.com",
+      "phone": "07949921692",
+      "role": "Senior Manager",
+      "notes": "Senior Manager — Finance lead for weekly repayment alerts.",
+      "isActive": "1"
+    },
+    {
+      "id": "30006",
+      "fullName": "Mr Farid Ahmed",
+      "email": "fariddixy@gmail.com",
+      "phone": "07477163761",
+      "role": "Deputy Manager",
+      "notes": "Deputy Manager.",
+      "isActive": "1"
+    },
+    {
+      "id": "30007",
+      "fullName": "Mr Atik Rahman",
+      "email": "NULL",
+      "phone": "07742962565",
+      "role": "Deputy Manager (Restaurant)",
+      "notes": "Restaurant / Deputy. No email on file.",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\temail\tphone\trole\tnotes\tisActive\n1\tAbdul Hamid\tahamid4@gmail.com\t+44 7958465328\tTrustee\tChair / super admin \t1\n2\tAjmal Masroor\t\t+44 07956 987398\tTrustee\t\t1\n30001\tDr Abdul Hamid\tahamid4@gmail.com\t07958465328\tChair / Trustee\tChair of Trustees. Superadmin.\t1\n30002\tMr Galib Khan\tkhan.galib@gmail.com\t07900413038\tTrustee\tNULL\t1\n30003\tMr Ajmal Masroor\tajmalmasroor40@gmail.com\t07956987398\tTrustee\tNULL\t1\n30004\tDr Altaf Khattak\taltafqadir901@yahoo.com\t07740930779\tTrustee\tNULL\t1\n30005\tMumin Khan\tmeds.mumin@gmail.com\t07949921692\tSenior Manager\tSenior Manager — Finance lead for weekly repayment alerts.\t1\n30006\tMr Farid Ahmed\tfariddixy@gmail.com\t07477163761\tDeputy Manager\tDeputy Manager.\t1\n30007\tMr Atik Rahman\tNULL\t07742962565\tDeputy Manager (Restaurant)\tRestaurant / Deputy. No email on file.\t1\n",
+  "stderr": "",
+  "execution_time_ms": 264
+}

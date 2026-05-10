@@ -625,3 +625,11 @@
 - [x] Monthly trustee report by email and WhatsApp: loan statuses summary sent to all trustees
 - [x] Schedule weekly email job (every Monday)
 - [x] Schedule monthly report job (1st of each month)
+
+## Organisation Page Fix (May 2026 — round 16)
+- [x] Clear duplicate/incorrect trustee records from DB
+- [x] Re-seed all 7 contacts with correct full names, roles, emails, phones (no duplicates)
+- [x] Fix org chart: trustees show correct names (not "?"), Mumin Khan shows as Senior Manager not Trustee
+- [x] Ensure fullName column is used for display (not username)
+- [x] Phone numbers visible on each org chart card
+- [x] Organisation page accessible from any part of app for communications lookup
