@@ -3695,6 +3695,67 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         await db.delete(commTemplates).where(eq(commTemplates.id, input.id));
         return { success: true };
       }),
+    /** Update the category on a template */
+    updateTemplateCategory: adminProcedure
+      .input(z.object({ id: z.number(), category: z.string().min(1) }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.update(commTemplates).set({ category: input.category }).where(eq(commTemplates.id, input.id));
+        return { success: true };
+      }),
+    /** Update the sendStatus of a message (pending → sent/failed) */
+    updateSentStatus: adminProcedure
+      .input(z.object({ messageId: z.number(), sendStatus: z.enum(['pending', 'sent', 'failed']) }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.update(commMessages).set({ sendStatus: input.sendStatus }).where(eq(commMessages.id, input.messageId));
+        return { success: true };
+      }),
+    /** Update the replyStatus of a sent message */
+    updateReplyStatus: protectedProcedure
+      .input(z.object({ messageId: z.number(), replyStatus: z.enum(['awaiting', 'replied', 'none']) }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const vals: any = { replyStatus: input.replyStatus };
+        if (input.replyStatus === 'replied') vals.repliedAt = new Date();
+        await db.update(commMessages).set(vals).where(eq(commMessages.id, input.messageId));
+        return { success: true };
+      }),
+    /** Schedule a message for later send — inserts with sendStatus=pending and scheduledAt set */
+    scheduleMessage: adminProcedure
+      .input(z.object({
+        channelId: z.number(),
+        subject: z.string().optional(),
+        body: z.string().optional(),
+        fromName: z.string().optional(),
+        fromEmail: z.string().optional(),
+        toEmailsJson: z.string().optional(),
+        whatsappNumbersJson: z.string().optional(),
+        scheduledAt: z.string(), // ISO string
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.insert(commMessages).values({
+          channelId: input.channelId,
+          direction: 'sent',
+          fromName: input.fromName ?? ctx.user.name,
+          fromEmail: input.fromEmail ?? ctx.user.email ?? null,
+          toEmailsJson: input.toEmailsJson ?? null,
+          whatsappNumbersJson: input.whatsappNumbersJson ?? null,
+          subject: input.subject ?? null,
+          body: input.body ?? null,
+          isRead: true,
+          isReplied: false,
+          scheduledAt: new Date(input.scheduledAt),
+          sendStatus: 'pending',
+          replyStatus: 'awaiting',
+        } as any);
+        return { success: true };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

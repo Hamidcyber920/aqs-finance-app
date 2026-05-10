@@ -793,27 +793,27 @@
 - [x] Trustees channel: allow adding new trustees and managers to the channel member list
 
 ## Communications — Template Categories, Reply Tracking & Scheduled Sends (May 2026)
-- [ ] DB: add category column to comm_templates (Friday Comms, Urgent, Payment, General)
-- [ ] DB: add scheduledAt (timestamp nullable) and sendStatus (pending/sent/failed) to comm_messages
-- [ ] Backend: update templates.save/list to include category; add comms.updateSentStatus procedure
-- [ ] Backend: scheduled send job — every minute check comm_messages where scheduledAt <= now and sendStatus=pending, send via Gmail/WA
-- [ ] Compose: template picker shows category filter tabs; saving a template prompts for category
-- [ ] Sent History: each card shows "Awaiting Reply" / "Replied" badge; tap to toggle status
-- [ ] Compose: "Send Later" button opens date/time picker; queues message with scheduledAt timestamp
-- [ ] Compose: scheduled messages show in Sent History with clock icon and scheduled time
+- [x] DB: add category column to comm_templates (Friday Comms, Urgent, Payment, General)
+- [x] DB: add scheduledAt (timestamp nullable) and sendStatus (pending/sent/failed) to comm_messages
+- [x] Backend: update templates.save/list to include category; add comms.updateSentStatus procedure
+- [x] Backend: scheduled send job — every minute check comm_messages where scheduledAt <= now and sendStatus=pending, send via Gmail/WA
+- [x] Compose: template picker shows category filter tabs; saving a template prompts for category
+- [x] Sent History: each card shows "Awaiting Reply" / "Replied" badge; tap to toggle status
+- [x] Compose: "Send Later" button opens date/time picker; queues message with scheduledAt timestamp
+- [x] Compose: scheduled messages show in Sent History with clock icon and scheduled time
 
 ## Superadmin Full Access & Delegated Succession System (May 2026)
-- [ ] Audit all tRPC procedures: ensure superadmin + owner (openId = OWNER_OPEN_ID) bypass all role checks
-- [ ] DB: add isOwnerDelegate boolean to users table; add succession_events table (id, type, triggeredAt, triggeredBy, delegateId, notifiedAt, notes)
-- [ ] Backend: ownerProcedure helper that allows superadmin OR owner OR active delegate
-- [ ] Backend: setDelegate procedure (owner-only) — designates a trustee as emergency delegate
-- [ ] Backend: inactivity check scheduled job — runs daily, if superadmin/owner last active > 28 days, auto-promote delegate and email all trustees + next of kin
-- [ ] Backend: manual succession trigger — owner can trigger succession manually (e.g. planned absence)
-- [ ] Frontend: Succession & Delegation panel in Admin Panel — shows current delegate, last-active timestamps, activity log
-- [ ] Frontend: delegate picker — owner selects any trustee from dropdown; shows their name, role, and contact
-- [ ] Frontend: succession event log — table of all succession events with date, type, and who was notified
-- [ ] Frontend: superadmin/owner see edit/delete controls on ALL records throughout the app (receipts, expenses, income, trustees, staff, channels, templates, etc.)
-- [ ] Frontend: non-superadmin users see only their own records and permitted actions
+- [x] Audit all tRPC procedures: ensure superadmin + owner (openId = OWNER_OPEN_ID) bypass all role checks
+- [x] DB: add isOwnerDelegate boolean to users table; add succession_events table (id, type, triggeredAt, triggeredBy, delegateId, notifiedAt, notes)
+- [x] Backend: ownerProcedure helper that allows superadmin OR owner OR active delegate
+- [x] Backend: setDelegate procedure (owner-only) — designates a trustee as emergency delegate
+- [x] Backend: inactivity check scheduled job — runs daily, if superadmin/owner last active > 28 days, auto-promote delegate and email all trustees + next of kin
+- [x] Backend: manual succession trigger — owner can trigger succession manually (e.g. planned absence)
+- [x] Frontend: Succession & Delegation panel in Admin Panel — shows current delegate, last-active timestamps, activity log
+- [x] Frontend: delegate picker — owner selects any trustee from dropdown; shows their name, role, and contact
+- [x] Frontend: succession event log — table of all succession events with date, type, and who was notified
+- [x] Frontend: superadmin/owner see edit/delete controls on ALL records throughout the app (receipts, expenses, income, trustees, staff, channels, templates, etc.)
+- [x] Frontend: non-superadmin users see only their own records and permitted actions
 
 ## Collapsible Sections — Full Row Tap (May 2026)
 - [x] Monthly Expenses: entire category section header row tappable to toggle collapse/expand (was already full-row button)
@@ -828,17 +828,17 @@
 - [x] Shows a browser popup-blocker warning if popups are blocked
 
 ## Permission Hierarchy — Full CRUD Control (May 2026)
-- [ ] Backend: create `ownerOrSuperadmin` procedure guard (ctx.user.role === 'superadmin' OR ctx.user.openId === OWNER_OPEN_ID)
-- [ ] Backend: wrap ALL delete procedures with ownerOrSuperadmin guard (receipts, expenses, income, loans, payroll, donors, campaigns, trustees, channels, templates, messages, reconciliation, backups)
-- [ ] Backend: comm_channels deleteChannel — restricted to ownerOrSuperadmin only
-- [ ] Backend: comm_channels createChannel — allowed for manager, deputy, superadmin, owner (not staff/volunteer)
-- [ ] Backend: update procedures for sensitive records — restricted to manager+ (not staff/volunteer)
-- [ ] Frontend: useAuth hook exposes `canDelete` and `canEdit` booleans based on role/openId
-- [ ] Frontend: all delete buttons (trash icons, "Delete" menu items) hidden for non-superadmin/non-owner
-- [ ] Frontend: all edit buttons hidden for staff/volunteer roles (read-only view)
-- [ ] Frontend: channel sidebar delete button — only visible to superadmin/owner
-- [ ] Frontend: Trustees page delete member — only visible to superadmin/owner
-- [ ] Frontend: show "Read Only" badge in header for staff/volunteer users
+- [x] Backend: create `ownerOrSuperadmin` procedure guard (ctx.user.role === 'superadmin' OR ctx.user.openId === OWNER_OPEN_ID)
+- [x] Backend: wrap ALL delete procedures with ownerOrSuperadmin guard (receipts, expenses, income, loans, payroll, donors, campaigns, trustees, channels, templates, messages, reconciliation, backups)
+- [x] Backend: comm_channels deleteChannel — restricted to ownerOrSuperadmin only
+- [x] Backend: comm_channels createChannel — allowed for manager, deputy, superadmin, owner (not staff/volunteer)
+- [x] Backend: update procedures for sensitive records — restricted to manager+ (not staff/volunteer)
+- [x] Frontend: useAuth hook exposes `canDelete` and `canEdit` booleans based on role/openId
+- [x] Frontend: all delete buttons (trash icons, "Delete" menu items) hidden for non-superadmin/non-owner
+- [x] Frontend: all edit buttons hidden for staff/volunteer roles (read-only view)
+- [x] Frontend: channel sidebar delete button — only visible to superadmin/owner
+- [x] Frontend: Trustees page delete member — only visible to superadmin/owner
+- [x] Frontend: show "Read Only" badge in header for staff/volunteer users
 
 ## Permission Hierarchy — Full CRUD Control (May 2026 — COMPLETED)
 - [x] Backend: `isOwnerOrSuperAdmin` helper updated — only superadmin role OR owner's openId qualify (generic "admin" removed)
@@ -915,54 +915,54 @@
 ## Automated Banking Instructions & Real-Time Reconciliation (May 2026)
 
 ### Automated Banking Instructions
-- [ ] Bank Transfer tab (/fintech + /pay): dynamic reference code (RIMMERS-123 style) generated per session
-- [ ] Bank Transfer tab: display AQS IBAN, SWIFT/BIC, Sort Code, Account Number in formatted card
-- [ ] Bank Transfer tab: one-tap copy for each field individually (clipboard API)
-- [ ] Bank Transfer tab: "Copy All Details" button copies formatted block to clipboard
-- [ ] Bank Transfer tab: WhatsApp share button pre-fills bank details + reference into WA message
-- [ ] Bank Transfer tab: QR code for the reference code (for in-person display)
+- [x] Bank Transfer tab (/fintech + /pay): dynamic reference code (RIMMERS-123 style) generated per session
+- [x] Bank Transfer tab: display AQS IBAN, SWIFT/BIC, Sort Code, Account Number in formatted card
+- [x] Bank Transfer tab: one-tap copy for each field individually (clipboard API)
+- [x] Bank Transfer tab: "Copy All Details" button copies formatted block to clipboard
+- [x] Bank Transfer tab: WhatsApp share button pre-fills bank details + reference into WA message
+- [x] Bank Transfer tab: QR code for the reference code (for in-person display)
 
 ### Real-Time Reconciliation
-- [ ] Stripe webhook handler: /api/stripe/webhook endpoint (already exists — audit and extend)
-- [ ] Webhook: payment_intent.succeeded → look up stripePaymentSessions by paymentIntentId, mark completed
-- [ ] Webhook: checkout.session.completed → mark session completed, update externalOrderId
-- [ ] Webhook: auto-detect Qarde Hasan repayment by metadata.loan_repayment_id or reference code pattern
-- [ ] Webhook: on Qarde Hasan repayment confirmed → mark loanRepayments row as paid (status=paid, paidAt=now)
-- [ ] Webhook: on Qarde Hasan repayment confirmed → send JazakAllah WhatsApp message via wa.me link (server-side log + owner notification)
-- [ ] Loan repayment: add stripePaymentIntentId column to loan_repayments table for webhook matching
-- [ ] Fintech QuickCapture: when generating payment link for a loan repayment, embed metadata.loan_repayment_id in PaymentIntent
+- [x] Stripe webhook handler: /api/stripe/webhook endpoint (already exists — audit and extend)
+- [x] Webhook: payment_intent.succeeded → look up stripePaymentSessions by paymentIntentId, mark completed
+- [x] Webhook: checkout.session.completed → mark session completed, update externalOrderId
+- [x] Webhook: auto-detect Qarde Hasan repayment by metadata.loan_repayment_id or reference code pattern
+- [x] Webhook: on Qarde Hasan repayment confirmed → mark loanRepayments row as paid (status=paid, paidAt=now)
+- [x] Webhook: on Qarde Hasan repayment confirmed → send JazakAllah WhatsApp message via wa.me link (server-side log + owner notification)
+- [x] Loan repayment: add stripePaymentIntentId column to loan_repayments table for webhook matching
+- [x] Fintech QuickCapture: when generating payment link for a loan repayment, embed metadata.loan_repayment_id in PaymentIntent
 
 ## The Donor Journey — End-to-End Flow (May 2026)
 
 ### Step 1-2: AI Collection Sheet Scanner
-- [ ] Backend: parseFridayCollectionSheet procedure — accepts image/PDF URL, uses LLM vision to extract all donor rows (name, phone, amount, campaign, gift aid) as a batch
-- [ ] Backend: returns array of DonorRecord with per-field confidence scores + "Analyzing Amanah entries..." status messaging
-- [ ] Backend: saveParsedDonors procedure — bulk-inserts verified donor records into donor_leads + creates pending stripe_payment_sessions
-- [ ] Frontend: CollectionSheetScanner component in Capture page — upload/camera, shows "Analyzing Amanah entries..." spinner
+- [x] Backend: parseFridayCollectionSheet procedure — accepts image/PDF URL, uses LLM vision to extract all donor rows (name, phone, amount, campaign, gift aid) as a batch
+- [x] Backend: returns array of DonorRecord with per-field confidence scores + "Analyzing Amanah entries..." status messaging
+- [x] Backend: saveParsedDonors procedure — bulk-inserts verified donor records into donor_leads + creates pending stripe_payment_sessions
+- [x] Frontend: CollectionSheetScanner component in Capture page — upload/camera, shows "Analyzing Amanah entries..." spinner
 - [ ] Frontend: Verification table — 50 rows, each editable, confidence badges, "Ready for verification, Dr. Abdul Hamid." header
 - [ ] Frontend: Bulk approve + individual edit before saving
 
 ### Step 3: WhatsApp Pledge Fulfilment
-- [ ] Backend: sendPledgeWhatsApp procedure — generates /pay URL with pre-filled name+campaign+amount, builds Islamic pledge message
-- [ ] Backend: WhatsApp message template: "JazakAllah! To fulfil your pledge for the [Campaign], click here: [URL]" — gentle, encouraging, spiritual tone
-- [ ] Frontend: "Send WhatsApp" button per donor row in verification table
-- [ ] Frontend: "Send All WhatsApp" bulk button after verification
+- [x] Backend: sendPledgeWhatsApp procedure — generates /pay URL with pre-filled name+campaign+amount, builds Islamic pledge message
+- [x] Backend: WhatsApp message template: "JazakAllah! To fulfil your pledge for the [Campaign], click here: [URL]" — gentle, encouraging, spiritual tone
+- [x] Frontend: "Send WhatsApp" button per donor row in verification table
+- [x] Frontend: "Send All WhatsApp" bulk button after verification
 
 ### Step 4: Seamless Payment (already implemented)
-- [ ] /pay page: Apple Pay shown first in Payment Element tabs (already set via paymentMethodOrder)
-- [ ] /pay page: Gift Aid toggle pre-checked if donor declared on collection sheet
+- [x] /pay page: Apple Pay shown first in Payment Element tabs (already set via paymentMethodOrder)
+- [x] /pay page: Gift Aid toggle pre-checked if donor declared on collection sheet
 
 ### Step 5: Digital Receipt + Jannah Hadith
-- [ ] Backend: generateDonorReceipt procedure — builds HTML receipt with: donor name, amount, campaign, reference, Gift Aid status, Jannah Hadith quote, AQS logo
-- [ ] Backend: Stripe webhook on payment_intent.succeeded → auto-generate receipt + send via Gmail API to donor email
-- [ ] Backend: WhatsApp receipt URL generated and logged (admin can tap to send)
-- [ ] Frontend: PaymentSuccess page — show receipt card with Hadith + download PDF button
+- [x] Backend: generateDonorReceipt procedure — builds HTML receipt with: donor name, amount, campaign, reference, Gift Aid status, Jannah Hadith quote, AQS logo
+- [x] Backend: Stripe webhook on payment_intent.succeeded → auto-generate receipt + send via Gmail API to donor email
+- [x] Backend: WhatsApp receipt URL generated and logged (admin can tap to send)
+- [x] Frontend: PaymentSuccess page — show receipt card with Hadith + download PDF button
 
 ### Step 6: Hibba Backup Vault
-- [ ] Backend: mirrorToBackupVault procedure — on every completed payment, write a JSON snapshot to S3 under /backup-vault/YYYY/MM/DD/{ref}.json
-- [ ] Backend: Stripe webhook on payment_intent.succeeded → call mirrorToBackupVault
-- [ ] Backend: Daily backup job: export all completed sessions for the day to S3 as a consolidated JSON
-- [ ] Frontend: Backups page — show vault entries with download links
+- [x] Backend: mirrorToBackupVault procedure — on every completed payment, write a JSON snapshot to S3 under /backup-vault/YYYY/MM/DD/{ref}.json
+- [x] Backend: Stripe webhook on payment_intent.succeeded → call mirrorToBackupVault
+- [x] Backend: Daily backup job: export all completed sessions for the day to S3 as a consolidated JSON
+- [x] Frontend: Backups page — show vault entries with download links
 
 ## Gift Aid HMRC Compliance — R68 Audit Trail (May 2026)
 

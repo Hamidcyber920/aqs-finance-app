@@ -6,7 +6,7 @@ import {
   Mail, MessageSquare, Send, Users, Pencil, Check, X,
   AlertTriangle, Shield, Briefcase, Building2, Hash,
   Plus, RefreshCw, ArrowLeft, UserPlus, ChevronDown, LogIn, Trash2,
-  BookOpen, Save, History, ChevronRight,
+  BookOpen, Save, History, ChevronRight, Clock, Tag,
 } from "lucide-react";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -86,8 +86,30 @@ function MessageBubble({ msg, onMarkReplied }: { msg: any; onMarkReplied?: (id: 
         {recipients.length>0&&<p style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:"8px 0 0"}}>To: {recipients.map((r:any)=>r.name).join(", ")}</p>}
         {waRecipients.length>0&&isSent&&<p style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:"8px 0 0"}}>Via WhatsApp: {waRecipients.map((r:any)=>r.name).join(", ")}</p>}
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 8px 0"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 8px 0",flexWrap:"wrap"}}>
         <p style={{fontSize:10,color:T.muted,margin:0}}>{formatTime(msg.sentAt)}{msg.fromName&&isSent?` · ${msg.fromName}`:""}</p>
+        {/* Send status badge for sent messages */}
+        {isSent&&msg.sendStatus==="pending"&&(
+          <span style={{fontSize:9,fontWeight:700,color:"#f59e0b",background:"rgba(245,158,11,0.15)",border:"1px solid rgba(245,158,11,0.3)",borderRadius:5,padding:"1px 6px"}}>
+            ⏰ Scheduled
+          </span>
+        )}
+        {isSent&&msg.sendStatus==="failed"&&(
+          <span style={{fontSize:9,fontWeight:700,color:"#ef4444",background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:5,padding:"1px 6px"}}>
+            ✗ Failed
+          </span>
+        )}
+        {/* Reply status badge for sent messages */}
+        {isSent&&msg.replyStatus==="awaiting"&&(
+          <span style={{fontSize:9,fontWeight:700,color:"#f59e0b",background:"rgba(245,158,11,0.15)",border:"1px solid rgba(245,158,11,0.3)",borderRadius:5,padding:"1px 6px"}}>
+            ⏳ Awaiting Reply
+          </span>
+        )}
+        {isSent&&msg.replyStatus==="replied"&&(
+          <span style={{fontSize:9,fontWeight:700,color:"#22c55e",background:"rgba(34,197,94,0.12)",border:"1px solid rgba(34,197,94,0.3)",borderRadius:5,padding:"1px 6px"}}>
+            ✓ Replied
+          </span>
+        )}
         {isReceived&&!replied&&onMarkReplied&&(
           <button
             onClick={()=>onMarkReplied(msg.id)}
@@ -199,6 +221,11 @@ function ComposePanel({
   // WA bulk-send state
   const [waBulkSent, setWaBulkSent] = useState(false);
   const [waBulkCount, setWaBulkCount] = useState(0);
+  // Send Later state
+  const [showSendLater, setShowSendLater] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState("");
+  // Template category filter
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState("All");
 
   // Templates data
   const { data: templates = [], refetch: refetchTemplates } = trpc.comms.listTemplates.useQuery();
@@ -208,6 +235,10 @@ function ComposePanel({
   });
   const deleteTemplateMutation = trpc.comms.deleteTemplate.useMutation({
     onSuccess: () => { toast.success("Template deleted"); refetchTemplates(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const scheduleMessageMutation = trpc.comms.scheduleMessage.useMutation({
+    onSuccess: () => { toast.success("Message scheduled!"); setShowSendLater(false); setScheduledAt(""); onSent(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -373,12 +404,26 @@ function ComposePanel({
       {/* ── Templates library ── */}
       {showTemplates&&(
         <div style={{marginBottom:16,background:"rgba(99,91,255,0.05)",border:"1px solid rgba(99,91,255,0.2)",borderRadius:12,padding:"12px 14px"}}>
-          <p style={{fontSize:10,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 10px"}}>📚 Saved Templates</p>
+          <p style={{fontSize:10,fontWeight:700,color:T.purple,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 8px"}}>📚 Saved Templates</p>
+          {/* Category filter tabs */}
+          {(templates as any[]).length>0&&(
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
+              {["All",...Array.from(new Set((templates as any[]).map((t:any)=>t.category||"General")))].map((cat:string)=>(
+                <button key={cat} onClick={()=>setTemplateCategoryFilter(cat)}
+                  style={{padding:"3px 8px",borderRadius:6,fontSize:10,fontWeight:700,cursor:"pointer",
+                    background:templateCategoryFilter===cat?"rgba(99,91,255,0.3)":"rgba(255,255,255,0.04)",
+                    border:`1px solid ${templateCategoryFilter===cat?T.purple:T.border}`,
+                    color:templateCategoryFilter===cat?T.white:T.muted}}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
           {(templates as any[]).length===0&&!savingTemplate&&(
             <p style={{fontSize:12,color:T.muted,margin:"0 0 10px"}}>No templates yet. Fill in a message below and save it.</p>
           )}
           <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
-            {(templates as any[]).map((tmpl:any)=>(
+            {(templates as any[]).filter((t:any)=>templateCategoryFilter==="All"||(t.category||"General")===templateCategoryFilter).map((tmpl:any)=>(
               <div key={tmpl.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`}}>
                 <div style={{flex:1,minWidth:0}}>
                   <p style={{fontSize:12,fontWeight:700,color:T.white,margin:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tmpl.name}</p>

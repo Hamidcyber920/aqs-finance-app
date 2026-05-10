@@ -40,7 +40,7 @@ export default function AdminPanelPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [permOpen, setPermOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [tab, setTab] = useState<"users"|"pending">("users");
+  const [tab, setTab] = useState<"users"|"pending"|"succession">("users");
 
   const { data, refetch } = trpc.users.list.useQuery({});
   const { data: pending, refetch: refetchPending } = (trpc.users as any).listPending?.useQuery?.() ?? { data: null, refetch: () => {} };
@@ -70,6 +70,22 @@ export default function AdminPanelPage() {
     onSuccess: () => refetchPerms(),
     onError: (e: any) => toast.error(e.message),
   });
+  // Succession data
+  const { data: successionData, refetch: refetchSuccession } = (trpc.succession as any).getStatus?.useQuery?.() ?? { data: null, refetch: () => {} };
+  const setDelegateMutation = (trpc.succession as any).setDelegate?.useMutation?.({
+    onSuccess: () => { toast.success("Delegate assigned"); refetchSuccession(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const removeDelegateMutation = (trpc.succession as any).removeDelegate?.useMutation?.({
+    onSuccess: () => { toast.success("Delegate removed"); refetchSuccession(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const triggerSuccessionMutation = (trpc.succession as any).triggerManual?.useMutation?.({
+    onSuccess: (d: any) => { toast.success(`Succession triggered — ${d.notifiedCount} trustees notified`); refetchSuccession(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const [successionReason, setSuccessionReason] = useState("");
+  const [showTriggerConfirm, setShowTriggerConfirm] = useState(false);
 
   const { register: regC, handleSubmit: handleC, reset: resetC } = useForm<any>();
 
@@ -120,12 +136,12 @@ export default function AdminPanelPage() {
 
         {/* Tabs */}
         <div style={{ display:"flex",gap:4,marginBottom:20,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:4,width:"fit-content" }}>
-          {(["users","pending"] as const).map(t => (
+          {(["users","pending","succession"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               style={{ padding:"8px 20px",borderRadius:10,fontSize:13,fontWeight:600,border:"none",cursor:"pointer",transition:"all 0.2s",
                 background:tab===t?"rgba(99,91,255,0.3)":"transparent",
                 color:tab===t?T.white:T.muted }}>
-              {t==="users"?"All Users":`Pending${pendingUsers.length>0?` (${pendingUsers.length})`:""}`}
+              {t==="users"?"All Users":t==="pending"?`Pending${pendingUsers.length>0?` (${pendingUsers.length})`:""}`:"Succession"}
             </button>
           ))}
         </div>
@@ -225,6 +241,102 @@ export default function AdminPanelPage() {
           </div>
         )}
 
+        {/* Succession & Delegation panel */}
+        {tab === "succession" && (
+          <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+            {/* Status card */}
+            <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 24px" }}>
+              <p style={{ fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 14px" }}>Succession Status</p>
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12 }}>
+                <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}` }}>
+                  <p style={{ fontSize:11,color:T.muted,margin:"0 0 4px" }}>Current Delegate</p>
+                  <p style={{ fontSize:16,fontWeight:700,color:successionData?.currentDelegate?T.mint:T.muted,margin:0 }}>
+                    {successionData?.currentDelegate?.fullName ?? "None assigned"}
+                  </p>
+                </div>
+                <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}` }}>
+                  <p style={{ fontSize:11,color:T.muted,margin:"0 0 4px" }}>Owner Last Active</p>
+                  <p style={{ fontSize:16,fontWeight:700,color:T.white,margin:0 }}>
+                    {successionData?.inactivityDays != null ? `${successionData.inactivityDays}d ago` : "—"}
+                  </p>
+                </div>
+                <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}` }}>
+                  <p style={{ fontSize:11,color:T.muted,margin:"0 0 4px" }}>Total Trustees</p>
+                  <p style={{ fontSize:16,fontWeight:700,color:T.purple,margin:0 }}>
+                    {successionData?.trustees?.length ?? 0}
+                  </p>
+                </div>
+              </div>
+            </div>
+            {/* Assign delegate */}
+            <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 24px" }}>
+              <p style={{ fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 14px" }}>Assign Delegate Trustee</p>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                {(successionData?.trustees ?? []).map((t: any) => (
+                  <div key={t.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}` }}>
+                    <div>
+                      <p style={{ fontSize:13,fontWeight:700,color:T.white,margin:0 }}>{t.name}</p>
+                      <p style={{ fontSize:11,color:T.muted,margin:"2px 0 0" }}>{t.role} · {t.email}</p>
+                    </div>
+                    <button onClick={() => setDelegateMutation?.mutate?.({ trusteesId: t.id })}
+                      style={{ padding:"6px 14px",borderRadius:8,background:`rgba(0,255,194,0.1)`,border:`1px solid rgba(0,255,194,0.3)`,color:T.mint,fontWeight:700,cursor:"pointer",fontSize:12 }}>
+                      Assign
+                    </button>
+                  </div>
+                ))}
+                {successionData?.currentDelegate && (
+                  <button onClick={() => removeDelegateMutation?.mutate?.()}
+                    style={{ padding:"10px 0",borderRadius:10,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",color:"#f87171",fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                    Remove Current Delegate
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Manual succession trigger */}
+            <div style={{ background:T.card,border:`1px solid rgba(239,68,68,0.3)`,borderRadius:16,padding:"20px 24px" }}>
+              <p style={{ fontSize:11,fontWeight:700,color:"#f87171",textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 4px" }}>Manual Succession Trigger</p>
+              <p style={{ fontSize:12,color:T.muted,margin:"0 0 14px" }}>Use this for planned absences or emergencies. All trustees and NOK will be notified by email.</p>
+              <textarea value={successionReason} onChange={e=>setSuccessionReason(e.target.value)}
+                placeholder="Reason for succession (e.g. planned leave, medical emergency)…"
+                rows={3}
+                style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,padding:"10px 12px",fontSize:13,resize:"vertical",boxSizing:"border-box",marginBottom:10 }}/>
+              {!showTriggerConfirm ? (
+                <button onClick={()=>setShowTriggerConfirm(true)} disabled={!successionReason.trim()}
+                  style={{ padding:"10px 24px",borderRadius:10,background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.4)",color:"#f87171",fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                  Trigger Succession
+                </button>
+              ) : (
+                <div style={{ display:"flex",gap:8 }}>
+                  <button onClick={()=>{ triggerSuccessionMutation?.mutate?.({ reason: successionReason, notifyNok: true }); setShowTriggerConfirm(false); setSuccessionReason(""); }}
+                    style={{ flex:1,padding:"10px 0",borderRadius:10,background:"#ef4444",border:"none",color:T.white,fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                    Confirm — Notify All Trustees
+                  </button>
+                  <button onClick={()=>setShowTriggerConfirm(false)}
+                    style={{ padding:"10px 16px",borderRadius:10,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* Succession event log */}
+            {(successionData?.events ?? []).length > 0 && (
+              <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 24px" }}>
+                <p style={{ fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",margin:"0 0 14px" }}>Recent Succession Events</p>
+                <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                  {(successionData.events as any[]).map((ev: any) => (
+                    <div key={ev.id} style={{ padding:"10px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}` }}>
+                      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+                        <span style={{ fontSize:12,fontWeight:700,color:T.white }}>{ev.eventType.replace(/_/g," ")}</span>
+                        <span style={{ fontSize:10,color:T.muted }}>{new Date(ev.triggeredAt).toLocaleString()}</span>
+                      </div>
+                      {ev.notes && <p style={{ fontSize:11,color:T.muted,margin:"4px 0 0" }}>{ev.notes}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         {/* Create staff dialog */}
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:460 }}>

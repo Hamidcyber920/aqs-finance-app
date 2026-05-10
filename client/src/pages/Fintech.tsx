@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -834,7 +835,25 @@ function BankTransferPanel() {
           >
             <Copy className="w-4 h-4 mr-2" /> Copy All Details
           </Button>
+          {/* WhatsApp share */}
+          <Button
+            className="w-full mt-2 bg-green-600 hover:bg-green-700 text-white"
+            onClick={() => {
+              const msg = `Assalamu Alaikum,\n\nPlease use the following bank details to make your donation to the AQ Society:\n\n${bankFields.map((f) => `${f.label}: ${f.value}`).join("\n")}\n\nJazakAllahu Khayran`;
+              window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+            }}
+          >
+            <MessageCircle className="w-4 h-4 mr-2" /> Share via WhatsApp
+          </Button>
         </div>
+      </div>
+      {/* QR Code for reference */}
+      <div className="flex flex-col items-center gap-2 pt-4 border-t">
+        <p className="text-xs font-semibold text-muted-foreground">QR Code — Payment Reference</p>
+        <div className="rounded-xl border bg-white p-3 shadow-sm">
+          <QRCodeSVG value={generatedRef} size={120} bgColor="#ffffff" fgColor="#065f46" />
+        </div>
+        <p className="text-xs text-muted-foreground">Scan to copy the reference code</p>
       </div>
     </div>
   );

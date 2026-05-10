@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { stripePaymentSessions, giftAidDeclarations, fundraisingCampaigns } from "../../drizzle/schema";
+import { stripePaymentSessions, giftAidDeclarations, fundraisingCampaigns, fundraisingDonations } from "../../drizzle/schema";
 import { eq, desc, gte, and } from "drizzle-orm";
 import Stripe from "stripe";
 import { TRPCError } from "@trpc/server";
@@ -822,5 +822,136 @@ export const fintechRouter = router({
         })
         .$returningId();
       return { id: inserted.id };
+    }),
+
+  // ─── PARSE FRIDAY COLLECTION SHEET (AI batch extraction) ──────────────────
+  parseFridayCollectionSheet: protectedProcedure
+    .input(
+      z.object({
+        fileUrl: z.string().url(),
+        mimeType: z.string().default("image/jpeg"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const systemPrompt = `You are an expert data extraction assistant for a mosque charity.
+You are given an image or PDF of a Friday collection sheet (Amanah entries) containing donor names, phone numbers, amounts pledged, campaign names, and Gift Aid declarations.
+Extract ALL donor rows you can find. For each row return a JSON object with these fields:
+- name: string (donor full name)
+- phone: string (phone number, may be empty)
+- amount: number (amount in GBP, 0 if unclear)
+- campaign: string (campaign name or "General" if not specified)
+- giftAid: boolean (true if Gift Aid is ticked/indicated)
+- confidence: object with keys name, phone, amount, campaign, giftAid — each a number 0-1 indicating extraction confidence
+Return a JSON object: { donors: [...], totalRows: number, analysisNote: string }
+The analysisNote should say "Ready for verification, Dr. Abdul Hamid." if extraction looks complete.`;
+
+      const contentParts: any[] = [
+        { type: "text", text: "Please extract all donor rows from this collection sheet:" },
+        input.mimeType.startsWith("image/")
+          ? { type: "image_url", image_url: { url: input.fileUrl, detail: "high" } }
+          : { type: "file_url", file_url: { url: input.fileUrl, mime_type: input.mimeType as any } },
+      ];
+
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: contentParts },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "collection_sheet_result",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                donors: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      name: { type: "string" },
+                      phone: { type: "string" },
+                      amount: { type: "number" },
+                      campaign: { type: "string" },
+                      giftAid: { type: "boolean" },
+                      confidence: {
+                        type: "object",
+                        properties: {
+                          name: { type: "number" },
+                          phone: { type: "number" },
+                          amount: { type: "number" },
+                          campaign: { type: "number" },
+                          giftAid: { type: "number" },
+                        },
+                        required: ["name", "phone", "amount", "campaign", "giftAid"],
+                        additionalProperties: false,
+                      },
+                    },
+                    required: ["name", "phone", "amount", "campaign", "giftAid", "confidence"],
+                    additionalProperties: false,
+                  },
+                },
+                totalRows: { type: "number" },
+                analysisNote: { type: "string" },
+              },
+              required: ["donors", "totalRows", "analysisNote"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const raw = response?.choices?.[0]?.message?.content;
+      if (!raw) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No response from AI" });
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return parsed as {
+        donors: Array<{
+          name: string; phone: string; amount: number; campaign: string; giftAid: boolean;
+          confidence: { name: number; phone: number; amount: number; campaign: number; giftAid: number };
+        }>;
+        totalRows: number;
+        analysisNote: string;
+      };
+    }),
+
+  // ─── SAVE PARSED DONORS (bulk insert from collection sheet) ───────────────
+  saveParsedDonors: protectedProcedure
+    .input(
+      z.object({
+        donors: z.array(
+          z.object({
+            name: z.string().min(1),
+            phone: z.string().optional(),
+            amount: z.number().min(0),
+            campaign: z.string().optional(),
+            giftAid: z.boolean().default(false),
+          })
+        ),
+        campaignId: z.number().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const results: Array<{ name: string; donationId: number }> = [];
+      for (const donor of input.donors) {
+        if (donor.amount <= 0) continue;
+        const [don] = await db
+          .insert(fundraisingDonations)
+          .values({
+            campaignId: input.campaignId ?? null,
+            donorName: donor.name,
+            donorPhone: donor.phone ?? null,
+            amount: String(donor.amount),
+            paymentMethod: "pending",
+            giftAid: donor.giftAid,
+            notes: "Imported from Friday collection sheet",
+          } as any)
+          .$returningId();
+        results.push({ name: donor.name, donationId: don.id });
+      }
+      return { saved: results.length, results };
     }),
 });
