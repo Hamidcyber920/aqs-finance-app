@@ -726,3 +726,9 @@
 
 ## WhatsApp Message Loading Fix (May 2026 #6)
 - [x] Fix wa.me URL so message text loads correctly in WhatsApp for both group and individual sends
+
+## Next Steps #3 (May 2026)
+- [ ] Trustees page: show warning badge for trustees missing phone number
+- [ ] WhatsApp tab: show "No phone" label on member chips missing a phone number
+- [ ] Incoming message bubbles: add "Mark as Replied" button that sets isReplied=true and shows a green tick
+- [ ] Add markReplied tRPC mutation to update comm_messages isReplied field

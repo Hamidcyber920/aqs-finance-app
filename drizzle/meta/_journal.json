@@ -232,6 +232,13 @@
       "when": 1778407740458,
       "tag": "0032_useful_jean_grey",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1778412432930,
+      "tag": "0033_bored_stryfe",
+      "breakpoints": true
     }
   ]
 }

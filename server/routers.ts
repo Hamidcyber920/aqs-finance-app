@@ -3344,6 +3344,17 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           .where(and(eq(commMessages.channelId, input.channelId), eq(commMessages.direction, 'received')));
         return { success: true };
       }),
+
+    markReplied: protectedProcedure
+      .input(z.object({ messageId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { success: false };
+        await db.update(commMessages)
+          .set({ isReplied: true, repliedAt: new Date() })
+          .where(eq(commMessages.id, input.messageId));
+        return { success: true };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

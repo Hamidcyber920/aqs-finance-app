@@ -1,0 +1,91 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "campaigns"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comm_channels"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comm_messages"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "departments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donors"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "expense_categories"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "friday_collections"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "fundraising_campaigns"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "fundraising_donations"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "fundraising_items"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "income_categories"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "income_donors"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "income_records"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "invoices"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "loan_applications"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "loan_repayments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "org_members"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "payroll_records"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "receipts"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "reconciliation_sessions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "staff_profiles"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "system_backups"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "trustees"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "user_permissions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "users"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "volunteer_payments"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_ExcMToduGVqDRtQnvUsVkJ\n__drizzle_migrations\ncampaigns\ncomm_channels\ncomm_messages\ndepartments\ndonors\nexpense_categories\nfriday_collections\nfundraising_campaigns\nfundraising_donations\nfundraising_items\nincome_categories\nincome_donors\nincome_records\ninvoices\nloan_applications\nloan_repayments\norg_members\npayroll_records\nreceipts\nreconciliation_sessions\nstaff_profiles\nsystem_backups\ntrustees\nuser_permissions\nusers\nvolunteer_payments\n",
+  "stderr": "",
+  "execution_time_ms": 257
+}

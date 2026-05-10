@@ -60,12 +60,13 @@ function normaliseUkPhone(phone: string) {
 }
 
 // ── Message bubble ────────────────────────────────────────────────────────────
-function MessageBubble({ msg }: { msg: any }) {
+function MessageBubble({ msg, onMarkReplied }: { msg: any; onMarkReplied?: (id: number) => void }) {
   const isSent = msg.direction === "sent";
   const isReceived = msg.direction === "received";
   const recipients: {name:string;email?:string}[] = msg.toEmailsJson ? JSON.parse(msg.toEmailsJson) : [];
   const waRecipients: {name:string;phone:string}[] = msg.whatsappNumbersJson ? JSON.parse(msg.whatsappNumbersJson) : [];
   const isWA = waRecipients.length>0 && !recipients.length;
+  const replied = msg.isReplied;
   return (
     <div style={{display:"flex",flexDirection:"column",alignItems:isSent?"flex-end":"flex-start",marginBottom:16}}>
       {isReceived&&(
@@ -74,15 +75,28 @@ function MessageBubble({ msg }: { msg: any }) {
             {getInitials(msg.fromName||"?")}
           </div>
           <span style={{fontSize:11,color:T.muted}}>{msg.fromName}</span>
+          {replied&&<span style={{fontSize:10,color:"#22c55e",fontWeight:600}}>✓ Replied</span>}
         </div>
       )}
-      <div style={{maxWidth:"85%",background:isSent?`linear-gradient(135deg,${T.purple},#4f46e5)`:"rgba(255,255,255,0.07)",border:`1px solid ${isSent?"transparent":T.border}`,borderRadius:isSent?"16px 16px 4px 16px":"16px 16px 16px 4px",padding:"12px 16px"}}>
+      <div style={{maxWidth:"85%",background:isSent?`linear-gradient(135deg,${T.purple},#4f46e5)`:"rgba(255,255,255,0.07)",border:`1px solid ${isSent?"transparent":replied?"#22c55e40":T.border}`,borderRadius:isSent?"16px 16px 4px 16px":"16px 16px 16px 4px",padding:"12px 16px"}}>
         {msg.subject&&<p style={{fontSize:12,fontWeight:700,color:isWA?"#25d366":T.mint,margin:"0 0 6px"}}>{isWA?"📱 WhatsApp":`📧 ${msg.subject}`}</p>}
         <p style={{fontSize:13,color:T.white,margin:0,whiteSpace:"pre-wrap",lineHeight:1.5}}>{msg.body}</p>
         {recipients.length>0&&<p style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:"8px 0 0"}}>To: {recipients.map((r:any)=>r.name).join(", ")}</p>}
         {waRecipients.length>0&&isSent&&<p style={{fontSize:10,color:"rgba(255,255,255,0.5)",margin:"8px 0 0"}}>Via WhatsApp: {waRecipients.map((r:any)=>r.name).join(", ")}</p>}
       </div>
-      <p style={{fontSize:10,color:T.muted,margin:"4px 8px 0"}}>{formatTime(msg.sentAt)}{msg.fromName&&isSent?` · ${msg.fromName}`:""}</p>
+      <div style={{display:"flex",alignItems:"center",gap:8,margin:"4px 8px 0"}}>
+        <p style={{fontSize:10,color:T.muted,margin:0}}>{formatTime(msg.sentAt)}{msg.fromName&&isSent?` · ${msg.fromName}`:""}</p>
+        {isReceived&&!replied&&onMarkReplied&&(
+          <button
+            onClick={()=>onMarkReplied(msg.id)}
+            style={{fontSize:10,fontWeight:600,color:"#22c55e",background:"rgba(34,197,94,0.12)",border:"1px solid rgba(34,197,94,0.3)",borderRadius:6,padding:"2px 8px",cursor:"pointer"}}>
+            ✓ Mark Replied
+          </button>
+        )}
+        {isReceived&&replied&&(
+          <span style={{fontSize:10,color:"#22c55e",fontWeight:600}}>✓ Replied {msg.repliedAt?formatTime(msg.repliedAt):""}</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -595,6 +609,10 @@ export default function CommunicationsPage() {
   const markReadMutation = trpc.comms.markChannelRead.useMutation({
     onSuccess:()=>refetchUnread(),
   });
+  const markRepliedMutation = trpc.comms.markReplied.useMutation({
+    onSuccess:()=>{ refetchMessages(); toast.success("Marked as replied"); },
+    onError:(e)=>toast.error(e.message),
+  });
   const updateChannelMutation = trpc.comms.updateChannel.useMutation({
     onSuccess:()=>{toast.success("Channel updated");setEditingChannel(null);refetchChannels();},
     onError:(e)=>toast.error(e.message),
@@ -831,7 +849,7 @@ export default function CommunicationsPage() {
                     </div>
                   ):(
                     <>
-                      {(messages as any[]).map((msg:any)=><MessageBubble key={msg.id} msg={msg}/>)}
+                      {(messages as any[]).map((msg:any)=><MessageBubble key={msg.id} msg={msg} onMarkReplied={(id)=>markRepliedMutation.mutate({messageId:id})}/>)}
                       <div ref={messagesEndRef}/>
                     </>
                   )}

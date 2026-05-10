@@ -761,6 +761,8 @@ export const commMessages = mysqlTable("comm_messages", {
   subject: varchar("subject", { length: 500 }),
   body: text("body"),
   isRead: boolean("isRead").default(true).notNull(),
+  isReplied: boolean("isReplied").default(false).notNull(),
+  repliedAt: timestamp("repliedAt"),
   sentAt: timestamp("sentAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

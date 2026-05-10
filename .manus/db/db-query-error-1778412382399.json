@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, full_name, role, phone FROM org_members WHERE role LIKE '%Trustee%' OR role LIKE '%Chair%' ORDER BY full_name;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, full_name, role, phone FROM org_members WHERE role LIKE '%Trustee%' OR role LIKE '%Chair%' ORDER BY full_name;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'role' in 'where clause'"
+  ]
+}
