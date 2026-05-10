@@ -857,3 +857,27 @@
 - [x] Frontend: Income page — delete button gated by canDelete
 - [x] Frontend: ReceiptDetail page — edit/save/delete buttons gated by canEdit/canDelete
 - [x] Frontend: MonthlyExpenses page — authorise/reject/pay buttons gated by canEdit
+
+## Student Accommodation System (May 2026)
+- [x] Database schema: accommodationTenants and accommodationRentPayments tables in drizzle/schema.ts
+- [x] Migration SQL applied via webdev_execute_sql
+- [x] DB helpers: server/db.accommodation.ts
+- [x] tRPC router: server/routers/accommodation.ts (tenant CRUD, rent payment, AI extraction, file upload)
+- [x] Router wired: accommodation: accommodationRouter added to appRouter in server/routers.ts
+- [x] Frontend page: client/src/pages/StudentAccommodation.tsx
+  - [x] Summary dashboard: upcoming rent (7 days), overdue rent, total/active tenants
+  - [x] Tenant list with status badges + search + filter
+  - [x] Tenant detail panel: contact info, contract, deposit, rent schedule
+  - [x] Add Tenant dialog with AI document extraction (file/photo upload → auto-fill form)
+  - [x] Contract document upload/view
+  - [x] Rent payment tracker per tenant with confirm tick (canEdit permission)
+  - [x] Confirm payment dialog with evidence upload, payment method, date stamp, confirmedByName
+  - [x] Mark overdue button
+  - [x] Edit Tenant dialog (canEdit permission)
+  - [x] Communication buttons (email/WhatsApp) per tenant record
+- [x] Route registered in App.tsx (/accommodation)
+- [x] Sidebar nav entry added in DashboardLayout.tsx (Income section)
+- [x] Scheduled jobs in server/scheduledJobs.ts:
+  - [x] Daily 08:30 UK: 7-day due notice emails to tenants
+  - [x] Daily 08:30 UK: 8-14 day overdue reminder emails + status update
+  - [x] Daily 08:30 UK: 14+ day escalation emails + notifyOwner notification

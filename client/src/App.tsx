@@ -30,6 +30,7 @@ import MonthlyExpensesPage from "./pages/MonthlyExpenses";
 import ReconciliationPage from "./pages/Reconciliation";
 import TrusteesPage from "./pages/Trustees";
 import BackupsPage from "./pages/Backups";
+import StudentAccommodationPage from "./pages/StudentAccommodation";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval"];
 
@@ -72,6 +73,7 @@ function Router() {
         <Route path="/admin" component={AdminPanelPage} />
         <Route path="/trustees" component={TrusteesPage} />
         <Route path="/backups" component={BackupsPage} />
+        <Route path="/accommodation" component={StudentAccommodationPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />
         <Route path="/profile" component={ProfileSettingsPage} />
         <Route path="/settings" component={ProfileSettingsPage} />

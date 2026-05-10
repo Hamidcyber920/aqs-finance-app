@@ -332,13 +332,193 @@ export function registerScheduledJobs() {
     sendMonthlyTrusteeReport().catch(console.error);
   }, { timezone: "Europe/London" });
 
-  // Daily at 09:00 UK time — birthday alerts
+   // Daily at 09:00 UK time — birthday alerts
   cron.schedule("0 9 * * *", () => {
     sendBirthdayAlerts().catch(console.error);
   }, { timezone: "Europe/London" });
-
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00)");
+  // Daily at 08:30 UK time — rent reminders (7-day due notice, 8-14 day overdue, 14+ day escalation)
+  cron.schedule("30 8 * * *", () => {
+    sendRentReminders().catch(console.error);
+  }, { timezone: "Europe/London" });
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30)");
 }
-
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
+
+// ─── Rent Reminders ───────────────────────────────────────────────────────────
+/**
+ * Daily rent reminder jobs:
+ *  1. 7-day due notice — email tenants whose rent is due within 7 days
+ *  2. 8-14 day overdue — escalating reminder to tenant
+ *  3. 14+ day overdue — escalation notification to owner/managers
+ */
+export async function sendRentReminders() {
+  console.log("[Scheduled] Running rent reminder check...");
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const { accommodationRentPayments, accommodationTenants } = await import("../drizzle/schema");
+    const { eq: eqOp, and: andOp, sql: sqlOp, or: orOp, isNull: isNullOp } = await import("drizzle-orm");
+    const today = new Date();
+    const todayStr = today.toISOString().split("T")[0];
+    const in7DaysStr = new Date(today.getTime() + 7 * 86400000).toISOString().split("T")[0];
+
+    // ── 7-day due notice ──────────────────────────────────────────────────────
+    const upcoming = await db.select({ payment: accommodationRentPayments, tenant: accommodationTenants })
+      .from(accommodationRentPayments)
+      .innerJoin(accommodationTenants, eqOp(accommodationRentPayments.tenantId, accommodationTenants.id))
+      .where(andOp(
+        sqlOp`${accommodationRentPayments.dueDate} >= ${todayStr}`,
+        sqlOp`${accommodationRentPayments.dueDate} <= ${in7DaysStr}`,
+        eqOp(accommodationRentPayments.status, "pending"),
+        isNullOp(accommodationRentPayments.reminderSentAt),
+      ));
+
+    for (const row of upcoming) {
+      const { tenant, payment } = row;
+      if (!tenant.email) continue;
+      const firstName = (tenant.fullName ?? "").split(" ")[0] ?? tenant.fullName ?? "Tenant";
+      const dueDate = new Date(payment.dueDate as any).toLocaleDateString("en-GB");
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <div style="background:#1a4731;padding:24px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
+            <p style="color:#c9a84c;margin:4px 0 0;">Rent Reminder</p>
+          </div>
+          <div style="padding:24px;background:#fff;">
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p>This is a friendly reminder that your rent payment is due soon.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+              <tr><td style="padding:8px;background:#f9f9f9;font-weight:600;">Period</td><td style="padding:8px;">${payment.periodLabel}</td></tr>
+              <tr><td style="padding:8px;background:#f9f9f9;font-weight:600;">Amount Due</td><td style="padding:8px;font-size:18px;color:#1a4731;font-weight:700;">£${parseFloat(payment.amountDue as any).toFixed(2)}</td></tr>
+              <tr><td style="padding:8px;background:#f9f9f9;font-weight:600;">Due Date</td><td style="padding:8px;">${dueDate}</td></tr>
+            </table>
+            <p>Please ensure your payment is made on time. If you have any questions, please contact us.</p>
+            <p>JazakAllahu Khayran for your cooperation.</p>
+            <p>Warm Islamic greetings,<br><strong>AQ Society Finance Team</strong></p>
+          </div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
+            Abdullah Quilliam Society — Student Accommodation
+          </div>
+        </div>`;
+      await sendEmail(tenant.email, tenant.fullName ?? firstName, `Rent Due in 7 Days — ${payment.periodLabel} — AQ Society`, html)
+        .then(async () => {
+          await db.update(accommodationRentPayments)
+            .set({ reminderSentAt: new Date() })
+            .where(eqOp(accommodationRentPayments.id, payment.id));
+          console.log(`[Scheduled] 7-day rent reminder sent to ${tenant.email}`);
+        })
+        .catch(e => console.error(`[Scheduled] Failed to send rent reminder to ${tenant.email}:`, e));
+    }
+
+    // ── 8-14 day overdue reminder ─────────────────────────────────────────────
+    const overdue8to14 = await db.select({ payment: accommodationRentPayments, tenant: accommodationTenants })
+      .from(accommodationRentPayments)
+      .innerJoin(accommodationTenants, eqOp(accommodationRentPayments.tenantId, accommodationTenants.id))
+      .where(andOp(
+        sqlOp`${accommodationRentPayments.dueDate} < ${todayStr}`,
+        sqlOp`DATEDIFF(${todayStr}, ${accommodationRentPayments.dueDate}) BETWEEN 8 AND 14`,
+        orOp(eqOp(accommodationRentPayments.status, "pending"), eqOp(accommodationRentPayments.status, "overdue")),
+        isNullOp(accommodationRentPayments.overdueSentAt),
+      ));
+
+    for (const row of overdue8to14) {
+      const { tenant, payment } = row;
+      if (!tenant.email) continue;
+      const firstName = (tenant.fullName ?? "").split(" ")[0] ?? tenant.fullName ?? "Tenant";
+      const dueDate = new Date(payment.dueDate as any).toLocaleDateString("en-GB");
+      const daysOverdue = Math.floor((today.getTime() - new Date(payment.dueDate as any).getTime()) / 86400000);
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <div style="background:#c0392b;padding:24px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
+            <p style="color:#ffd;margin:4px 0 0;">Overdue Rent Notice</p>
+          </div>
+          <div style="padding:24px;background:#fff;">
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p style="color:#c0392b;font-weight:600;">Your rent payment is now ${daysOverdue} days overdue.</p>
+            <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+              <tr><td style="padding:8px;background:#fff0f0;font-weight:600;">Period</td><td style="padding:8px;">${payment.periodLabel}</td></tr>
+              <tr><td style="padding:8px;background:#fff0f0;font-weight:600;">Amount Due</td><td style="padding:8px;font-size:18px;color:#c0392b;font-weight:700;">£${parseFloat(payment.amountDue as any).toFixed(2)}</td></tr>
+              <tr><td style="padding:8px;background:#fff0f0;font-weight:600;">Original Due Date</td><td style="padding:8px;">${dueDate}</td></tr>
+              <tr><td style="padding:8px;background:#fff0f0;font-weight:600;">Days Overdue</td><td style="padding:8px;color:#c0392b;font-weight:700;">${daysOverdue} days</td></tr>
+            </table>
+            <p>Please make payment as soon as possible. If you are experiencing difficulties, please contact us immediately.</p>
+            <p>JazakAllahu Khayran,<br><strong>AQ Society Finance Team</strong></p>
+          </div>
+          <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
+            Abdullah Quilliam Society — Student Accommodation
+          </div>
+        </div>`;
+      await sendEmail(tenant.email, tenant.fullName ?? firstName, `OVERDUE: Rent Payment ${daysOverdue} Days Late — ${payment.periodLabel} — AQ Society`, html)
+        .then(async () => {
+          await db.update(accommodationRentPayments)
+            .set({ status: "overdue", overdueSentAt: new Date() })
+            .where(eqOp(accommodationRentPayments.id, payment.id));
+          console.log(`[Scheduled] 8-14 day overdue notice sent to ${tenant.email}`);
+        })
+        .catch(e => console.error(`[Scheduled] Failed to send overdue notice to ${tenant.email}:`, e));
+    }
+
+    // ── 14+ day escalation to owner/managers ──────────────────────────────────
+    const overdue14plus = await db.select({ payment: accommodationRentPayments, tenant: accommodationTenants })
+      .from(accommodationRentPayments)
+      .innerJoin(accommodationTenants, eqOp(accommodationRentPayments.tenantId, accommodationTenants.id))
+      .where(andOp(
+        sqlOp`${accommodationRentPayments.dueDate} < ${todayStr}`,
+        sqlOp`DATEDIFF(${todayStr}, ${accommodationRentPayments.dueDate}) >= 14`,
+        orOp(eqOp(accommodationRentPayments.status, "pending"), eqOp(accommodationRentPayments.status, "overdue")),
+        isNullOp(accommodationRentPayments.escalationSentAt),
+      ));
+
+    if (overdue14plus.length > 0) {
+      const { notifyOwner } = await import("./_core/notification");
+      const rows = overdue14plus.map(r => `${r.tenant.fullName} — ${r.payment.periodLabel} — £${parseFloat(r.payment.amountDue as any).toFixed(2)} (${Math.floor((today.getTime() - new Date(r.payment.dueDate as any).getTime()) / 86400000)} days overdue)`).join("\n");
+      await notifyOwner({
+        title: `⚠️ ${overdue14plus.length} Rent Payment(s) 14+ Days Overdue`,
+        content: `The following student accommodation rent payments are 14+ days overdue and require immediate attention:\n\n${rows}\n\nPlease review in the Student Accommodation section.`,
+      }).catch(e => console.error("[Scheduled] Failed to send escalation notification:", e));
+
+      for (const row of overdue14plus) {
+        const { tenant, payment } = row;
+        if (!tenant.email) continue;
+        const firstName = (tenant.fullName ?? "").split(" ")[0] ?? tenant.fullName ?? "Tenant";
+        const daysOverdue = Math.floor((today.getTime() - new Date(payment.dueDate as any).getTime()) / 86400000);
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+            <div style="background:#7b241c;padding:24px;text-align:center;">
+              <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
+              <p style="color:#ffd;margin:4px 0 0;">URGENT: Rent Escalation Notice</p>
+            </div>
+            <div style="padding:24px;background:#fff;">
+              <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+              <p style="color:#7b241c;font-weight:700;font-size:16px;">URGENT: Your rent payment is ${daysOverdue} days overdue.</p>
+              <p>This matter has been escalated to the management and trustees of Abdullah Quilliam Society. Please contact us immediately.</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+                <tr><td style="padding:8px;background:#fff0f0;font-weight:600;">Period</td><td style="padding:8px;">${payment.periodLabel}</td></tr>
+                <tr><td style="padding:8px;background:#fff0f0;font-weight:600;">Amount Due</td><td style="padding:8px;font-size:18px;color:#7b241c;font-weight:700;">£${parseFloat(payment.amountDue as any).toFixed(2)}</td></tr>
+                <tr><td style="padding:8px;background:#fff0f0;font-weight:600;">Days Overdue</td><td style="padding:8px;color:#7b241c;font-weight:700;">${daysOverdue} days</td></tr>
+              </table>
+              <p>Please contact us urgently at your earliest convenience.</p>
+              <p>JazakAllahu Khayran,<br><strong>AQ Society Management</strong></p>
+            </div>
+            <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
+              Abdullah Quilliam Society — Student Accommodation
+            </div>
+          </div>`;
+        await sendEmail(tenant.email, tenant.fullName ?? firstName, `URGENT: Rent ${daysOverdue} Days Overdue — Escalation Notice — AQ Society`, html)
+          .then(async () => {
+            await db.update(accommodationRentPayments)
+              .set({ escalationSentAt: new Date() })
+              .where(eqOp(accommodationRentPayments.id, payment.id));
+            console.log(`[Scheduled] 14+ day escalation sent to ${tenant.email}`);
+          })
+          .catch(e => console.error(`[Scheduled] Failed to send escalation to ${tenant.email}:`, e));
+      }
+    }
+
+    console.log(`[Scheduled] Rent reminders complete: ${upcoming.length} due-soon, ${overdue8to14.length} overdue (8-14d), ${overdue14plus.length} escalated (14+d)`);
+  } catch (e) {
+    console.error("[Scheduled] Rent reminder job failed:", e);
+  }
+}

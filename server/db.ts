@@ -12,6 +12,8 @@ import {
   staffProfiles, payrollRecords, InsertPayrollRecord,
   trustees, InsertTrustee,
   orgMembers, InsertOrgMember,
+  accommodationTenants, InsertAccommodationTenant, AccommodationTenant,
+  accommodationRentPayments, InsertAccommodationRentPayment, AccommodationRentPayment,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -881,3 +883,4 @@ export async function deleteOrgMember(id: number) {
   if (!db) return;
   await db.update(orgMembers).set({ isActive: false }).where(eq(orgMembers.id, id));
 }
+

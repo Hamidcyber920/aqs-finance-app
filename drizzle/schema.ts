@@ -815,3 +815,74 @@ export const successionEvents = mysqlTable("succession_events", {
 });
 export type SuccessionEvent = typeof successionEvents.$inferSelect;
 export type InsertSuccessionEvent = typeof successionEvents.$inferInsert;
+
+// ─── STUDENT ACCOMMODATION ────────────────────────────────────────────────────
+
+export const accommodationTenants = mysqlTable("accommodation_tenants", {
+  id: int("id").autoincrement().primaryKey(),
+  // Identity
+  fullName: varchar("fullName", { length: 200 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  phone: varchar("phone", { length: 30 }),
+  whatsappPhone: varchar("whatsappPhone", { length: 30 }), // may differ from phone
+  // Room / unit
+  roomNumber: varchar("roomNumber", { length: 50 }),
+  propertyAddress: text("propertyAddress"),
+  // Contract
+  contractStartDate: date("contractStartDate"),
+  contractEndDate: date("contractEndDate"),
+  contractDocUrl: text("contractDocUrl"), // S3 URL of uploaded contract
+  // Financials
+  rentAmount: decimal("rentAmount", { precision: 10, scale: 2 }).notNull(),
+  rentFrequency: mysqlEnum("rentFrequency", ["weekly", "monthly", "quarterly"]).default("monthly").notNull(),
+  rentDueDay: int("rentDueDay").default(1).notNull(), // day of month (1-28) or day of week (1-7 for weekly)
+  depositAmount: decimal("depositAmount", { precision: 10, scale: 2 }),
+  depositPaidDate: date("depositPaidDate"),
+  depositRefundedDate: date("depositRefundedDate"),
+  depositNotes: text("depositNotes"),
+  // Status
+  status: mysqlEnum("status", ["active", "inactive", "notice_given", "vacated"]).default("active").notNull(),
+  // Emergency contact
+  emergencyContactName: varchar("emergencyContactName", { length: 200 }),
+  emergencyContactPhone: varchar("emergencyContactPhone", { length: 30 }),
+  // Notes
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AccommodationTenant = typeof accommodationTenants.$inferSelect;
+export type InsertAccommodationTenant = typeof accommodationTenants.$inferInsert;
+
+export const accommodationRentPayments = mysqlTable("accommodation_rent_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  tenantId: int("tenantId").notNull(),
+  // Period this payment covers
+  periodLabel: varchar("periodLabel", { length: 100 }).notNull(), // e.g. "May 2026" or "Week 20 2026"
+  periodStart: date("periodStart").notNull(),
+  periodEnd: date("periodEnd").notNull(),
+  dueDate: date("dueDate").notNull(),
+  // Amount
+  amountDue: decimal("amountDue", { precision: 10, scale: 2 }).notNull(),
+  amountPaid: decimal("amountPaid", { precision: 10, scale: 2 }),
+  // Payment status
+  status: mysqlEnum("status", ["pending", "paid", "partial", "overdue", "waived"]).default("pending").notNull(),
+  paidDate: date("paidDate"),
+  paymentMethod: mysqlEnum("paymentMethod", ["bank_transfer", "cash", "cheque", "standing_order", "other"]),
+  receiptUrl: text("receiptUrl"), // S3 URL of payment receipt/evidence
+  // Confirmation (sign-off by manager/deputy)
+  confirmedByUserId: int("confirmedByUserId"),
+  confirmedByName: varchar("confirmedByName", { length: 200 }),
+  confirmedAt: timestamp("confirmedAt"),
+  // Reminders sent
+  reminderSentAt: timestamp("reminderSentAt"),    // 7-day due reminder
+  overdueSentAt: timestamp("overdueSentAt"),       // 8-day overdue reminder
+  escalationSentAt: timestamp("escalationSentAt"), // 14-day escalation to trustees
+  // Notes
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AccommodationRentPayment = typeof accommodationRentPayments.$inferSelect;
+export type InsertAccommodationRentPayment = typeof accommodationRentPayments.$inferInsert;

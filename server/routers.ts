@@ -13,6 +13,7 @@ import { nanoid } from "nanoid";
 import { localAuthRouter, adminRouter } from "./routers/localAuth";
 import { backupRouter, triggerBackupSoon } from "./routers/backup";
 import { voiceAgentRouter } from "./routers/voiceAgent";
+import { accommodationRouter } from "./routers/accommodation";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -352,6 +353,7 @@ export const appRouter = router({
   admin: adminRouter,
   backup: backupRouter,
   voiceAgent: voiceAgentRouter,
+  accommodation: accommodationRouter,
 
   // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
   succession: router({
