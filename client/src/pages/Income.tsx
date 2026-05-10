@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft, Upload, X, Camera, Search, Download, ChevronDown } from "lucide-react";
@@ -284,6 +285,7 @@ function SubcategoryPanel({
 
 export default function IncomePage() {
   const { user } = useAuth();
+  const { canDelete: canDeleteIncome } = usePermissions();
   const [open, setOpen] = useState(false);
   const [catFilter, setCatFilter] = useState("All");
   const [period, setPeriod] = useState("Monthly");
@@ -598,22 +600,15 @@ export default function IncomePage() {
                             {r.signedByTrustee && <div><span style={{color:T.muted,display:"block",marginBottom:2}}>SIGNED BY TRUSTEE</span><span style={{color:T.white}}>{r.signedByTrustee}</span></div>}
                             {r.receiptUrl && <div style={{gridColumn:"1/-1"}}><span style={{color:T.muted,display:"block",marginBottom:4}}>ATTACHED EVIDENCE</span><a href={r.receiptUrl} target="_blank" rel="noreferrer" style={{color:T.mint,textDecoration:"underline"}}>View attached document</a></div>}
                             <div><span style={{color:T.muted,display:"block",marginBottom:2}}>RECORDED AT</span><span style={{color:T.white}}>{r.createdAt ? new Date(r.createdAt).toLocaleString("en-GB") : "—"}</span></div>
-                            {/* Delete button — visible within 10 min of creation or for superadmin/trustee */}
-                            {(() => {
-                              const ageMs = r.createdAt ? Date.now() - new Date(r.createdAt).getTime() : Infinity;
-                              const canDel = (user?.role === "superadmin" || user?.role === "trustee") || ageMs <= 10 * 60 * 1000;
-                              if (!canDel) return null;
-                              const minsLeft = Math.max(0, Math.ceil((10 * 60 * 1000 - ageMs) / 60000));
-                              const isAdmin = user?.role === "superadmin" || user?.role === "trustee";
-                              return (
-                                <div style={{gridColumn:"1/-1",marginTop:4}}>
-                                  <button onClick={(e)=>{ e.stopPropagation(); if(window.confirm("Delete this income record? This cannot be undone.")) deleteMutation.mutate({id:r.id}); }}
-                                    style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:600,border:"1px solid rgba(239,68,68,0.4)",background:"rgba(239,68,68,0.1)",color:"#f87171",cursor:"pointer"}}>
-                                    Delete Record{!isAdmin && minsLeft > 0 ? ` (${minsLeft} min left)` : ""}
-                                  </button>
-                                </div>
-                              );
-                            })()}
+                            {/* Delete button — only superadmin/owner can delete */}
+                            {canDeleteIncome && (
+                              <div style={{gridColumn:"1/-1",marginTop:4}}>
+                                <button onClick={(e)=>{ e.stopPropagation(); if(window.confirm("Delete this income record? This cannot be undone.")) deleteMutation.mutate({id:r.id}); }}
+                                  style={{padding:"6px 14px",borderRadius:8,fontSize:12,fontWeight:600,border:"1px solid rgba(239,68,68,0.4)",background:"rgba(239,68,68,0.1)",color:"#f87171",cursor:"pointer"}}>
+                                  Delete Record
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>

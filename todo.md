@@ -826,3 +826,34 @@
 - [x] "Send to All Selected (N)" button opens all selected recipients' WhatsApp chats at once using window.open
 - [x] Works for both channel members and the staff/manager toggle section
 - [x] Shows a browser popup-blocker warning if popups are blocked
+
+## Permission Hierarchy — Full CRUD Control (May 2026)
+- [ ] Backend: create `ownerOrSuperadmin` procedure guard (ctx.user.role === 'superadmin' OR ctx.user.openId === OWNER_OPEN_ID)
+- [ ] Backend: wrap ALL delete procedures with ownerOrSuperadmin guard (receipts, expenses, income, loans, payroll, donors, campaigns, trustees, channels, templates, messages, reconciliation, backups)
+- [ ] Backend: comm_channels deleteChannel — restricted to ownerOrSuperadmin only
+- [ ] Backend: comm_channels createChannel — allowed for manager, deputy, superadmin, owner (not staff/volunteer)
+- [ ] Backend: update procedures for sensitive records — restricted to manager+ (not staff/volunteer)
+- [ ] Frontend: useAuth hook exposes `canDelete` and `canEdit` booleans based on role/openId
+- [ ] Frontend: all delete buttons (trash icons, "Delete" menu items) hidden for non-superadmin/non-owner
+- [ ] Frontend: all edit buttons hidden for staff/volunteer roles (read-only view)
+- [ ] Frontend: channel sidebar delete button — only visible to superadmin/owner
+- [ ] Frontend: Trustees page delete member — only visible to superadmin/owner
+- [ ] Frontend: show "Read Only" badge in header for staff/volunteer users
+
+## Permission Hierarchy — Full CRUD Control (May 2026 — COMPLETED)
+- [x] Backend: `isOwnerOrSuperAdmin` helper updated — only superadmin role OR owner's openId qualify (generic "admin" removed)
+- [x] Backend: `assertCanDelete` helper enforces owner/superadmin-only deletion on all procedures
+- [x] Backend: `canDelete` helper used in all delete procedures (receipts, expenses, income, loans, payroll, trustees, channels, templates, org members)
+- [x] Backend: comm_channels deleteChannel — restricted to ownerOrSuperadmin only (assertCanDelete)
+- [x] Backend: comm_channels createChannel — allowed for manager, deputy, superadmin, owner
+- [x] Frontend: `usePermissions` hook created at `client/src/hooks/usePermissions.ts`
+  - canDelete: superadmin role OR isOwner (openId matches OWNER_OPEN_ID)
+  - canEdit: superadmin, owner, admin, or trustee
+  - canAdd: all authenticated users
+- [x] Frontend: auth.me now returns `isOwner: true` when user is superadmin or owner by openId
+- [x] Frontend: Trustees page — edit/role-change buttons gated by canEdit; Add Member gated by canAdd
+- [x] Frontend: OrgChart page — edit node button gated by canEdit
+- [x] Frontend: Communications page — delete channel button gated by canDelete; new channel form gated by canAdd; delete template gated by canDelete
+- [x] Frontend: Income page — delete button gated by canDelete
+- [x] Frontend: ReceiptDetail page — edit/save/delete buttons gated by canEdit/canDelete
+- [x] Frontend: MonthlyExpenses page — authorise/reject/pay buttons gated by canEdit

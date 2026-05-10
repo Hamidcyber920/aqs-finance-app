@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function ReceiptDetailPage() {
   const params = useParams<{ id: string }>();
@@ -29,6 +30,7 @@ export default function ReceiptDetailPage() {
 
   const [editing, setEditing] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const { canEdit, canDelete } = usePermissions();
   const [form, setForm] = useState({
     vendor: "",
     receiptDate: "",
@@ -148,12 +150,13 @@ export default function ReceiptDetailPage() {
               Re-process
             </Button>
           ) : null}
-          {!editing ? (
+          {!editing && canEdit && (
             <Button size="sm" onClick={() => setEditing(true)} className="gap-2">
               <Edit2 className="h-4 w-4" />
               Edit
             </Button>
-          ) : (
+          )}
+          {editing && (
             <>
               <Button size="sm" onClick={handleSave} disabled={updateMutation.isPending} className="gap-2">
                 {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -164,14 +167,16 @@ export default function ReceiptDetailPage() {
               </Button>
             </>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-destructive hover:text-destructive"
-            onClick={() => setShowDelete(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {canDelete && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setShowDelete(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 

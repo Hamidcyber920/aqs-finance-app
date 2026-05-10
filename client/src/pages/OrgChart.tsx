@@ -2,6 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Mail, Phone, Pencil, ChevronDown, ChevronUp, Check, X, MapPin, Heart, Cake } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const T = {
   navy:"#0A192F", purple:"#635BFF", mint:"#00FFC2", white:"#FFFFFF",
@@ -109,6 +110,7 @@ function PersonCard({ person, isRoot = false, onSaved }: { person: any; isRoot?:
   const dob = person.dateOfBirth ?? null;
   const age = calcAge(dob);
   const isTrusteeRecord = !!person.fullName;
+  const { canEdit } = usePermissions();
 
   const waLink = phone ? `https://wa.me/44${phone.replace(/^0/, "").replace(/\s/g, "")}` : null;
   const telLink = phone ? `tel:${phone.replace(/\s/g, "")}` : null;
@@ -162,7 +164,7 @@ function PersonCard({ person, isRoot = false, onSaved }: { person: any; isRoot?:
           )}
         </div>
         <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-          {isTrusteeRecord && (
+          {isTrusteeRecord && canEdit && (
             <button onClick={e=>{ e.stopPropagation(); setEditing(!editing); setExpanded(true); setForm({ fullName:name,email,phone,role,notes:person.notes??"",dateOfBirth:dob??"",addressLine1:person.addressLine1??"",addressLine2:person.addressLine2??"",city:person.city??"",postcode:person.postcode??"",nokName:person.nokName??"",nokPhone:person.nokPhone??"",nokEmail:person.nokEmail??"",nokRelationship:person.nokRelationship??"" }); }}
               style={{ width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }} title="Edit contact">
               <Pencil size={12}/>

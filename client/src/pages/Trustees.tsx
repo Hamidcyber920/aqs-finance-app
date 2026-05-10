@@ -5,6 +5,7 @@ import {
   Mail, Phone, Pencil, ChevronDown, ChevronUp, MapPin, Heart,
   Plus, X, Check, Users, Shield, Briefcase,
 } from "lucide-react";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const T = {
   navy:   "#0A192F",
@@ -76,6 +77,7 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>({});
   const [editingRole, setEditingRole] = useState(false);
+  const { canEdit } = usePermissions();
 
   const updateMutation = trpc.trustees.update.useMutation({
     onSuccess: () => { toast.success("Contact updated"); setEditing(false); onSaved(); },
@@ -143,7 +145,7 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
         </div>
         <div style={{ flex:1,minWidth:0 }}>
           <p style={{ fontSize:16,fontWeight:800,color:T.white,margin:0,lineHeight:1.3 }}>{name}</p>
-          {editingRole ? (
+          {canEdit && editingRole ? (
             <select
               autoFocus
               defaultValue={role}
@@ -155,19 +157,21 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
             </select>
           ) : (
             <span
-              onClick={() => setEditingRole(true)}
-              title="Click to change role"
-              style={{ fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:999,background:rc.bg,color:rc.color,display:"inline-block",marginTop:4,cursor:"pointer" }}
+              onClick={() => { if (canEdit) setEditingRole(true); }}
+              title={canEdit ? "Click to change role" : role}
+              style={{ fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:999,background:rc.bg,color:rc.color,display:"inline-block",marginTop:4,cursor:canEdit?"pointer":"default" }}
             >
-              {role} ✎
+              {role}{canEdit ? " ✎" : ""}
             </span>
           )}
           {age !== null && <p style={{ fontSize:12,color:T.muted,margin:"4px 0 0" }}>Age {age}</p>}
         </div>
         <div style={{ display:"flex",gap:6,flexShrink:0 }}>
-          <button onClick={e=>{e.stopPropagation();startEdit();}} style={{ width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
-            <Pencil size={13}/>
-          </button>
+          {canEdit && (
+            <button onClick={e=>{e.stopPropagation();startEdit();}} style={{ width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
+              <Pencil size={13}/>
+            </button>
+          )}
           <button onClick={e=>{e.stopPropagation();setExpanded(v=>!v);}} style={{ width:32,height:32,borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
             {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
           </button>
@@ -388,6 +392,7 @@ function AddMemberForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: (
 export default function TrusteesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const { data, refetch } = trpc.trustees.list.useQuery();
+  const { canAdd } = usePermissions();
   const allMembers: any[] = Array.isArray(data) ? data : [];
   const active = allMembers.filter((t: any) => t.isActive !== false);
 
@@ -422,10 +427,12 @@ export default function TrusteesPage() {
             </h1>
             <p style={{ fontSize:12,color:T.muted,margin:"4px 0 0" }}>AQS trustees, managers and staff — contact directory &amp; emergency details</p>
           </div>
-          <button onClick={()=>setShowAddForm(!showAddForm)}
-            style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 18px",borderRadius:12,background:showAddForm?"rgba(0,255,194,0.12)":`linear-gradient(135deg,${T.purple},#4f46e5)`,border:showAddForm?"1px solid rgba(0,255,194,0.4)":"none",color:showAddForm?T.mint:T.white,fontWeight:700,cursor:"pointer",fontSize:13 }}>
-            {showAddForm ? <><X size={14}/>Cancel</> : <><Plus size={14}/>Add Member</>}
-          </button>
+          {canAdd && (
+            <button onClick={()=>setShowAddForm(!showAddForm)}
+              style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 18px",borderRadius:12,background:showAddForm?"rgba(0,255,194,0.12)":`linear-gradient(135deg,${T.purple},#4f46e5)`,border:showAddForm?"1px solid rgba(0,255,194,0.4)":"none",color:showAddForm?T.mint:T.white,fontWeight:700,cursor:"pointer",fontSize:13 }}>
+              {showAddForm ? <><X size={14}/>Cancel</> : <><Plus size={14}/>Add Member</>}
+            </button>
+          )}
         </div>
 
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:12,marginBottom:24,animation:"fadeUp 0.5s ease 60ms both" }}>

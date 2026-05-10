@@ -42,9 +42,10 @@ const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
 
 function isAdmin(role: string) { return ADMIN_ROLES.includes(role); }
 
-/** Returns true if the user is the app owner (Dr Abdul Hamid) by openId, or is superadmin */
+/** Returns true if the user is the app owner (Dr Abdul Hamid) by openId, or is superadmin.
+ * NOTE: generic "admin" role does NOT qualify — only superadmin or the owner's openId. */
 function isOwnerOrSuperAdmin(user: { role: string; openId?: string | null }): boolean {
-  return user.role === "superadmin" || user.role === "admin" || (!!ENV.ownerOpenId && user.openId === ENV.ownerOpenId);
+  return user.role === "superadmin" || (!!ENV.ownerOpenId && user.openId === ENV.ownerOpenId);
 }
 
 /** Returns true if user is owner, superadmin, or the designated owner delegate */
@@ -77,24 +78,17 @@ const seniorProcedure = protectedProcedure.use(({ ctx, next }) => {
 
 // ─── Deletion policy helper ───────────────────────────────────────────────────
 // Rules:
-//   1. superadmin or trustee can always delete
-//   2. Any user can delete their OWN entry within 10 minutes of creation
-//   3. All other deletions are forbidden
-function canDelete(userRole: string, userId: number, entryUserId: number | null | undefined, createdAt: Date | null | undefined): boolean {
-  if (userRole === 'superadmin' || userRole === 'trustee') return true;
-  if (!createdAt) return false;
-  const ageMs = Date.now() - new Date(createdAt).getTime();
-  const TEN_MIN = 10 * 60 * 1000;
-  return entryUserId === userId && ageMs <= TEN_MIN;
+//   ONLY superadmin or owner (Dr Abdul Hamid by openId) can delete any record.
+//   Trustees, managers, deputies, staff, and volunteers CANNOT delete anything.
+function canDelete(user: { role: string; openId?: string | null }): boolean {
+  return isOwnerOrSuperAdmin(user);
 }
 
-function assertCanDelete(userRole: string, userId: number, entryUserId: number | null | undefined, createdAt: Date | null | undefined) {
-  if (!canDelete(userRole, userId, entryUserId, createdAt)) {
+function assertCanDelete(user: { role: string; openId?: string | null }) {
+  if (!canDelete(user)) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: userRole === 'superadmin' || userRole === 'trustee'
-        ? 'Delete not permitted'
-        : 'Entries can only be deleted within 10 minutes of creation, or by a superadmin/trustee',
+      message: 'Only the superadmin or owner (Dr Abdul Hamid) can delete records. Data cannot be removed by other users.',
     });
   }
 }
@@ -464,7 +458,11 @@ export const appRouter = router({
   }),
 
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(opts => {
+      const user = opts.ctx.user;
+      if (!user) return null;
+      return { ...user, isOwner: isOwnerOrSuperAdmin(user) };
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -584,10 +582,10 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    delete: protectedProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    delete: superAdminProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
       const receipt = await getReceiptById(input.id);
       if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
-      assertCanDelete(ctx.user.role, ctx.user.id, receipt.userId, receipt.createdAt);
+      assertCanDelete(ctx.user);
       await deleteReceipt(input.id);
       return { success: true };
     }),
@@ -596,7 +594,7 @@ export const appRouter = router({
     canDelete: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ ctx, input }) => {
       const receipt = await getReceiptById(input.id);
       if (!receipt) return { allowed: false, reason: 'Not found' };
-      const allowed = canDelete(ctx.user.role, ctx.user.id, receipt.userId, receipt.createdAt);
+      const allowed = canDelete(ctx.user);
       const ageMs = receipt.createdAt ? Date.now() - new Date(receipt.createdAt).getTime() : Infinity;
       const remainingMs = Math.max(0, 10 * 60 * 1000 - ageMs);
       return { allowed, remainingMs, isSuperAdmin: ctx.user.role === 'superadmin' || ctx.user.role === 'trustee' };
@@ -812,7 +810,7 @@ export const appRouter = router({
     recordFridayCollection: adminProcedure
       .input(z.object({ collectionDate: z.date(), amount: z.string(), collectedById: z.number().optional(), notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => createFridayCollection({ collectionDate: input.collectionDate, totalAmount: input.amount, recordedById: ctx.user.id, notes: input.notes })),
-    deleteDonation: protectedProcedure
+    deleteDonation: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const db = await (await import('./db')).getDb();
@@ -821,11 +819,11 @@ export const appRouter = router({
         const { fundraisingDonations } = await import('../drizzle/schema');
         const rows = await db.select().from(fundraisingDonations).where(eq(fundraisingDonations.id, input.id)).limit(1);
         if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
-        assertCanDelete(ctx.user.role, ctx.user.id, null, rows[0].createdAt);
+        assertCanDelete(ctx.user);
         await db.delete(fundraisingDonations).where(eq(fundraisingDonations.id, input.id));
         return { success: true };
       }),
-    deleteFridayCollection: protectedProcedure
+    deleteFridayCollection: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const db = await (await import('./db')).getDb();
@@ -834,7 +832,7 @@ export const appRouter = router({
         const { fridayCollections } = await import('../drizzle/schema');
         const rows = await db.select().from(fridayCollections).where(eq(fridayCollections.id, input.id)).limit(1);
         if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
-        assertCanDelete(ctx.user.role, ctx.user.id, rows[0].recordedById, rows[0].createdAt);
+        assertCanDelete(ctx.user);
         await db.delete(fridayCollections).where(eq(fridayCollections.id, input.id));
         return { success: true };
       }),
@@ -1950,7 +1948,7 @@ export const appRouter = router({
           const [result] = await db.insert(volunteerPayments).values({ ...input, createdById: ctx.user.id });
           return { id: (result as any).insertId, success: true };
         }),
-      delete: protectedProcedure
+      delete: superAdminProcedure
         .input(z.object({ id: z.number() }))
         .mutation(async ({ ctx, input }) => {
           const db = await (await import("./db")).getDb();
@@ -1959,7 +1957,7 @@ export const appRouter = router({
           const { volunteerPayments } = await import("../drizzle/schema");
           const rows = await db.select().from(volunteerPayments).where(eq(volunteerPayments.id, input.id)).limit(1);
           if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
-          assertCanDelete(ctx.user.role, ctx.user.id, rows[0].createdById, rows[0].createdAt);
+          assertCanDelete(ctx.user);
           await db.delete(volunteerPayments).where(eq(volunteerPayments.id, input.id));
           return { success: true };
         }),
@@ -2369,7 +2367,7 @@ export const appRouter = router({
     update: adminProcedure
       .input(z.object({ id: z.number(), paymentStatus: z.string().optional(), amount: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ input }) => { const { id, ...data } = input; await updateIncomeRecord(id, data as any); return { success: true }; }),
-    delete: protectedProcedure
+    delete: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const db = await (await import('./db')).getDb();
@@ -2378,7 +2376,7 @@ export const appRouter = router({
         const { incomeRecords } = await import('../drizzle/schema');
         const rows = await db.select().from(incomeRecords).where(eq(incomeRecords.id, input.id)).limit(1);
         if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
-        assertCanDelete(ctx.user.role, ctx.user.id, rows[0].recordedById, rows[0].createdAt);
+        assertCanDelete(ctx.user);
         await db.delete(incomeRecords).where(eq(incomeRecords.id, input.id));
         return { success: true };
       }),
@@ -2998,7 +2996,7 @@ export const appRouter = router({
         return { success: true, paidAt: now };
       }),
 
-    delete: protectedProcedure
+    delete: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const db = await (await import('./db')).getDb();
@@ -3007,7 +3005,7 @@ export const appRouter = router({
         const { invoices } = await import('../drizzle/schema');
         const rows = await db.select().from(invoices).where(eq(invoices.id, input.id)).limit(1);
         if (!rows[0]) throw new TRPCError({ code: 'NOT_FOUND' });
-        assertCanDelete(ctx.user.role, ctx.user.id, rows[0].createdById, rows[0].createdAt);
+        assertCanDelete(ctx.user);
         await db.delete(invoices).where(eq(invoices.id, input.id));
         return { success: true };
       }),
@@ -3291,7 +3289,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         }
         return createOrgMember({ ...input, isActive: true });
       }),
-    remove: seniorProcedure
+    remove: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         await deleteOrgMember(input.id);
@@ -3327,7 +3325,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         const created = await db.select().from(commChannels).orderBy(commChannels.sortOrder);
         return created[created.length - 1];
       }),
-    deleteChannel: adminProcedure
+    deleteChannel: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const db = await getDb();
@@ -3571,7 +3569,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           return { success: true, id: rows[0]?.id };
         }
       }),
-    deleteTemplate: adminProcedure
+    deleteTemplate: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const db = await getDb();

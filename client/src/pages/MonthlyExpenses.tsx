@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import {
@@ -30,7 +31,7 @@ function PaymentBadge({ status }: { status: string }) {
   return <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,background:s.bg,color:s.color,textTransform:"capitalize" }}>{status}</span>;
 }
 
-function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWithhold }: any) {
+function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWithhold, canEdit }: any) {
   const [expanded, setExpanded] = useState(true);
   const total = items.reduce((s: number, i: any) => s + Number(i.amount ?? i.grossPay ?? i.netPay ?? 0), 0);
 
@@ -79,7 +80,7 @@ function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWith
                 <div style={{ display:"flex",alignItems:"center",gap:10,flexShrink:0 }}>
                   <span style={{ fontSize:16,fontWeight:800,color }}> £{Number(item.amount??item.grossPay??item.netPay??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</span>
                   <div style={{ display:"flex",gap:6 }}>
-                    {!item.authorisedById && (
+                    {canEdit && !item.authorisedById && (
                       <>
                         <button onClick={()=>onAuthorise(item)} title="Authorise"
                           style={{ width:32,height:32,borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.25)",color:T.mint,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
@@ -91,7 +92,7 @@ function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWith
                         </button>
                       </>
                     )}
-                    {item.authorisedById && item.status !== "paid" && (
+                    {canEdit && item.authorisedById && item.status !== "paid" && (
                       <button onClick={()=>onPay(item)}
                         style={{ padding:"4px 12px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:700,cursor:"pointer" }}>
                         Mark Paid
@@ -110,6 +111,7 @@ function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWith
 
 export default function MonthlyExpensesPage() {
   const { user } = useAuth();
+  const { canEdit } = usePermissions();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -198,10 +200,10 @@ export default function MonthlyExpensesPage() {
         </div>
 
         {/* Sections */}
-        <SectionCard title="Payroll" items={payroll.map((i:any)=>({...i,_type:"payroll"}))} color={SECTION_COLORS.payroll} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}}/>
-        <SectionCard title="Invoices & Receipts" items={invoices.map((i:any)=>({...i,_type:"invoice"}))} color={SECTION_COLORS.invoices} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}}/>
-        <SectionCard title="Volunteer Payments" items={volunteers.map((i:any)=>({...i,_type:"volunteer"}))} color={SECTION_COLORS.volunteers} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}}/>
-        <SectionCard title="Qarde Hasan Repayments" items={loans.map((i:any)=>({...i,_type:"loan"}))} color={SECTION_COLORS.loans} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}}/>
+        <SectionCard title="Payroll" items={payroll.map((i:any)=>({...i,_type:"payroll"}))} color={SECTION_COLORS.payroll} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
+        <SectionCard title="Invoices & Receipts" items={invoices.map((i:any)=>({...i,_type:"invoice"}))} color={SECTION_COLORS.invoices} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
+        <SectionCard title="Volunteer Payments" items={volunteers.map((i:any)=>({...i,_type:"volunteer"}))} color={SECTION_COLORS.volunteers} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
+        <SectionCard title="Qarde Hasan Repayments" items={loans.map((i:any)=>({...i,_type:"loan"}))} color={SECTION_COLORS.loans} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
 
         {/* Reject/defer dialog */}
         <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
