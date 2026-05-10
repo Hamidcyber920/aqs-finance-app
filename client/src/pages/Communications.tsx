@@ -489,10 +489,10 @@ function MemberManager({
       return r.includes("trustee") || r.includes("chair");
     }
     if (channelName.includes("manager")) {
-      return r.includes("manager") && !r.includes("deputy");
+      return r.includes("manager") || r.includes("senior") || r.includes("deputy");
     }
     if (channelName.includes("staff")) {
-      return r.includes("manager") || r.includes("deputy");
+      return r.includes("staff") || r.includes("volunteer");
     }
     // Urgent / Friday Comms: allow all
     return true;
@@ -675,10 +675,12 @@ export default function CommunicationsPage() {
         return (allTrustees as any[]).filter((t:any)=>ids.includes(t.id));
       } catch { /* fall through */ }
     }
-    const roles = (ch.memberRoles??"").split(",").map((r:string)=>r.trim().toLowerCase());
+    const roles = (ch.memberRoles??"").split(",").map((r:string)=>r.trim().toLowerCase()).filter(Boolean);
+    if (!roles.length) return allTrustees as any[];
     return (allTrustees as any[]).filter((t:any)=>{
-      const r=(t.role??"").toLowerCase();
-      return roles.some((role:string)=>r.includes(role));
+      const memberRole=(t.role??"").toLowerCase();
+      // Match if any keyword appears in the member's role string
+      return roles.some((keyword:string)=>memberRole.includes(keyword));
     });
   })();
 

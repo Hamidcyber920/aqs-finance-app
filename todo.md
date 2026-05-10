@@ -747,11 +747,17 @@
 - [x] Add delete (trash) button on custom/editable channels in sidebar with confirmation dialog
 
 ## Trustees & Staff Contacts Redesign (May 2026)
-- [ ] Rename sidebar nav item "Trustees" → "Trustees & Staff Contacts"
-- [ ] Extend org_members schema: add seniorityOrder (int), nextOfKinName, nextOfKinRelation, nextOfKinPhone, nextOfKinEmail, address fields
-- [ ] Add seniority rank to each role type (chair > trustee > manager > deputy > staff)
-- [ ] Rebuild Trustees page as "Trustees & Staff Contacts" with sections: Board of Trustees, Managers, Staff
-- [ ] Contact cards match reference: avatar initials, role badge (gold), age, CONTACT (email+phone+WhatsApp), DATE OF BIRTH, ADDRESS, NEXT OF KIN, notes
-- [ ] Add manual entry form (+ Add Member button) with all fields: name, role, email, phone, DOB, address, nextOfKin, notes, seniorityOrder
-- [ ] Org Chart: auto-sort members by seniorityOrder within each tier
-- [ ] Communications Hub: channel member pickers auto-reflect all org_members (no hardcoded IDs)
+- [x] Rename sidebar nav item "Trustees" → "Trustees & Staff Contacts"
+- [x] Extend org_members schema: add seniorityOrder (int), nextOfKinName, nextOfKinRelation, nextOfKinPhone, nextOfKinEmail, address fields
+- [x] Add seniority rank to each role type (chair > trustee > manager > deputy > staff)
+- [x] Rebuild Trustees page as "Trustees & Staff Contacts" with sections: Board of Trustees, Managers, Staff
+- [x] Contact cards match reference: avatar initials, role badge (gold), age, CONTACT (email+phone+WhatsApp), DATE OF BIRTH, ADDRESS, NEXT OF KIN, notes
+- [x] Add manual entry form (+ Add Member button) with all fields: name, role, email, phone, DOB, address, nextOfKin, notes, seniorityOrder
+- [x] Org Chart: auto-sort members by seniorityOrder within each tier
+- [x] Communications Hub: channel member pickers auto-reflect all org_members (no hardcoded IDs)
+
+## Communications Hub Channel Member Fix (May 2026)
+- [x] Fix Managers channel: memberRoles should match "manager", "senior manager", "deputy manager" roles
+- [x] Fix Staff channel: memberRoles should match "staff", "volunteer" roles
+- [x] Update role-matching logic to use broader keyword matching (any role containing "manager" → Managers channel)
+- [x] Update default channel memberRoles seeds in DB to use correct keywords
