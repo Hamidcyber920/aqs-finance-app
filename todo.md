@@ -745,3 +745,13 @@
 - [x] New channel uses same full template (Manage Members, compose tabs, message thread)
 - [x] Add deleteChannel tRPC procedure (deletes channel + all its messages)
 - [x] Add delete (trash) button on custom/editable channels in sidebar with confirmation dialog
+
+## Trustees & Staff Contacts Redesign (May 2026)
+- [ ] Rename sidebar nav item "Trustees" → "Trustees & Staff Contacts"
+- [ ] Extend org_members schema: add seniorityOrder (int), nextOfKinName, nextOfKinRelation, nextOfKinPhone, nextOfKinEmail, address fields
+- [ ] Add seniority rank to each role type (chair > trustee > manager > deputy > staff)
+- [ ] Rebuild Trustees page as "Trustees & Staff Contacts" with sections: Board of Trustees, Managers, Staff
+- [ ] Contact cards match reference: avatar initials, role badge (gold), age, CONTACT (email+phone+WhatsApp), DATE OF BIRTH, ADDRESS, NEXT OF KIN, notes
+- [ ] Add manual entry form (+ Add Member button) with all fields: name, role, email, phone, DOB, address, nextOfKin, notes, seniorityOrder
+- [ ] Org Chart: auto-sort members by seniorityOrder within each tier
+- [ ] Communications Hub: channel member pickers auto-reflect all org_members (no hardcoded IDs)

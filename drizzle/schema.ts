@@ -684,6 +684,7 @@ export const trustees = mysqlTable("trustees", {
   nokPhone: varchar("nokPhone", { length: 30 }),
   nokEmail: varchar("nokEmail", { length: 320 }),
   nokRelationship: varchar("nokRelationship", { length: 100 }),
+  seniorityOrder: int("seniorityOrder").default(99).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

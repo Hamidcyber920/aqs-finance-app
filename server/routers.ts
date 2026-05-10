@@ -849,8 +849,24 @@ export const appRouter = router({
     list: adminProcedure.query(() => getTrustees(false)),
     listActive: protectedProcedure.query(() => getTrustees(true)),
     create: adminProcedure
-      .input(z.object({ fullName: z.string(), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional(), notes: z.string().optional() }))
-      .mutation(async ({ input }) => createTrustee({ fullName: input.fullName, email: input.email, phone: input.phone, role: input.role ?? "Trustee", notes: input.notes })),
+      .input(z.object({
+        fullName: z.string(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        role: z.string().optional(),
+        notes: z.string().optional(),
+        dateOfBirth: z.string().optional().nullable(),
+        addressLine1: z.string().optional().nullable(),
+        addressLine2: z.string().optional().nullable(),
+        city: z.string().optional().nullable(),
+        postcode: z.string().optional().nullable(),
+        nokName: z.string().optional().nullable(),
+        nokPhone: z.string().optional().nullable(),
+        nokEmail: z.string().optional().nullable(),
+        nokRelationship: z.string().optional().nullable(),
+        seniorityOrder: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => createTrustee({ ...input, role: input.role ?? "Trustee" } as any)),
     update: adminProcedure
       .input(z.object({
         id: z.number(),
@@ -871,6 +887,7 @@ export const appRouter = router({
         nokPhone: z.string().optional().nullable(),
         nokEmail: z.string().optional().nullable(),
         nokRelationship: z.string().optional().nullable(),
+        seniorityOrder: z.number().optional(),
       }))
       .mutation(async ({ input }) => { const { id, ...data } = input; await updateTrustee(id, data as any); return { success: true }; }),
     delete: superAdminProcedure

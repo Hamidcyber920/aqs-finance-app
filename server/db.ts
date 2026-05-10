@@ -808,8 +808,8 @@ export async function getDashboardStats(startDate?: Date, endDate?: Date) {
 export async function getTrustees(activeOnly = false) {
   const db = await getDb();
   if (!db) return [];
-  if (activeOnly) return db.select().from(trustees).where(eq(trustees.isActive, true)).orderBy(trustees.fullName);
-  return db.select().from(trustees).orderBy(trustees.fullName);
+  if (activeOnly) return db.select().from(trustees).where(eq(trustees.isActive, true)).orderBy(trustees.seniorityOrder, trustees.fullName);
+  return db.select().from(trustees).orderBy(trustees.seniorityOrder, trustees.fullName);
 }
 
 export async function getTrusteeById(id: number) {
