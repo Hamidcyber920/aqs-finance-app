@@ -371,6 +371,7 @@ export default function IncomePage() {
       setOpen(false);
       setSubPanel(null);
       setSelectedSub("");
+      setSelectedCat("");
       setEidType("");
       setEidDate("");
       setBazaarDate("");
@@ -389,7 +390,8 @@ export default function IncomePage() {
   });
 
   const { register, handleSubmit, reset, watch, setValue } = useForm<any>();
-  const watchCat = watch("category");
+  const [selectedCat, setSelectedCat] = useState<string>("");
+  const watchCat = selectedCat; // driven by state, not watch(), to ensure reliable re-renders
 
   const records: any[] = (data as any[]) ?? [];
   const totalIncome = records.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
@@ -433,6 +435,7 @@ export default function IncomePage() {
 
   function handleCategoryChange(cat: string) {
     setValue("category", cat);
+    setSelectedCat(cat);
     if (SUBCATEGORY_MAP[cat]) {
       setSubPanel(cat);
       setSelectedSub("");
@@ -461,6 +464,7 @@ export default function IncomePage() {
       setConfirmed(false);
       setSubPanel(null);
       setSelectedSub("");
+      setSelectedCat("");
       setEidType("");
       setEidDate("");
       setBazaarDate("");
@@ -505,7 +509,7 @@ export default function IncomePage() {
               style={{ padding:"8px 14px",borderRadius:12,fontSize:12,fontWeight:600,border:`1px solid ${showAll ? T.mint : T.border}`,background:showAll ? `rgba(52,211,153,0.15)` : `rgba(255,255,255,0.06)`,color:showAll ? T.mint : T.muted,cursor:"pointer",transition:"all 0.2s" }}>
               {showAll ? "Showing All" : "Show All"}
             </button>
-            <Button onClick={()=>{ setOpen(true); if(catFilter && catFilter !== "All") { setTimeout(()=>handleCategoryChange(catFilter), 0); } }}
+            <Button onClick={()=>{ setOpen(true); if(catFilter && catFilter !== "All") { handleCategoryChange(catFilter); } }}
               style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
               <Plus size={16}/> Add Income
             </Button>
