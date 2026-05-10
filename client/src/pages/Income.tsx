@@ -393,13 +393,25 @@ export default function IncomePage() {
   const [selectedCat, setSelectedCat] = useState<string>("");
   const watchCat = selectedCat; // driven by state, not watch(), to ensure reliable re-renders
 
-  // When the dialog opens, pre-select the active category filter (if not "All")
-  useEffect(() => {
-    if (open && catFilter && catFilter !== "All") {
-      handleCategoryChange(catFilter);
+  // Open the dialog with a pre-selected category so the correct fields show on the very first render
+  function openDialog(preselect?: string) {
+    const cat = preselect ?? (catFilter !== "All" ? catFilter : "");
+    if (cat) {
+      setValue("category", cat);
+      setSelectedCat(cat);
+      if (SUBCATEGORY_MAP[cat]) {
+        setSubPanel(cat);
+        setSelectedSub("");
+      } else {
+        setSubPanel(null);
+        setSelectedSub("");
+      }
+    } else {
+      setSelectedCat("");
+      setSubPanel(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+    setOpen(true);
+  }
 
   const records: any[] = (data as any[]) ?? [];
   const totalIncome = records.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
@@ -517,7 +529,7 @@ export default function IncomePage() {
               style={{ padding:"8px 14px",borderRadius:12,fontSize:12,fontWeight:600,border:`1px solid ${showAll ? T.mint : T.border}`,background:showAll ? `rgba(52,211,153,0.15)` : `rgba(255,255,255,0.06)`,color:showAll ? T.mint : T.muted,cursor:"pointer",transition:"all 0.2s" }}>
               {showAll ? "Showing All" : "Show All"}
             </button>
-            <Button onClick={()=>{ setOpen(true); }}
+            <Button onClick={()=>{ openDialog(); }}
               style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
               <Plus size={16}/> Add Income
             </Button>
