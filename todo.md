@@ -761,3 +761,8 @@
 - [x] Fix Staff channel: memberRoles should match "staff", "volunteer" roles
 - [x] Update role-matching logic to use broader keyword matching (any role containing "manager" → Managers channel)
 - [x] Update default channel memberRoles seeds in DB to use correct keywords
+
+## Role Editing, WhatsApp Links & Channel Customisation (May 2026)
+- [x] Trustees & Staff Contacts: add inline role-change dropdown on each contact card (pencil icon → role select → save instantly updates seniority order and channel membership)
+- [x] Communications Compose: add WhatsApp group link shortcut button that opens the channel's saved group link in a new tab
+- [x] Urgent & Friday Comms channels: keep as fully customisable (no auto-role filter) — Add Member shows all org members

@@ -75,6 +75,7 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>({});
+  const [editingRole, setEditingRole] = useState(false);
 
   const updateMutation = trpc.trustees.update.useMutation({
     onSuccess: () => { toast.success("Contact updated"); setEditing(false); onSaved(); },
@@ -88,6 +89,12 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
   const waLink = person.phone
     ? `https://wa.me/${person.phone.replace(/\D/g,"").replace(/^0/,"44")}`
     : null;
+
+  const saveRoleInline = (newRole: string) => {
+    const opt = ROLE_OPTIONS.find(o => o.value === newRole);
+    updateMutation.mutate({ id: person.id, role: newRole, seniorityOrder: opt?.seniority ?? 99 });
+    setEditingRole(false);
+  };
 
   const startEdit = () => {
     setForm({
@@ -133,7 +140,25 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
         </div>
         <div style={{ flex:1,minWidth:0 }}>
           <p style={{ fontSize:16,fontWeight:800,color:T.white,margin:0,lineHeight:1.3 }}>{name}</p>
-          <span style={{ fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:999,background:rc.bg,color:rc.color,display:"inline-block",marginTop:4 }}>{role}</span>
+          {editingRole ? (
+            <select
+              autoFocus
+              defaultValue={role}
+              onBlur={() => setEditingRole(false)}
+              onChange={e => saveRoleInline(e.target.value)}
+              style={{ marginTop:4,fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:999,background:"#0D2240",color:rc.color,border:`1px solid ${rc.color}40`,cursor:"pointer",outline:"none" }}
+            >
+              {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value} style={{ background:"#0D2240",color:T.white }}>{o.value}</option>)}
+            </select>
+          ) : (
+            <span
+              onClick={() => setEditingRole(true)}
+              title="Click to change role"
+              style={{ fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:999,background:rc.bg,color:rc.color,display:"inline-block",marginTop:4,cursor:"pointer" }}
+            >
+              {role} ✎
+            </span>
+          )}
           {age !== null && <p style={{ fontSize:12,color:T.muted,margin:"4px 0 0" }}>Age {age}</p>}
         </div>
         <div style={{ display:"flex",gap:6,flexShrink:0 }}>
