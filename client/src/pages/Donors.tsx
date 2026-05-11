@@ -17,6 +17,13 @@ export default function DonorsPage() {
   const [search, setSearch] = useState("");
 
   const { data, refetch } = trpc.donors.list.useQuery({ limit:100 });
+  const mergeDonorMutation = trpc.donors.mergeFromScan.useMutation({
+    onSuccess: (res) => {
+      refetch();
+      toast.success(`Donor profile updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
+    },
+    onError: (e) => toast.error(`Merge failed: ${e.message}`),
+  });
   const createMutation = trpc.donors.create.useMutation({
     onSuccess: () => { toast.success("Donor added"); setOpen(false); refetch(); reset(); },
     onError: (e) => toast.error(e.message),
@@ -51,13 +58,29 @@ export default function DonorsPage() {
               buttonVariant="outline"
               onConfirm={(result) => {
                 const d = result.extractedData as any;
-                setOpen(true);
-                setTimeout(() => {
-                  if (d.name || d.fullName) setValue("name", d.name || d.fullName);
-                  if (d.email) setValue("email", d.email);
-                  if (d.phone) setValue("phone", d.phone);
-                  if (d.notes) setValue("notes", d.notes);
-                }, 200);
+                if (result.matchedProfile?.id) {
+                  // Merge extracted fields into the matched existing donor
+                  mergeDonorMutation.mutate({
+                    id: result.matchedProfile.id,
+                    name: d.name || d.fullName,
+                    email: d.email,
+                    phone: d.phone,
+                    addressLine1: d.addressLine1,
+                    city: d.city,
+                    postcode: d.postcode,
+                    giftAid: d.giftAid,
+                    notes: d.notes,
+                  });
+                } else {
+                  // No match — open Add Donor form pre-filled
+                  setOpen(true);
+                  setTimeout(() => {
+                    if (d.name || d.fullName) setValue('name', d.name || d.fullName);
+                    if (d.email) setValue('email', d.email);
+                    if (d.phone) setValue('phone', d.phone);
+                    if (d.notes) setValue('notes', d.notes);
+                  }, 200);
+                }
               }}
             />
             <Button onClick={() => setOpen(true)}

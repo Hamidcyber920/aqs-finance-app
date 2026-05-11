@@ -856,9 +856,16 @@ function DonorPortalPanel() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DonorCRM() {
-  const { data: leads } = trpc.crm.listLeads.useQuery();
+  const { data: leads, refetch: refetchLeads } = trpc.crm.listLeads.useQuery();
   const { data: certs } = trpc.crm.listGiftAidCertificates.useQuery();
   const { data: campaigns } = trpc.crm.listCampaignsWithProgress.useQuery();
+  const mergeDonorMutation = trpc.donors.mergeFromScan.useMutation({
+    onSuccess: (res) => {
+      refetchLeads();
+      toast.success(`Donor profile updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
+    },
+    onError: (e) => toast.error(`Merge failed: ${e.message}`),
+  });
 
   const incompleteLeads = leads?.filter((l) => !l.profileComplete).length ?? 0;
   const totalLeads = leads?.length ?? 0;
@@ -881,7 +888,21 @@ export default function DonorCRM() {
           buttonVariant="outline"
           onConfirm={(result) => {
             const d = result.extractedData as any;
-            toast.info(`AI extracted donor: ${d.name || d.fullName || "unknown"}. Use QuickCapture tab to add them.`);
+            if (result.matchedProfile?.id) {
+              mergeDonorMutation.mutate({
+                id: result.matchedProfile.id,
+                name: d.name || d.fullName,
+                email: d.email,
+                phone: d.phone,
+                addressLine1: d.addressLine1,
+                city: d.city,
+                postcode: d.postcode,
+                giftAid: d.giftAid,
+                notes: d.notes,
+              });
+            } else {
+              toast.info(`AI extracted donor: ${d.name || d.fullName || 'unknown'}. Use QuickCapture tab to add them.`);
+            }
           }}
         />
       </div>

@@ -1019,6 +1019,41 @@ export const appRouter = router({
     delete: superAdminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => { await deleteTrustee(input.id); return { success: true }; }),
+
+    // Merge AI-extracted fields into an existing trustee record
+    mergeFromScan: seniorProcedure
+      .input(z.object({
+        id: z.number(),
+        fullName: z.string().optional(),
+        role: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        dateOfBirth: z.string().optional(),
+        addressLine1: z.string().optional(),
+        addressLine2: z.string().optional(),
+        city: z.string().optional(),
+        postcode: z.string().optional(),
+        nokName: z.string().optional(),
+        nokPhone: z.string().optional(),
+        nokRelationship: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { id, ...fields } = input;
+        const updates: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(fields)) {
+          if (v !== undefined && v !== null && v !== '') updates[k] = v;
+        }
+        if (Object.keys(updates).length > 0) {
+          // Build and execute raw update using Drizzle's sql helper
+          const setClauses = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');
+          const vals = [...Object.values(updates), id];
+          await db.execute({ sql: `UPDATE trustees SET ${setClauses}, updatedAt = NOW() WHERE id = ?`, args: vals } as any);
+        }
+        return { success: true, updatedFields: Object.keys(updates) };
+      }),
   }),
 
   // ─── LOANS (QARDE HASAN) ──────────────────────────────────────────────────
@@ -2447,7 +2482,38 @@ export const appRouter = router({
         await db2.update(ir).set(updates).where(eq2(ir.id, input.id));
         return { success: true };
       }),
+
+    // Merge AI-extracted tenant/rental fields into an existing income record
+    mergeFromScan: seniorProcedure
+      .input(z.object({
+        id: z.number(),
+        tenantName: z.string().optional(),
+        amount: z.number().optional(),
+        paymentDate: z.string().optional(),
+        periodStart: z.string().optional(),
+        periodEnd: z.string().optional(),
+        propertyUnit: z.string().optional(),
+        paymentMethod: z.string().optional(),
+        reference: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { id, ...fields } = input;
+        const updates: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(fields)) {
+          if (v !== undefined && v !== null && v !== '') updates[k] = v;
+        }
+        if (Object.keys(updates).length > 0) {
+          const setClauses = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');
+          const vals = [...Object.values(updates), id];
+          await (db as any).execute(`UPDATE income_records SET ${setClauses}, updatedAt = NOW() WHERE id = ?`, vals);
+        }
+        return { success: true, updatedFields: Object.keys(updates) };
+      }),
   }),
+
 
   // ─── DONORS ───────────────────────────────────────────────────────────────
 
@@ -2523,8 +2589,36 @@ export const appRouter = router({
         .where(eq(incomeDonorsTable.incomeRecordId, input.incomeRecordId));
       return rows;
     }),
-  }),
 
+    // Merge AI-extracted fields into an existing donor record
+    mergeFromScan: seniorProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        addressLine1: z.string().optional(),
+        city: z.string().optional(),
+        postcode: z.string().optional(),
+        giftAid: z.boolean().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { id, ...fields } = input;
+        const updates: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(fields)) {
+          if (v !== undefined && v !== null && v !== '') updates[k] = v;
+        }
+        if (Object.keys(updates).length > 0) {
+          const setClauses = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');
+          const vals = [...Object.values(updates), id];
+          await (db as any).execute(`UPDATE donors SET ${setClauses}, updatedAt = NOW() WHERE id = ?`, vals);
+        }
+        return { success: true, updatedFields: Object.keys(updates) };
+      }),
+  }),
   // ─── EMAIL CAMPAIGNS ──────────────────────────────────────────────────────
 
   campaigns: router({
@@ -3700,6 +3794,167 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
           confidence,
           moduleType: input.moduleType,
           isBulk: 'records' in extractedData,
+        };
+      }),
+
+    // ─── PROFILE MATCHER ───────────────────────────────────────────────────────────────────────────
+    // Fuzzy-match an extracted name against existing records in the database.
+    // Returns up to 3 candidate matches with a similarity score (0-100).
+    // Used by SmartUpload to auto-select the matching existing profile.
+    matchProfile: seniorProcedure
+      .input(z.object({
+        name: z.string(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        moduleType: z.enum([
+          'staff_profile', 'crm_donor', 'income_rental', 'fundraising_donation',
+          'loan_application', 'receipt', 'invoice', 'payroll', 'bank_statement',
+          'friday_collection', 'handwritten_collection', 'business_card',
+          'bank_transfer_screenshot', 'loan_repayment',
+        ]),
+      }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { matches: [] };
+
+        function normaliseName(n: string): string {
+          return n.toLowerCase()
+            .replace(/^(mr\.?|mrs\.?|ms\.?|dr\.?|prof\.?|rev\.?|sheikh\.?|shaikh\.?)\s+/i, '')
+            .replace(/[^a-z0-9 ]/g, '').trim();
+        }
+
+        function diceSimilarity(a: string, b: string): number {
+          if (!a || !b) return 0;
+          if (a === b) return 1;
+          const bigrams = (s: string) => {
+            const bg = new Set<string>();
+            for (let i = 0; i < s.length - 1; i++) bg.add(s.slice(i, i + 2));
+            return bg;
+          };
+          const bgA = bigrams(a);
+          const bgB = bigrams(b);
+          let intersection = 0;
+          bgA.forEach(bg => { if (bgB.has(bg)) intersection++; });
+          return (2 * intersection) / (bgA.size + bgB.size);
+        }
+
+        function tokenOverlap(a: string, b: string): number {
+          const tokA = a.split(' ').filter(Boolean);
+          const tokB = b.split(' ').filter(Boolean);
+          const [shorter, longer] = tokA.length <= tokB.length ? [tokA, tokB] : [tokB, tokA];
+          const matches = shorter.filter(t => longer.some(lt => lt.startsWith(t) || t.startsWith(lt)));
+          return shorter.length ? matches.length / shorter.length : 0;
+        }
+
+        function scoreCandidate(candidateName: string, candidateEmail?: string | null, candidatePhone?: string | null): number {
+          const normInput = normaliseName(input.name);
+          const normCandidate = normaliseName(candidateName);
+          let s = Math.max(
+            diceSimilarity(normInput, normCandidate),
+            tokenOverlap(normInput, normCandidate) * 0.9,
+          );
+          if (input.email && candidateEmail && input.email.toLowerCase() === candidateEmail.toLowerCase()) s = Math.max(s, 0.95);
+          if (input.phone && candidatePhone) {
+            const normPhone = (p: string) => p.replace(/[^0-9]/g, '').slice(-10);
+            if (normPhone(input.phone) === normPhone(candidatePhone)) s = Math.max(s, 0.92);
+          }
+          return s;
+        }
+
+        type MatchCandidate = {
+          id: number; name: string; subtitle: string;
+          email?: string | null; phone?: string | null;
+          score: number; table: string;
+        };
+        const candidates: MatchCandidate[] = [];
+
+        const staffTypes = ['staff_profile', 'payroll', 'business_card'];
+        const donorTypes = ['crm_donor', 'fundraising_donation', 'handwritten_collection'];
+        const tenantTypes = ['income_rental'];
+        const loanTypes = ['loan_application', 'loan_repayment'];
+
+        if (staffTypes.includes(input.moduleType)) {
+          const [trusteeRows] = await db.execute(
+            'SELECT id, fullName, role, email, phone FROM trustees WHERE isActive = 1 LIMIT 200'
+          ) as any;
+          for (const row of (trusteeRows as any[])) {
+            const s = scoreCandidate(row.fullName, row.email, row.phone);
+            if (s > 0.3) candidates.push({ id: row.id, name: row.fullName, subtitle: row.role, email: row.email, phone: row.phone, score: s, table: 'trustees' });
+          }
+          const [spRows] = await db.execute(
+            'SELECT sp.id, COALESCE(sp.fullName, u.name) AS displayName, u.email, sp.contractType FROM staff_profiles sp JOIN users u ON sp.userId = u.id LIMIT 200'
+          ) as any;
+          for (const row of (spRows as any[])) {
+            const s = scoreCandidate(row.displayName, row.email);
+            if (s > 0.3) candidates.push({ id: row.id, name: row.displayName, subtitle: row.contractType || 'Staff', email: row.email, score: s, table: 'staff_profiles' });
+          }
+          const [omRows] = await db.execute(
+            'SELECT id, name, title FROM org_members WHERE isActive = 1 LIMIT 200'
+          ) as any;
+          for (const row of (omRows as any[])) {
+            const s = scoreCandidate(row.name);
+            if (s > 0.3) candidates.push({ id: row.id, name: row.name, subtitle: row.title, score: s, table: 'org_members' });
+          }
+        }
+
+        if (donorTypes.includes(input.moduleType)) {
+          const [donorRows] = await db.execute(
+            'SELECT id, name, email, phone FROM donors LIMIT 500'
+          ) as any;
+          for (const row of (donorRows as any[])) {
+            const s = scoreCandidate(row.name, row.email, row.phone);
+            if (s > 0.3) candidates.push({ id: row.id, name: row.name, subtitle: 'Donor', email: row.email, phone: row.phone, score: s, table: 'donors' });
+          }
+        }
+
+        if (tenantTypes.includes(input.moduleType)) {
+          const [tenantRows] = await db.execute(
+            'SELECT id, tenantName FROM income_records GROUP BY tenantName LIMIT 200'
+          ) as any;
+          for (const row of (tenantRows as any[])) {
+            const s = scoreCandidate(row.tenantName);
+            if (s > 0.3) candidates.push({ id: row.id, name: row.tenantName, subtitle: 'Tenant', score: s, table: 'income_records' });
+          }
+        }
+
+        if (loanTypes.includes(input.moduleType)) {
+          const [loanRows] = await db.execute(
+            'SELECT id, borrowerName, borrowerEmail, borrowerPhone FROM loan_applications LIMIT 200'
+          ) as any;
+          for (const row of (loanRows as any[])) {
+            const s = scoreCandidate(row.borrowerName, row.borrowerEmail, row.borrowerPhone);
+            if (s > 0.3) candidates.push({ id: row.id, name: row.borrowerName, subtitle: 'Loan Applicant', email: row.borrowerEmail, phone: row.borrowerPhone, score: s, table: 'loan_applications' });
+          }
+        }
+
+        if (['receipt', 'invoice', 'bank_statement', 'bank_transfer_screenshot', 'friday_collection'].includes(input.moduleType)) {
+          const [userRows] = await db.execute(
+            "SELECT id, name, email FROM users WHERE status = 'active' LIMIT 200"
+          ) as any;
+          for (const row of (userRows as any[])) {
+            const s = scoreCandidate(row.name, row.email);
+            if (s > 0.3) candidates.push({ id: row.id, name: row.name, subtitle: 'User', email: row.email, score: s, table: 'users' });
+          }
+        }
+
+        candidates.sort((a, b) => b.score - a.score);
+        const seen = new Set<string>();
+        const unique = candidates.filter(c => {
+          const key = `${c.table}:${c.id}`;
+          if (seen.has(key)) return false;
+          seen.add(key); return true;
+        });
+
+        return {
+          matches: unique.slice(0, 3).map(c => ({
+            id: c.id,
+            name: c.name,
+            subtitle: c.subtitle,
+            email: c.email ?? null,
+            phone: c.phone ?? null,
+            score: Math.round(c.score * 100),
+            table: c.table,
+          })),
         };
       }),
   }),

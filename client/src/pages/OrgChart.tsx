@@ -382,6 +382,13 @@ function SectionLabel({ label, color }: { label: string; color: string }) {
 export default function OrgChartPage() {
   const { data: usersData } = trpc.users.list.useQuery({});
   const { data: trusteesData, refetch } = trpc.trustees.list.useQuery();
+  const mergeMutation = trpc.trustees.mergeFromScan.useMutation({
+    onSuccess: (res) => {
+      refetch();
+      toast.success(`Profile updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
+    },
+    onError: (e) => toast.error(`Merge failed: ${e.message}`),
+  });
 
   const users: any[] = usersData?.rows ?? [];
   const allTrustees: any[] = Array.isArray(trusteesData) ? trusteesData : [];
@@ -429,7 +436,26 @@ export default function OrgChartPage() {
             buttonVariant="outline"
             onConfirm={(result) => {
               const d = result.extractedData as any;
-              toast.info(`AI extracted: ${d.name || d.fullName || "staff member"}. Go to Trustees to add them.`);
+              if (result.matchedProfile?.id) {
+                mergeMutation.mutate({
+                  id: result.matchedProfile.id,
+                  fullName: d.fullName || d.name,
+                  role: d.role,
+                  email: d.email,
+                  phone: d.phone,
+                  dateOfBirth: d.dateOfBirth,
+                  addressLine1: d.addressLine1,
+                  addressLine2: d.addressLine2,
+                  city: d.city,
+                  postcode: d.postcode,
+                  nokName: d.nokName,
+                  nokPhone: d.nokPhone,
+                  nokRelationship: d.nokRelationship,
+                  notes: d.notes,
+                });
+              } else {
+                toast.info(`AI extracted: ${d.name || d.fullName || 'staff member'}. Go to Trustees & Staff to add them.`);
+              }
             }}
           />
         </div>

@@ -375,6 +375,13 @@ export default function IncomePage() {
 
   const { data, refetch } = trpc.income.list.useQuery(showAll ? {} : { month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };
+  const mergeIncomeMutation = trpc.income.mergeFromScan.useMutation({
+    onSuccess: (res) => {
+      refetch();
+      toast.success(`Income record updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
+    },
+    onError: (e) => toast.error(`Merge failed: ${e.message}`),
+  });
   const createMutation = trpc.income.create.useMutation({
     onSuccess: async (result: any) => {
       // If there are donors to link, do so now
@@ -555,15 +562,32 @@ export default function IncomePage() {
               buttonVariant="outline"
               onConfirm={(result) => {
                 const d = result.extractedData as any;
-                openDialog(d.category || "");
-                setTimeout(() => {
-                  if (d.amount) setValue("amount", String(d.amount));
-                  if (d.tenantName) setValue("tenantName", d.tenantName);
-                  if (d.paymentDate) setValue("incomeDate", d.paymentDate);
-                  if (d.paymentMethod) setValue("paymentMethod", d.paymentMethod);
-                  if (d.reference) setValue("reference", d.reference);
-                  if (d.notes) setValue("notes", d.notes);
-                }, 200);
+                if (result.matchedProfile?.id) {
+                  // Merge extracted fields into the matched existing income record
+                  mergeIncomeMutation.mutate({
+                    id: result.matchedProfile.id,
+                    tenantName: d.tenantName,
+                    amount: d.amount ? Number(d.amount) : undefined,
+                    paymentDate: d.paymentDate,
+                    periodStart: d.periodStart,
+                    periodEnd: d.periodEnd,
+                    propertyUnit: d.propertyUnit,
+                    paymentMethod: d.paymentMethod,
+                    reference: d.reference,
+                    notes: d.notes,
+                  });
+                } else {
+                  // No match — open Add Income form pre-filled
+                  openDialog(d.category || '');
+                  setTimeout(() => {
+                    if (d.amount) setValue('amount', String(d.amount));
+                    if (d.tenantName) setValue('tenantName', d.tenantName);
+                    if (d.paymentDate) setValue('incomeDate', d.paymentDate);
+                    if (d.paymentMethod) setValue('paymentMethod', d.paymentMethod);
+                    if (d.reference) setValue('reference', d.reference);
+                    if (d.notes) setValue('notes', d.notes);
+                  }, 200);
+                }
               }}
             />
             <Button onClick={()=>{ openDialog(); }}

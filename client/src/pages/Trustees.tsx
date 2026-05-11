@@ -394,6 +394,13 @@ export default function TrusteesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const { data, refetch } = trpc.trustees.list.useQuery();
   const { canAdd } = usePermissions();
+  const mergeMutation = trpc.trustees.mergeFromScan.useMutation({
+    onSuccess: (res) => {
+      refetch();
+      toast.success(`Profile updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
+    },
+    onError: (e) => toast.error(`Merge failed: ${e.message}`),
+  });
   const allMembers: any[] = Array.isArray(data) ? data : [];
   const active = allMembers.filter((t: any) => t.isActive !== false);
 
@@ -435,8 +442,29 @@ export default function TrusteesPage() {
               buttonVariant="outline"
               onConfirm={(result) => {
                 const d = result.extractedData as any;
-                toast.info(`AI extracted: ${d.name || d.fullName || "staff member"}. Use Add Member to complete the record.`);
-                setShowAddForm(true);
+                if (result.matchedProfile?.id) {
+                  // Merge extracted fields into the matched existing record
+                  mergeMutation.mutate({
+                    id: result.matchedProfile.id,
+                    fullName: d.fullName || d.name,
+                    role: d.role,
+                    email: d.email,
+                    phone: d.phone,
+                    dateOfBirth: d.dateOfBirth,
+                    addressLine1: d.addressLine1,
+                    addressLine2: d.addressLine2,
+                    city: d.city,
+                    postcode: d.postcode,
+                    nokName: d.nokName,
+                    nokPhone: d.nokPhone,
+                    nokRelationship: d.nokRelationship,
+                    notes: d.notes,
+                  });
+                } else {
+                  // No match — open the Add Member form pre-filled
+                  toast.info(`AI extracted: ${d.name || d.fullName || 'staff member'}. Complete the record below.`);
+                  setShowAddForm(true);
+                }
               }}
             />
             {canAdd && (

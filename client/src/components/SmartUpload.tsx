@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Upload, Camera, FileText, AlertTriangle, CheckCircle, Loader2, X, FileSpreadsheet } from "lucide-react";
+import { Upload, Camera, FileText, AlertTriangle, CheckCircle, Loader2, X, FileSpreadsheet, UserCheck, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 export type ModuleType =
@@ -40,6 +40,16 @@ export interface Discrepancy {
   severity: "warning" | "error";
 }
 
+export interface ProfileMatch {
+  id: number;
+  name: string;
+  subtitle: string;
+  email?: string | null;
+  phone?: string | null;
+  score: number;
+  table: string;
+}
+
 export interface SmartUploadResult {
   extractedData: Record<string, unknown>;
   discrepancies: Discrepancy[];
@@ -48,6 +58,10 @@ export interface SmartUploadResult {
   isBulk: boolean;
   fileUrl: string;
   mimeType: string;
+  /** Set when user confirmed a match — the existing record to update */
+  matchedProfile?: ProfileMatch;
+  /** Set to true when user chose to create a new record instead of matching */
+  createNew?: boolean;
 }
 
 interface SmartUploadProps {
@@ -59,7 +73,7 @@ interface SmartUploadProps {
   buttonVariant?: "default" | "outline" | "secondary" | "ghost";
   className?: string;
   fieldLabels?: Record<string, string>;
-  /** Roles allowed to use this button. Defaults to ["superadmin", "trustee"]. */
+  /** Roles allowed to use this button. Defaults to senior roles. */
   allowedRoles?: string[];
 }
 
@@ -165,6 +179,36 @@ const DEFAULT_FIELD_LABELS: Record<string, Record<string, string>> = {
     bankName: "Bank",
     openingBalance: "Opening Balance (£)",
   },
+  crm_donor: {
+    name: "Donor Name",
+    email: "Email",
+    phone: "Phone",
+    addressLine1: "Address Line 1",
+    city: "City",
+    postcode: "Postcode",
+    giftAid: "Gift Aid",
+    notes: "Notes",
+  },
+  business_card: {
+    name: "Name",
+    company: "Company",
+    email: "Email",
+    phone: "Phone",
+    address: "Address",
+  },
+  handwritten_collection: {
+    donorName: "Donor Name",
+    amount: "Amount (£)",
+    date: "Date",
+    notes: "Notes",
+  },
+  bank_transfer_screenshot: {
+    senderName: "Sender Name",
+    amount: "Amount (£)",
+    date: "Date",
+    reference: "Reference",
+    bankName: "Bank",
+  },
 };
 
 function formatValue(value: unknown): string {
@@ -175,12 +219,43 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
+/** Modules where we attempt fuzzy profile matching */
+const MATCHABLE_MODULES: ModuleType[] = [
+  "staff_profile", "crm_donor", "income_rental", "fundraising_donation",
+  "loan_application", "loan_repayment", "payroll", "business_card",
+  "handwritten_collection", "bank_transfer_screenshot",
+];
+
+function extractNameFromData(data: Record<string, unknown>): string {
+  const candidates = [
+    data.fullName, data.name, data.donorName, data.tenantName,
+    data.borrowerName, data.employeeName, data.applicantName,
+    data.senderName, data.contactName,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return "";
+}
+
+function extractEmailFromData(data: Record<string, unknown>): string | undefined {
+  const v = data.email;
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+function extractPhoneFromData(data: Record<string, unknown>): string | undefined {
+  const v = data.phone;
+  return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+type MatchStep = "idle" | "matching" | "confirm" | "done";
+
 export function SmartUpload({
   moduleType,
   onConfirm,
   onCancel,
   existingRecordIds,
-  buttonLabel = "Import from Document",
+  buttonLabel = "Scan / Upload",
   buttonVariant = "outline",
   className,
   fieldLabels,
@@ -189,74 +264,91 @@ export function SmartUpload({
   const { user } = useAuth();
   const userRole = user?.role ?? "";
   const hasAccess = allowedRoles.includes(userRole);
+
   const [open, setOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [result, setResult] = useState<SmartUploadResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Match flow state
+  const [matchStep, setMatchStep] = useState<MatchStep>("idle");
+  const [matches, setMatches] = useState<ProfileMatch[]>([]);
+  const [selectedMatch, setSelectedMatch] = useState<ProfileMatch | null>(null);
+  const [matchQueryInput, setMatchQueryInput] = useState<{
+    name: string; email?: string; phone?: string; moduleType: ModuleType;
+  } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const extractMutation = trpc.documents.extract.useMutation();
+
+  const matchQuery = trpc.documents.matchProfile.useQuery(
+    matchQueryInput ?? { name: "", moduleType },
+    {
+      enabled: !!matchQueryInput && matchQueryInput.name.length > 1,
+      retry: false,
+    }
+  );
+
+  // When matchQuery resolves, transition to confirm or done
+  useEffect(() => {
+    if (matchStep === "matching" && !matchQuery.isFetching && matchQueryInput) {
+      const found = (matchQuery.data?.matches ?? []) as ProfileMatch[];
+      setMatches(found);
+      if (found.length > 0) {
+        setSelectedMatch(found[0]);
+        setMatchStep("confirm");
+      } else {
+        setMatchStep("done");
+        setResult(prev => prev ? { ...prev, createNew: true } : prev);
+      }
+    }
+  }, [matchQuery.isFetching, matchStep, matchQueryInput, matchQuery.data]);
 
   const labels = { ...(DEFAULT_FIELD_LABELS[moduleType] || {}), ...(fieldLabels || {}) };
 
   const handleFile = useCallback(async (file: File) => {
     if (!file) return;
-
-    const maxSize = 16 * 1024 * 1024; // 16MB
-    if (file.size > maxSize) {
-      toast.error("File too large — maximum size is 16MB");
-      return;
-    }
-
+    const maxSize = 16 * 1024 * 1024;
+    if (file.size > maxSize) { toast.error("File too large — maximum size is 16MB"); return; }
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/heic", "application/pdf", "text/csv", "application/csv"];
     if (!allowed.includes(file.type) && !file.name.endsWith(".csv")) {
-      toast.error("Unsupported file type — please upload an image, PDF, or CSV");
-      return;
+      toast.error("Unsupported file type — please upload an image, PDF, or CSV"); return;
     }
-
     setUploading(true);
     try {
-      // Upload to S3
       const ext = file.name.split(".").pop() || "bin";
       const key = `smart-upload/${moduleType}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-      // Use the server-side upload via a form post
       const formData = new FormData();
       formData.append("file", file);
       formData.append("key", key);
-
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
       let fileUrl: string;
       if (uploadRes.ok) {
         const data = await uploadRes.json();
         fileUrl = data.url;
       } else {
-        // Fallback: create object URL for demo (won't work for server-side LLM)
         throw new Error("Upload failed");
       }
-
       setUploading(false);
       setExtracting(true);
-
       const mimeType = file.type || (file.name.endsWith(".csv") ? "text/csv" : "application/octet-stream");
-
       const extractResult = await extractMutation.mutateAsync({
-        fileUrl,
-        mimeType,
-        moduleType,
-        existingRecordIds,
+        fileUrl, mimeType, moduleType, existingRecordIds,
       });
+      const newResult: SmartUploadResult = { ...extractResult, fileUrl, mimeType };
+      setResult(newResult);
 
-      setResult({
-        ...extractResult,
-        fileUrl,
-        mimeType,
-      });
+      // Attempt profile matching for relevant module types
+      if (MATCHABLE_MODULES.includes(moduleType) && !extractResult.isBulk) {
+        const name = extractNameFromData(extractResult.extractedData as Record<string, unknown>);
+        if (name.length > 1) {
+          const email = extractEmailFromData(extractResult.extractedData as Record<string, unknown>);
+          const phone = extractPhoneFromData(extractResult.extractedData as Record<string, unknown>);
+          setMatchStep("matching");
+          setMatchQueryInput({ name, email, phone, moduleType });
+        }
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Extraction failed";
       toast.error(`AI extraction failed: ${message}`);
@@ -273,16 +365,35 @@ export function SmartUpload({
     if (file) handleFile(file);
   }, [handleFile]);
 
-  const handleConfirm = () => {
-    if (!result) return;
-    onConfirm(result);
+  const resetAndClose = () => {
     setOpen(false);
     setResult(null);
+    setMatchStep("idle");
+    setMatches([]);
+    setSelectedMatch(null);
+    setMatchQueryInput(null);
+  };
+
+  const handleAcceptMatch = () => {
+    if (!result || !selectedMatch) return;
+    onConfirm({ ...result, matchedProfile: selectedMatch, createNew: false });
+    resetAndClose();
+  };
+
+  const handleCreateNew = () => {
+    if (!result) return;
+    onConfirm({ ...result, createNew: true });
+    resetAndClose();
+  };
+
+  const handleConfirmNoMatch = () => {
+    if (!result) return;
+    onConfirm({ ...result, createNew: true });
+    resetAndClose();
   };
 
   const handleClose = () => {
-    setOpen(false);
-    setResult(null);
+    resetAndClose();
     onCancel?.();
   };
 
@@ -300,7 +411,8 @@ export function SmartUpload({
     ? ((result.extractedData as { records?: unknown[] }).records || [])
     : [];
 
-  // If user doesn't have the required role, show a disabled button with tooltip
+  const isMatching = matchStep === "matching" || matchQuery.isFetching;
+
   if (!hasAccess) {
     return (
       <TooltipProvider>
@@ -336,11 +448,11 @@ export function SmartUpload({
               AI Document Import
             </DialogTitle>
             <DialogDescription>
-              Upload an image, PDF, or CSV and AI will extract the data automatically.
-              Review the extracted fields and confirm before importing.
+              Upload an image, PDF, or CSV — AI extracts the data, matches it to existing records, and asks you to confirm before saving.
             </DialogDescription>
           </DialogHeader>
 
+          {/* ── UPLOAD ZONE ── */}
           {!result && !uploading && !extracting && (
             <div
               className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer ${
@@ -375,19 +487,124 @@ export function SmartUpload({
             </div>
           )}
 
-          {(uploading || extracting) && (
+          {/* ── LOADING / MATCHING STATE ── */}
+          {(uploading || extracting || isMatching) && (
             <div className="flex flex-col items-center gap-4 py-12">
               <Loader2 className="w-10 h-10 animate-spin text-primary" />
               <div className="text-center">
-                <p className="font-semibold">{uploading ? "Uploading file…" : "AI is extracting data…"}</p>
+                <p className="font-semibold">
+                  {uploading ? "Uploading file…"
+                    : extracting ? "AI is extracting data…"
+                    : "Searching for matching records…"}
+                </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {uploading ? "Securely uploading to storage" : "Reading and analysing your document"}
+                  {uploading ? "Securely uploading to storage"
+                    : extracting ? "Reading and analysing your document"
+                    : "Comparing against existing profiles in the system"}
                 </p>
               </div>
             </div>
           )}
 
-          {result && (
+          {/* ── MATCH CONFIRMATION STEP ── */}
+          {result && matchStep === "confirm" && !isMatching && (
+            <div className="space-y-5">
+              {/* Extracted summary */}
+              <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Extracted from document</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {extractedFields.slice(0, 6).map(({ key, label, value }) => (
+                    <div key={key} className="text-sm">
+                      <span className="text-muted-foreground">{label}: </span>
+                      <span className="font-medium">{formatValue(value)}</span>
+                    </div>
+                  ))}
+                </div>
+                <Badge variant="secondary" className="gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  {Math.round(result.confidence * 100)}% extraction confidence
+                </Badge>
+              </div>
+
+              <Separator />
+
+              {/* Match candidates */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-4 h-4 text-primary" />
+                  <p className="font-semibold text-sm">
+                    {matches.length === 1 ? "1 matching record found" : `${matches.length} matching records found`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">— Select the correct one or create a new record</p>
+                </div>
+                <div className="space-y-2">
+                  {matches.map((m) => (
+                    <button
+                      key={`${m.table}-${m.id}`}
+                      type="button"
+                      onClick={() => setSelectedMatch(m)}
+                      className={`w-full text-left rounded-xl border p-4 transition-all ${
+                        selectedMatch?.id === m.id && selectedMatch?.table === m.table
+                          ? "border-primary bg-primary/10 ring-1 ring-primary"
+                          : "border-border bg-card hover:border-primary/50 hover:bg-muted/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
+                            {m.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-sm">{m.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {m.subtitle}{m.email ? ` · ${m.email}` : ""}{m.phone ? ` · ${m.phone}` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground/60 capitalize">{m.table.replace(/_/g, " ")}</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <Badge
+                            variant={m.score >= 80 ? "default" : m.score >= 60 ? "secondary" : "outline"}
+                            className="text-xs"
+                          >
+                            {m.score}% match
+                          </Badge>
+                          {selectedMatch?.id === m.id && selectedMatch?.table === m.table && (
+                            <CheckCircle className="w-4 h-4 text-primary" />
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <Button variant="ghost" size="sm" onClick={() => { setResult(null); setMatchStep("idle"); }} className="gap-1 text-muted-foreground">
+                  <X className="w-4 h-4" /> Upload Different File
+                </Button>
+                <div className="flex gap-2 flex-wrap justify-end">
+                  <Button variant="outline" onClick={handleCreateNew} className="gap-1">
+                    <UserPlus className="w-4 h-4" />
+                    Create New Record
+                  </Button>
+                  <Button
+                    onClick={handleAcceptMatch}
+                    disabled={!selectedMatch}
+                    className="gap-1"
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    Update {selectedMatch?.name ?? "Selected Record"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── EXTRACTED DATA REVIEW (no match found or non-matchable module) ── */}
+          {result && (matchStep === "idle" || matchStep === "done") && !isMatching && (
             <div className="space-y-4">
               {/* Confidence indicator */}
               <div className="flex items-center justify-between">
@@ -397,6 +614,18 @@ export function SmartUpload({
                   {Math.round(result.confidence * 100)}%
                 </Badge>
               </div>
+
+              {/* No match notice */}
+              {matchStep === "done" && (
+                <Card className="border-amber-400/40 bg-amber-50/30 dark:bg-amber-950/20">
+                  <CardContent className="pt-3 pb-3">
+                    <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                      <span>No existing record matched this name. A new record will be created on confirm.</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Discrepancies */}
               {result.discrepancies.length > 0 && (
@@ -411,17 +640,12 @@ export function SmartUpload({
                     <div className="space-y-2">
                       {result.discrepancies.map((d, i) => (
                         <div key={i} className="text-sm bg-destructive/10 rounded-lg p-3 border border-destructive/20">
-                          <span className="font-medium text-destructive">
-                            {labels[d.field] || d.field}:
-                          </span>
+                          <span className="font-medium text-destructive">{labels[d.field] || d.field}:</span>
                           <span className="ml-2 text-foreground">
                             Extracted <span className="font-mono font-bold">{formatValue(d.extracted)}</span>
                             {" "}— On record <span className="font-mono font-bold">{formatValue(d.existing)}</span>
                           </span>
-                          <Badge
-                            variant={d.severity === "error" ? "destructive" : "secondary"}
-                            className="ml-2 text-xs"
-                          >
+                          <Badge variant={d.severity === "error" ? "destructive" : "secondary"} className="ml-2 text-xs">
                             {d.severity === "error" ? "Requires correction" : "Please verify"}
                           </Badge>
                         </div>
@@ -431,8 +655,8 @@ export function SmartUpload({
                 </Card>
               )}
 
-              {/* Bulk import preview */}
-              {result.isBulk && bulkRecords.length > 0 ? (
+              {/* Bulk or single preview */}
+              {bulkRecords.length > 0 ? (
                 <div>
                   <p className="text-sm font-semibold mb-2">
                     {bulkRecords.length} record{bulkRecords.length !== 1 ? "s" : ""} found in file
@@ -456,14 +680,11 @@ export function SmartUpload({
                       </Card>
                     ))}
                     {bulkRecords.length > 20 && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        +{bulkRecords.length - 20} more records
-                      </p>
+                      <p className="text-xs text-muted-foreground text-center">+{bulkRecords.length - 20} more records</p>
                     )}
                   </div>
                 </div>
               ) : (
-                /* Single record preview */
                 <div>
                   <p className="text-sm font-semibold mb-3">Extracted Data</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -502,16 +723,15 @@ export function SmartUpload({
               )}
 
               <Separator />
-
               <div className="flex items-center justify-between gap-3">
-                <Button variant="ghost" onClick={() => setResult(null)} className="gap-1">
+                <Button variant="ghost" onClick={() => { setResult(null); setMatchStep("idle"); }} className="gap-1">
                   <X className="w-4 h-4" />
                   Upload Different File
                 </Button>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={handleClose}>Cancel</Button>
                   <Button
-                    onClick={handleConfirm}
+                    onClick={handleConfirmNoMatch}
                     disabled={result.discrepancies.some((d) => d.severity === "error")}
                     className="gap-1"
                   >
@@ -520,10 +740,9 @@ export function SmartUpload({
                   </Button>
                 </div>
               </div>
-
               {result.discrepancies.some((d) => d.severity === "error") && (
                 <p className="text-xs text-destructive text-center">
-                  Please resolve the errors above before importing. Edit the values manually after closing this dialog.
+                  Please resolve the errors above before importing.
                 </p>
               )}
             </div>
