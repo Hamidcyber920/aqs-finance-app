@@ -12,8 +12,8 @@
 import cron from "node-cron";
 import nodemailer from "nodemailer";
 import { getDb } from "./db";
-import { loanRepayments } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { loanRepayments, pledges, donors } from "../drizzle/schema";
+import { eq, and, lte, or } from "drizzle-orm";
 import { setGmailLastSyncedAt } from "./routers/commsInbox";
 
 // ─── Email helper ─────────────────────────────────────────────────────────────
@@ -389,10 +389,112 @@ export function registerScheduledJobs() {
   cron.schedule("0 8 * * *", () => {
     sendUnreadEmailDigest().catch(console.error);
   }, { timezone: "Europe/London" });
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00)");
+  // Daily at 09:30 UK time — pledge reminders (7-day due notice + overdue)
+  cron.schedule("30 9 * * *", () => {
+    sendPledgeReminders().catch(console.error);
+  }, { timezone: "Europe/London" });
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
+
+// ─── Pledge Reminders ────────────────────────────────────────────────────────
+/**
+ * Daily pledge reminder job (09:30 UK time):
+ *  1. Pledges due within the next 7 days — send a gentle reminder
+ *  2. Overdue pledges (nextDueDate < today, status = 'active') — send an overdue notice
+ * Looks up the donor's email from the donors table via donorId.
+ */
+export async function sendPledgeReminders() {
+  console.log("[Scheduled] Running pledge reminder check...");
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const in7Days = new Date(today);
+    in7Days.setDate(in7Days.getDate() + 7);
+    // Format as YYYY-MM-DD for MySQL date column comparison
+    const todayStr = today.toISOString().slice(0, 10);
+    const in7DaysStr = in7Days.toISOString().slice(0, 10);
+    // Fetch active pledges with nextDueDate <= 7 days from now (includes overdue)
+    const activePledges = await db
+      .select({
+        id: pledges.id,
+        donorId: pledges.donorId,
+        donorName: pledges.donorName,
+        totalAmount: pledges.totalAmount,
+        balanceOwing: pledges.balanceOwing,
+        nextDueDate: pledges.nextDueDate,
+        campaignName: pledges.campaignName,
+        isGiftAid: pledges.isGiftAid,
+      })
+      .from(pledges)
+      .where(and(
+        eq(pledges.status, "active"),
+        lte(pledges.nextDueDate, in7DaysStr as any),
+      ))
+      .limit(200);
+    if (!activePledges.length) {
+      console.log("[Scheduled] Pledge reminders: no pledges due within 7 days.");
+      return;
+    }
+    let sent = 0;
+    let skipped = 0;
+    for (const pledge of activePledges) {
+      if (!pledge.nextDueDate) { skipped++; continue; }
+      const dueDate = new Date(pledge.nextDueDate);
+      const isOverdue = dueDate < today;
+      // Look up donor email
+      let donorEmail: string | null = null;
+      if (pledge.donorId) {
+        const [donorRow] = await db
+          .select({ email: donors.email })
+          .from(donors)
+          .where(eq(donors.id, pledge.donorId))
+          .limit(1);
+        donorEmail = donorRow?.email ?? null;
+      }
+      if (!donorEmail) { skipped++; continue; }
+      const donorFirstName = (pledge.donorName ?? "Valued Donor").split(" ")[0];
+      const dueDateFormatted = dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+      const balanceFormatted = `£${Number(pledge.balanceOwing ?? 0).toFixed(2)}`;
+      const campaignLine = pledge.campaignName ? `<br/>Campaign: <strong>${pledge.campaignName}</strong>` : "";
+      const giftAidLine = pledge.isGiftAid ? "<br/><em>Your pledge includes Gift Aid — JazakAllah Khayran for your generosity.</em>" : "";
+      const subject = isOverdue
+        ? `Pledge Reminder — Overdue Payment | Abdullah Quilliam Society`
+        : `Pledge Reminder — Payment Due ${dueDateFormatted} | Abdullah Quilliam Society`;
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+          <h2 style="color:#1a3c5e;">Assalamu Alaikum, ${donorFirstName},</h2>
+          <p>JazakAllah Khayran for your generous pledge to the Abdullah Quilliam Society.</p>
+          ${
+            isOverdue
+              ? `<p style="color:#dc2626;"><strong>Your pledge payment of ${balanceFormatted} was due on ${dueDateFormatted} and is now overdue.</strong></p>`
+              : `<p>This is a gentle reminder that your pledge payment of <strong>${balanceFormatted}</strong> is due on <strong>${dueDateFormatted}</strong>.</p>`
+          }
+          ${campaignLine}
+          ${giftAidLine}
+          <p>If you have already made this payment, please disregard this message.</p>
+          <p>To make a payment or discuss your pledge, please contact us at <a href="mailto:info@abdullahquilliam.org">info@abdullahquilliam.org</a>.</p>
+          <br/>
+          <p>Warm regards,<br/><strong>Abdullah Quilliam Society</strong><br/>Finance Team</p>
+        </div>
+      `;
+      try {
+        await sendEmail(donorEmail, pledge.donorName ?? "Donor", subject, html);
+        sent++;
+        console.log(`[Scheduled] Pledge reminder sent to ${donorEmail} (pledge #${pledge.id})`);
+      } catch (e) {
+        console.error(`[Scheduled] Pledge reminder failed for pledge ${pledge.id}:`, e);
+        skipped++;
+      }
+    }
+    console.log(`[Scheduled] Pledge reminders complete: ${sent} sent, ${skipped} skipped.`);
+  } catch (e) {
+    console.error("[Scheduled] Pledge reminders job failed:", e);
+  }
+}
 
 // ─── Rent Reminders ───────────────────────────────────────────────────────────
 /**

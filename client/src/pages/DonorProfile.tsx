@@ -63,8 +63,8 @@ export default function DonorProfile() {
     { enabled: !!donorId && activeTab === "pledges" }
   );
 
-  const { data: emails } = (trpc as any).commsInbox.listEmails.useQuery(
-    { search: donor?.email, limit: 20 },
+  const { data: emailsList } = (trpc as any).commsInbox.listEmails.useQuery(
+    { fromEmail: donor?.email, limit: 50 },
     { enabled: !!donor?.email && activeTab === "comms" }
   );
 
@@ -82,6 +82,21 @@ export default function DonorProfile() {
     undefined,
     { enabled: showDonationDialog }
   );
+
+  // Load all recognition tiers (global, no campaignId filter) to compute donor's tier
+  const { data: allTiers } = (trpc as any).recognitionTiers.list.useQuery(
+    {},
+    { enabled: !!donor && activeTab === "overview" }
+  );
+
+  // Compute the highest tier the donor qualifies for based on totalGiven
+  const donorTier = useMemo(() => {
+    if (!allTiers?.length || !donor) return null;
+    const totalGiven = Number(donor.totalGiven ?? donor.totalDonated ?? 0);
+    // Sort tiers by minAmount descending so we find the highest qualifying tier
+    const sorted = [...allTiers].sort((a: any, b: any) => Number(b.minAmount) - Number(a.minAmount));
+    return sorted.find((t: any) => totalGiven >= Number(t.minAmount)) ?? null;
+  }, [allTiers, donor]);
 
   const addNoteMut = (trpc as any).donorPipeline.addNote.useMutation({
     onSuccess: () => { toast.success("Note added"); refetchNotes(); setNoteText(""); },
@@ -207,6 +222,19 @@ export default function DonorProfile() {
                 {donor.donationCount !== undefined && <p><span className="text-muted-foreground">Donations:</span> {donor.donationCount}</p>}
                 {donor.lastDonationDate && <p><span className="text-muted-foreground">Last donation:</span> {new Date(donor.lastDonationDate).toLocaleDateString("en-GB")}</p>}
                 {donor.rfmScore !== undefined && <p><span className="text-muted-foreground">RFM Score:</span> {donor.rfmScore}</p>}
+                {donorTier && (
+                  <div className="pt-2 border-t">
+                    <p className="text-muted-foreground mb-1">Recognition Tier:</p>
+                    <span
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                      style={{ background: `${donorTier.color}22`, color: donorTier.color, border: `1px solid ${donorTier.color}55` }}
+                    >
+                      <span className="w-2 h-2 rounded-full" style={{ background: donorTier.color }} />
+                      {donorTier.name}
+                    </span>
+                    {donorTier.description && <p className="text-xs text-muted-foreground mt-1">{donorTier.description}</p>}
+                  </div>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -295,19 +323,30 @@ export default function DonorProfile() {
 
         {activeTab === "comms" && (
           <Card>
-            <CardHeader><CardTitle>Communications</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Communications</CardTitle>
+              {donor?.email && <p className="text-xs text-muted-foreground mt-1">Showing emails from <strong>{donor.email}</strong></p>}
+            </CardHeader>
             <CardContent>
-              {!emails?.emails?.length ? (
-                <p className="text-muted-foreground text-sm py-4 text-center">No emails found for this donor</p>
+              {!emailsList?.length ? (
+                <p className="text-muted-foreground text-sm py-4 text-center">No emails found for this donor{donor?.email ? " (" + donor.email + ")" : ""}</p>
               ) : (
                 <div className="space-y-2">
-                  {emails.emails.map((e: any) => (
-                    <div key={e.id} className="border rounded p-3 text-sm">
-                      <div className="flex justify-between items-start">
-                        <span className="font-medium">{e.subject || "(No subject)"}</span>
-                        <span className="text-xs text-muted-foreground">{e.receivedAt ? new Date(e.receivedAt).toLocaleDateString("en-GB") : ""}</span>
+                  {(emailsList as any[]).map((e: any) => (
+                    <div key={e.id} className="border rounded p-3 text-sm hover:bg-muted/30 transition-colors">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {e.status === "unread" && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
+                          {e.priority === "urgent" && <span className="text-xs font-bold text-red-500 flex-shrink-0">URGENT</span>}
+                          <span className="font-medium truncate">{e.subject || "(No subject)"}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground flex-shrink-0">{e.receivedAt ? new Date(e.receivedAt).toLocaleDateString("en-GB") : ""}</span>
                       </div>
-                      <p className="text-muted-foreground text-xs mt-1">{e.fromEmail}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-muted-foreground text-xs">{e.fromName ? `${e.fromName} <${e.fromEmail}>` : e.fromEmail}</p>
+                        {e.sectionId && <span className="text-xs bg-muted px-1.5 py-0.5 rounded">Section #{e.sectionId}</span>}
+                      </div>
+                      {e.snippet && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{e.snippet}</p>}
                     </div>
                   ))}
                 </div>

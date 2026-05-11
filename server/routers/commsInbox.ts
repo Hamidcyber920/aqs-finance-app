@@ -105,6 +105,7 @@ export const commsInboxRouter = router({
       status: z.enum(["unread", "read", "actioned", "archived"]).optional(),
       priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
       search: z.string().optional(),
+      fromEmail: z.string().optional(), // exact/partial match on fromEmail for donor comms tab
       dateFrom: z.number().optional(), // UTC ms timestamp
       dateTo: z.number().optional(),   // UTC ms timestamp
       limit: z.number().min(1).max(200).default(50),
@@ -119,6 +120,7 @@ export const commsInboxRouter = router({
       if (input.priority) conditions.push(eq(inboundEmails.priority, input.priority));
       if (input.dateFrom) conditions.push(gte(inboundEmails.receivedAt, new Date(input.dateFrom)));
       if (input.dateTo) conditions.push(lte(inboundEmails.receivedAt, new Date(input.dateTo)));
+      if (input.fromEmail) conditions.push(like(inboundEmails.fromEmail, `%${input.fromEmail}%`));
       if (input.search) {
         conditions.push(or(
           like(inboundEmails.subject, `%${input.search}%`),

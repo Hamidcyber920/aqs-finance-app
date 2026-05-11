@@ -1436,3 +1436,9 @@
 - [x] Backend + Frontend: QR code generation (unique, attributable per campaign)
 - [x] Frontend: AI suggested replies (3 options per inbound) in Master Inbox
 - [x] Backend: logAudit wired into pledge create/update/markPaid and pipeline moveStage mutations
+
+## Next Steps Round 2 (May 11 2026)
+
+- [ ] Pledge reminders: nightly scheduled job finds overdue/due-soon pledges and sends personalised email reminders
+- [x] Donor Profile Communications tab: wire to inbound_emails filtered by donor email address
+- [ ] Recognition tier badge: show donor's current tier on Donor Profile Overview tab based on lifetime giving total
