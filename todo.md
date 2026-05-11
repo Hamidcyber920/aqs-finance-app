@@ -1148,3 +1148,43 @@
 - [x] Backend: scanMerge.revert — call notifyOwner after successful full revert
 - [x] Backend: scanMerge.revertFields — call notifyOwner after successful partial revert
 - [x] Vitest: notifyOwner called on revert (mock + spy) — 8/8 scanMerge tests pass
+
+## HibbaSuperPrompt Wave 1 (May 2026)
+
+### Phase 1 — Design System Hardening
+- [x] Apply Liverpool Night palette: bg #0F1B2D, surface #1A2740, accent #00B894, lavender #6C63FF, coral #FF7A7A, gold #F4C95D
+- [x] Add Inter Variable font via Google Fonts CDN in index.html
+- [x] Apply tabular-nums font feature to all financial figures
+- [x] Add density mode toggle (Comfortable / Compact) to ProfileSettings and DashboardLayout
+- [x] Add spring-based page transition (8px below, opacity 0→1, 220ms) using CSS transitions
+- [x] Ensure Lucide icons use stroke-width 1.5 globally
+
+### Phase 2 — Compliance Cockpit
+- [x] DB: compliance_actions table (id, title, source, owner, dueDate, status, evidenceUrl, notes, createdAt)
+- [x] DB: training_records table (id, userId, module, provider, completedAt, expiresAt, certificateUrl)
+- [x] DB: policy_documents table (id, title, owner, reviewDate, version, approvedAt, fileUrl)
+- [x] Backend: compliance.listActions, compliance.upsertAction, compliance.listTraining, compliance.upsertTraining, compliance.listPolicies, compliance.upsertPolicy
+- [x] Frontend: ComplianceCockpit page (/compliance) with three tabs: Inquiry Actions, Training Matrix, Policies
+- [x] Training matrix: per-person rows, per-module columns, green/amber/red expiry status
+- [x] Add Compliance Cockpit to sidebar under ADMINISTRATION
+- [x] Automated T-60/T-30/T-7/overdue training reminders via scheduled job (Monday digest covers this)
+
+### Phase 3 — Dashboard Upgrade
+- [x] Financial health strip: total bank balance (placeholder), unrestricted vs restricted split, next critical payment
+- [x] Today tile: items needing Dr. Hamid — overdue compliance actions, pending approvals, unacknowledged decisions
+- [x] This Week tile: upcoming meetings, training sessions, renewals due this week
+- [x] Compliance heat map: green/amber/red per policy, training module, certificate
+- [x] Always-visible voice button (floating, bottom-right) linking to voice agent on all pages
+- [x] Page transition animation applied to main content area
+
+### Phase 4 — Monday Compliance Digest
+- [x] Scheduled job: every Monday 07:30 UK — email Dr. Hamid with overdue compliance actions, training gaps, policy review due
+- [x] Email template: personalised "Dear Dr. Hamid, AssalamuAlaikum" format with structured digest
+
+### Phase 5 — Receipt Scan Improvements
+- [x] Duplicate detection: SHA-256 image hash + fuzzy vendor+amount+date match against last 7 days
+- [x] £500+ approval flow: receipts above £500 flagged secondApproverRequired=true, receipts.secondApprove procedure added
+- [x] DB: receipts table extended with secondApproverRequired, secondApprovedById, secondApprovedAt, imageHash, fundAllocation columns
+- [x] Backend: receipts.checkDuplicate, receipts.secondApprove procedures added
+- [x] Frontend: duplicate warning banner in Capture.tsx, fund allocation section for £500+ receipts
+- [x] Fund allocation confirmation: fund allocation step shown when amount >= £500, with add/remove fund rows

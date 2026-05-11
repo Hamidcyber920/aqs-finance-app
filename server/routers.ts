@@ -541,8 +541,15 @@ export const appRouter = router({
         notes: z.string().optional(),
         imageUrl: z.string().optional(),
         categoryName: z.string().optional(),
+        imageHash: z.string().optional(),
+        fundAllocation: z.array(z.object({ fund: z.string(), amount: z.number() })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        const amountNum = parseFloat(input.amount) || 0;
+        const secondApproverRequired = amountNum >= 500;
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const { receipts: receiptsTable } = await import("../drizzle/schema");
         const id = await createReceipt({
           userId: ctx.user.id,
           amount: input.amount,
@@ -553,7 +560,94 @@ export const appRouter = router({
           categoryName: input.categoryName,
           status: "pending",
         });
-        return { id };
+        // Patch the extra fields not in createReceipt helper
+        await db.update(receiptsTable).set({
+          imageHash: input.imageHash ?? null,
+          secondApproverRequired,
+          fundAllocation: input.fundAllocation ?? null,
+        } as any).where(eq(receiptsTable.id, id));
+        if (secondApproverRequired) {
+          await notifyOwner({
+            title: `£500+ Receipt Requires Second Approval`,
+            content: `A receipt for £${amountNum.toFixed(2)} submitted by ${ctx.user.name ?? ctx.user.email ?? `User #${ctx.user.id}`} requires a second approver. Receipt ID: #${id}. Please review in the Expenses module.`,
+          });
+        }
+        return { id, secondApproverRequired };
+      }),
+
+    // Check for duplicate receipt by image hash or fuzzy match (same vendor + amount + date within 7 days)
+    checkDuplicate: protectedProcedure
+      .input(z.object({
+        imageHash: z.string().optional(),
+        vendor: z.string().optional(),
+        amount: z.string().optional(),
+        date: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { isDuplicate: false, matches: [] };
+        const { receipts: receiptsTable } = await import("../drizzle/schema");
+        const { like, gte, lte } = await import("drizzle-orm");
+        let matches: any[] = [];
+        // 1. Exact hash match
+        if (input.imageHash) {
+          const hashMatches = await db.select({
+            id: receiptsTable.id,
+            vendor: receiptsTable.vendor,
+            amount: receiptsTable.amount,
+            createdAt: receiptsTable.createdAt,
+            imageHash: (receiptsTable as any).imageHash,
+          }).from(receiptsTable)
+            .where(eq((receiptsTable as any).imageHash, input.imageHash))
+            .limit(3);
+          matches = [...matches, ...hashMatches.map((m: any) => ({ ...m, matchType: "exact_hash" }))];
+        }
+        // 2. Fuzzy match: same vendor + amount within 7 days
+        if (input.vendor && input.amount && matches.length === 0) {
+          const amountNum = parseFloat(input.amount);
+          const dateBase = input.date ? new Date(input.date) : new Date();
+          const windowStart = new Date(dateBase.getTime() - 7 * 24 * 60 * 60 * 1000);
+          const windowEnd = new Date(dateBase.getTime() + 7 * 24 * 60 * 60 * 1000);
+          const fuzzyMatches = await db.select({
+            id: receiptsTable.id,
+            vendor: receiptsTable.vendor,
+            amount: receiptsTable.amount,
+            createdAt: receiptsTable.createdAt,
+          }).from(receiptsTable)
+            .where(and(
+              like(receiptsTable.vendor, `%${input.vendor.slice(0, 20)}%`),
+              gte(receiptsTable.createdAt, windowStart),
+              lte(receiptsTable.createdAt, windowEnd),
+            ))
+            .limit(5);
+          const fuzzy = fuzzyMatches.filter((m: any) => {
+            const diff = Math.abs(parseFloat(m.amount ?? "0") - amountNum);
+            return diff < 0.01;
+          });
+          matches = [...matches, ...fuzzy.map((m: any) => ({ ...m, matchType: "fuzzy" }))];
+        }
+        return { isDuplicate: matches.length > 0, matches };
+      }),
+
+    // Second approver sign-off (admin/trustee only)
+    secondApprove: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const { receipts: receiptsTable } = await import("../drizzle/schema");
+        const [receipt] = await db.select().from(receiptsTable).where(eq(receiptsTable.id, input.id)).limit(1);
+        if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
+        if (!(receipt as any).secondApproverRequired) throw new TRPCError({ code: "BAD_REQUEST", message: "Second approval not required for this receipt" });
+        if ((receipt as any).secondApprovedById) throw new TRPCError({ code: "BAD_REQUEST", message: "Already second-approved" });
+        if (receipt.approvedById === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "Second approver must be a different person from the first approver" });
+        await db.update(receiptsTable).set({
+          secondApprovedById: ctx.user.id,
+          secondApprovedByName: ctx.user.name ?? ctx.user.email ?? `User #${ctx.user.id}`,
+          secondApprovedAt: new Date(),
+          status: "approved",
+        } as any).where(eq(receiptsTable.id, input.id));
+        return { success: true };
       }),
     // Admin-only: list all active users (for filter dropdown)
     adminUserList: adminProcedure.query(async () => {
@@ -5000,6 +5094,171 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           content: `A partial undo was applied to ${snap.tableName} record #${snap.recordId}. Fields restored: ${revertedFieldList}. (Originally merged by ${snap.mergedByName ?? 'unknown'} at ${new Date(snap.mergedAt).toLocaleString()})`,
         }).catch(() => {});
         return { success: true, revertedFields: Object.keys(partialUpdate) };
+      }),
+  }),
+
+  // ─── Compliance Cockpit ─────────────────────────────────────────────────────
+  compliance: router({
+    listActions: protectedProcedure
+      .input(z.object({
+        status: z.string().optional(),
+        priority: z.string().optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { complianceActions } = await import('../drizzle/schema');
+        let rows = await db.select().from(complianceActions).orderBy(sql`FIELD(status,'critical','high','open','in_progress','overdue','completed','low') ASC, dueDate ASC`);
+        if (input?.status) rows = rows.filter(r => r.status === input.status);
+        if (input?.priority) rows = rows.filter(r => r.priority === input.priority);
+        return rows;
+      }),
+
+    upsertAction: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        title: z.string().min(1),
+        source: z.string().optional(),
+        owner: z.string().optional(),
+        dueDate: z.string().optional(),
+        status: z.enum(['open', 'in_progress', 'completed', 'overdue']).default('open'),
+        priority: z.enum(['low', 'medium', 'high', 'critical']).default('medium'),
+        evidenceUrl: z.string().optional(),
+        notes: z.string().optional(),
+        completedAt: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { complianceActions } = await import('../drizzle/schema');
+        const role = ctx.user.role;
+        if (!isAdmin(role)) throw new TRPCError({ code: 'FORBIDDEN' });
+        const data = {
+          title: input.title,
+          source: input.source ?? null,
+          owner: input.owner ?? null,
+          dueDate: input.dueDate ? new Date(input.dueDate) : null,
+          status: input.status,
+          priority: input.priority,
+          evidenceUrl: input.evidenceUrl ?? null,
+          notes: input.notes ?? null,
+          completedAt: input.completedAt ? new Date(input.completedAt) : null,
+          updatedAt: new Date(),
+        };
+        if (input.id) {
+          await db.update(complianceActions).set(data).where(eq(complianceActions.id, input.id));
+          return { id: input.id };
+        } else {
+          const [result] = await db.insert(complianceActions).values({ ...data, createdByUserId: ctx.user.id });
+          return { id: (result as any).insertId };
+        }
+      }),
+
+    listTraining: protectedProcedure
+      .input(z.object({ userId: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { trainingRecords } = await import('../drizzle/schema');
+        let rows = await db.select().from(trainingRecords).orderBy(sql`expiresAt ASC`);
+        if (input?.userId) rows = rows.filter(r => r.userId === input.userId);
+        // Auto-compute status based on expiry
+        const now = Date.now();
+        const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+        return rows.map(r => ({
+          ...r,
+          computedStatus: !r.completedAt ? 'pending'
+            : !r.expiresAt ? 'completed'
+            : new Date(r.expiresAt).getTime() < now ? 'expired'
+            : new Date(r.expiresAt).getTime() - now < THIRTY_DAYS ? 'expiring_soon'
+            : 'completed',
+        }));
+      }),
+
+    upsertTraining: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        userId: z.number(),
+        userName: z.string().optional(),
+        module: z.string().min(1),
+        provider: z.string().optional(),
+        completedAt: z.string().optional(),
+        expiresAt: z.string().optional(),
+        certificateUrl: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { trainingRecords } = await import('../drizzle/schema');
+        if (!isAdmin(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN' });
+        const data = {
+          userId: input.userId,
+          userName: input.userName ?? null,
+          module: input.module,
+          provider: input.provider ?? null,
+          completedAt: input.completedAt ? new Date(input.completedAt) : null,
+          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+          certificateUrl: input.certificateUrl ?? null,
+          notes: input.notes ?? null,
+          updatedAt: new Date(),
+        };
+        if (input.id) {
+          await db.update(trainingRecords).set(data).where(eq(trainingRecords.id, input.id));
+          return { id: input.id };
+        } else {
+          const [result] = await db.insert(trainingRecords).values(data);
+          return { id: (result as any).insertId };
+        }
+      }),
+
+    listPolicies: protectedProcedure
+      .query(async () => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { policyDocuments } = await import('../drizzle/schema');
+        return db.select().from(policyDocuments).orderBy(sql`reviewDate ASC`);
+      }),
+
+    upsertPolicy: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        title: z.string().min(1),
+        category: z.string().optional(),
+        owner: z.string().optional(),
+        version: z.string().optional(),
+        reviewDate: z.string().optional(),
+        approvedAt: z.string().optional(),
+        approvedBy: z.string().optional(),
+        fileUrl: z.string().optional(),
+        status: z.enum(['current', 'due_review', 'overdue', 'draft']).default('current'),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { policyDocuments } = await import('../drizzle/schema');
+        if (!isAdmin(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN' });
+        const data = {
+          title: input.title,
+          category: input.category ?? null,
+          owner: input.owner ?? null,
+          version: input.version ?? null,
+          reviewDate: input.reviewDate ? new Date(input.reviewDate) : null,
+          approvedAt: input.approvedAt ? new Date(input.approvedAt) : null,
+          approvedBy: input.approvedBy ?? null,
+          fileUrl: input.fileUrl ?? null,
+          status: input.status,
+          notes: input.notes ?? null,
+          updatedAt: new Date(),
+        };
+        if (input.id) {
+          await db.update(policyDocuments).set(data).where(eq(policyDocuments.id, input.id));
+          return { id: input.id };
+        } else {
+          const [result] = await db.insert(policyDocuments).values(data);
+          return { id: (result as any).insertId };
+        }
       }),
   }),
 });

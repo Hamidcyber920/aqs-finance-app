@@ -49,10 +49,16 @@
 }
 
 :root {
-  /* Hibba brand colours */
-  --hibba-navy: #0A192F;
-  --hibba-purple: #635BFF;
-  --hibba-mint: #00FFC2;
+  /* ── Liverpool Night brand tokens (HibbaSuperPrompt) ── */
+  --hibba-night: #0F1B2D;       /* Liverpool Night background */
+  --hibba-surface: #1A2740;     /* surface / card */
+  --hibba-mint: #00B894;        /* Mint accent */
+  --hibba-lavender: #6C63FF;    /* secondary actions */
+  --hibba-coral: #FF7A7A;       /* warnings */
+  --hibba-gold: #F4C95D;        /* restricted/charity-locked funds */
+  /* Legacy aliases kept for backward compat */
+  --hibba-navy: #0F1B2D;
+  --hibba-purple: #6C63FF;
   --hibba-alabaster: #F8F9FA;
 
   /* Base radius — 12px = 0.75rem */
@@ -96,8 +102,8 @@
   --chart-4: oklch(0.72 0.16 55);    /* amber */
   --chart-5: oklch(0.65 0.20 15);    /* rose */
 
-  /* Sidebar = Deep Midnight Navy #0A192F */
-  --sidebar: oklch(0.17 0.04 264);           /* #0A192F navy */
+  /* Sidebar = Liverpool Night #0F1B2D */
+  --sidebar: oklch(0.14 0.04 264);           /* #0F1B2D Liverpool Night */
   --sidebar-foreground: oklch(0.92 0.008 264);
   --sidebar-primary: oklch(0.55 0.22 264);   /* purple active */
   --sidebar-primary-foreground: oklch(0.98 0 0);
@@ -108,38 +114,45 @@
 }
 
 .dark {
-  --background: oklch(0.14 0.025 264);
-  --foreground: oklch(0.92 0.008 264);
-  --card: oklch(0.19 0.03 264);
-  --card-foreground: oklch(0.92 0.008 264);
-  --popover: oklch(0.19 0.03 264);
-  --popover-foreground: oklch(0.92 0.008 264);
-  --primary: oklch(0.62 0.22 264);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.24 0.03 264);
-  --secondary-foreground: oklch(0.75 0.01 264);
-  --muted: oklch(0.26 0.03 264);
-  --muted-foreground: oklch(0.60 0.015 264);
-  --accent: oklch(0.75 0.18 168);
-  --accent-foreground: oklch(0.12 0.04 168);
-  --destructive: oklch(0.65 0.22 25);
+  /* Liverpool Night dark theme */
+  --background: oklch(0.13 0.03 230);        /* #0F1B2D Liverpool Night */
+  --foreground: oklch(0.93 0.006 230);
+  --card: oklch(0.17 0.035 230);             /* #1A2740 surface */
+  --card-foreground: oklch(0.93 0.006 230);
+  --popover: oklch(0.17 0.035 230);
+  --popover-foreground: oklch(0.93 0.006 230);
+  /* Primary = Mint #00B894 */
+  --primary: oklch(0.72 0.17 168);           /* #00B894 mint */
+  --primary-foreground: oklch(0.10 0.04 168);
+  /* Secondary = Lavender #6C63FF */
+  --secondary: oklch(0.22 0.04 230);
+  --secondary-foreground: oklch(0.80 0.01 230);
+  --muted: oklch(0.22 0.04 230);
+  --muted-foreground: oklch(0.58 0.015 230);
+  /* Accent = Mint */
+  --accent: oklch(0.72 0.17 168);
+  --accent-foreground: oklch(0.10 0.04 168);
+  /* Destructive = Coral #FF7A7A */
+  --destructive: oklch(0.70 0.20 15);        /* #FF7A7A coral */
   --destructive-foreground: oklch(0.98 0 0);
   --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.62 0.22 264);
-  --chart-1: oklch(0.62 0.22 264);
-  --chart-2: oklch(0.75 0.18 168);
-  --chart-3: oklch(0.45 0.08 264);
-  --chart-4: oklch(0.72 0.16 55);
-  --chart-5: oklch(0.65 0.20 15);
-  --sidebar: oklch(0.13 0.03 264);
-  --sidebar-foreground: oklch(0.92 0.008 264);
-  --sidebar-primary: oklch(0.62 0.22 264);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.19 0.04 264);
-  --sidebar-accent-foreground: oklch(0.92 0.008 264);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.62 0.22 264);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.72 0.17 168);
+  /* Charts */
+  --chart-1: oklch(0.72 0.17 168);           /* mint */
+  --chart-2: oklch(0.60 0.22 264);           /* lavender */
+  --chart-3: oklch(0.78 0.16 55);            /* gold */
+  --chart-4: oklch(0.70 0.20 15);            /* coral */
+  --chart-5: oklch(0.45 0.08 230);           /* navy tint */
+  /* Sidebar = deeper Liverpool Night */
+  --sidebar: oklch(0.11 0.03 230);
+  --sidebar-foreground: oklch(0.93 0.006 230);
+  --sidebar-primary: oklch(0.72 0.17 168);   /* mint active */
+  --sidebar-primary-foreground: oklch(0.10 0.04 168);
+  --sidebar-accent: oklch(0.17 0.035 230);
+  --sidebar-accent-foreground: oklch(0.93 0.006 230);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.72 0.17 168);
 }
 
 @layer base {
@@ -148,10 +161,15 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     -webkit-font-smoothing: antialiased;
     letter-spacing: -0.01em;
+  }
+  /* Tabular figures for all financial/numeric content */
+  .tabular-nums, [data-financial], .font-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
@@ -315,3 +333,76 @@
     font-size: 16px;
   }
 }
+
+/* ─── Density Modes ──────────────────────────────────────────────────────── */
+/* Comfortable (default) — mobile-first generous spacing */
+:root {
+  --density-px: 1rem;       /* base padding */
+  --density-py: 0.75rem;
+  --density-gap: 1rem;
+  --density-row-h: 3rem;    /* table row height */
+  --density-text: 0.875rem; /* body text size */
+}
+
+/* Compact — power-user desktop mode */
+.density-compact {
+  --density-px: 0.625rem;
+  --density-py: 0.375rem;
+  --density-gap: 0.625rem;
+  --density-row-h: 2.25rem;
+  --density-text: 0.8125rem;
+}
+
+.density-compact .data-table tbody td {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+  font-size: 0.8125rem;
+}
+.density-compact .stat-card {
+  padding: 0.75rem;
+}
+.density-compact .page-header {
+  margin-bottom: 0.75rem;
+}
+
+/* ─── Page Transition ────────────────────────────────────────────────────── */
+/* Applied to the main content wrapper in DashboardLayout */
+.page-enter {
+  animation: page-enter 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Hibba Brand Utility Classes ───────────────────────────────────────── */
+.text-mint { color: var(--hibba-mint); }
+.text-lavender { color: var(--hibba-lavender); }
+.text-coral { color: var(--hibba-coral); }
+.text-gold { color: var(--hibba-gold); }
+.bg-mint { background-color: var(--hibba-mint); }
+.bg-lavender { background-color: var(--hibba-lavender); }
+.bg-coral { background-color: var(--hibba-coral); }
+.bg-gold { background-color: var(--hibba-gold); }
+
+/* Gold badge for restricted/charity-locked funds */
+.badge-restricted {
+  background-color: oklch(0.78 0.16 55 / 15%);
+  color: var(--hibba-gold);
+  border: 1px solid oklch(0.78 0.16 55 / 30%);
+}
+
+/* Compliance status colours */
+.compliance-green { color: oklch(0.72 0.17 145); }
+.compliance-amber { color: oklch(0.78 0.16 55); }
+.compliance-red   { color: oklch(0.70 0.20 15); }
+.compliance-bg-green { background-color: oklch(0.72 0.17 145 / 12%); border: 1px solid oklch(0.72 0.17 145 / 25%); }
+.compliance-bg-amber { background-color: oklch(0.78 0.16 55 / 12%); border: 1px solid oklch(0.78 0.16 55 / 25%); }
+.compliance-bg-red   { background-color: oklch(0.70 0.20 15 / 12%); border: 1px solid oklch(0.70 0.20 15 / 25%); }

@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
+export type Density = "comfortable" | "compact";
 
 interface ThemeContextType {
   theme: Theme;
   toggleTheme?: () => void;
   switchable: boolean;
+  density: Density;
+  setDensity: (d: Density) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -29,6 +32,12 @@ export function ThemeProvider({
     return defaultTheme;
   });
 
+  const [density, setDensityState] = useState<Density>(() => {
+    const stored = localStorage.getItem("density");
+    return (stored as Density) || "comfortable";
+  });
+
+  // Apply dark class
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "dark") {
@@ -36,20 +45,30 @@ export function ThemeProvider({
     } else {
       root.classList.remove("dark");
     }
-
     if (switchable) {
       localStorage.setItem("theme", theme);
     }
   }, [theme, switchable]);
 
+  // Apply density class
+  useEffect(() => {
+    const root = document.documentElement;
+    if (density === "compact") {
+      root.classList.add("density-compact");
+    } else {
+      root.classList.remove("density-compact");
+    }
+    localStorage.setItem("density", density);
+  }, [density]);
+
   const toggleTheme = switchable
-    ? () => {
-        setTheme(prev => (prev === "light" ? "dark" : "light"));
-      }
+    ? () => setTheme(prev => (prev === "light" ? "dark" : "light"))
     : undefined;
 
+  const setDensity = (d: Density) => setDensityState(d);
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, switchable }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, switchable, density, setDensity }}>
       {children}
     </ThemeContext.Provider>
   );

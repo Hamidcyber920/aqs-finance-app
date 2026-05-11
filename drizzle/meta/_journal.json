@@ -344,6 +344,20 @@
       "when": 1778495012071,
       "tag": "0048_colossal_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "5",
+      "when": 1778497206259,
+      "tag": "0049_familiar_korvac",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "5",
+      "when": 1778498260573,
+      "tag": "0050_supreme_colleen_wing",
+      "breakpoints": true
     }
   ]
 }

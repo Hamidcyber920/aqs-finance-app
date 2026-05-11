@@ -340,7 +340,12 @@ export function registerScheduledJobs() {
   cron.schedule("30 8 * * *", () => {
     sendRentReminders().catch(console.error);
   }, { timezone: "Europe/London" });
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30)");
+  // Every Monday at 07:30 UK time — compliance digest to Dr. Hamid
+  cron.schedule("30 7 * * 1", () => {
+    sendComplianceDigest().catch(console.error);
+  }, { timezone: "Europe/London" });
+
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
@@ -520,5 +525,221 @@ export async function sendRentReminders() {
     console.log(`[Scheduled] Rent reminders complete: ${upcoming.length} due-soon, ${overdue8to14.length} overdue (8-14d), ${overdue14plus.length} escalated (14+d)`);
   } catch (e) {
     console.error("[Scheduled] Rent reminder job failed:", e);
+  }
+}
+
+// ─── Monday Compliance Digest ─────────────────────────────────────────────────
+/**
+ * Every Monday at 07:30 UK time — sends a compliance digest to Dr. Abdul Hamid
+ * covering:
+ *  - Critical / overdue compliance actions
+ *  - Training records expiring within 30 days or already expired
+ *  - Policies due for review
+ */
+export async function sendComplianceDigest() {
+  console.log("[Scheduled] Running Monday compliance digest...");
+  try {
+    const db = await getDb();
+    if (!db) { console.warn("[Scheduled] DB unavailable, skipping compliance digest"); return; }
+
+    const { complianceActions, trainingRecords, policyDocuments } = await import("../drizzle/schema");
+    const now = new Date();
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+    // Fetch all data
+    const actions = await db.select().from(complianceActions);
+    const training = await db.select().from(trainingRecords);
+    const policies = await db.select().from(policyDocuments);
+
+    // Filter to actionable items
+    const criticalActions = actions.filter((a: any) =>
+      a.priority === "critical" && a.status !== "completed"
+    );
+    const overdueActions = actions.filter((a: any) =>
+      (a.status === "overdue" || (a.dueDate && new Date(a.dueDate) < now && a.status !== "completed"))
+      && a.priority !== "critical"
+    );
+    const trainingGaps = training.filter((t: any) => {
+      if (!t.expiresAt) return false;
+      const exp = new Date(t.expiresAt).getTime();
+      return exp < now.getTime() + THIRTY_DAYS;
+    });
+    const policyReviews = policies.filter((p: any) =>
+      p.status === "overdue" || p.status === "due_review"
+    );
+
+    const totalIssues = criticalActions.length + overdueActions.length + trainingGaps.length + policyReviews.length;
+    if (totalIssues === 0) {
+      console.log("[Scheduled] Compliance digest: no issues to report this week.");
+      return;
+    }
+
+    const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const score = Math.max(0, 100 - criticalActions.length * 20 - overdueActions.length * 10 - trainingGaps.length * 5 - policyReviews.length * 5);
+    const scoreColor = score >= 80 ? "#00FFC2" : score >= 60 ? "#f59e0b" : "#f87171";
+
+    const actionRow = (a: any) => `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:13px">${a.title ?? "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${a.source ?? "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px">
+          <span style="padding:2px 8px;border-radius:999px;background:${a.priority==='critical'?'rgba(248,113,113,0.15)':'rgba(245,158,11,0.15)'};color:${a.priority==='critical'?'#f87171':'#f59e0b'};font-weight:600">${a.priority ?? "—"}</span>
+        </td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${a.dueDate ? new Date(a.dueDate).toLocaleDateString("en-GB") : "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${a.owner ?? "—"}</td>
+      </tr>`;
+
+    const trainingRow = (t: any) => {
+      const exp = t.expiresAt ? new Date(t.expiresAt) : null;
+      const isExpired = exp && exp < now;
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:13px">${t.userName ?? `User #${t.userId}`}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${t.module ?? "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px">
+          <span style="padding:2px 8px;border-radius:999px;background:${isExpired?'rgba(248,113,113,0.15)':'rgba(245,158,11,0.15)'};color:${isExpired?'#f87171':'#f59e0b'};font-weight:600">${isExpired?'Expired':'Expiring soon'}</span>
+        </td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${exp ? exp.toLocaleDateString("en-GB") : "—"}</td>
+      </tr>`;
+    };
+
+    const policyRow = (p: any) => `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:13px">${p.title ?? "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${p.category ?? "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px">
+          <span style="padding:2px 8px;border-radius:999px;background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:600">${p.status === "overdue" ? "Overdue" : "Due Review"}</span>
+        </td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${p.reviewDate ? new Date(p.reviewDate).toLocaleDateString("en-GB") : "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${p.owner ?? "—"}</td>
+      </tr>`;
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#070F1E;font-family:'Inter',Arial,sans-serif">
+  <div style="max-width:680px;margin:0 auto;padding:32px 16px">
+
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#0A192F,#112240);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:28px 32px;margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h1 style="margin:0;font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.03em">
+            Weekly Compliance Digest
+          </h1>
+          <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,0.5)">${dateStr} · Abdullah Quilliam Society</p>
+        </div>
+        <div style="text-align:center">
+          <p style="margin:0;font-size:36px;font-weight:900;color:${scoreColor};line-height:1">${score}%</p>
+          <p style="margin:2px 0 0;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Compliance Score</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary strip -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px">
+      ${[
+        { label: "Critical Actions", value: criticalActions.length, color: "#f87171" },
+        { label: "Overdue Items", value: overdueActions.length, color: "#f59e0b" },
+        { label: "Training Gaps", value: trainingGaps.length, color: "#a78bfa" },
+        { label: "Policy Reviews", value: policyReviews.length, color: "#00FFC2" },
+      ].map(s => `<div style="background:${s.color}11;border:1px solid ${s.color}33;border-radius:12px;padding:14px;text-align:center">
+        <p style="margin:0;font-size:24px;font-weight:800;color:${s.value>0?s.color:'rgba(255,255,255,0.3)'}">${s.value}</p>
+        <p style="margin:4px 0 0;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.08em">${s.label}</p>
+      </div>`).join("")}
+    </div>
+
+    ${criticalActions.length > 0 ? `
+    <!-- Critical Actions -->
+    <div style="background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.2);border-radius:12px;margin-bottom:20px;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(248,113,113,0.2)">
+        <h2 style="margin:0;font-size:14px;font-weight:700;color:#f87171">⚠ Critical Actions (${criticalActions.length})</h2>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,0.2)">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Action</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Source</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Priority</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Due</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Owner</th>
+        </tr></thead>
+        <tbody>${criticalActions.map(actionRow).join("")}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${overdueActions.length > 0 ? `
+    <!-- Overdue Actions -->
+    <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:12px;margin-bottom:20px;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(245,158,11,0.2)">
+        <h2 style="margin:0;font-size:14px;font-weight:700;color:#f59e0b">⏰ Overdue Actions (${overdueActions.length})</h2>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,0.2)">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Action</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Source</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Priority</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Due</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Owner</th>
+        </tr></thead>
+        <tbody>${overdueActions.map(actionRow).join("")}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${trainingGaps.length > 0 ? `
+    <!-- Training Gaps -->
+    <div style="background:rgba(167,139,250,0.05);border:1px solid rgba(167,139,250,0.2);border-radius:12px;margin-bottom:20px;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(167,139,250,0.2)">
+        <h2 style="margin:0;font-size:14px;font-weight:700;color:#a78bfa">🎓 Training Gaps (${trainingGaps.length})</h2>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,0.2)">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Staff Member</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Module</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Status</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Expires</th>
+        </tr></thead>
+        <tbody>${trainingGaps.map(trainingRow).join("")}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${policyReviews.length > 0 ? `
+    <!-- Policy Reviews -->
+    <div style="background:rgba(0,255,194,0.04);border:1px solid rgba(0,255,194,0.2);border-radius:12px;margin-bottom:20px;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(0,255,194,0.2)">
+        <h2 style="margin:0;font-size:14px;font-weight:700;color:#00FFC2">📋 Policies Due for Review (${policyReviews.length})</h2>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,0.2)">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Policy</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Category</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Status</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Review Date</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Owner</th>
+        </tr></thead>
+        <tbody>${policyReviews.map(policyRow).join("")}</tbody>
+      </table>
+    </div>` : ""}
+
+    <!-- Footer -->
+    <div style="text-align:center;padding:20px 0;border-top:1px solid rgba(255,255,255,0.06)">
+      <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.3)">
+        Abdullah Quilliam Society · Automated Compliance Digest · Every Monday 07:30 UK
+      </p>
+      <p style="margin:6px 0 0;font-size:11px;color:rgba(255,255,255,0.2)">
+        To manage compliance items, log in to the Hibba OS Compliance Cockpit.
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>`;
+
+    await sendEmail(
+      "ahamid4@gmail.com",
+      "Dr Abdul Hamid",
+      `[Hibba] Weekly Compliance Digest — ${totalIssues} item${totalIssues !== 1 ? "s" : ""} require attention`,
+      html,
+    );
+    console.log(`[Scheduled] Compliance digest sent to Dr. Hamid: ${totalIssues} issues (${criticalActions.length} critical, ${overdueActions.length} overdue, ${trainingGaps.length} training, ${policyReviews.length} policies)`);
+  } catch (e) {
+    console.error("[Scheduled] Compliance digest failed:", e);
   }
 }

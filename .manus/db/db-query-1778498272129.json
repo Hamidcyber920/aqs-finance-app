@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `receipts` ADD `imageHash` varchar(64);\nALTER TABLE `receipts` ADD `secondApproverRequired` boolean DEFAULT false;\nALTER TABLE `receipts` ADD `secondApprovedById` int;\nALTER TABLE `receipts` ADD `secondApprovedByName` varchar(200);\nALTER TABLE `receipts` ADD `secondApprovedAt` timestamp;\nALTER TABLE `receipts` ADD `fundAllocation` json;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute ALTER TABLE `receipts` ADD `imageHash` varchar(64);\nALTER TABLE `receipts` ADD `secondApproverRequired` boolean DEFAULT false;\nALTER TABLE `receipts` ADD `secondApprovedById` int;\nALTER TABLE `receipts` ADD `secondApprovedByName` varchar(200);\nALTER TABLE `receipts` ADD `secondApprovedAt` timestamp;\nALTER TABLE `receipts` ADD `fundAllocation` json;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2179
+}

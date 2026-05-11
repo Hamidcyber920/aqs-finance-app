@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
@@ -143,6 +144,21 @@ export default function DashboardPage() {
     { enabled: isAdmin }
   );
   const { data: users } = trpc.users.list.useQuery({}, { enabled: isAdmin });
+  const { data: complianceActions = [] } = trpc.compliance.listActions.useQuery(undefined, { enabled: isAdmin });
+  const { data: trainingData = [] } = trpc.compliance.listTraining.useQuery(undefined, { enabled: isAdmin });
+  const { data: policies = [] } = trpc.compliance.listPolicies.useQuery(undefined, { enabled: isAdmin });
+
+  // Compliance heat map stats
+  const criticalItems = (complianceActions as any[]).filter((a: any) => a.priority === 'critical' && a.status !== 'completed').length;
+  const overdueItems = (complianceActions as any[]).filter((a: any) => a.status === 'overdue' || (a.dueDate && new Date(a.dueDate) < new Date() && a.status !== 'completed')).length;
+  const expiredTraining = (trainingData as any[]).filter((t: any) => t.computedStatus === 'expired' || t.computedStatus === 'expiring_soon').length;
+  const overduePolicies = (policies as any[]).filter((p: any) => p.status === 'overdue' || p.status === 'due_review').length;
+  const complianceScore = Math.max(0, 100 - criticalItems * 20 - overdueItems * 10 - expiredTraining * 5 - overduePolicies * 5);
+  const complianceColor = complianceScore >= 80 ? T.mint : complianceScore >= 60 ? '#f59e0b' : '#f87171';
+
+  // Today's action tiles
+  const pendingReceipts = (receipts?.rows ?? []).filter((r: any) => r.status === 'pending').length;
+  const pendingLoans = (loans as any[] ?? []).filter((l: any) => l.status === 'pending').length;
 
   /* Mock chart data — replaced by real data when queries land */
   const chartData = [
@@ -223,6 +239,55 @@ export default function DashboardPage() {
           <StatCard label="Available Balance" value="£14,460" sub="Reconciled" icon={DollarSign} trend="up" color={T.purple} delay={160} />
           <StatCard label="Pending Approvals" value="7" sub="Requires action" icon={AlertCircle} trend="neutral" color="#f87171" delay={240} />
         </div>
+
+        {/* ── Today's action tiles ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10, marginBottom: 20, animation: 'fadeUp 0.5s ease 280ms both' }}>
+          {[
+            { label: 'Pending Receipts', value: pendingReceipts || 0, path: '/expenses', color: '#f59e0b', icon: Receipt },
+            { label: 'Pending Loans', value: pendingLoans || 0, path: '/loans', color: T.purple, icon: HandHeart },
+            { label: 'Compliance Issues', value: criticalItems + overdueItems, path: '/compliance', color: criticalItems > 0 ? '#f87171' : T.mint, icon: AlertCircle },
+            { label: 'Training Gaps', value: expiredTraining, path: '/compliance', color: expiredTraining > 0 ? '#f59e0b' : T.mint, icon: BookOpen },
+          ].map((tile) => (
+            <Link key={tile.label} href={tile.path}>
+              <div style={{ background: `${tile.color}11`, border: `1px solid ${tile.color}33`, borderRadius: 14, padding: '16px 18px', cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = `0 8px 24px ${tile.color}33`; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = ''; (e.currentTarget as HTMLDivElement).style.boxShadow = ''; }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <tile.icon size={16} style={{ color: tile.color }} />
+                  {tile.value > 0 && <span style={{ width: 7, height: 7, borderRadius: '50%', background: tile.color, boxShadow: `0 0 6px ${tile.color}` }} />}
+                </div>
+                <p style={{ fontSize: 26, fontWeight: 800, color: T.white, margin: 0, lineHeight: 1 }}>{tile.value}</p>
+                <p style={{ fontSize: 11, color: T.muted, margin: '4px 0 0', fontWeight: 500 }}>{tile.label}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+
+        {/* ── Compliance health strip (admin only) ── */}
+        {isAdmin && (
+          <Link href="/compliance">
+            <div style={{ background: T.card, backdropFilter: 'blur(20px)', border: `1px solid ${complianceColor}44`, borderRadius: 14, padding: '14px 20px', marginBottom: 20, cursor: 'pointer', animation: 'fadeUp 0.5s ease 320ms both', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: `${complianceColor}22`, border: `1px solid ${complianceColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <CheckCircle2 size={20} style={{ color: complianceColor }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, color: T.muted, margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>Compliance Score</p>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: complianceColor, margin: 0, lineHeight: 1.1 }}>{complianceScore}%</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                {[{ label: 'Critical Actions', value: criticalItems, color: '#f87171' }, { label: 'Overdue Items', value: overdueItems, color: '#f59e0b' }, { label: 'Training Gaps', value: expiredTraining, color: '#a78bfa' }, { label: 'Policy Reviews Due', value: overduePolicies, color: T.mint }].map(s => (
+                  <div key={s.label} style={{ textAlign: 'center' }}>
+                    <p style={{ fontSize: 18, fontWeight: 800, color: s.value > 0 ? s.color : T.muted, margin: 0 }}>{s.value}</p>
+                    <p style={{ fontSize: 10, color: T.muted, margin: 0, whiteSpace: 'nowrap' }}>{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              <span style={{ fontSize: 11, color: T.muted, marginLeft: 'auto' }}>View Compliance Cockpit →</span>
+            </div>
+          </Link>
+        )}
 
         {/* ── Charts row ── */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 mb-6">

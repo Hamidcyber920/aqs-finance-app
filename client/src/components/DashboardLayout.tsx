@@ -69,6 +69,7 @@ const orgItems = [
 const adminItems = [
   { icon: ShieldCheck, label: "Admin Panel", path: "/admin" },
   { icon: Users, label: "Trustees & Staff Contacts", path: "/trustees" },
+  { icon: ShieldCheck, label: "Compliance Cockpit", path: "/compliance" },
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Settings, label: "Settings", path: "/settings" },
@@ -201,18 +202,18 @@ function DashboardLayoutContent({
           onClick={() => { setLocation(path); if (sidebarIsMobile) setOpenMobile(false); }}
           tooltip={label}
           className={`h-10 rounded-lg transition-all ${isActive ? "font-semibold" : ""}`}
-          style={isActive ? { background: "rgba(99,91,255,0.18)", color: "#fff" } : {}}
+          style={isActive ? { background: "rgba(0,184,148,0.15)", color: "#fff" } : {}}
         >
-          <Icon className="h-4 w-4 shrink-0" style={isActive ? { color: "#00FFC2" } : {}} />
+          <Icon className="h-4 w-4 shrink-0" style={isActive ? { color: "#00B894" } : {}} />
           <span className="text-sm tracking-tight">{label}</span>
         </SidebarMenuButton>
       </SidebarMenuItem>
     );
   };
 
-  const sidebarBg = "linear-gradient(180deg, #0A192F 0%, #112240 60%, #0d1f3c 100%)";
-  const topBarBg = "linear-gradient(90deg, #0A192F 0%, #112240 100%)";
-  const bottomBarBg = "linear-gradient(180deg, #0A192F 0%, #0d1f3c 100%)";
+  const sidebarBg = "linear-gradient(180deg, #0F1B2D 0%, #1A2740 60%, #0f1f38 100%)";
+  const topBarBg = "linear-gradient(90deg, #0F1B2D 0%, #1A2740 100%)";
+  const bottomBarBg = "linear-gradient(180deg, #0F1B2D 0%, #0f1f38 100%)";
 
   return (
     <>
@@ -416,7 +417,7 @@ function DashboardLayoutContent({
           </div>
         )}
 
-        <main className="flex-1 p-3 sm:p-4 md:p-6">{children}</main>
+        <main className="flex-1 p-3 sm:p-4 md:p-6 page-enter" key={location}>{children}</main>
 
         {/* Mobile bottom nav — Hibba mint/purple theme */}
         {isMobile && (

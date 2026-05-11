@@ -163,12 +163,20 @@ export const receipts = mysqlTable("receipts", {
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "withheld"]).default("pending"),
   withheldAt: timestamp("withheldAt"),
   withheldReason: text("withheldReason"),
-  chequeAmount: decimal("chequeAmount", { precision: 10, scale: 2 }),
+   chequeAmount: decimal("chequeAmount", { precision: 10, scale: 2 }),
   totalAmount: decimal("totalAmount", { precision: 10, scale: 2 }),
+  // Duplicate detection
+  imageHash: varchar("imageHash", { length: 64 }),
+  // £500+ second approver workflow
+  secondApproverRequired: boolean("secondApproverRequired").default(false),
+  secondApprovedById: int("secondApprovedById"),
+  secondApprovedByName: varchar("secondApprovedByName", { length: 200 }),
+  secondApprovedAt: timestamp("secondApprovedAt"),
+  // Fund allocation (JSON: [{fund: string, amount: number}])
+  fundAllocation: json("fundAllocation").$type<Array<{ fund: string; amount: number }>>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type Receipt = typeof receipts.$inferSelect;
 export type InsertReceipt = typeof receipts.$inferInsert;
 
@@ -1262,3 +1270,58 @@ export const scanMergeSnapshots = mysqlTable("scan_merge_snapshots", {
 });
 export type ScanMergeSnapshot = typeof scanMergeSnapshots.$inferSelect;
 export type InsertScanMergeSnapshot = typeof scanMergeSnapshots.$inferInsert;
+
+// ─── Compliance Cockpit ───────────────────────────────────────────────────────
+
+export const complianceActions = mysqlTable("compliance_actions", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  source: varchar("source", { length: 200 }),          // e.g. "Charity Commission inquiry", "LBMW"
+  owner: varchar("owner", { length: 200 }),             // responsible person name
+  dueDate: timestamp("dueDate"),
+  status: varchar("status", { length: 50 }).default("open").notNull(), // open | in_progress | completed | overdue
+  priority: varchar("priority", { length: 20 }).default("medium").notNull(), // low | medium | high | critical
+  evidenceUrl: text("evidenceUrl"),
+  notes: text("notes"),
+  completedAt: timestamp("completedAt"),
+  createdByUserId: int("createdByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type ComplianceAction = typeof complianceActions.$inferSelect;
+export type InsertComplianceAction = typeof complianceActions.$inferInsert;
+
+export const trainingRecords = mysqlTable("training_records", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  userName: varchar("userName", { length: 200 }),       // denormalised for display
+  module: varchar("module", { length: 300 }).notNull(), // e.g. "Safeguarding", "GDPR", "First Aid"
+  provider: varchar("provider", { length: 200 }),
+  completedAt: timestamp("completedAt"),
+  expiresAt: timestamp("expiresAt"),
+  certificateUrl: text("certificateUrl"),
+  status: varchar("status", { length: 50 }).default("pending").notNull(), // pending | completed | expired | expiring_soon
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type TrainingRecord = typeof trainingRecords.$inferSelect;
+export type InsertTrainingRecord = typeof trainingRecords.$inferInsert;
+
+export const policyDocuments = mysqlTable("policy_documents", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  category: varchar("category", { length: 100 }),       // e.g. "Safeguarding", "Finance", "HR"
+  owner: varchar("owner", { length: 200 }),
+  version: varchar("version", { length: 50 }),          // e.g. "v2.1"
+  reviewDate: timestamp("reviewDate"),                   // next scheduled review
+  approvedAt: timestamp("approvedAt"),
+  approvedBy: varchar("approvedBy", { length: 200 }),
+  fileUrl: text("fileUrl"),
+  status: varchar("status", { length: 50 }).default("current").notNull(), // current | due_review | overdue | draft
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type PolicyDocument = typeof policyDocuments.$inferSelect;
+export type InsertPolicyDocument = typeof policyDocuments.$inferInsert;

@@ -38,6 +38,7 @@ import PaymentCancelledPage from "./pages/PaymentCancelled";
 import PayPage from "./pages/Pay";
 import CommHubPage from "./pages/CommHub";
 import MergeHistoryPage from "./pages/MergeHistory";
+import ComplianceCockpitPage from "./pages/ComplianceCockpit";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay"];
 
@@ -88,6 +89,7 @@ function Router() {
         <Route path="/fintech" component={FintechPage} />
         <Route path="/donor-crm" component={DonorCRMPage} />
         <Route path="/merge-history" component={MergeHistoryPage} />
+        <Route path="/compliance" component={ComplianceCockpitPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />

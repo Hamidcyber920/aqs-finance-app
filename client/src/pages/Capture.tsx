@@ -51,7 +51,11 @@ export default function CapturePage() {
   const [waSentRows, setWaSentRows] = useState<Set<number>>(new Set());
   const [sendingWaAll, setSendingWaAll] = useState(false);
   const [editingRow, setEditingRow] = useState<number | null>(null);
-  const [rowEdits, setRowEdits] = useState<Record<number, { name?: string; amount?: string; campaign?: string }>>({});
+  const [rowEdits, setRowEdits] = useState<Record<number, { name?: string; amount?: string; campaign?: string }>>({})
+  const [imageHash, setImageHash] = useState<string | null>(null)
+  const [fundAllocation, setFundAllocation] = useState<Array<{ fund: string; amount: number }>>([])
+  const [showFundAlloc, setShowFundAlloc] = useState(false)
+  const [duplicateWarning, setDuplicateWarning] = useState<any[] | null>(null);
 
   const extractMutation = trpc.documents.extract.useMutation();
   const saveCrmMutation = trpc.crm.saveScanToCRM.useMutation();
@@ -61,9 +65,14 @@ export default function CapturePage() {
     onSuccess: () => { toast.success("Receipt submitted"); setSubmitted(true); setTimeout(() => setLocation("/receipts"), 1800); },
     onError: (e) => toast.error(e.message),
   });
-  const { register, handleSubmit, setValue } = useForm<any>({
+  const checkDuplicateQuery = trpc.receipts.checkDuplicate.useQuery(
+    { imageHash: imageHash ?? undefined, vendor: extracted?.vendor, amount: extracted?.amount ? String(extracted.amount) : undefined, date: extracted?.date },
+    { enabled: !!(imageHash || (extracted?.vendor && extracted?.amount)), staleTime: 30000 }
+  )
+  const { register, handleSubmit, setValue, watch } = useForm<any>({
     defaultValues: { department: "Mosque" }
-  });
+  })
+  const watchedAmount = watch("amount");
 
   const checkCrmByPhone = useCallback(async (phone: string) => {
     if (!phone || phone.length < 7) return;
@@ -83,6 +92,11 @@ export default function CapturePage() {
     setUploading(true);
     setExtracted(null); setCrmMatch(null); setMultiRecords([]); setSavedToCrm(false);
     try {
+      // Compute SHA-256 hash of file for duplicate detection
+      const hashBuffer = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+      const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+      setImageHash(hashHex);
+      setDuplicateWarning(null);
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
@@ -415,8 +429,28 @@ export default function CapturePage() {
                     <button onClick={()=>setLocation("/donor-crm")} style={{ marginLeft:"auto",fontSize:12,color:T.purple,textDecoration:"underline" }}>View in CRM →</button>
                   </div>
                 )}
+                {docType==="receipt"&&checkDuplicateQuery.data?.isDuplicate&&(
+                  <div style={{ background:"rgba(245,158,11,0.12)",border:"1px solid rgba(245,158,11,0.4)",borderRadius:12,padding:"12px 16px",display:"flex",gap:10,alignItems:"flex-start" }}>
+                    <span style={{ fontSize:18 }}>⚠️</span>
+                    <div>
+                      <p style={{ fontWeight:700,color:"#f59e0b",fontSize:13,margin:"0 0 4px" }}>Possible Duplicate Receipt</p>
+                      <p style={{ color:"rgba(255,255,255,0.6)",fontSize:12,margin:0 }}>
+                        {checkDuplicateQuery.data.matches.length} similar receipt{checkDuplicateQuery.data.matches.length!==1?"s":""} found
+                        {checkDuplicateQuery.data.matches[0]?.matchType==="exact_hash" ? " (identical image)" : " (same vendor & amount within 7 days)"}.
+                        Please verify before submitting.
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {docType==="receipt"&&(
-                  <form onSubmit={handleSubmit(d=>createMutation.mutate(d))} style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                  <form onSubmit={handleSubmit(d => {
+                    const amountNum = parseFloat(d.amount || "0");
+                    if (amountNum >= 500 && fundAllocation.length === 0 && !showFundAlloc) {
+                      setShowFundAlloc(true);
+                      return;
+                    }
+                    createMutation.mutate({ ...d, imageHash: imageHash ?? undefined, fundAllocation: fundAllocation.length > 0 ? fundAllocation : undefined });
+                  })} style={{ display:"flex",flexDirection:"column",gap:10 }}>
                     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
                       <div><Label style={{ fontSize:11,color:T.muted,textTransform:"uppercase" }}>Amount (£) *</Label><Input {...register("amount",{required:true})} type="number" step="0.01" placeholder="0.00" style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:40 }}/></div>
                       <div><Label style={{ fontSize:11,color:T.muted,textTransform:"uppercase" }}>Date</Label><Input {...register("date")} type="date" style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:40,colorScheme:"dark" }}/></div>
