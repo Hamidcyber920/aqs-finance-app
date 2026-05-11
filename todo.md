@@ -994,3 +994,18 @@
 - [x] Date and timestamp recorded on each payroll payment record (paidAt field)
 - [x] Authorising signatory field per payment: pre-filled with "Dr Abdul Hamid" (Manager & Trustee), editable
 - [x] Signatory shown on each saved payroll row and in monthly export
+
+## Payroll Improvements (May 2026)
+- [ ] Backend: payroll.exportMonthly procedure — returns CSV string with all records for selected month (Employee, NI, Tax Code, Gross, Income Tax, NI Contribution, Pension, Other Deductions, Net Pay, Payment Method, Cheque No, Paid At, Authorised By)
+- [ ] Backend: payroll.exportMonthlyPdf procedure — generates HTML receipt-style PDF for the month, includes AQS header, signatory block, and cheque register
+- [ ] Backend: payroll.getChequeRegister procedure — returns all payroll records with paymentMethod=cheque across all months, with bankingStatus and bankedAt
+- [ ] Backend: payroll.markChequeBanked procedure — updates bankingStatus=banked and bankedAt=now for a given record
+- [ ] Backend: payroll.getStaffProfileByName procedure — fuzzy name lookup in staff_profiles, returns niNumber, taxCode, bankName, sortCode, accountNumber
+- [ ] Frontend: Payroll page — "Export CSV" button downloads monthly payroll as CSV
+- [ ] Frontend: Payroll page — "Export PDF" button generates and opens printable monthly summary
+- [ ] Frontend: Payroll page — "Cheque Register" tab showing all cheques issued, with banked/unbanked toggle
+- [ ] Frontend: Cheque Register — each row shows employee, amount, cheque number, date issued, status badge
+- [ ] Frontend: Cheque Register — "Mark Banked" button with date/time stamp
+- [ ] Frontend: Cheque Register — cheque evidence thumbnail with click-to-expand
+- [ ] Frontend: AI extraction — after name is extracted, auto-lookup staff profile and pre-fill NI + Tax Code if match found
+- [ ] Frontend: NI/Tax Code auto-fill shows a "Pre-filled from staff profile" badge when auto-populated

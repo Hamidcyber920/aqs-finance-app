@@ -95,11 +95,17 @@ export default function PayrollPage() {
 
   // Expanded row in saved table
   const [expandedSavedRow, setExpandedSavedRow] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'payroll' | 'cheques'>('payroll');
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [chequeYear, setChequeYear] = useState(new Date().getFullYear());
 
   const fileRef = useRef<HTMLInputElement>(null);
   const chequeRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const { data, refetch } = trpc.payroll.list.useQuery({ month, year });
+  const { data: chequeData, refetch: refetchCheques } = trpc.payroll.getChequeRegister.useQuery({ year: chequeYear });
+  const markChequeBanked = trpc.payroll.markChequeBanked.useMutation({ onSuccess: () => { refetchCheques(); toast.success('Cheque marked as banked'); } });
   const analyzePayslipBulk = trpc.payroll.analyzePayslipBulk.useMutation();
   const createMutation = trpc.payroll.create.useMutation();
   const updateMutation = trpc.payroll.update.useMutation();
@@ -233,6 +239,77 @@ export default function PayrollPage() {
   const updateRow = (i: number, patch: Partial<VerificationRow>) =>
     setVerificationRows(prev => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r));
 
+  // ── Staff profile auto-fill ──────────────────────────────────────────────────
+  const [profileLookupName, setProfileLookupName] = useState('');
+  const [profileLookupIdx, setProfileLookupIdx] = useState<number | null>(null);
+  const { data: staffProfileData } = trpc.payroll.getStaffProfileByName.useQuery(
+    { name: profileLookupName },
+    { enabled: profileLookupName.length >= 3 }
+  );
+  // Effect: when staffProfileData arrives, apply to the target row
+  const prevProfileName = useRef('');
+  if (staffProfileData !== undefined && profileLookupName !== prevProfileName.current && profileLookupIdx !== null) {
+    prevProfileName.current = profileLookupName;
+    if (staffProfileData) {
+      const idx = profileLookupIdx;
+      setTimeout(() => {
+        updateRow(idx, {
+          niNumber: staffProfileData.niNumber ?? null,
+          taxCode: staffProfileData.taxCode ?? null,
+          payMethod: (staffProfileData.paymentMethod as PaymentMethod) ?? 'bank_transfer',
+        });
+        toast.success(`Auto-filled NI & Tax Code from staff profile`);
+      }, 0);
+    }
+  }
+  const autoFillFromProfile = (i: number, name: string) => {
+    setProfileLookupIdx(i);
+    setProfileLookupName(name);
+  };
+
+  // ── Export handlers ───────────────────────────────────────────────────────────
+  const [exportMonth, setExportMonth] = useState(month);
+  const [exportYear, setExportYear] = useState(year);
+  const { data: exportCsvData, refetch: refetchCsv } = trpc.payroll.exportMonthly.useQuery(
+    { month: exportMonth, year: exportYear },
+    { enabled: false }
+  );
+  const { data: exportPdfData, refetch: refetchPdf } = trpc.payroll.exportMonthlyPdf.useQuery(
+    { month: exportMonth, year: exportYear },
+    { enabled: false }
+  );
+
+  const handleExportCsv = async () => {
+    setExportMonth(month); setExportYear(year);
+    setExportingCsv(true);
+    try {
+      const result = await refetchCsv();
+      const data = result.data;
+      if (!data) { toast.error('No data to export'); return; }
+      const blob = new Blob([data.csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `Payroll_${data.monthLabel.replace(' ', '_')}.csv`;
+      a.click(); URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${data.monthLabel} payroll CSV (${data.rowCount} records)`);
+    } catch { toast.error('Export failed'); } finally { setExportingCsv(false); }
+  };
+
+  const handleExportPdf = async () => {
+    setExportMonth(month); setExportYear(year);
+    setExportingPdf(true);
+    try {
+      const result = await refetchPdf();
+      const data = result.data;
+      if (!data) { toast.error('No data to export'); return; }
+      const blob = new Blob([data.html], { type: 'text/html;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const win = window.open(url, '_blank');
+      if (win) { setTimeout(() => win.print(), 800); }
+      toast.success(`Opened ${data.monthLabel} payroll summary for printing`);
+    } catch { toast.error('PDF export failed'); } finally { setExportingPdf(false); }
+  };
+
   return (
     <>
       <style>{`
@@ -277,6 +354,17 @@ export default function PayrollPage() {
               style={{ background: `linear-gradient(135deg,${T.purple},#4f46e5)`, color: T.white, border: "none", borderRadius: 12, padding: "10px 18px", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
               <Plus size={15} /> Manual Entry
             </Button>
+            {/* Export buttons */}
+            <Button onClick={handleExportCsv} disabled={exportingCsv || records.length === 0}
+              style={{ background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)", color: "#10B981", borderRadius: 12, padding: "10px 16px", fontWeight: 700, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              {exportingCsv ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+              CSV
+            </Button>
+            <Button onClick={handleExportPdf} disabled={exportingPdf || records.length === 0}
+              style={{ background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.3)", color: "#fbbf24", borderRadius: 12, padding: "10px 16px", fontWeight: 700, display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              {exportingPdf ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+              Print
+            </Button>
           </div>
         </div>
 
@@ -297,6 +385,18 @@ export default function PayrollPage() {
                 <p style={{ fontSize: 11, color: T.muted, margin: 0 }}>{s.label}</p>
               </div>
             </div>
+          ))}
+        </div>
+
+        {/* ── Tab Navigation ── */}
+        <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "rgba(255,255,255,0.04)", border: `1px solid ${T.border}`, borderRadius: 12, padding: 4, width: "fit-content" }}>
+          {([['payroll', 'Payroll Records'], ['cheques', 'Cheque Register']] as const).map(([tab, label]) => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              style={{ padding: "8px 18px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.2s",
+                background: activeTab === tab ? T.purple : "transparent",
+                color: activeTab === tab ? T.white : T.muted }}>
+              {label}
+            </button>
           ))}
         </div>
 
@@ -484,7 +584,7 @@ export default function PayrollPage() {
         )}
 
         {/* ── Saved Payroll Table ── */}
-        <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: 24, animation: "fadeUp 0.5s ease 300ms both" }}>
+        {activeTab === 'payroll' && <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: 24, animation: "fadeUp 0.5s ease 300ms both" }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: T.white, margin: "0 0 20px", letterSpacing: "-0.01em" }}>
             {new Date(year, month - 1).toLocaleString("en-GB", { month: "long", year: "numeric" })} Payroll
           </h2>
@@ -590,7 +690,75 @@ export default function PayrollPage() {
               )}
             </table>
           </div>
-        </div>
+        </div>}
+
+        {/* ── Cheque Register Tab ── */}
+        {activeTab === 'cheques' && (
+          <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: 24, animation: "fadeUp 0.5s ease both" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: T.white, margin: 0 }}>Cheque Register</h2>
+                <p style={{ fontSize: 12, color: T.muted, margin: "4px 0 0" }}>All cheques issued — mark as banked when cleared</p>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: T.muted }}>Year:</span>
+                <select value={chequeYear} onChange={e => setChequeYear(Number(e.target.value))} className="payroll-select" style={{ padding: "6px 12px" }}>
+                  {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+                <thead>
+                  <tr>
+                    {["Employee", "Cheque No.", "Amount", "Issued", "Authorised By", "Status", ""].map(h => (
+                      <th key={h} style={{ padding: "8px 12px 8px 0", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", textAlign: "left", borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(!chequeData || (chequeData as any[]).length === 0) ? (
+                    <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: T.muted, fontSize: 14 }}>
+                      No cheques issued for {chequeYear}
+                    </td></tr>
+                  ) : (chequeData as any[]).map((c: any) => (
+                    <tr key={c.id}>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 13, fontWeight: 600, color: T.white, borderBottom: `1px solid ${T.border}` }}>{c.employeeName ?? "—"}</td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}`, fontFamily: "monospace" }}>{c.chequeNumber ?? "—"}</td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 13, fontWeight: 700, color: T.mint, borderBottom: `1px solid ${T.border}` }}>£{Number(c.netPay ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2 })}</td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 11, color: T.muted, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>
+                        {c.paidAt ? new Date(c.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                      </td>
+                      <td style={{ padding: "12px 12px 12px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{c.authorisedByName ?? "—"}</td>
+                      <td style={{ padding: "12px 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>
+                        {c.bankingStatus === 'banked'
+                          ? <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, background: "rgba(0,255,194,0.1)", color: T.mint }}>Banked</span>
+                          : <span style={{ padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, background: "rgba(251,191,36,0.1)", color: "#fbbf24" }}>Pending</span>}
+                      </td>
+                      <td style={{ padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
+                        {c.bankingStatus !== 'banked' && (
+                          <button onClick={() => markChequeBanked.mutate({ id: c.id })}
+                            disabled={markChequeBanked.isPending}
+                            style={{ fontSize: 11, fontWeight: 600, color: T.mint, background: "rgba(0,255,194,0.1)", border: "1px solid rgba(0,255,194,0.3)", borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}>
+                            Mark Banked
+                          </button>
+                        )}
+                        {c.chequeImageUrl && (
+                          <a href={c.chequeImageUrl} target="_blank" rel="noopener noreferrer"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 6, fontSize: 11, color: T.purple, textDecoration: "none" }}>
+                            <ImageIcon size={11} />Evidence
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* ── Manual Entry Dialog ── */}
         <Dialog open={open} onOpenChange={setOpen}>

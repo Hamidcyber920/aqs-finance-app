@@ -2588,10 +2588,98 @@ export const appRouter = router({
       getByUser: adminProcedure.input(z.object({ userId: z.number() })).query(({ input }) => getStaffProfile(input.userId)),
       upsert: adminProcedure
         .input(z.object({ userId: z.number(), fullName: z.string().optional(), niNumber: z.string().optional(), taxCode: z.string().optional(), bankName: z.string().optional(), bankAccountNumber: z.string().optional(), bankSortCode: z.string().optional(), startDate: z.date().optional(), contractType: z.string().optional(), paymentMethod: z.string().optional(), annualSalary: z.string().optional(), hourlyRate: z.string().optional() }))
-        .mutation(async ({ input }) => { const { userId, ...data } = input; await upsertStaffProfile(userId, data as any); return { success: true }; }),
+         .mutation(async ({ input }) => { const { userId, ...data } = input; await upsertStaffProfile(userId, data as any); return { success: true }; }),
     }),
-  }),
 
+    exportMonthly: adminProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { payrollRecords: prTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const rows = await db.select().from(prTable)
+          .where(andFn(eqFn(prTable.month, input.month), eqFn(prTable.year, input.year)))
+          .orderBy(prTable.employeeName);
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const monthLabel = `${monthNames[input.month - 1]} ${input.year}`;
+        const headers = ['Employee Name','Gross Pay','Income Tax','National Insurance','Pension','Other Deductions','Total Deductions','Net Pay','Payment Method','Cheque Number','Paid At','Authorised By','Status'];
+        const csvRows = rows.map(r => [
+          r.employeeName ?? `Employee #${r.userId}`,
+          r.grossPay ?? '0', r.incomeTax ?? '0', r.nationalInsurance ?? '0',
+          r.pensionContribution ?? '0', r.otherDeductions ?? '0', r.totalDeductions ?? '0', r.netPay ?? '0',
+          r.paymentMethod ?? 'bank_transfer', r.chequeNumber ?? '',
+          r.paidAt ? new Date(r.paidAt).toLocaleString('en-GB') : '',
+          r.authorisedByName ?? '', r.paymentStatus ?? 'pending',
+        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+        const csv = [headers.join(','), ...csvRows].join('\n');
+        const totals = rows.reduce((acc, r) => ({ gross: acc.gross + parseFloat(String(r.grossPay ?? 0)), net: acc.net + parseFloat(String(r.netPay ?? 0)), deductions: acc.deductions + parseFloat(String(r.totalDeductions ?? 0)) }), { gross: 0, net: 0, deductions: 0 });
+        return { csv, monthLabel, rowCount: rows.length, totals };
+      }),
+
+    exportMonthlyPdf: adminProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { payrollRecords: prTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const rows = await db.select().from(prTable)
+          .where(andFn(eqFn(prTable.month, input.month), eqFn(prTable.year, input.year)))
+          .orderBy(prTable.employeeName);
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const monthLabel = `${monthNames[input.month - 1]} ${input.year}`;
+        const totals = rows.reduce((acc, r) => ({ gross: acc.gross + parseFloat(String(r.grossPay ?? 0)), net: acc.net + parseFloat(String(r.netPay ?? 0)), deductions: acc.deductions + parseFloat(String(r.totalDeductions ?? 0)) }), { gross: 0, net: 0, deductions: 0 });
+        const rowsHtml = rows.map(r => `<tr><td>${r.employeeName ?? `Employee #${r.userId}`}</td><td>£${parseFloat(String(r.grossPay??0)).toFixed(2)}</td><td>£${parseFloat(String(r.incomeTax??0)).toFixed(2)}</td><td>£${parseFloat(String(r.nationalInsurance??0)).toFixed(2)}</td><td>£${parseFloat(String(r.pensionContribution??0)).toFixed(2)}</td><td>£${parseFloat(String(r.otherDeductions??0)).toFixed(2)}</td><td><strong>£${parseFloat(String(r.netPay??0)).toFixed(2)}</strong></td><td>${r.paymentMethod??'bank_transfer'}</td><td>${r.chequeNumber??''}</td><td>${r.paidAt?new Date(r.paidAt).toLocaleDateString('en-GB'):''}</td><td>${r.authorisedByName??''}</td></tr>`).join('');
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payroll ${monthLabel}</title><style>body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:20px}h1{color:#1a3a2a;font-size:16px;margin-bottom:4px}p{margin:2px 0}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#1a3a2a;color:#fff;padding:5px 6px;text-align:left;font-size:10px}td{padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:10px}.total-row td{font-weight:bold;background:#f0f7f4;border-top:2px solid #1a3a2a}.footer{margin-top:24px;border-top:1px solid #ccc;padding-top:10px;font-size:10px;color:#666}</style></head><body><h1>AQ Society — Payroll Summary: ${monthLabel}</h1><p><strong>Generated:</strong> ${new Date().toLocaleString('en-GB')} &nbsp; <strong>Staff Count:</strong> ${rows.length}</p><table><thead><tr><th>Employee</th><th>Gross</th><th>Tax</th><th>NI</th><th>Pension</th><th>Other</th><th>Net Pay</th><th>Method</th><th>Cheque No</th><th>Paid</th><th>Authorised By</th></tr></thead><tbody>${rowsHtml}<tr class="total-row"><td>TOTALS (${rows.length} staff)</td><td>£${totals.gross.toFixed(2)}</td><td></td><td></td><td></td><td></td><td>£${totals.net.toFixed(2)}</td><td colspan="4"></td></tr></tbody></table><div class="footer"><p>Authorised by: Dr Abdul Hamid (Manager &amp; Trustee) — AQ Society Finance &amp; HR System</p></div></body></html>`;
+        return { html, monthLabel, rowCount: rows.length, totals };
+      }),
+
+    getChequeRegister: adminProcedure
+      .input(z.object({ year: z.number().optional() }))
+      .query(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return [];
+        const { payrollRecords: prTable } = await import('../drizzle/schema');
+        const { eq: eqFn, and: andFn } = await import('drizzle-orm');
+        const conditions: any[] = [eqFn(prTable.paymentMethod, 'cheque')];
+        if (input.year) conditions.push(eqFn(prTable.year, input.year));
+        const rows = await db.select().from(prTable).where(andFn(...conditions as [any, ...any[]])).orderBy(prTable.chequeIssuedAt);
+        return rows;
+      }),
+
+    markChequeBanked: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { payrollRecords: prTable } = await import('../drizzle/schema');
+        const { eq: eqFn } = await import('drizzle-orm');
+        await db.update(prTable).set({ bankingStatus: 'banked', bankedAt: new Date() }).where(eqFn(prTable.id, input.id));
+        return { success: true };
+      }),
+
+    getStaffProfileByName: adminProcedure
+      .input(z.object({ name: z.string() }))
+      .query(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return null;
+        const { staffProfiles: spTable } = await import('../drizzle/schema');
+        const nameLower = input.name.toLowerCase().trim();
+        const allProfiles = await db.select({
+          id: spTable.id, userId: spTable.userId, fullName: spTable.fullName,
+          niNumber: spTable.niNumber, taxCode: spTable.taxCode,
+          bankName: spTable.bankName, bankSortCode: spTable.bankSortCode,
+          bankAccountNumber: spTable.bankAccountNumber, paymentMethod: spTable.paymentMethod,
+        }).from(spTable);
+        const match = allProfiles.find(p => {
+          const profileName = (p.fullName ?? '').toLowerCase();
+          if (!profileName) return false;
+          return profileName.includes(nameLower) || nameLower.includes(profileName.split(' ')[0] ?? '');
+        });
+        return match ?? null;
+      }),
+  }),
   // ─── RECONCILIATION ────────────────────────────────────────────────────────
   reconciliation: router({
 
