@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Upload, Camera, FileText, AlertTriangle, CheckCircle, Loader2, X, FileSpreadsheet, UserCheck, UserPlus, Users } from "lucide-react";
+import { Upload, Camera, FileText, AlertTriangle, CheckCircle, Loader2, X, FileSpreadsheet, UserCheck, UserPlus, Users, ArrowRight, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 export type ModuleType =
@@ -48,6 +48,8 @@ export interface ProfileMatch {
   phone?: string | null;
   score: number;
   table: string;
+  /** Full current field values of the matched record, used for diff preview */
+  currentFields?: Record<string, unknown> | null;
 }
 
 export interface SmartUploadResult {
@@ -85,10 +87,13 @@ const DEFAULT_FIELD_LABELS: Record<string, Record<string, string>> = {
     phone: "Phone",
     dateOfBirth: "Date of Birth",
     addressLine1: "Address Line 1",
+    addressLine2: "Address Line 2",
     city: "City",
     postcode: "Postcode",
     nokName: "Next of Kin Name",
     nokPhone: "Next of Kin Phone",
+    nokEmail: "Next of Kin Email",
+    nokRelationship: "NOK Relationship",
     notes: "Notes",
   },
   income_rental: {
@@ -248,7 +253,44 @@ function extractPhoneFromData(data: Record<string, unknown>): string | undefined
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
 
-type MatchStep = "idle" | "matching" | "confirm" | "done";
+/** Build a list of proposed field changes for the diff review step */
+interface FieldDiff {
+  key: string;
+  label: string;
+  currentValue: unknown;
+  proposedValue: unknown;
+  isNew: boolean; // true if field is empty/null in current record
+}
+
+function buildDiff(
+  extractedData: Record<string, unknown>,
+  currentFields: Record<string, unknown> | null | undefined,
+  labels: Record<string, string>
+): FieldDiff[] {
+  if (!currentFields) return [];
+  const diffs: FieldDiff[] = [];
+  for (const [key, proposed] of Object.entries(extractedData)) {
+    if (key === "records" || key === "transactions") continue;
+    if (proposed === null || proposed === undefined || proposed === "") continue;
+    const current = currentFields[key];
+    const currentEmpty = current === null || current === undefined || current === "";
+    const proposedStr = String(proposed);
+    const currentStr = current !== null && current !== undefined ? String(current) : "";
+    // Only include if the proposed value differs from current
+    if (proposedStr !== currentStr) {
+      diffs.push({
+        key,
+        label: labels[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()),
+        currentValue: currentEmpty ? null : current,
+        proposedValue: proposed,
+        isNew: currentEmpty,
+      });
+    }
+  }
+  return diffs;
+}
+
+type MatchStep = "idle" | "matching" | "confirm" | "review" | "done";
 
 export function SmartUpload({
   moduleType,
@@ -278,6 +320,7 @@ export function SmartUpload({
   const [matchQueryInput, setMatchQueryInput] = useState<{
     name: string; email?: string; phone?: string; moduleType: ModuleType;
   } | null>(null);
+  const [fieldDiffs, setFieldDiffs] = useState<FieldDiff[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extractMutation = trpc.documents.extract.useMutation();
@@ -372,9 +415,24 @@ export function SmartUpload({
     setMatches([]);
     setSelectedMatch(null);
     setMatchQueryInput(null);
+    setFieldDiffs([]);
   };
 
+  /** After user selects a match, build the diff and move to review step */
   const handleAcceptMatch = () => {
+    if (!result || !selectedMatch) return;
+    // Build field-level diff between current record and extracted data
+    const diffs = buildDiff(
+      result.extractedData as Record<string, unknown>,
+      selectedMatch.currentFields,
+      labels
+    );
+    setFieldDiffs(diffs);
+    setMatchStep("review");
+  };
+
+  /** User confirmed the diff — now actually call onConfirm to save */
+  const handleConfirmSave = () => {
     if (!result || !selectedMatch) return;
     onConfirm({ ...result, matchedProfile: selectedMatch, createNew: false });
     resetAndClose();
@@ -579,8 +637,6 @@ export function SmartUpload({
                 </div>
               </div>
 
-              <Separator />
-
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <Button variant="ghost" size="sm" onClick={() => { setResult(null); setMatchStep("idle"); }} className="gap-1 text-muted-foreground">
                   <X className="w-4 h-4" /> Upload Different File
@@ -595,8 +651,97 @@ export function SmartUpload({
                     disabled={!selectedMatch}
                     className="gap-1"
                   >
-                    <UserCheck className="w-4 h-4" />
-                    Update {selectedMatch?.name ?? "Selected Record"}
+                    <Eye className="w-4 h-4" />
+                    Review Changes
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── PRE-SAVE REVIEW STEP (field diff table) ── */}
+          {result && matchStep === "review" && selectedMatch && !isMatching && (
+            <div className="space-y-5">
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <UserCheck className="w-4 h-4 text-primary" />
+                  <p className="font-semibold text-sm">Updating: {selectedMatch.name}</p>
+                  <Badge variant="secondary" className="text-xs">{selectedMatch.subtitle}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Review the proposed changes below. Only fields with new or different values are shown.
+                  Click <strong>Confirm &amp; Save</strong> to apply them, or <strong>Go Back</strong> to choose a different record.
+                </p>
+              </div>
+
+              {fieldDiffs.length === 0 ? (
+                <Card className="border-amber-400/40 bg-amber-50/30 dark:bg-amber-950/20">
+                  <CardContent className="pt-3 pb-3">
+                    <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                      <span>No new information was found in the document that differs from the existing record.</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="rounded-xl border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-1/4">Field</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[37%]">Current Value</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[37%]">Proposed New Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fieldDiffs.map((diff, i) => (
+                        <tr key={diff.key} className={`border-b last:border-0 ${i % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
+                          <td className="px-4 py-3 font-medium text-foreground">{diff.label}</td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {diff.isNew ? (
+                              <span className="italic text-xs text-muted-foreground/60">empty</span>
+                            ) : (
+                              <span className="font-mono text-xs bg-destructive/10 text-destructive px-1.5 py-0.5 rounded">
+                                {formatValue(diff.currentValue)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              {!diff.isNew && <ArrowRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+                              <span className="font-mono text-xs bg-green-500/10 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded font-semibold">
+                                {formatValue(diff.proposedValue)}
+                              </span>
+                              {diff.isNew && (
+                                <Badge variant="secondary" className="text-xs py-0 h-4">New</Badge>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <Separator />
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setMatchStep("confirm")}
+                  className="gap-1 text-muted-foreground"
+                >
+                  <X className="w-4 h-4" /> Go Back
+                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={handleClose}>Cancel</Button>
+                  <Button
+                    onClick={handleConfirmSave}
+                    className="gap-1"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    {fieldDiffs.length === 0 ? "No Changes to Save" : `Confirm & Save ${fieldDiffs.length} Change${fieldDiffs.length !== 1 ? "s" : ""}`}
                   </Button>
                 </div>
               </div>

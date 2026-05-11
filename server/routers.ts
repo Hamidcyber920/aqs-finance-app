@@ -1035,6 +1035,7 @@ export const appRouter = router({
         postcode: z.string().nullish(),
         nokName: z.string().nullish(),
         nokPhone: z.string().nullish(),
+        nokEmail: z.string().nullish(),
         nokRelationship: z.string().nullish(),
         notes: z.string().nullish(),
       }))
@@ -1054,9 +1055,18 @@ export const appRouter = router({
           return v;
         };
         const { id, ...fields } = input;
+        // Fetch existing record so we can protect non-null fields
+        const { trustees: trusteesTable } = await import('../drizzle/schema');
+        const [existing] = await db.select().from(trusteesTable).where(eq(trusteesTable.id, id)).limit(1);
         const updates: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(fields)) {
           if (v !== undefined && v !== null && v !== '') {
+            // GUARD: never overwrite the member's own phone with a NOK phone value.
+            // If the existing record already has a phone number, skip the phone field
+            // (the AI sometimes puts the NOK contact number in the phone field).
+            if (k === 'phone' && existing?.phone && existing.phone.trim() !== '') {
+              continue; // preserve existing phone
+            }
             // Normalise date fields
             if ((k === 'dateOfBirth' || k === 'date') && typeof v === 'string') {
               updates[k] = normaliseDate(v);
@@ -1066,7 +1076,6 @@ export const appRouter = router({
           }
         }
         if (Object.keys(updates).length > 0) {
-          const { trustees: trusteesTable } = await import('../drizzle/schema');
           await db.update(trusteesTable).set(updates as any).where(eq(trusteesTable.id, id));
         }
         return { success: true, updatedFields: Object.keys(updates) };
@@ -3729,18 +3738,30 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 - beneficiaryName: if this is a Sadaqah Jariyah dedication, the name of the person it is for
 - notes: any additional notes
 Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
-          staff_profile: `You are an expert at extracting staff and trustee profile information for a UK Islamic charity. This image may be a CV, ID document, business card, or staff form. Extract:
-- fullName: full legal name
+          staff_profile: `You are an expert at extracting staff and trustee profile information for a UK Islamic charity. This image may be a CV, ID document, business card, WhatsApp message, or staff form.
+
+IMPORTANT RULES:
+- "phone" = the PERSON'S OWN contact number (labelled "Contact number", "Mobile", "Tel", or similar for the main person)
+- "nokPhone" = the NEXT OF KIN'S phone number ONLY (found after "Next of kin" or "NOK" section)
+- "nokEmail" = the NEXT OF KIN'S email address ONLY (found after "Next of kin" or "NOK" section, labelled "Email" within that section)
+- "email" = the PERSON'S OWN email address (NOT the NOK's email)
+- If the document only shows a NOK phone and no separate member phone, set phone to null — do NOT copy the NOK phone into the phone field
+- addressLine1/city/postcode = the PERSON'S OWN address (not NOK address)
+
+Extract these fields:
+- fullName: full legal name of the person
 - role: job title or role (e.g. Trustee, Manager, Staff, Volunteer)
-- email: email address
-- phone: UK phone number
-- dateOfBirth: date of birth (YYYY-MM-DD)
-- addressLine1: street address
-- city: city or town
-- postcode: UK postcode
+- email: the person's own email address
+- phone: the person's own UK phone number (NOT the NOK phone)
+- dateOfBirth: date of birth in format DD/MM/YYYY or YYYY-MM-DD
+- addressLine1: person's street address (house number and street name)
+- addressLine2: second address line if present
+- city: person's city or town
+- postcode: person's UK postcode
 - nokName: next of kin full name
 - nokPhone: next of kin phone number
-- nokRelationship: relationship to next of kin (e.g. spouse, parent)
+- nokEmail: next of kin email address
+- nokRelationship: relationship to next of kin (e.g. Wife, Husband, Parent, Sibling)
 - notes: any additional notes
 Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
         };
@@ -3889,6 +3910,7 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
           id: number; name: string; subtitle: string;
           email?: string | null; phone?: string | null;
           score: number; table: string;
+          currentFields?: Record<string, unknown>;
         };
         const candidates: MatchCandidate[] = [];
 
@@ -3899,11 +3921,11 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 
         if (staffTypes.includes(input.moduleType)) {
           const [trusteeRows] = await db.execute(
-            'SELECT id, fullName, role, email, phone FROM trustees WHERE isActive = 1 LIMIT 200'
+            'SELECT id, fullName, role, email, phone, dateOfBirth, addressLine1, addressLine2, city, postcode, nokName, nokPhone, nokEmail, nokRelationship, notes FROM trustees WHERE isActive = 1 LIMIT 200'
           ) as any;
           for (const row of (trusteeRows as any[])) {
             const s = scoreCandidate(row.fullName, row.email, row.phone);
-            if (s > 0.3) candidates.push({ id: row.id, name: row.fullName, subtitle: row.role, email: row.email, phone: row.phone, score: s, table: 'trustees' });
+            if (s > 0.3) candidates.push({ id: row.id, name: row.fullName, subtitle: row.role, email: row.email, phone: row.phone, score: s, table: 'trustees', currentFields: { fullName: row.fullName, role: row.role, email: row.email, phone: row.phone, dateOfBirth: row.dateOfBirth, addressLine1: row.addressLine1, addressLine2: row.addressLine2, city: row.city, postcode: row.postcode, nokName: row.nokName, nokPhone: row.nokPhone, nokEmail: row.nokEmail, nokRelationship: row.nokRelationship, notes: row.notes } });
           }
           const [spRows] = await db.execute(
             'SELECT sp.id, COALESCE(sp.fullName, u.name) AS displayName, u.email, sp.contractType FROM staff_profiles sp JOIN users u ON sp.userId = u.id LIMIT 200'
@@ -3978,6 +4000,7 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
             phone: c.phone ?? null,
             score: Math.round(c.score * 100),
             table: c.table,
+            currentFields: c.currentFields ?? null,
           })),
         };
       }),

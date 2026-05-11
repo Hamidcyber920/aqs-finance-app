@@ -1108,3 +1108,12 @@
 - [x] Frontend: OrgChart Scan/Upload — on confirm with match, auto-populate the matched staff member's edit form with extracted DOB, address, NOK
 - [x] Frontend: DonorCRM Scan/Upload — on confirm with match, auto-populate matched donor's edit form
 - [x] Frontend: Income Scan/Upload — on confirm with match, auto-select matched tenant in the form
+
+## Bug Fixes & Enhancements (May 2026 — Scan/Merge Flow)
+- [x] Add nokEmail column to staffProfiles table (schema already had it — confirmed)
+- [x] Fix AI extraction prompt: member's own phone → phone field; NOK phone → nokPhone; NOK email → nokEmail
+- [x] Fix trustees.mergeFromScan: guard against overwriting existing phone with nokPhone value
+- [x] Add nokEmail to trustees.mergeFromScan Zod schema and update logic
+- [x] Add pre-save confirmation step in SmartUpload: show table of proposed field changes (field | current | new) before committing
+- [x] matchProfile response must return current field values of matched record for diff display
+- [x] Update Trustees.tsx NOK card to display nokEmail (was already implemented)
