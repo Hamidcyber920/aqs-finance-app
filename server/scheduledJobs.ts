@@ -11,10 +11,13 @@
 
 import cron from "node-cron";
 import nodemailer from "nodemailer";
+import Stripe from "stripe";
 import { getDb } from "./db";
 import { loanRepayments, pledges, donors } from "../drizzle/schema";
 import { eq, and, lte, or } from "drizzle-orm";
 import { setGmailLastSyncedAt } from "./routers/commsInbox";
+
+const stripeScheduler = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-04-22.dahlia" as any });
 
 // ─── Email helper ─────────────────────────────────────────────────────────────
 
@@ -461,6 +464,38 @@ export async function sendPledgeReminders() {
       const balanceFormatted = `£${Number(pledge.balanceOwing ?? 0).toFixed(2)}`;
       const campaignLine = pledge.campaignName ? `<br/>Campaign: <strong>${pledge.campaignName}</strong>` : "";
       const giftAidLine = pledge.isGiftAid ? "<br/><em>Your pledge includes Gift Aid — JazakAllah Khayran for your generosity.</em>" : "";
+      // Generate Stripe Checkout link for this pledge
+      let paymentButtonHtml = "";
+      try {
+        if (process.env.STRIPE_SECRET_KEY && Number(pledge.balanceOwing ?? 0) >= 0.5) {
+          const amountPence = Math.round(Number(pledge.balanceOwing ?? 0) * 100);
+          const appUrl = process.env.VITE_APP_URL || "https://receipt-scanner.manus.space";
+          const checkoutSession = await stripeScheduler.checkout.sessions.create({
+            payment_method_types: ["card"],
+            line_items: [{
+              price_data: {
+                currency: "gbp",
+                unit_amount: amountPence,
+                product_data: {
+                  name: `Pledge Payment${pledge.campaignName ? ` — ${pledge.campaignName}` : ""}`,
+                  description: `Pledge #${pledge.id} — ${pledge.donorName ?? "Donor"}`,
+                },
+              },
+              quantity: 1,
+            }],
+            mode: "payment",
+            customer_email: donorEmail,
+            success_url: `${appUrl}/pledges?payment=success`,
+            cancel_url: `${appUrl}/pledges`,
+            metadata: { pledgeId: String(pledge.id), donorName: pledge.donorName ?? "" },
+          });
+          if (checkoutSession.url) {
+            paymentButtonHtml = `<p style="text-align:center;margin:20px 0;"><a href="${checkoutSession.url}" style="background:#1a3c5e;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">Pay Now — ${balanceFormatted}</a></p>`;
+          }
+        }
+      } catch (stripeErr) {
+        console.warn(`[Scheduled] Could not generate Stripe link for pledge ${pledge.id}:`, stripeErr);
+      }
       const subject = isOverdue
         ? `Pledge Reminder — Overdue Payment | Abdullah Quilliam Society`
         : `Pledge Reminder — Payment Due ${dueDateFormatted} | Abdullah Quilliam Society`;
@@ -476,7 +511,8 @@ export async function sendPledgeReminders() {
           ${campaignLine}
           ${giftAidLine}
           <p>If you have already made this payment, please disregard this message.</p>
-          <p>To make a payment or discuss your pledge, please contact us at <a href="mailto:info@abdullahquilliam.org">info@abdullahquilliam.org</a>.</p>
+          ${paymentButtonHtml}
+          <p>To discuss your pledge, please contact us at <a href="mailto:info@abdullahquilliam.org">info@abdullahquilliam.org</a>.</p>
           <br/>
           <p>Warm regards,<br/><strong>Abdullah Quilliam Society</strong><br/>Finance Team</p>
         </div>

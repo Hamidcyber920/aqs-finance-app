@@ -1445,6 +1445,6 @@
 
 ## Next Steps Round 3 (May 11 2026)
 
-- [ ] Stripe pledge payment link: backend createPledgeCheckout procedure + Pay Now button on Pledges tab + link in reminder email
+- [x] Stripe pledge payment link — createPledgeCheckout procedure + Pay Now button on Pledges tab + Stripe Checkout link in reminder email
 - [x] Donor Profile — New Pledge quick-create dialog on Pledges tab (pre-filled with donor name + Gift Aid status)
 - [x] Recognition Tiers — campaign leaderboard view showing donors ranked by total giving with tier badges
