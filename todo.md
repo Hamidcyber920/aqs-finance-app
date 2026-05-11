@@ -1448,3 +1448,9 @@
 - [x] Stripe pledge payment link — createPledgeCheckout procedure + Pay Now button on Pledges tab + Stripe Checkout link in reminder email
 - [x] Donor Profile — New Pledge quick-create dialog on Pledges tab (pre-filled with donor name + Gift Aid status)
 - [x] Recognition Tiers — campaign leaderboard view showing donors ranked by total giving with tier badges
+
+## Next Steps Round 4 (May 11 2026)
+
+- [ ] Stripe pledge webhook handler — /api/stripe/webhook auto-marks pledge as paid on checkout.session.completed
+- [ ] Donor Portal — public /give/:donorToken page with pledge history, Gift Aid declaration download, and Pay Now button
+- [ ] Bulk Gift Aid HMRC R68 export — Export HMRC R68 CSV button on Gift Aid & CRM+ page

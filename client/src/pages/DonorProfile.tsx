@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen, Plus } from "lucide-react";
+import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen, Plus, Share2 } from "lucide-react";
 import { Link } from "wouter";
 
 const TABS = [
@@ -148,6 +148,17 @@ export default function DonorProfile() {
       notes: pledgeForm.notes || undefined,
     });
   };
+  const generatePortalTokenMut = (trpc as any).donorPortal.generateToken.useMutation({
+    onSuccess: (data: any) => {
+      const url = `${window.location.origin}/give/${data.token}`;
+      navigator.clipboard.writeText(url).then(() => {
+        toast.success("Portal link copied to clipboard! Valid for 30 days.");
+      }).catch(() => {
+        toast.info(`Portal link: ${url}`);
+      });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   const addNoteMut = (trpc as any).donorPipeline.addNote.useMutation({
     onSuccess: () => { toast.success("Note added"); refetchNotes(); setNoteText(""); },
     onError: (e: any) => toast.error(e.message),
@@ -226,6 +237,14 @@ export default function DonorProfile() {
                   }}
                 >
                   <Plus className="w-4 h-4 mr-1" /> New Donation
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => donorId && generatePortalTokenMut.mutate({ donorId, purpose: "donation_history" })}
+                  disabled={generatePortalTokenMut.isPending}
+                >
+                  <Share2 className="w-4 h-4 mr-1" /> Share Portal Link
                 </Button>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import { Express, Request, Response } from "express";
 import Stripe from "stripe";
 import { getDb } from "./db";
-import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns, loanRepayments, loanApplications } from "../drizzle/schema";
+import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns, loanRepayments, loanApplications, pledges, pledgePayments } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
@@ -212,6 +212,37 @@ export function registerStripeWebhook(app: Express) {
               }
 
               console.log(`[Stripe Webhook] Payment completed for ${localSession.donorName} — £${localSession.amount}`);
+            } else {
+              // ── Pledge reconciliation (direct checkout from pledges router) ───────
+              const pledgeIdMeta = session.metadata?.pledgeId;
+              if (pledgeIdMeta) {
+                const pledgeId = parseInt(pledgeIdMeta, 10);
+                const amountPaid = session.amount_total ? session.amount_total / 100 : 0;
+                if (!isNaN(pledgeId) && amountPaid > 0) {
+                  const [pledge] = await db.select().from(pledges).where(eq(pledges.id, pledgeId)).limit(1);
+                  if (pledge) {
+                    const newPaid = Number(pledge.paidAmount ?? 0) + amountPaid;
+                    const newBalance = Math.max(0, Number(pledge.totalAmount ?? 0) - newPaid);
+                    const newStatus: "active" | "fulfilled" | "lapsed" | "cancelled" = newBalance <= 0 ? "fulfilled" : "active";
+                    await db.update(pledges).set({
+                      paidAmount: String(newPaid.toFixed(2)),
+                      balanceOwing: String(newBalance.toFixed(2)),
+                      status: newStatus,
+                    }).where(eq(pledges.id, pledgeId));
+                    await db.insert(pledgePayments).values({
+                      pledgeId,
+                      donorId: pledge.donorId,
+                      amount: String(amountPaid.toFixed(2)),
+                      paymentDate: new Date().toISOString().slice(0, 10) as any,
+                      paymentMethod: "stripe",
+                      reference: (typeof session.payment_intent === "string" ? session.payment_intent : session.id),
+                      notes: `Auto-reconciled via Stripe webhook. Session: ${session.id}`,
+                      recordedById: pledge.createdById,
+                    });
+                    console.log(`[Stripe Webhook] Pledge #${pledgeId} reconciled — £${amountPaid.toFixed(2)} paid, balance £${newBalance.toFixed(2)}, status: ${newStatus}`);
+                  }
+                }
+              }
             }
             break;
           }

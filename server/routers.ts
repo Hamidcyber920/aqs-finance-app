@@ -50,7 +50,7 @@ import {
   getDashboardStats,
 } from "./db";
 import { eq, and, sql, desc, isNull, gte, lte } from "drizzle-orm";
-import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions } from "../drizzle/schema";
+import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 // sendGmail is defined locally in this file (line ~123)
 
@@ -5517,6 +5517,66 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         assertCanDelete(ctx.user);
         await db.delete(trusteeDecisions).where(eq(trusteeDecisions.id, input.id));
         return { ok: true };
+      }),
+  }),
+  donorPortal: router({
+    // Public: look up a donor by their secure portal token
+    getByToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const [tokenRow] = await db
+          .select()
+          .from(donorPortalTokens)
+          .where(eq(donorPortalTokens.token, input.token))
+          .limit(1);
+        if (!tokenRow) throw new TRPCError({ code: "NOT_FOUND", message: "Invalid or expired link" });
+        if (tokenRow.expiresAt < new Date()) throw new TRPCError({ code: "FORBIDDEN", message: "This link has expired" });
+        if (!tokenRow.donorId) throw new TRPCError({ code: "NOT_FOUND", message: "No donor linked to this token" });
+        const donor = await getDonorById(tokenRow.donorId);
+        if (!donor) throw new TRPCError({ code: "NOT_FOUND", message: "Donor not found" });
+        const donorPledges = await db.select().from(pledges).where(eq(pledges.donorId, tokenRow.donorId));
+        const giftAidDecls = await db.select().from(giftAidDeclarations).where(eq(giftAidDeclarations.donorEmail, donor.email ?? ""));
+        return {
+          donor: { id: donor.id, name: donor.name, email: donor.email, phone: donor.phone, totalGiven: donor.totalGiven },
+          pledges: donorPledges,
+          giftAidDeclarations: giftAidDecls,
+          tokenPurpose: tokenRow.purpose,
+        };
+      }),
+    // Public: create a Stripe checkout session for a pledge payment via portal token
+    createPledgeCheckout: publicProcedure
+      .input(z.object({ token: z.string(), pledgeId: z.number().int(), amount: z.number().positive(), origin: z.string().url() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const [tokenRow] = await db.select().from(donorPortalTokens).where(eq(donorPortalTokens.token, input.token)).limit(1);
+        if (!tokenRow || tokenRow.expiresAt < new Date()) throw new TRPCError({ code: "FORBIDDEN", message: "Invalid or expired link" });
+        const [pledge] = await db.select().from(pledges).where(eq(pledges.id, input.pledgeId)).limit(1);
+        if (!pledge) throw new TRPCError({ code: "NOT_FOUND", message: "Pledge not found" });
+        const StripeLib = (await import("stripe")).default;
+        const stripe = new StripeLib(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-04-22.dahlia" as any });
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [{ price_data: { currency: "gbp", product_data: { name: `Pledge Payment — ${pledge.campaignName ?? "AQ Society"}`, description: `Pledge #${pledge.id} for ${pledge.donorName ?? "Donor"}` }, unit_amount: Math.round(input.amount * 100) }, quantity: 1 }],
+          mode: "payment",
+          success_url: `${input.origin}/give/${input.token}?paid=1`,
+          cancel_url: `${input.origin}/give/${input.token}`,
+          metadata: { pledgeId: String(input.pledgeId), donorId: String(pledge.donorId), source: "donor_portal" },
+        });
+        return { url: session.url };
+      }),
+    // Protected: generate a portal token for a donor
+    generateToken: protectedProcedure
+      .input(z.object({ donorId: z.number().int(), purpose: z.enum(["profile_complete", "donation_history", "gift_aid_sign", "annual_summary"]).optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const token = nanoid(48);
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        await db.insert(donorPortalTokens).values({ token, donorId: input.donorId, purpose: input.purpose ?? "donation_history", expiresAt });
+        return { token, expiresAt };
       }),
   }),
 });

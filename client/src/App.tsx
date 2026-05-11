@@ -56,8 +56,9 @@ import RecognitionTiersPage from "./pages/RecognitionTiers";
 import QRCodesPage from "./pages/QRCodes";
 import DonorProfilePage from "./pages/DonorProfile";
 import SavedViewsPage from "./pages/SavedViews";
+import DonorPortalPage from "./pages/DonorPortal";
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay", "/give"];
 
 function Router() {
   const path = window.location.pathname;
@@ -71,6 +72,7 @@ function Router() {
         <Route path="/forgot-password" component={ForgotPasswordPage} />
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/pay" component={PayPage} />
+        <Route path="/give/:token" component={DonorPortalPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route component={NotFound} />
