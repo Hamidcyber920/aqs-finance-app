@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen, Plus, Share2 } from "lucide-react";
+import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen, Plus, Share2, Send, Mail, Phone, Download, Calendar } from "lucide-react";
 import { Link } from "wouter";
 
 const TABS = [
@@ -59,6 +59,13 @@ export default function DonorProfile() {
   const [showPledgeDialog, setShowPledgeDialog] = useState(false);
   const [pledgeForm, setPledgeForm] = useState(EMPTY_PLEDGE_FORM);
   const [payingPledgeId, setPayingPledgeId] = useState<number | null>(null);
+  const [showSendLinkDialog, setShowSendLinkDialog] = useState(false);
+  const [portalLinkData, setPortalLinkData] = useState<{ token: string; url: string } | null>(null);
+  const [showStatementDialog, setShowStatementDialog] = useState(false);
+  const [statementTaxYear, setStatementTaxYear] = useState(() => {
+    const now = new Date();
+    return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  });
 
   const { data: donor } = (trpc as any).donors.get.useQuery(
     { id: donorId! },
@@ -151,14 +158,51 @@ export default function DonorProfile() {
   const generatePortalTokenMut = (trpc as any).donorPortal.generateToken.useMutation({
     onSuccess: (data: any) => {
       const url = `${window.location.origin}/give/${data.token}`;
-      navigator.clipboard.writeText(url).then(() => {
-        toast.success("Portal link copied to clipboard! Valid for 30 days.");
-      }).catch(() => {
-        toast.info(`Portal link: ${url}`);
-      });
+      setPortalLinkData({ token: data.token, url });
+      setShowSendLinkDialog(true);
     },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const exportStatementMut = (trpc as any).donors.exportAnnualStatement.useMutation({
+    onSuccess: (data: any) => {
+      if (data?.url) {
+        window.open(data.url, "_blank");
+        toast.success("Annual statement PDF generated");
+      }
+      setShowStatementDialog(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const donorName = donor?.fullName || donor?.name || "Donor";
+  const donorFirstName = donorName.split(" ")[0];
+
+  const handleCopyLink = useCallback(() => {
+    if (!portalLinkData) return;
+    navigator.clipboard.writeText(portalLinkData.url).then(() => {
+      toast.success("Portal link copied to clipboard!");
+    }).catch(() => {
+      toast.info(`Link: ${portalLinkData.url}`);
+    });
+  }, [portalLinkData]);
+
+  const handleSendWhatsApp = useCallback(() => {
+    if (!portalLinkData || !donor?.phone) return;
+    const msg = `Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${donorFirstName}!\n\nJazakAllah Khayran for your generous support of Abdullah Quilliam Society.\n\nYou can view your donation history, pledges, and Gift Aid declarations anytime using your secure Donor Portal:\n\n${portalLinkData.url}\n\nThis link is valid for 30 days.\n\nBarakAllahu feekum,\nAQS Finance Team`;
+    const cleaned = donor.phone.replace(/\D/g, "");
+    const waNumber = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, "_blank");
+    toast.success("WhatsApp opened with portal link");
+  }, [portalLinkData, donor, donorFirstName]);
+
+  const handleSendEmail = useCallback(() => {
+    if (!portalLinkData || !donor?.email) return;
+    const subject = encodeURIComponent("Your AQ Society Donor Portal Link");
+    const body = encodeURIComponent(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${donorFirstName},\n\nJazakAllah Khayran for your generous support of Abdullah Quilliam Society.\n\nYou can view your donation history, pledges, and Gift Aid declarations anytime using your secure Donor Portal:\n\n${portalLinkData.url}\n\nThis link is valid for 30 days.\n\nBarakAllahu feekum,\nAQS Finance Team`);
+    window.open(`mailto:${donor.email}?subject=${subject}&body=${body}`, "_blank");
+    toast.success("Email client opened with portal link");
+  }, [portalLinkData, donor, donorFirstName]);
   const addNoteMut = (trpc as any).donorPipeline.addNote.useMutation({
     onSuccess: () => { toast.success("Note added"); refetchNotes(); setNoteText(""); },
     onError: (e: any) => toast.error(e.message),
@@ -244,7 +288,14 @@ export default function DonorProfile() {
                   onClick={() => donorId && generatePortalTokenMut.mutate({ donorId, purpose: "donation_history" })}
                   disabled={generatePortalTokenMut.isPending}
                 >
-                  <Share2 className="w-4 h-4 mr-1" /> Share Portal Link
+                  <Send className="w-4 h-4 mr-1" /> Send Portal Link
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowStatementDialog(true)}
+                >
+                  <Download className="w-4 h-4 mr-1" /> Annual Statement
                 </Button>
               </div>
             </div>
@@ -677,6 +728,95 @@ export default function DonorProfile() {
               onClick={handleRecordDonation}
             >
               {recordDonationMut.isPending ? "Recording..." : "Record Donation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Portal Link Dialog */}
+      <Dialog open={showSendLinkDialog} onOpenChange={setShowSendLinkDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Portal Link to {donorName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              A secure portal link has been generated. Choose how to send it to the donor:
+            </p>
+            {portalLinkData && (
+              <div className="bg-muted/40 rounded p-3 text-xs font-mono break-all">
+                {portalLinkData.url}
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Button
+                className="w-full justify-start gap-3"
+                variant="outline"
+                onClick={handleCopyLink}
+              >
+                <Share2 className="w-4 h-4" /> Copy Link to Clipboard
+              </Button>
+              {donor?.phone && (
+                <Button
+                  className="w-full justify-start gap-3"
+                  variant="outline"
+                  onClick={handleSendWhatsApp}
+                >
+                  <Phone className="w-4 h-4" /> Send via WhatsApp ({donor.phone})
+                </Button>
+              )}
+              {donor?.email && (
+                <Button
+                  className="w-full justify-start gap-3"
+                  variant="outline"
+                  onClick={handleSendEmail}
+                >
+                  <Mail className="w-4 h-4" /> Send via Email ({donor.email})
+                </Button>
+              )}
+              {!donor?.phone && !donor?.email && (
+                <p className="text-sm text-amber-600">No phone or email on file — please copy the link manually.</p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Link expires in 30 days.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSendLinkDialog(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Annual Statement Dialog */}
+      <Dialog open={showStatementDialog} onOpenChange={setShowStatementDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Export Annual Giving Statement</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Generate a PDF statement for <strong>{donorName}</strong> covering all donations in the selected UK tax year (6 Apr – 5 Apr).
+            </p>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Tax Year</label>
+              <Select value={String(statementTaxYear)} onValueChange={v => setStatementTaxYear(Number(v))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 5 }, (_, i) => {
+                    const y = new Date().getFullYear() - i;
+                    return <SelectItem key={y} value={String(y)}>{y}/{y + 1}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStatementDialog(false)}>Cancel</Button>
+            <Button
+              disabled={exportStatementMut.isPending}
+              onClick={() => donorId && exportStatementMut.mutate({ donorId, taxYear: statementTaxYear })}
+            >
+              <Download className="w-4 h-4 mr-1" />
+              {exportStatementMut.isPending ? "Generating..." : "Generate PDF"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,8 +1,34 @@
 import { Express, Request, Response } from "express";
 import Stripe from "stripe";
 import { getDb } from "./db";
-import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns, loanRepayments, loanApplications, pledges, pledgePayments } from "../drizzle/schema";
+import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns, loanRepayments, loanApplications, pledges, pledgePayments, donors } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
+import nodemailer from "nodemailer";
+
+async function sendReceiptEmail(to: string, name: string, subject: string, html: string) {
+  try {
+    const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
+    const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
+    const envPass = process.env.SMTP_PASSWORD;
+    const smtpPass = (envPass && envPass.length === 16) ? envPass : "njvigzynhdcxusik";
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: parseInt(process.env.SMTP_PORT || "587"),
+      secure: false,
+      auth: { user: smtpUser, pass: smtpPass },
+      tls: { rejectUnauthorized: false },
+    });
+    await transporter.sendMail({
+      from: `"Abdullah Quilliam Society" <${fromEmail}>`,
+      to: name ? `"${name}" <${to}>` : to,
+      subject,
+      html,
+    });
+    console.log(`[Stripe Webhook] Receipt email sent to ${to}`);
+  } catch (e: any) {
+    console.error(`[Stripe Webhook] Failed to send receipt email to ${to}:`, e.message);
+  }
+}
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
   apiVersion: "2026-04-22.dahlia",
@@ -240,6 +266,62 @@ export function registerStripeWebhook(app: Express) {
                       recordedById: pledge.createdById,
                     });
                     console.log(`[Stripe Webhook] Pledge #${pledgeId} reconciled — £${amountPaid.toFixed(2)} paid, balance £${newBalance.toFixed(2)}, status: ${newStatus}`);
+
+                    // ── Send pledge payment receipt email ──────────────────────────
+                    try {
+                      const [donor] = await db.select().from(donors).where(eq(donors.id, pledge.donorId)).limit(1);
+                      if (donor?.email) {
+                        const firstName = (donor.name || "Donor").split(" ")[0];
+                        const refCode = (typeof session.payment_intent === "string" ? session.payment_intent : session.id).slice(-12).toUpperCase();
+                        const receiptHtml = `
+                          <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                            <div style="background: #1a4731; padding: 24px 32px; border-radius: 8px 8px 0 0;">
+                              <h1 style="color: #ffffff; font-size: 20px; margin: 0;">Abdullah Quilliam Society</h1>
+                              <p style="color: #c9a84c; font-size: 12px; margin: 4px 0 0;">Pledge Payment Receipt</p>
+                            </div>
+                            <div style="padding: 32px; border: 1px solid #e5e5e5; border-top: none; border-radius: 0 0 8px 8px;">
+                              <p style="font-size: 15px; color: #333;">Dear ${firstName},</p>
+                              <p style="font-size: 15px; color: #333;">Assalamu Alaikum wa Rahmatullahi wa Barakatuh,</p>
+                              <p style="font-size: 15px; color: #333;">JazakAllah Khayran! Your pledge payment has been received and confirmed.</p>
+                              <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                                <tr style="border-bottom: 1px solid #eee;">
+                                  <td style="padding: 10px 0; color: #666; font-size: 14px;">Amount Paid</td>
+                                  <td style="padding: 10px 0; font-weight: bold; font-size: 14px; text-align: right;">£${amountPaid.toFixed(2)}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                  <td style="padding: 10px 0; color: #666; font-size: 14px;">Pledge Total</td>
+                                  <td style="padding: 10px 0; font-size: 14px; text-align: right;">£${Number(pledge.totalAmount).toFixed(2)}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #eee;">
+                                  <td style="padding: 10px 0; color: #666; font-size: 14px;">Balance Remaining</td>
+                                  <td style="padding: 10px 0; font-size: 14px; text-align: right;">£${newBalance.toFixed(2)}</td>
+                                </tr>
+                                ${pledge.campaignName ? `<tr style="border-bottom: 1px solid #eee;"><td style="padding: 10px 0; color: #666; font-size: 14px;">Campaign</td><td style="padding: 10px 0; font-size: 14px; text-align: right;">${pledge.campaignName}</td></tr>` : ""}
+                                <tr style="border-bottom: 1px solid #eee;">
+                                  <td style="padding: 10px 0; color: #666; font-size: 14px;">Reference</td>
+                                  <td style="padding: 10px 0; font-size: 14px; text-align: right; font-family: monospace;">${refCode}</td>
+                                </tr>
+                                <tr>
+                                  <td style="padding: 10px 0; color: #666; font-size: 14px;">Date</td>
+                                  <td style="padding: 10px 0; font-size: 14px; text-align: right;">${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</td>
+                                </tr>
+                              </table>
+                              ${newStatus === "fulfilled" ? `<div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 12px 16px; margin: 16px 0;"><p style="color: #166534; font-size: 14px; margin: 0;">🎉 <strong>Alhamdulillah!</strong> Your pledge has been fulfilled in full. May Allah accept it from you.</p></div>` : ""}
+                              <p style="font-size: 13px; color: #666; margin-top: 24px;">"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith</p>
+                              <p style="font-size: 14px; color: #333; margin-top: 16px;">BarakAllahu feekum,<br/>AQS Finance Team</p>
+                            </div>
+                          </div>
+                        `;
+                        await sendReceiptEmail(
+                          donor.email,
+                          donor.name || "Donor",
+                          `Pledge Payment Confirmed — £${amountPaid.toFixed(2)} — AQ Society`,
+                          receiptHtml
+                        );
+                      }
+                    } catch (emailErr: any) {
+                      console.error(`[Stripe Webhook] Receipt email error for pledge #${pledgeId}:`, emailErr.message);
+                    }
                   }
                 }
               }

@@ -2882,6 +2882,70 @@ export const appRouter = router({
         }
         return { success: true, updatedFields: Object.keys(updates), snapshotId };
       }),
+    // Export annual giving statement as PDF
+    exportAnnualStatement: adminProcedure
+      .input(z.object({ donorId: z.number().int(), taxYear: z.number().int() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const { fundraisingDonations: fd, fundraisingCampaigns: fc, pledgePayments: pp, pledges: pl, donors: dt } = await import("../drizzle/schema");
+        const [donor] = await db.select().from(dt).where(eq(dt.id, input.donorId)).limit(1);
+        if (!donor) throw new TRPCError({ code: "NOT_FOUND", message: "Donor not found" });
+        // UK tax year: 6 April taxYear to 5 April taxYear+1
+        const startDate = `${input.taxYear}-04-06`;
+        const endDate = `${input.taxYear + 1}-04-05`;
+        // Fetch donations in date range
+        const donations = await db.select({
+          id: fd.id, amount: fd.amount, donatedAt: fd.donatedAt,
+          paymentMethod: fd.paymentMethod, giftAidDeclared: fd.giftAidDeclared,
+          notes: fd.notes, campaignName: fc.name, referenceCode: fd.referenceCode,
+        }).from(fd)
+          .leftJoin(fc, eq(fd.campaignId, fc.id))
+          .where(donor.email
+            ? sql`${fd.donorEmail} = ${donor.email} AND ${fd.donatedAt} >= ${startDate} AND ${fd.donatedAt} <= ${endDate}`
+            : sql`${fd.donorName} = ${donor.name} AND ${fd.donatedAt} >= ${startDate} AND ${fd.donatedAt} <= ${endDate}`)
+          .orderBy(fd.donatedAt);
+        // Fetch pledge payments in date range
+        const pledgePaymentsRows = await db.select({
+          id: pp.id, amount: pp.amount, paymentDate: pp.paymentDate,
+          reference: pp.reference, pledgeId: pp.pledgeId,
+          campaignName: pl.campaignName,
+        }).from(pp)
+          .leftJoin(pl, eq(pp.pledgeId, pl.id))
+          .where(sql`${pp.donorId} = ${input.donorId} AND ${pp.paymentDate} >= ${startDate} AND ${pp.paymentDate} <= ${endDate}`)
+          .orderBy(pp.paymentDate);
+        const totalDonated = donations.reduce((s, d) => s + Number(d.amount ?? 0), 0);
+        const totalPledgePaid = pledgePaymentsRows.reduce((s, p) => s + Number(p.amount ?? 0), 0);
+        const giftAidTotal = donations.filter(d => d.giftAidDeclared).reduce((s, d) => s + Number(d.amount ?? 0), 0);
+        const { generateAnnualStatement } = await import("./annualStatement");
+        const pdfBuffer = await generateAnnualStatement({
+          donorName: donor.name,
+          donorEmail: donor.email,
+          donorAddress: donor.address,
+          taxYear: input.taxYear,
+          donations: donations.map(d => ({
+            date: d.donatedAt ? new Date(d.donatedAt).toLocaleDateString("en-GB") : "—",
+            amount: Number(d.amount ?? 0),
+            campaign: d.campaignName,
+            method: d.paymentMethod,
+            giftAid: !!d.giftAidDeclared,
+            reference: d.referenceCode,
+          })),
+          pledgePayments: pledgePaymentsRows.map(p => ({
+            date: p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—",
+            amount: Number(p.amount ?? 0),
+            campaign: p.campaignName,
+            reference: p.reference,
+          })),
+          totalDonated,
+          totalPledgePaid,
+          grandTotal: totalDonated + totalPledgePaid,
+          giftAidTotal,
+        });
+        const fileKey = `statements/${input.donorId}-${input.taxYear}-${Date.now()}.pdf`;
+        const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+        return { url, taxYear: input.taxYear, donorName: donor.name, grandTotal: totalDonated + totalPledgePaid };
+      }),
   }),
   // ─── EMAIL CAMPAIGNS ──────────────────────────────────────────────────────
 

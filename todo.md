@@ -1458,3 +1458,7 @@
 ## Bug Fixes (May 11 2026)
 
 - [x] Fix broken donor portal link in WhatsApp messages — URL now uses /give/:token path with correct deployed domain
+## Round 5 (May 12 2026)
+- [x] Send Portal Link button on Donor Profile — one-click button that generates a portal token and sends the /give/:token link to the donor via WhatsApp/email
+- [x] Pledge payment receipt email — after Stripe checkout.session.completed webhook, send donor a confirmation email with amount paid, remaining balance, and JazakAllah Khayran message
+- [x] Annual giving statement PDF — Export Annual Statement button on Donor Profile generating a formatted PDF of all donations and Gift Aid declarations for a selected tax year
