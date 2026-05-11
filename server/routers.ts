@@ -1047,10 +1047,8 @@ export const appRouter = router({
           if (v !== undefined && v !== null && v !== '') updates[k] = v;
         }
         if (Object.keys(updates).length > 0) {
-          // Build and execute raw update using Drizzle's sql helper
-          const setClauses = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');
-          const vals = [...Object.values(updates), id];
-          await db.execute({ sql: `UPDATE trustees SET ${setClauses}, updatedAt = NOW() WHERE id = ?`, args: vals } as any);
+          const { trustees: trusteesTable } = await import('../drizzle/schema');
+          await db.update(trusteesTable).set(updates as any).where(eq(trusteesTable.id, id));
         }
         return { success: true, updatedFields: Object.keys(updates) };
       }),
@@ -2506,9 +2504,8 @@ export const appRouter = router({
           if (v !== undefined && v !== null && v !== '') updates[k] = v;
         }
         if (Object.keys(updates).length > 0) {
-          const setClauses = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');
-          const vals = [...Object.values(updates), id];
-          await (db as any).execute(`UPDATE income_records SET ${setClauses}, updatedAt = NOW() WHERE id = ?`, vals);
+          const { incomeRecords } = await import('../drizzle/schema');
+          await db.update(incomeRecords).set(updates as any).where(eq(incomeRecords.id, id));
         }
         return { success: true, updatedFields: Object.keys(updates) };
       }),
@@ -2612,9 +2609,8 @@ export const appRouter = router({
           if (v !== undefined && v !== null && v !== '') updates[k] = v;
         }
         if (Object.keys(updates).length > 0) {
-          const setClauses = Object.keys(updates).map(k => `\`${k}\` = ?`).join(', ');
-          const vals = [...Object.values(updates), id];
-          await (db as any).execute(`UPDATE donors SET ${setClauses}, updatedAt = NOW() WHERE id = ?`, vals);
+          const { donors: donorsTable } = await import('../drizzle/schema');
+          await db.update(donorsTable).set(updates as any).where(eq(donorsTable.id, id));
         }
         return { success: true, updatedFields: Object.keys(updates) };
       }),
