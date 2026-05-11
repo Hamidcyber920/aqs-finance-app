@@ -50,6 +50,14 @@ export default function CommsInboxPage() {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Reply state
+  const [showReplyPanel, setShowReplyPanel] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+
+  // Gmail push webhook registration state
+  const [showWebhookDialog, setShowWebhookDialog] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState("");
+
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: sections = [], refetch: refetchSections } = trpc.commsInbox.listSections.useQuery();
   const { data: stats } = trpc.commsInbox.getInboxStats.useQuery(undefined, { refetchInterval: 30000 });
@@ -122,6 +130,25 @@ export default function CommsInboxPage() {
     onError: (e) => toast.error(`Failed: ${e.message}`),
   });
 
+  const replyToEmail = trpc.commsInbox.replyToEmail.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Reply sent to ${data.to}`);
+      setShowReplyPanel(false);
+      setReplyBody("");
+      refetchDetail();
+      refetchEmails();
+    },
+    onError: (e) => toast.error(`Reply failed: ${e.message}`),
+  });
+
+  const registerGmailPush = trpc.commsInbox.registerGmailPush.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Gmail push registered — expires ${new Date(data.expiresAt).toLocaleDateString()}`);
+      setShowWebhookDialog(false);
+    },
+    onError: (e) => toast.error(`Webhook registration failed: ${e.message}`),
+  });
+
   const deleteSection = trpc.commsInbox.deleteSection.useMutation({
     onSuccess: () => { toast.success("Section deleted"); refetchSections(); },
     onError: (e) => toast.error(`Delete failed: ${e.message}`),
@@ -153,6 +180,9 @@ export default function CommsInboxPage() {
     reader.readAsDataURL(file);
   };
 
+  // Unread counts for sidebar badges
+  const { data: unreadCounts } = trpc.commsInbox.getSectionUnreadCounts.useQuery(undefined, { refetchInterval: 30000 });
+
   const selectedEmail = emailDetail?.email;
   const attachments = emailDetail?.attachments ?? [];
   const activity = emailDetail?.activity ?? [];
@@ -174,7 +204,9 @@ export default function CommsInboxPage() {
           </div>
           {stats && (
             <div className="flex gap-3 mt-2">
-              <span className="text-xs text-gray-400">{stats.unread} unread</span>
+              <span className="text-xs text-gray-400">
+                {unreadCounts?.total ?? stats.unread} unread
+              </span>
               {stats.urgent > 0 && <span className="text-xs text-red-400 font-semibold">{stats.urgent} urgent</span>}
             </div>
           )}
@@ -195,7 +227,12 @@ export default function CommsInboxPage() {
               className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors ${selectedSectionId === s.id ? "bg-indigo-600/20 text-indigo-300" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
             >
               <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-              <span className="truncate">{s.name}</span>
+              <span className="truncate flex-1">{s.name}</span>
+              {unreadCounts?.sections?.[String(s.id)] ? (
+                <span className="ml-auto mr-1 text-[10px] bg-indigo-500 text-white rounded-full px-1.5 py-0.5 font-bold">
+                  {unreadCounts.sections[String(s.id)]}
+                </span>
+              ) : null}
               {!s.isSystem && (
                 <button className="ml-auto text-gray-600 hover:text-red-400" onClick={(e) => { e.stopPropagation(); deleteSection.mutate({ id: s.id }); }}>
                   <X className="w-3 h-3" />
@@ -204,13 +241,17 @@ export default function CommsInboxPage() {
             </button>
           ))}
         </div>
-        {/* Gmail sync */}
-        <div className="p-3 border-t border-white/10">
+        {/* Gmail sync + push webhook */}
+        <div className="p-3 border-t border-white/10 space-y-2">
           <Button size="sm" variant="outline" className="w-full text-xs border-white/20 text-gray-300 hover:text-white hover:bg-white/10"
             onClick={() => fetchGmail.mutate({ maxResults: 20 })}
             disabled={fetchGmail.isPending}>
             {fetchGmail.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <RefreshCw className="w-3 h-3 mr-1" />}
             Sync Gmail
+          </Button>
+          <Button size="sm" variant="outline" className="w-full text-xs border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10"
+            onClick={() => setShowWebhookDialog(true)}>
+            <Zap className="w-3 h-3 mr-1" /> Enable Push
           </Button>
         </div>
       </div>
@@ -359,6 +400,7 @@ export default function CommsInboxPage() {
                   <TabsTrigger value="attachments" className="text-xs data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-gray-400">
                     Attachments {attachments.length > 0 ? `(${attachments.length})` : ""}
                   </TabsTrigger>
+                  <TabsTrigger value="reply" className="text-xs data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-gray-400">Reply</TabsTrigger>
                   <TabsTrigger value="activity" className="text-xs data-[state=active]:bg-indigo-600 data-[state=active]:text-white text-gray-400">Activity</TabsTrigger>
                 </TabsList>
 
@@ -477,6 +519,30 @@ export default function CommsInboxPage() {
                       </Card>
                     ))
                   )}
+                </TabsContent>
+
+                {/* Reply tab */}
+                <TabsContent value="reply" className="p-4 space-y-3">
+                  <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-xs text-gray-400 space-y-1">
+                    <div><span className="text-gray-500">To:</span> <span className="text-gray-200">{(selectedEmail as any)?.fromName || (selectedEmail as any)?.fromEmail} &lt;{(selectedEmail as any)?.fromEmail}&gt;</span></div>
+                    <div><span className="text-gray-500">Subject:</span> <span className="text-gray-200">{(selectedEmail as any)?.subject?.startsWith("Re:") ? (selectedEmail as any)?.subject : `Re: ${(selectedEmail as any)?.subject}`}</span></div>
+                  </div>
+                  <Textarea
+                    value={replyBody}
+                    onChange={e => setReplyBody(e.target.value)}
+                    placeholder="Write your reply here…"
+                    className="bg-white/5 border-white/10 text-white min-h-[180px] text-sm"
+                  />
+                  <div className="text-xs text-gray-500 italic">Your reply will be prefixed with "Assalamu Alaikum," and signed "JazakAllah Khair" automatically.</div>
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => replyToEmail.mutate({ emailId: (selectedEmail as any).id, replyBody })}
+                      disabled={replyToEmail.isPending || !replyBody.trim()}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                      {replyToEmail.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Mail className="w-4 h-4 mr-2" />}
+                      Send Reply
+                    </Button>
+                  </div>
                 </TabsContent>
 
                 {/* Activity tab */}
@@ -609,6 +675,49 @@ export default function CommsInboxPage() {
               className="bg-indigo-600 hover:bg-indigo-700">
               {upsertSection.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Save Section
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Gmail Push Webhook Dialog ──────────────────────────────────────── */}
+      <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
+        <DialogContent className="bg-[#0d1426] border-white/10 text-white max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Zap className="w-4 h-4 text-indigo-400" /> Enable Gmail Push Notifications</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400">
+              Register a Gmail push subscription so new emails arrive in real-time (within seconds) instead of only when you click "Sync Gmail".
+            </p>
+            <div className="bg-indigo-900/20 border border-indigo-500/20 rounded-lg p-3 text-xs text-indigo-300 space-y-1">
+              <p className="font-semibold">Prerequisites:</p>
+              <ol className="list-decimal list-inside space-y-1 text-indigo-400">
+                <li>Create a Google Cloud Pub/Sub topic (e.g. <code>gmail-inbox</code>)</li>
+                <li>Grant <code>gmail-api-push@system.gserviceaccount.com</code> the Pub/Sub Publisher role</li>
+                <li>Create a push subscription pointing to <code>{window.location.origin}/api/gmail/push</code></li>
+                <li>Enter the full topic name below and click Register</li>
+              </ol>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-400">Pub/Sub Topic Name</Label>
+              <Input
+                value={webhookUrl}
+                onChange={e => setWebhookUrl(e.target.value)}
+                placeholder="projects/my-project/topics/gmail-inbox"
+                className="bg-white/5 border-white/10 text-white mt-1 font-mono text-xs"
+              />
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded p-2 text-xs text-gray-400">
+              <span className="text-gray-500">Webhook URL:</span> <code className="text-gray-200">{window.location.origin}/api/gmail/push</code>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWebhookDialog(false)} className="border-white/20 text-gray-300">Cancel</Button>
+            <Button
+              onClick={() => registerGmailPush.mutate({ webhookUrl: `${window.location.origin}/api/gmail/push`, topicName: webhookUrl || undefined })}
+              disabled={registerGmailPush.isPending}
+              className="bg-indigo-600 hover:bg-indigo-700">
+              {registerGmailPush.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+              Register Push
             </Button>
           </DialogFooter>
         </DialogContent>

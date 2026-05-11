@@ -13,6 +13,7 @@ import { registerScheduledBackupRoute } from "./scheduledBackup";
 import { registerBackupOnMutationMiddleware } from "./backupMiddleware";
 import { registerScheduledJobs } from "../scheduledJobs";
 import { registerStripeWebhook } from "../stripeWebhook";
+import { registerGmailWebhook } from "../gmailWebhook";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -53,6 +54,8 @@ async function startServer() {
   registerBackupOnMutationMiddleware(app);
   // Stripe webhook endpoint
   registerStripeWebhook(app);
+  // Gmail push notification webhook (POST /api/gmail/push)
+  registerGmailWebhook(app);
   // tRPC API
   app.use(
     "/api/trpc",

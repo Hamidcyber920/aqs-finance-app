@@ -495,4 +495,152 @@ export const commsInboxRouter = router({
       }
       return { imported, skipped, total: messages.length };
     }),
+
+  // ── Reply to an email via Gmail API ─────────────────────────────────────
+  replyToEmail: protectedProcedure
+    .input(z.object({
+      emailId: z.number(),
+      replyBody: z.string().min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [email] = await db.select().from(inboundEmails).where(eq(inboundEmails.id, input.emailId));
+      if (!email) throw new TRPCError({ code: "NOT_FOUND", message: "Email not found" });
+      const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+      const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+      const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+      const GMAIL_FROM_EMAIL = process.env.GMAIL_FROM_EMAIL;
+      if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN || !GMAIL_FROM_EMAIL) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Gmail credentials not configured" });
+      }
+      // Get access token
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: GMAIL_CLIENT_ID,
+          client_secret: GMAIL_CLIENT_SECRET,
+          refresh_token: GMAIL_REFRESH_TOKEN,
+          grant_type: "refresh_token",
+        }),
+      });
+      if (!tokenRes.ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to refresh Gmail access token" });
+      const { access_token } = await tokenRes.json() as { access_token: string };
+      // Build RFC 2822 reply message
+      const toEmail = (email as any).fromEmail;
+      const subject = (email as any).subject.startsWith("Re:") ? (email as any).subject : `Re: ${(email as any).subject}`;
+      const rawMessage = [
+        `From: ${GMAIL_FROM_EMAIL}`,
+        `To: ${toEmail}`,
+        `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+        `In-Reply-To: ${(email as any).gmailMessageId ?? ""}`,
+        `References: ${(email as any).gmailMessageId ?? ""}`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/plain; charset=UTF-8`,
+        ``,
+        `Assalamu Alaikum,`,
+        ``,
+        input.replyBody,
+        ``,
+        `JazakAllah Khair`,
+      ].join("\r\n");
+      const encodedMessage = Buffer.from(rawMessage).toString("base64url");
+      // Send via Gmail API — reply in same thread
+      const sendRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ raw: encodedMessage, threadId: (email as any).gmailThreadId }),
+        }
+      );
+      if (!sendRes.ok) {
+        const err = await sendRes.text();
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Gmail send failed: ${err}` });
+      }
+      // Log the reply in activity log
+      await db.insert(emailActivityLog).values({
+        emailId: (email as any).id,
+        userId: ctx.user.id,
+        action: "replied",
+        notes: `Reply sent to ${toEmail}`,
+      });
+      // Mark original as actioned
+      await db.update(inboundEmails).set({ status: "actioned" }).where(eq(inboundEmails.id, (email as any).id));
+      return { success: true, to: toEmail, subject };
+    }),
+
+  // ── Register Gmail push subscription (Pub/Sub watch) ─────────────────────
+  registerGmailPush: protectedProcedure
+    .input(z.object({
+      webhookUrl: z.string().url(),
+      topicName: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+      const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+      const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+      if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Gmail credentials not configured" });
+      }
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: GMAIL_CLIENT_ID,
+          client_secret: GMAIL_CLIENT_SECRET,
+          refresh_token: GMAIL_REFRESH_TOKEN,
+          grant_type: "refresh_token",
+        }),
+      });
+      if (!tokenRes.ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to refresh Gmail access token" });
+      const { access_token } = await tokenRes.json() as { access_token: string };
+      const topic = input.topicName || `projects/${process.env.GOOGLE_CLOUD_PROJECT || "hibba-finance"}/topics/gmail-inbox`;
+      const watchRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/watch`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topicName: topic,
+            labelIds: ["INBOX"],
+            labelFilterBehavior: "INCLUDE",
+          }),
+        }
+      );
+      if (!watchRes.ok) {
+        const err = await watchRes.text();
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Gmail watch registration failed: ${err}` });
+      }
+      const watchData = await watchRes.json() as { historyId: string; expiration: string };
+      return {
+        success: true,
+        historyId: watchData.historyId,
+        expiration: watchData.expiration,
+        expiresAt: new Date(parseInt(watchData.expiration)).toISOString(),
+        webhookUrl: input.webhookUrl,
+        topic,
+      };
+    }),
+
+  // ── Per-section unread counts (for sidebar badges) ───────────────────────
+  getSectionUnreadCounts: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { total: 0, sections: {} };
+    const rows = await db
+      .select({ sectionId: inboundEmails.sectionId, count: sql<number>`count(*)` })
+      .from(inboundEmails)
+      .where(eq(inboundEmails.status, "unread"))
+      .groupBy(inboundEmails.sectionId);
+    const sections: Record<string, number> = {};
+    let total = 0;
+    for (const row of rows) {
+      const key = row.sectionId == null ? "unsorted" : String(row.sectionId);
+      const count = Number(row.count);
+      sections[key] = count;
+      total += count;
+    }
+    return { total, sections };
+  }),
 });

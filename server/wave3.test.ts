@@ -175,3 +175,34 @@ describe("Wave 4 – commsInbox router", () => {
     expect(cols).toContain("submittedAt");
   });
 });
+
+// ── Wave 4 Next Steps tests ──────────────────────────────────────────────────
+
+describe("commsInbox — reply, push webhook, unread counts", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const commsInboxSrc = fs.readFileSync(
+    path.resolve(__dirname, "routers/commsInbox.ts"), "utf8"
+  );
+
+  it("commsInbox router has replyToEmail procedure", () => {
+    expect(commsInboxSrc).toContain("replyToEmail:");
+  });
+
+  it("commsInbox router has registerGmailPush procedure", () => {
+    expect(commsInboxSrc).toContain("registerGmailPush:");
+  });
+
+  it("commsInbox router has getSectionUnreadCounts procedure", () => {
+    expect(commsInboxSrc).toContain("getSectionUnreadCounts:");
+  });
+
+  it("gmailWebhook file exists with registerGmailWebhook export", () => {
+    const fs = require("fs");
+    const path = require("path");
+    const filePath = path.resolve(__dirname, "gmailWebhook.ts");
+    expect(fs.existsSync(filePath)).toBe(true);
+    const src = fs.readFileSync(filePath, "utf8");
+    expect(src).toContain("export function registerGmailWebhook");
+  });
+});

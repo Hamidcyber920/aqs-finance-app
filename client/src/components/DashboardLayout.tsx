@@ -200,7 +200,13 @@ function DashboardLayoutContent({
     };
   }, [isResizing, setSidebarWidth]);
 
-  const NavItem = ({ icon: Icon, label, path }: { icon: React.ElementType; label: string; path: string }) => {
+  // Fetch inbox unread count for sidebar badge
+  const { data: inboxUnread } = trpc.commsInbox.getSectionUnreadCounts.useQuery(undefined, {
+    refetchInterval: 30000,
+    enabled: !!user,
+  });
+
+  const NavItem = ({ icon: Icon, label, path, badge }: { icon: React.ElementType; label: string; path: string; badge?: number }) => {
     const isActive = location === path || (path !== "/" && location.startsWith(path));
     return (
       <SidebarMenuItem>
@@ -212,7 +218,12 @@ function DashboardLayoutContent({
           style={isActive ? { background: "rgba(0,184,148,0.15)", color: "#fff" } : {}}
         >
           <Icon className="h-4 w-4 shrink-0" style={isActive ? { color: "#00B894" } : {}} />
-          <span className="text-sm tracking-tight">{label}</span>
+          <span className="text-sm tracking-tight flex-1">{label}</span>
+          {badge && badge > 0 ? (
+            <span className="ml-auto text-[10px] bg-indigo-500 text-white rounded-full px-1.5 py-0.5 font-bold min-w-[18px] text-center">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          ) : null}
         </SidebarMenuButton>
       </SidebarMenuItem>
     );
@@ -311,7 +322,11 @@ function DashboardLayoutContent({
                 )}
                 <ul className="flex flex-col gap-0.5">
                   {orgItems.map((item) => (
-                    <NavItem key={item.path} {...item} />
+                    <NavItem
+                      key={item.path}
+                      {...item}
+                      badge={item.path === "/comms-inbox" ? (inboxUnread?.total ?? 0) : undefined}
+                    />
                   ))}
                 </ul>
               </div>

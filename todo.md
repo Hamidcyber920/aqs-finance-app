@@ -1318,3 +1318,18 @@
 - [x] Section management: "Add Section" button, rename/recolour sections inline
 - [x] Sync button: "Fetch Latest Emails" triggers commsHub.syncInbox
 - [x] Add both pages to sidebar under COMMUNICATIONS group and App.tsx routes
+
+## Wave 4 Next Steps (May 11, 2026)
+
+### Gmail Push Webhook
+- [ ] Backend: register Gmail push subscription via Gmail API watch() on server startup — topic: projects/hibba/topics/gmail-inbox
+- [ ] Backend: POST /api/gmail/push-webhook endpoint — verify X-Goog-Resource-State, decode Pub/Sub message, call fetchFromGmail to pull new messages
+- [ ] Frontend: CommsInbox.tsx — "Register Push Notifications" button in settings panel, shows active/inactive status
+
+### Email Reply Threading
+- [ ] Backend: commsInbox.replyToEmail procedure — accept emailId + replyBody, send via Gmail API with In-Reply-To + References headers, log reply in email_activity_log
+- [ ] Frontend: CommsInbox.tsx — "Reply" button in email detail opens compose panel below original message, shows thread history
+
+### Inbox Unread Badge
+- [ ] Backend: commsInbox.getInboxStats — already returns unreadCount; ensure it's exposed per-section too
+- [ ] Frontend: DashboardLayout.tsx — fetch unread count via commsInbox.getInboxStats, show red badge on "Master Inbox" nav item
