@@ -1101,10 +1101,10 @@
 - [x] 30 Vitest tests for slug generation, priority validation, visibility rules, auto-routing, status transitions, date formatting
 
 ## SmartUpload AI Matching Fix (May 2026)
-- [ ] Backend: documents.matchProfile — fuzzy-match extracted name against staff/trustees (staff_profile), donors (crm_donor), tenants (income_rental)
-- [ ] Backend: return top 3 candidate matches with confidence score for each module type
-- [ ] Frontend: SmartUpload confirmation dialog — show matched record card with confidence score
-- [ ] Frontend: Allow user to accept match (merge fields into existing record) or override (create new)
-- [ ] Frontend: OrgChart Scan/Upload — on confirm with match, auto-populate the matched staff member's edit form with extracted DOB, address, NOK
-- [ ] Frontend: DonorCRM Scan/Upload — on confirm with match, auto-populate matched donor's edit form
-- [ ] Frontend: Income Scan/Upload — on confirm with match, auto-select matched tenant in the form
+- [x] Backend: documents.matchProfile — fuzzy-match extracted name against staff/trustees (staff_profile), donors (crm_donor), tenants (income_rental)
+- [x] Backend: return top 3 candidate matches with confidence score for each module type
+- [x] Frontend: SmartUpload confirmation dialog — show matched record card with confidence score
+- [x] Frontend: Allow user to accept match (merge fields into existing record) or override (create new)
+- [x] Frontend: OrgChart Scan/Upload — on confirm with match, auto-populate the matched staff member's edit form with extracted DOB, address, NOK
+- [x] Frontend: DonorCRM Scan/Upload — on confirm with match, auto-populate matched donor's edit form
+- [x] Frontend: Income Scan/Upload — on confirm with match, auto-select matched tenant in the form
