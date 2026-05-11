@@ -406,7 +406,7 @@ function DashboardLayoutContent({
       </div>
 
       {/* ── Main content ── */}
-      <SidebarInset className={`${isMobile ? "pb-[72px]" : ""} overflow-y-auto`} style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+      <SidebarInset className={`${isMobile ? "pb-[72px]" : ""} overflow-y-auto`} style={{ WebkitOverflowScrolling: "touch", paddingBottom: isMobile ? "calc(72px + env(safe-area-inset-bottom, 0px))" : undefined } as React.CSSProperties}>
         {/* Mobile top bar */}
         {isMobile && (
           <div
@@ -454,8 +454,8 @@ function DashboardLayoutContent({
 
         {/* Mobile bottom nav — Hibba mint/purple theme */}
         {isMobile && (
-          <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10" style={{ background: bottomBarBg }}>
-            <div className="flex items-stretch" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+          <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10" style={{ background: bottomBarBg, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+            <div className="flex items-stretch">
               {mobileBottomNav.map(({ icon: Icon, label, path, isCentral }) => {
                 const isActive = path !== "/__more__" && (location === path || (path !== "/" && location.startsWith(path)));
                 return (

@@ -36,6 +36,7 @@ export default function CapturePage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState<DocType>("receipt");
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -238,13 +239,16 @@ export default function CapturePage() {
               <div style={{ background:`${currentDocType.color}22`,borderRadius:"50%",padding:16 }}><Camera size={28} style={{ color:currentDocType.color }}/></div>
               <div><p style={{ fontWeight:600,marginBottom:4,color:T.white }}>Tap to scan or upload</p><p style={{ color:T.muted,fontSize:13 }}>Photo, PDF, or image file</p></div>
               <div style={{ display:"flex",gap:8 }}>
-                <span style={{ background:T.glass,border:`1px solid ${T.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:T.white }}><Camera size={12} style={{ display:"inline",marginRight:4 }}/>Camera</span>
-                <span style={{ background:T.glass,border:`1px solid ${T.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:T.white }}><Upload size={12} style={{ display:"inline",marginRight:4 }}/>Gallery</span>
+                <span onClick={(e)=>{e.stopPropagation();fileRef.current?.click();}} style={{ background:T.glass,border:`1px solid ${T.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:T.white,cursor:"pointer" }}><Camera size={12} style={{ display:"inline",marginRight:4 }}/>Camera</span>
+                <span onClick={(e)=>{e.stopPropagation();galleryRef.current?.click();}} style={{ background:T.glass,border:`1px solid ${T.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:T.white,cursor:"pointer" }}><Upload size={12} style={{ display:"inline",marginRight:4 }}/>Gallery</span>
               </div>
             </div>
           )}
         </div>
-        <input ref={fileRef} type="file" accept="image/*,application/pdf" capture="environment" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFile(f);}}/>
+        {/* Camera input — forces camera on mobile */}
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFile(f);e.target.value="";}} />
+        {/* Gallery input — opens file picker (no capture attribute) */}
+        <input ref={galleryRef} type="file" accept="image/*,application/pdf" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFile(f);e.target.value="";}} />
       </div>
 
       {/* Multi-record selector — Collection Sheet Verification Table */}

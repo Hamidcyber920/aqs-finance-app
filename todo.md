@@ -1462,3 +1462,8 @@
 - [x] Send Portal Link button on Donor Profile — one-click button that generates a portal token and sends the /give/:token link to the donor via WhatsApp/email
 - [x] Pledge payment receipt email — after Stripe checkout.session.completed webhook, send donor a confirmation email with amount paid, remaining balance, and JazakAllah Khayran message
 - [x] Annual giving statement PDF — Export Annual Statement button on Donor Profile generating a formatted PDF of all donations and Gift Aid declarations for a selected tax year
+
+## Bug Fixes (May 12 2026)
+- [x] Fix Scanner Gallery button — on mobile it opens camera instead of file picker; need accept="image/*,application/pdf" and correct capture attribute
+- [x] Fix duplicate bottom nav bar on mobile — in-app bottom nav shows twice when browser PWA bar is visible; add safe-area padding and hide duplicate
+- [x] Fix Comms Hub right panel overflow on mobile — message list/detail panel overflows off-screen on narrow viewports; make it responsive single-column

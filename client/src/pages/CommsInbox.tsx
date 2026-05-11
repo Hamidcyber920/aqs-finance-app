@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Mail, MailOpen, AlertTriangle, RefreshCw, Plus, Search, Zap, FileText,
-  MoveRight, UserCheck, Archive, CheckCircle, ChevronRight, Inbox, Loader2,
+  MoveRight, UserCheck, Archive, CheckCircle, ChevronRight, ChevronLeft, Inbox, Loader2,
   Upload, Eye, Clock, Tag, X, Paperclip, Filter, CalendarDays, ChevronDown,
   SquareCheck, Trash2
 } from "lucide-react";
@@ -333,9 +333,9 @@ export default function CommsInboxPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full min-h-screen bg-[#0a0f1e]">
+    <div className="flex h-full min-h-screen bg-[#0a0f1e] overflow-hidden">
       {/* ── Left: Section sidebar ──────────────────────────────────────────── */}
-      <div className="w-56 border-r border-white/10 flex flex-col bg-[#0d1426]">
+      <div className={`${selectedEmail ? "hidden md:flex" : "flex"} w-full md:w-56 border-r border-white/10 flex-col bg-[#0d1426] flex-shrink-0`}>
         <div className="p-4 border-b border-white/10">
           <div className="flex items-center justify-between mb-1">
             <span className="text-white font-semibold text-sm flex items-center gap-2">
@@ -606,16 +606,20 @@ export default function CommsInboxPage() {
       </div>
 
       {/* ── Right: Email detail ────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={`${selectedEmail ? "flex" : "hidden md:flex"} flex-1 flex-col overflow-hidden`}>
         {!selectedEmail ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             <Mail className="w-16 h-16 mb-4 opacity-20" />
-            <p className="text-lg">Select an email to read</p>
+            <p className="text-lg">Select a message to read</p>
           </div>
         ) : (
           <>
             {/* Email header */}
             <div className="p-4 border-b border-white/10 bg-[#0d1426]">
+              {/* Mobile back button */}
+              <button className="md:hidden flex items-center gap-1 text-indigo-400 text-sm mb-3 hover:text-indigo-300" onClick={() => setSelectedEmailId(null)}>
+                <ChevronLeft className="w-4 h-4" /> Back to inbox
+              </button>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <h2 className="text-white font-semibold text-lg leading-tight">{(selectedEmail as any).subject}</h2>
