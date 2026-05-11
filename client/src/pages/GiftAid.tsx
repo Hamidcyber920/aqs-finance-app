@@ -39,6 +39,12 @@ export default function GiftAidPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [hmrcRef, setHmrcRef] = useState("");
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [showR68Dialog, setShowR68Dialog] = useState(false);
+  const [r68Xml, setR68Xml] = useState("");
+  const [r68ClaimCount, setR68ClaimCount] = useState(0);
+  const [r68Total, setR68Total] = useState("0.00");
+  const [trusteeEmail, setTrusteeEmail] = useState("");
+  const [trusteeName, setTrusteeName] = useState("Dr. Abdul Hamid");
   const [lapsedDays, setLapsedDays] = useState(90);
   const [reEngageDonorId, setReEngageDonorId] = useState<number | null>(null);
   const [reEngageMsg, setReEngageMsg] = useState("");
@@ -69,6 +75,32 @@ export default function GiftAidPage() {
     onSuccess: (d) => setReEngageMsg(d.message),
     onError: (e) => toast.error(e.message),
   });
+
+  const buildR68 = trpc.donorsV3.buildGiftAidR68Xml.useMutation({
+    onSuccess: (d) => {
+      setR68Xml(d.xml);
+      setR68ClaimCount(d.claimCount);
+      setR68Total(d.totalGiftAid);
+      setShowR68Dialog(true);
+      toast.success(`R68 XML built for ${d.claimCount} donors — £${d.totalGiftAid} reclaimable`);
+      utils.donorsV3.listGiftAidClaims.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const sendR68ToTrustee = trpc.donorsV3.submitGiftAidToTrustee.useMutation({
+    onSuccess: () => { toast.success("R68 XML emailed to trustee for review"); setShowR68Dialog(false); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleDownloadR68 = () => {
+    const blob = new Blob([r68Xml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `R68-${taxYear}-${quarter}.xml`; a.click();
+    URL.revokeObjectURL(url);
+    toast.success("R68 XML downloaded");
+  };
 
   const sendThankYou = trpc.donorsV3.sendThankYou.useMutation({
     onSuccess: (d) => { toast.success(`Thank-you ${d.status === "sent" ? "sent" : "logged"}`); setThankYouDonorId(null); utils.donorsV3.listThankYouLog.invalidate(); },
@@ -160,6 +192,9 @@ export default function GiftAidPage() {
             )}
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4 mr-1" />Export CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => buildR68.mutate({ taxYear, quarter })} disabled={buildR68.isPending}>
+              <Download className="h-4 w-4 mr-1" />{buildR68.isPending ? "Building XML..." : "Build R68 XML"}
             </Button>
           </div>
 
@@ -330,6 +365,54 @@ export default function GiftAidPage() {
             <Button variant="outline" onClick={() => setShowSubmitDialog(false)}>Cancel</Button>
             <Button onClick={() => submitClaims.mutate({ ids: selectedIds, hmrcRef: hmrcRef || undefined })} disabled={submitClaims.isPending}>
               {submitClaims.isPending ? "Submitting..." : "Confirm Submission"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* R68 XML Review & Submit to Trustee dialog */}
+      <Dialog open={showR68Dialog} onOpenChange={setShowR68Dialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>R68 XML — {taxYear} {quarter}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="bg-green-50 rounded p-3">
+                <p className="text-gray-500">Donors</p>
+                <p className="text-xl font-bold text-green-700">{r68ClaimCount}</p>
+              </div>
+              <div className="bg-green-50 rounded p-3">
+                <p className="text-gray-500">Gift Aid Reclaimable</p>
+                <p className="text-xl font-bold text-green-700">£{r68Total}</p>
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">XML Preview</p>
+              <pre className="bg-gray-50 border rounded p-3 text-xs overflow-auto max-h-48 font-mono">{r68Xml.slice(0, 1200)}{r68Xml.length > 1200 ? "\n... (truncated)" : ""}</pre>
+            </div>
+            <div className="border-t pt-3 space-y-2">
+              <p className="text-sm font-medium">Email to Finance Trustee for Review</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Trustee Name</p>
+                  <Input value={trusteeName} onChange={e => setTrusteeName(e.target.value)} placeholder="Dr. Abdul Hamid" />
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">Trustee Email</p>
+                  <Input value={trusteeEmail} onChange={e => setTrusteeEmail(e.target.value)} placeholder="trustee@example.com" type="email" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowR68Dialog(false)}>Close</Button>
+            <Button variant="outline" onClick={handleDownloadR68}>
+              <Download className="h-4 w-4 mr-1" />Download XML
+            </Button>
+            <Button
+              onClick={() => sendR68ToTrustee.mutate({ xml: r68Xml, taxYear, quarter, claimCount: r68ClaimCount, totalGiftAid: r68Total, trusteeEmail, trusteeName })}
+              disabled={sendR68ToTrustee.isPending || !trusteeEmail}
+            >
+              <Send className="h-4 w-4 mr-1" />{sendR68ToTrustee.isPending ? "Sending..." : "Email to Trustee"}
             </Button>
           </DialogFooter>
         </DialogContent>

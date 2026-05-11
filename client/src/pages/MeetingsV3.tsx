@@ -64,6 +64,9 @@ export default function MeetingsV3Page() {
   const [minutesText, setMinutesText] = useState("");
   const [aiAgendaItems, setAiAgendaItems] = useState<Array<{ itemNumber: number; title: string; description: string; durationMinutes: number }>>([]);
   const [aiSummary, setAiSummary] = useState("");
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
+  const [transcribeResult, setTranscribeResult] = useState<{ transcriptText: string; extractedDecisions: number } | null>(null);
 
   const meetings = trpc.meetingsV3.listMeetings.useQuery({ limit: 50 });
   const activePipelines = trpc.meetingsV3.listActivePipelines.useQuery({});
@@ -119,6 +122,33 @@ export default function MeetingsV3Page() {
     },
     onError: (e) => toast.error(e.message),
   });
+
+  const transcribeAndExtract = trpc.meetingsV3.transcribeAndExtract.useMutation({
+    onSuccess: (d) => {
+      setTranscribeResult({ transcriptText: d.transcriptText, extractedDecisions: d.extractedDecisions });
+      toast.success(`Transcribed! ${d.extractedDecisions} decisions extracted automatically.`);
+      utils.meetingsV3.listMeetings.invalidate();
+      utils.meetingsV3.getMeeting.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleAudioTranscribe = async () => {
+    if (!audioFile || !selectedMeeting) return;
+    setIsUploadingAudio(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", audioFile);
+      const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) throw new Error("Upload failed");
+      const { url } = await res.json() as { url: string };
+      transcribeAndExtract.mutate({ meetingId: selectedMeeting.id, audioUrl: url });
+    } catch (e: any) {
+      toast.error(e.message ?? "Audio upload failed");
+    } finally {
+      setIsUploadingAudio(false);
+    }
+  };
 
   const updatePipelineStage = trpc.meetingsV3.updatePipelineStage.useMutation({
     onSuccess: () => { toast.success("Stage updated"); utils.meetingsV3.listActivePipelines.invalidate(); },
@@ -215,6 +245,24 @@ export default function MeetingsV3Page() {
                       <Button size="sm" variant="outline" onClick={() => handleOpenMinutes(selectedMeeting)}>
                         <FileText className="h-3.5 w-3.5 mr-1" />Minutes
                       </Button>
+                      {/* Audio transcription upload */}
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          accept="audio/*"
+                          className="hidden"
+                          onChange={(e) => { setAudioFile(e.target.files?.[0] ?? null); setTranscribeResult(null); }}
+                        />
+                        <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border text-xs font-medium bg-white hover:bg-gray-50 cursor-pointer">
+                          🎤 {audioFile ? audioFile.name.slice(0, 20) : "Upload Audio"}
+                        </span>
+                      </label>
+                      {audioFile && (
+                        <Button size="sm" variant="outline" onClick={handleAudioTranscribe} disabled={isUploadingAudio || transcribeAndExtract.isPending}>
+                          <Sparkles className="h-3.5 w-3.5 mr-1" />
+                          {isUploadingAudio ? "Uploading..." : transcribeAndExtract.isPending ? "Transcribing..." : "Transcribe & Extract"}
+                        </Button>
+                      )}
                       {selectedMeeting.transcriptText && (
                         <Button size="sm" variant="outline" onClick={() => extractDecisions.mutate({ meetingId: selectedMeeting.id, minutesText: selectedMeeting.transcriptText })} disabled={extractDecisions.isPending}>
                           <CheckSquare className="h-3.5 w-3.5 mr-1" />{extractDecisions.isPending ? "Extracting..." : "Extract Decisions"}
@@ -254,6 +302,17 @@ export default function MeetingsV3Page() {
                             </li>
                           ))}
                         </ol>
+                      </div>
+                    )}
+
+                    {/* Audio transcription result */}
+                    {transcribeResult && (
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                        <p className="text-xs font-semibold text-indigo-700 mb-2 flex items-center gap-1">
+                          <Sparkles className="h-3 w-3" />Transcription Complete
+                        </p>
+                        <p className="text-sm text-indigo-900">{transcribeResult.extractedDecisions} decisions extracted automatically.</p>
+                        <p className="text-xs text-gray-600 mt-2 whitespace-pre-wrap max-h-32 overflow-y-auto">{transcribeResult.transcriptText.slice(0, 500)}{transcribeResult.transcriptText.length > 500 ? "..." : ""}</p>
                       </div>
                     )}
 

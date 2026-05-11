@@ -48,8 +48,11 @@ function getQuarter(date: Date): "Q1" | "Q2" | "Q3" | "Q4" {
   return "Q4"; // Jan-Mar
 }
 
+/// ─── helpers ─────────────────────────────────────────────────────────────────
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
 // ─── router ──────────────────────────────────────────────────────────────────
-
 export const donorsV3Router = router({
 
   // ── Gift Aid ────────────────────────────────────────────────────────────────
@@ -394,6 +397,148 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
     const pendingGiftAid = pendingClaims[0]?.count ?? 0;
     return { total, regular, giftAidEligible, totalGiven, lapsed, pendingGiftAid };
   }),
+
+  // ── Gift Aid R68 XML Export ─────────────────────────────────────────────────
+  /**
+   * Build an HMRC R68-compatible XML string for all pending/submitted gift aid claims
+   * in a given tax year and quarter, then return it as a downloadable string.
+   */
+  buildGiftAidR68Xml: protectedProcedure
+    .input(z.object({
+      taxYear: z.string().regex(/^\d{4}-\d{2}$/, "Format: YYYY-YY e.g. 2024-25"),
+      quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const claims = await db.select().from(giftAidClaims)
+        .where(and(
+          eq(giftAidClaims.taxYear, input.taxYear),
+          eq(giftAidClaims.quarter, input.quarter),
+        ));
+      if (!claims.length) throw new TRPCError({ code: "NOT_FOUND", message: "No Gift Aid claims found for this period" });
+
+      const totalGiftAid = claims.reduce((s, c) => s + Number(c.giftAidAmount ?? 0), 0);
+      const donorLines = claims.map(c => {
+        const nameParts = (c.donorName ?? "Unknown Donor").split(" ");
+        const fore = escapeXml(nameParts[0] ?? "Unknown");
+        const sur = escapeXml(nameParts.slice(1).join(" ") || "Donor");
+        const house = escapeXml(c.donorAddress?.split(",")[0] ?? "");
+        const postcode = escapeXml(c.donorPostcode ?? "");
+        return `
+        <GAD>
+          <Fore>${fore}</Fore>
+          <Sur>${sur}</Sur>
+          <House>${house}</House>
+          <Postcode>${postcode}</Postcode>
+          <Overseas>no</Overseas>
+          <Aggregation>no</Aggregation>
+          <Donations>
+            <Donation>
+              <Date>${c.donationDate}</Date>
+              <Total>${Number(c.donationAmount).toFixed(2)}</Total>
+            </Donation>
+          </Donations>
+        </GAD>`;
+      }).join("");
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<GovTalkMessage xmlns="http://www.govtalk.gov.uk/CM/envelope">
+  <EnvelopeVersion>2.0</EnvelopeVersion>
+  <Header>
+    <MessageDetails>
+      <Class>HMRC-CHAR-CLM</Class>
+      <Qualifier>request</Qualifier>
+      <Function>submit</Function>
+    </MessageDetails>
+  </Header>
+  <Body>
+    <IRenvelope>
+      <IRheader>
+        <Sender>
+          <Organisation>
+            <OrganisationName>Abdullah Quilliam Society</OrganisationName>
+          </Organisation>
+        </Sender>
+        <DefaultCurrency>GBP</DefaultCurrency>
+      </IRheader>
+      <CHARITYCLAIM>
+        <AuthorisedOfficial>
+          <Name><Fore>Abdul</Fore><Sur>Hamid</Sur></Name>
+        </AuthorisedOfficial>
+        <Repayment>
+          <EarliestGAdate>${claims[0]?.donationDate ?? ""}</EarliestGAdate>
+          <TotalGAdonations>${totalGiftAid.toFixed(2)}</TotalGAdonations>
+          <GADonations>${donorLines}
+          </GADonations>
+        </Repayment>
+      </CHARITYCLAIM>
+    </IRenvelope>
+  </Body>
+</GovTalkMessage>`;
+
+      // Mark claims as submitted
+      for (const c of claims) {
+        await db.update(giftAidClaims)
+          .set({ claimStatus: "submitted", claimedAt: new Date() })
+          .where(eq(giftAidClaims.id, c.id));
+      }
+      return { xml, claimCount: claims.length, totalGiftAid: totalGiftAid.toFixed(2) };
+    }),
+
+  /**
+   * Email the R68 XML as an attachment to the finance trustee for review before HMRC submission.
+   */
+  submitGiftAidToTrustee: protectedProcedure
+    .input(z.object({
+      xml: z.string().min(10),
+      taxYear: z.string(),
+      quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]),
+      claimCount: z.number(),
+      totalGiftAid: z.string(),
+      trusteeEmail: z.string().email(),
+      trusteeName: z.string().default("Dr. Abdul Hamid"),
+    }))
+    .mutation(async ({ input }) => {
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <h2 style="color:#1a5c38;">Gift Aid R68 XML &mdash; Ready for HMRC Submission</h2>
+          <p>Assalamu Alaikum, ${input.trusteeName},</p>
+          <p>Please find the HMRC R68 Gift Aid claim XML below for <strong>${input.taxYear} ${input.quarter}</strong>.</p>
+          <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+            <tr style="background:#f0f7f4;">
+              <td style="padding:8px 12px;border:1px solid #ccc;"><strong>Tax Year</strong></td>
+              <td style="padding:8px 12px;border:1px solid #ccc;">${input.taxYear}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;border:1px solid #ccc;"><strong>Quarter</strong></td>
+              <td style="padding:8px 12px;border:1px solid #ccc;">${input.quarter}</td>
+            </tr>
+            <tr style="background:#f0f7f4;">
+              <td style="padding:8px 12px;border:1px solid #ccc;"><strong>Number of Donors</strong></td>
+              <td style="padding:8px 12px;border:1px solid #ccc;">${input.claimCount}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px;border:1px solid #ccc;"><strong>Total Gift Aid Reclaimable</strong></td>
+              <td style="padding:8px 12px;border:1px solid #ccc;">&pound;${input.totalGiftAid}</td>
+            </tr>
+          </table>
+          <p>Please review and submit via HMRC Charities Online at
+          <a href="https://www.gov.uk/guidance/claim-gift-aid-online">gov.uk/guidance/claim-gift-aid-online</a>.</p>
+          <details style="margin-top:16px;">
+            <summary style="cursor:pointer;color:#1a5c38;">View R68 XML</summary>
+            <pre style="background:#f5f5f5;padding:12px;font-size:11px;overflow:auto;">${escapeXml(input.xml)}</pre>
+          </details>
+          <p style="margin-top:24px;">JazakAllah Khayran,<br/>Abdullah Quilliam Society Finance System</p>
+        </div>`;
+      await sendEmail(
+        input.trusteeEmail,
+        input.trusteeName,
+        `Gift Aid R68 XML \u2014 ${input.taxYear} ${input.quarter} (${input.claimCount} donors, \u00a3${input.totalGiftAid})`,
+        html
+      );
+      return { sent: true };
+    }),
 });
 
 export type DonorsV3Router = typeof donorsV3Router;

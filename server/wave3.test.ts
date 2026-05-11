@@ -103,3 +103,29 @@ describe("Wave 3 schema tables", () => {
     expect(schema.donorSegments).toBeDefined();
   });
 });
+
+// ── Wave 3 next-step procedures ───────────────────────────────────────────────
+describe("donorsV3 R68 procedures", () => {
+  it("exports buildGiftAidR68Xml and submitGiftAidToTrustee", async () => {
+    const mod = await import("./routers/donorsV3");
+    const keys = Object.keys(mod.donorsV3Router);
+    expect(keys).toContain("buildGiftAidR68Xml");
+    expect(keys).toContain("submitGiftAidToTrustee");
+  });
+});
+
+describe("meetingsV3 transcribeAndExtract procedure", () => {
+  it("exports transcribeAndExtract", async () => {
+    const mod = await import("./routers/meetingsV3");
+    const keys = Object.keys(mod.meetingsV3Router);
+    expect(keys).toContain("transcribeAndExtract");
+  });
+});
+
+describe("payrollV3 emailPayslip procedure", () => {
+  it("exports emailPayslip", async () => {
+    const mod = await import("./routers/payrollV3");
+    const keys = Object.keys(mod.payrollV3Router);
+    expect(keys).toContain("emailPayslip");
+  });
+});

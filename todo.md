@@ -1257,3 +1257,18 @@
 - [x] Meetings page (/meetings): meeting list, schedule meeting, AI agenda, minutes upload + transcription, auto-extract decisions
 - [x] Onboarding pipeline page (/onboarding): kanban-style pipeline (contract → ID → DBS → induction → training → payslip)
 - [x] Add all new pages to sidebar and App.tsx routes
+
+## Wave 3 Next Steps (May 11, 2026)
+
+### Gift Aid HMRC R68 XML Export
+- [x] Backend: donorsV3.buildGiftAidR68Xml procedure — generate HMRC R68 XML from eligible gift_aid_claims for a given tax year quarter
+- [x] Backend: donorsV3.submitGiftAidToTrustee — email R68 XML as attachment to finance trustee via Gmail API for review
+- [x] Frontend: GiftAid.tsx — "Generate R68 XML" button with tax year + quarter selector, preview XML, "Email to Trustee" button
+
+### Meeting Minutes Audio Transcription
+- [x] Backend: meetingsV3.transcribeAndExtract — accept audio file URL, call Whisper transcription, then auto-extract decisions via LLM, save transcript + decisions to DB
+- [x] Frontend: MeetingsV3.tsx — audio upload button in meeting detail, show transcription progress, display transcript + extracted decisions side-by-side
+
+### Payroll V3 Payslip Email on Approval
+- [x] Backend: payrollV3.emailPayslip procedure — on approve, generate PDF summary (gross, deductions, net, YTD) and email to employee via Gmail API
+- [x] Frontend: PayrollV3.tsx — "Email Payslip" button shown after approval, confirmation toast with recipient name

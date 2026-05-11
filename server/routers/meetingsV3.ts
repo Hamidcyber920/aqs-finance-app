@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
+import { transcribeAudio } from "../_core/voiceTranscription";
 import { getDb } from "../db";
 import { eq, and, sql, desc, gte, lt } from "drizzle-orm";
 import {
@@ -358,6 +359,111 @@ ${input.minutesText.slice(0, 8000)}`;
         notes: input.notes,
       }).where(eq(onboardingPipeline.id, input.id));
       return { success: true };
+    }),
+
+  /**
+   * Transcribe a meeting audio recording via Whisper, save transcript to DB,
+   * then auto-extract decisions via LLM and insert them into trusteeDecisions.
+   */
+  transcribeAndExtract: protectedProcedure
+    .input(z.object({
+      meetingId: z.number(),
+      audioUrl: z.string().url(),
+      language: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [meeting] = await db.select().from(trusteeMeetings)
+        .where(eq(trusteeMeetings.id, input.meetingId)).limit(1);
+      if (!meeting) throw new TRPCError({ code: "NOT_FOUND", message: "Meeting not found" });
+
+      // Step 1: Whisper transcription
+      const whisperResult = await transcribeAudio({
+        audioUrl: input.audioUrl,
+        language: input.language ?? "en",
+        prompt: "Transcribe this trustee meeting recording. Include speaker names if audible.",
+      });
+      if ("error" in whisperResult) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: whisperResult.error });
+      }
+      const transcriptText = whisperResult.text;
+
+      // Step 2: Save transcript to meeting record
+      await db.update(trusteeMeetings).set({
+        transcriptText,
+        transcriptUrl: input.audioUrl,
+      }).where(eq(trusteeMeetings.id, input.meetingId));
+
+      // Step 3: AI decisions extraction
+      const llmResult = await invokeLLM({
+        messages: [{ role: "user", content: `Extract all formal decisions/resolutions from these meeting minutes.\nFor each decision, extract: title, motionText, proposer, seconder, votesFor, votesAgainst, abstentions, outcome (passed|rejected|deferred|pending).\nReturn JSON: { decisions: [...] }\n\nTranscript:\n${transcriptText.slice(0, 8000)}` }],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "decisions_extraction",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                decisions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      title: { type: "string" },
+                      motionText: { type: "string" },
+                      proposer: { type: ["string", "null"] },
+                      seconder: { type: ["string", "null"] },
+                      votesFor: { type: "number" },
+                      votesAgainst: { type: "number" },
+                      abstentions: { type: "number" },
+                      outcome: { type: "string" },
+                    },
+                    required: ["title", "motionText", "proposer", "seconder", "votesFor", "votesAgainst", "abstentions", "outcome"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["decisions"],
+              additionalProperties: false,
+            },
+          },
+        } as any,
+      });
+      const raw = llmResult.choices?.[0]?.message?.content;
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw ?? { decisions: [] };
+      const decisions: any[] = parsed.decisions ?? [];
+
+      // Step 4: Insert extracted decisions
+      let inserted = 0;
+      for (const d of decisions) {
+        await db.insert(trusteeDecisions).values({
+          title: d.title,
+          motionText: d.motionText,
+          proposer: d.proposer ?? undefined,
+          seconder: d.seconder ?? undefined,
+          votesFor: d.votesFor ?? 0,
+          votesAgainst: d.votesAgainst ?? 0,
+          abstentions: d.abstentions ?? 0,
+          outcome: d.outcome ?? "pending",
+          meetingDate: meeting.scheduledAt,
+          minutesUrl: meeting.minutesUrl ?? undefined,
+        });
+        inserted++;
+      }
+
+      // Step 5: Mark meeting as having decisions extracted
+      await db.update(trusteeMeetings)
+        .set({ aiDecisionsExtracted: true })
+        .where(eq(trusteeMeetings.id, input.meetingId));
+
+      return {
+        transcriptText,
+        transcriptDuration: (whisperResult as any).duration ?? null,
+        extractedDecisions: inserted,
+        decisions,
+      };
     }),
 
   /** List all active pipelines (for HR overview) */

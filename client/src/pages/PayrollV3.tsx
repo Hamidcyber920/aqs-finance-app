@@ -75,6 +75,11 @@ export default function PayrollV3Page() {
     onError: (e) => toast.error(e.message),
   });
 
+  const emailPayslip = trpc.payrollV3.emailPayslip.useMutation({
+    onSuccess: (d) => toast.success(`Payslip emailed to ${d.recipientName} (${d.recipient})`),
+    onError: (e) => toast.error(e.message),
+  });
+
   const extractFromPayslip = trpc.payrollV3.extractFromPayslip.useMutation({
     onSuccess: (d) => { setOcrFields(d.fields); setOcrConfirmed(false); },
     onError: (e) => toast.error(e.message),
@@ -229,6 +234,11 @@ export default function PayrollV3Page() {
                           {r.status === "approved" && (
                             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); markPaid.mutate({ id: r.id }); }}>
                               Mark Paid
+                            </Button>
+                          )}
+                          {(r.status === "approved" || r.status === "paid") && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); emailPayslip.mutate({ id: r.id }); }} disabled={emailPayslip.isPending} title="Email payslip to employee">
+                              ✉️ Email
                             </Button>
                           )}
                         </div>

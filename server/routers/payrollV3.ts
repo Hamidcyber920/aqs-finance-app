@@ -295,6 +295,118 @@ All monetary values as numbers (no £ sign). If a field is not visible, return n
       const fields = typeof raw === "string" ? JSON.parse(raw) : raw ?? {};
       return { fields };
     }),
+
+  /**
+   * Email an approved payslip summary to the employee.
+   * Looks up the employee's email from users table if employeeId is set.
+   */
+  emailPayslip: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      recipientEmail: z.string().email().optional(),
+      recipientName: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ADMIN_ROLES.includes(ctx.user.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only managers/trustees can send payslip emails" });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      const [record] = await db.select().from(payrollV2).where(eq(payrollV2.id, input.id)).limit(1);
+      if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Payroll record not found" });
+      if (record.status !== "approved" && record.status !== "paid") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Payslip must be approved before emailing" });
+      }
+
+      // Resolve recipient email
+      let toEmail = input.recipientEmail;
+      let toName: string = input.recipientName ?? record.employeeName ?? "Employee";
+      if (!toEmail && record.employeeId) {
+        const [emp] = await db.select({ email: users.email, name: users.name })
+          .from(users).where(eq(users.id, record.employeeId)).limit(1);
+        if (emp?.email) toEmail = emp.email;
+        if (!input.recipientName && emp?.name) toName = emp.name;
+      }
+      if (!toEmail) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No email address found for this employee. Please provide a recipient email." });
+      }
+
+      const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const monthName = monthNames[(record.month ?? 1) - 1] ?? "Unknown";
+      const gross = Number(record.grossPay).toFixed(2);
+      const tax = Number(record.incomeTax).toFixed(2);
+      const ni = Number(record.nationalInsurance).toFixed(2);
+      const pension = Number(record.pensionEmployee).toFixed(2);
+      const other = Number(record.otherDeductions).toFixed(2);
+      const net = Number(record.netPay).toFixed(2);
+      const ytdGross = Number(record.ytdGross).toFixed(2);
+      const ytdTax = Number(record.ytdTax).toFixed(2);
+      const ytdNI = Number(record.ytdNI).toFixed(2);
+      const firstName = toName.split(" ")[0] ?? toName;
+
+      const html = `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <div style="background:#1a5c38;padding:20px;border-radius:8px 8px 0 0;">
+            <h2 style="color:#f4c95d;margin:0;">Abdullah Quilliam Society</h2>
+            <p style="color:#fff;margin:4px 0 0;">Payslip &mdash; ${monthName} ${record.year}</p>
+          </div>
+          <div style="padding:24px;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 8px 8px;">
+            <p>Assalamu Alaikum, ${firstName},</p>
+            <p>Please find your payslip summary for <strong>${monthName} ${record.year}</strong> below.</p>
+            <table style="border-collapse:collapse;width:100%;margin:16px 0;">
+              <thead>
+                <tr style="background:#1a5c38;color:#fff;">
+                  <th style="padding:8px 12px;text-align:left;">Description</th>
+                  <th style="padding:8px 12px;text-align:right;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="padding:8px 12px;border-bottom:1px solid #eee;">Gross Pay</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right;">&pound;${gross}</td></tr>
+                <tr style="color:#c0392b;"><td style="padding:8px 12px;border-bottom:1px solid #eee;">Income Tax</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right;">-&pound;${tax}</td></tr>
+                <tr style="color:#c0392b;"><td style="padding:8px 12px;border-bottom:1px solid #eee;">National Insurance</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right;">-&pound;${ni}</td></tr>
+                <tr style="color:#c0392b;"><td style="padding:8px 12px;border-bottom:1px solid #eee;">Pension (Employee)</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right;">-&pound;${pension}</td></tr>
+                ${Number(other) > 0 ? `<tr style="color:#c0392b;"><td style="padding:8px 12px;border-bottom:1px solid #eee;">Other Deductions</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:right;">-&pound;${other}</td></tr>` : ""}
+                <tr style="background:#f0f7f4;font-weight:bold;">
+                  <td style="padding:10px 12px;">Net Pay</td>
+                  <td style="padding:10px 12px;text-align:right;color:#1a5c38;">&pound;${net}</td>
+                </tr>
+              </tbody>
+            </table>
+            <h4 style="color:#666;margin-top:24px;">Year-to-Date Summary</h4>
+            <table style="border-collapse:collapse;width:100%;">
+              <tr style="background:#f5f5f5;"><td style="padding:6px 12px;border:1px solid #eee;">YTD Gross</td><td style="padding:6px 12px;border:1px solid #eee;text-align:right;">&pound;${ytdGross}</td></tr>
+              <tr><td style="padding:6px 12px;border:1px solid #eee;">YTD Tax Paid</td><td style="padding:6px 12px;border:1px solid #eee;text-align:right;">&pound;${ytdTax}</td></tr>
+              <tr style="background:#f5f5f5;"><td style="padding:6px 12px;border:1px solid #eee;">YTD NI Paid</td><td style="padding:6px 12px;border:1px solid #eee;text-align:right;">&pound;${ytdNI}</td></tr>
+            </table>
+            ${record.payslipUrl ? `<p style="margin-top:16px;"><a href="${record.payslipUrl}" style="color:#1a5c38;">View full payslip PDF</a></p>` : ""}
+            <p style="margin-top:24px;color:#666;font-size:13px;">This is an automated payslip notification. If you have any queries, please contact the finance team.</p>
+            <p style="color:#666;font-size:13px;">JazakAllah Khayran,<br/>Abdullah Quilliam Society</p>
+          </div>
+        </div>`;
+
+      try {
+        const nodemailer = await import("nodemailer");
+        const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
+        const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
+        const smtpPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || "";
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST || "smtp.gmail.com",
+          port: 465, secure: true,
+          auth: { user: smtpUser, pass: smtpPass },
+        });
+        await transporter.sendMail({
+          from: `"Abdullah Quilliam Society" <${fromEmail}>`,
+          to: toEmail,
+          subject: `Your Payslip \u2014 ${monthName} ${record.year}`,
+          html,
+        });
+      } catch (e) {
+        console.error("[payrollV3] emailPayslip failed:", e);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to send payslip email" });
+      }
+      return { sent: true, recipient: toEmail, recipientName: toName };
+    }),
 });
 
 export type PayrollV3Router = typeof payrollV3Router;
