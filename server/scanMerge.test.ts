@@ -79,9 +79,10 @@ vi.mock("./db", () => ({
 }));
 
 vi.mock("../drizzle/schema", () => ({
-  scanMergeSnapshots: { id: "id", tableName: "tableName", recordId: "recordId", mergedAt: "mergedAt" },
+  scanMergeSnapshots: { id: "id", tableName: "tableName", recordId: "recordId", mergedAt: "mergedAt", revertedAt: "revertedAt" },
   trustees: { id: "id", fullName: "fullName", email: "email" },
   donors: { id: "id", name: "name", email: "email" },
+  staffProfiles: { id: "id", fullName: "fullName", contractType: "contractType" },
   users: { id: "id", status: "status" },
 }));
 

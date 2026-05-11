@@ -17,14 +17,19 @@ export default function DonorsPage() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [lastMergedDonorId, setLastMergedDonorId] = useState<number | null>(null);
+  const [premergeSnapshot, setPremergeSnapshot] = useState<Record<string, unknown> | null>(null);
+  const [appliedFields, setAppliedFields] = useState<Record<string, unknown> | null>(null);
 
   const { data, refetch } = trpc.donors.list.useQuery({ limit:100 });
   const mergeDonorMutation = trpc.donors.mergeFromScan.useMutation({
-    onSuccess: (res) => {
+    onSuccess: (res: any) => {
       refetch();
+      if (res.snapshotId && res.snapshotId > 0) setLastMergedDonorId(res.snapshotId);
+      if (res.premergeSnapshot) setPremergeSnapshot(res.premergeSnapshot);
+      if (res.appliedFields) setAppliedFields(res.appliedFields);
       toast.success(`Donor profile updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
     },
-    onError: (e) => toast.error(`Merge failed: ${e.message}`),
+    onError: (e: any) => toast.error(`Merge failed: ${e.message}`),
   });
   const createMutation = trpc.donors.create.useMutation({
     onSuccess: () => { toast.success("Donor added"); setOpen(false); refetch(); reset(); },
@@ -99,7 +104,9 @@ export default function DonorsPage() {
             <ScanMergeUndoBanner
               tableName="donors"
               recordId={lastMergedDonorId}
-              onReverted={() => { refetch(); setLastMergedDonorId(null); }}
+              premergeSnapshot={premergeSnapshot}
+              appliedFields={appliedFields}
+              onReverted={() => { refetch(); setLastMergedDonorId(null); setPremergeSnapshot(null); setAppliedFields(null); }}
             />
           </div>
         )}

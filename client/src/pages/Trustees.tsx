@@ -394,6 +394,8 @@ function AddMemberForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: (
 export default function TrusteesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [lastMergedId, setLastMergedId] = useState<number | null>(null);
+  const [premergeSnapshot, setPremergeSnapshot] = useState<Record<string, unknown> | null>(null);
+  const [appliedFields, setAppliedFields] = useState<Record<string, unknown> | null>(null);
   const { data, refetch } = trpc.trustees.list.useQuery();
   const { canAdd } = usePermissions();
   const mergeMutation = trpc.trustees.mergeFromScan.useMutation({
@@ -401,6 +403,9 @@ export default function TrusteesPage() {
       refetch();
       // snapshotId is returned by the backend but not yet in the inferred type
       if (res.snapshotId && res.snapshotId > 0) setLastMergedId(res.snapshotId);
+      // Store the pre-merge snapshot and applied fields for partial undo
+      if (res.premergeSnapshot) setPremergeSnapshot(res.premergeSnapshot);
+      if (res.appliedFields) setAppliedFields(res.appliedFields);
       toast.success(`Profile updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
     },
     onError: (e: any) => toast.error(`Merge failed: ${e.message}`),
@@ -487,7 +492,9 @@ export default function TrusteesPage() {
             <ScanMergeUndoBanner
               tableName="trustees"
               recordId={lastMergedId}
-              onReverted={() => { refetch(); setLastMergedId(null); }}
+              premergeSnapshot={premergeSnapshot}
+              appliedFields={appliedFields}
+              onReverted={() => { refetch(); setLastMergedId(null); setPremergeSnapshot(null); setAppliedFields(null); }}
             />
           </div>
         )}

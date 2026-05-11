@@ -1129,3 +1129,14 @@
 - [x] Backend: scanMerge.revert procedure — restore record from snapshot (only within 10 min)
 - [x] Frontend: Trustees page — show "Undo last scan import" toast/button for 10 min after merge
 - [x] Frontend: Donors page — show "Undo last scan import" toast/button for 10 min after merge
+
+## Next Steps Round 2 (May 2026)
+- [x] Backend: scanMerge.revert — add staff_profiles branch to restore staff profile records
+- [x] Backend: trustees.mergeFromScan — save snapshotId as recordId (currently saves trustee id correctly)
+- [x] Frontend: Wire ScanMergeUndoBanner into OrgChart/Staff Profiles page (moduleType staff_profile)
+- [x] Backend: scanMerge.listHistory procedure — return paginated list of all snapshots with tableName, recordId, mergedByName, mergedAt, reverted flag
+- [x] Frontend: Merge History page (/merge-history) — admin-only audit log table with filter by table, date range, user
+- [x] Register /merge-history route in App.tsx and add sidebar nav item under ADMIN
+- [x] Backend: scanMerge.revertFields procedure — accepts snapshotId + array of field names to restore selectively
+- [x] Frontend: ScanMergeUndoBanner — add "Partial Undo" button that opens a dialog showing snapshot diff with checkboxes, calling revertFields
+- [x] Vitest: scanMerge schema mock updated; 7/7 tests passing including revert, getLatest, role gates

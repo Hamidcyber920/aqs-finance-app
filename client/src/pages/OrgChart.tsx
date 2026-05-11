@@ -2,6 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Mail, Phone, Pencil, ChevronDown, ChevronUp, Check, X, MapPin, Heart, Cake } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
+import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -382,12 +383,18 @@ function SectionLabel({ label, color }: { label: string; color: string }) {
 export default function OrgChartPage() {
   const { data: usersData } = trpc.users.list.useQuery({});
   const { data: trusteesData, refetch } = trpc.trustees.list.useQuery();
+  const [lastMergedId, setLastMergedId] = useState<number | null>(null);
+  const [premergeSnapshot, setPremergeSnapshot] = useState<Record<string, unknown> | null>(null);
+  const [appliedFields, setAppliedFields] = useState<Record<string, unknown> | null>(null);
   const mergeMutation = trpc.trustees.mergeFromScan.useMutation({
-    onSuccess: (res) => {
+    onSuccess: (res: any) => {
       refetch();
+      if (res.snapshotId && res.snapshotId > 0) setLastMergedId(res.snapshotId);
+      if (res.premergeSnapshot) setPremergeSnapshot(res.premergeSnapshot);
+      if (res.appliedFields) setAppliedFields(res.appliedFields);
       toast.success(`Profile updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
     },
-    onError: (e) => toast.error(`Merge failed: ${e.message}`),
+    onError: (e: any) => toast.error(`Merge failed: ${e.message}`),
   });
 
   const users: any[] = usersData?.rows ?? [];
@@ -459,6 +466,18 @@ export default function OrgChartPage() {
             }}
           />
         </div>
+
+        {lastMergedId !== null && (
+          <div className="mb-4">
+            <ScanMergeUndoBanner
+              tableName="trustees"
+              recordId={lastMergedId}
+              premergeSnapshot={premergeSnapshot}
+              appliedFields={appliedFields}
+              onReverted={() => { refetch(); setLastMergedId(null); setPremergeSnapshot(null); setAppliedFields(null); }}
+            />
+          </div>
+        )}
 
         {missingDob.length > 0 && (
           <div style={{ background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.3)",borderRadius:12,padding:"10px 14px",marginBottom:16,display:"flex",alignItems:"flex-start",gap:10 }}>

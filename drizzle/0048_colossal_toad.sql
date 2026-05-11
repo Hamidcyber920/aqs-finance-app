@@ -1,0 +1,1 @@
+ALTER TABLE `scan_merge_snapshots` ADD `revertedAt` timestamp;

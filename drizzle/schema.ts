@@ -1258,6 +1258,7 @@ export const scanMergeSnapshots = mysqlTable("scan_merge_snapshots", {
   mergedByUserId: int("mergedByUserId"),
   mergedByName: varchar("mergedByName", { length: 200 }),
   mergedAt: timestamp("mergedAt").defaultNow().notNull(),
+  revertedAt: timestamp("revertedAt"),  // set when the snapshot is reverted
 });
 export type ScanMergeSnapshot = typeof scanMergeSnapshots.$inferSelect;
 export type InsertScanMergeSnapshot = typeof scanMergeSnapshots.$inferInsert;

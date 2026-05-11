@@ -4851,7 +4851,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
       .mutation(async ({ input, ctx }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-        const { scanMergeSnapshots, trustees: trusteesTable, donors: donorsTable } = await import('../drizzle/schema');
+        const { scanMergeSnapshots, trustees: trusteesTable, donors: donorsTable, staffProfiles } = await import('../drizzle/schema');
         // Fetch the snapshot
         const [snap] = await db.select().from(scanMergeSnapshots).where(eq(scanMergeSnapshots.id, input.snapshotId)).limit(1);
         if (!snap) throw new TRPCError({ code: 'NOT_FOUND', message: 'Snapshot not found' });
@@ -4870,9 +4870,14 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         } else if (snap.tableName === 'donors') {
           const { id: _id, createdAt: _ca, updatedAt: _ua, ...restoreFields } = original;
           await db.update(donorsTable).set(restoreFields).where(eq(donorsTable.id, snap.recordId));
+        } else if (snap.tableName === 'staff_profiles') {
+          const { id: _id, createdAt: _ca, updatedAt: _ua, userId: _uid, ...restoreFields } = original;
+          await db.update(staffProfiles).set(restoreFields).where(eq(staffProfiles.id, snap.recordId));
         } else {
           throw new TRPCError({ code: 'BAD_REQUEST', message: `Revert not supported for table: ${snap.tableName}` });
         }
+        // Mark snapshot as reverted
+        await db.update(scanMergeSnapshots).set({ revertedAt: new Date() }).where(eq(scanMergeSnapshots.id, snap.id));
         return { success: true, tableName: snap.tableName, recordId: snap.recordId };
       }),
 
@@ -4901,6 +4906,87 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         const ageMs = Date.now() - new Date(snap.mergedAt).getTime();
         if (ageMs > 10 * 60 * 1000) return null; // expired
         return { snapshotId: snap.id, mergedAt: snap.mergedAt, mergedByName: snap.mergedByName, expiresInMs: 10 * 60 * 1000 - ageMs };
+      }),
+
+    /**
+     * Paginated audit log of all scan-merge snapshots.
+     * Accessible to senior staff (seniorProcedure).
+     */
+    listHistory: seniorProcedure
+      .input(z.object({
+        tableName: z.string().optional(),
+        limit: z.number().min(1).max(200).default(50),
+        offset: z.number().min(0).default(0),
+      }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return { rows: [], total: 0 };
+        const { scanMergeSnapshots } = await import('../drizzle/schema');
+        const conditions = input.tableName
+          ? [eq(scanMergeSnapshots.tableName, input.tableName)]
+          : [];
+        const rows = await db
+          .select({
+            id: scanMergeSnapshots.id,
+            tableName: scanMergeSnapshots.tableName,
+            recordId: scanMergeSnapshots.recordId,
+            mergedByName: scanMergeSnapshots.mergedByName,
+            mergedAt: scanMergeSnapshots.mergedAt,
+            revertedAt: scanMergeSnapshots.revertedAt,
+          })
+          .from(scanMergeSnapshots)
+          .where(conditions.length > 0 ? conditions[0] : sql`1=1`)
+          .orderBy(sql`mergedAt DESC`)
+          .limit(input.limit)
+          .offset(input.offset);
+        const [{ count }] = await db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(scanMergeSnapshots)
+          .where(conditions.length > 0 ? conditions[0] : sql`1=1`);
+        return { rows, total: Number(count) };
+      }),
+
+    /**
+     * Partially revert a scan-merge by restoring only selected fields from the snapshot.
+     * Only allowed within 10 minutes of the merge (enforced server-side).
+     */
+    revertFields: seniorProcedure
+      .input(z.object({
+        snapshotId: z.number(),
+        fields: z.array(z.string()).min(1),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { scanMergeSnapshots, trustees: trusteesTable, donors: donorsTable, staffProfiles } = await import('../drizzle/schema');
+        const [snap] = await db.select().from(scanMergeSnapshots).where(eq(scanMergeSnapshots.id, input.snapshotId)).limit(1);
+        if (!snap) throw new TRPCError({ code: 'NOT_FOUND', message: 'Snapshot not found' });
+        const ageMs = Date.now() - new Date(snap.mergedAt).getTime();
+        if (ageMs > 10 * 60 * 1000) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Undo window has expired (10 minutes)' });
+        }
+        const original = JSON.parse(snap.snapshotJson);
+        // Build update object with only the requested fields
+        const NON_UPDATABLE = new Set(['id', 'createdAt', 'updatedAt', 'userId']);
+        const partialUpdate: Record<string, unknown> = {};
+        for (const field of input.fields) {
+          if (!NON_UPDATABLE.has(field) && field in original) {
+            partialUpdate[field] = original[field];
+          }
+        }
+        if (Object.keys(partialUpdate).length === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'No valid fields to revert' });
+        }
+        if (snap.tableName === 'trustees') {
+          await db.update(trusteesTable).set(partialUpdate as any).where(eq(trusteesTable.id, snap.recordId));
+        } else if (snap.tableName === 'donors') {
+          await db.update(donorsTable).set(partialUpdate as any).where(eq(donorsTable.id, snap.recordId));
+        } else if (snap.tableName === 'staff_profiles') {
+          await db.update(staffProfiles).set(partialUpdate as any).where(eq(staffProfiles.id, snap.recordId));
+        } else {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `Partial revert not supported for table: ${snap.tableName}` });
+        }
+        return { success: true, revertedFields: Object.keys(partialUpdate) };
       }),
   }),
 });
