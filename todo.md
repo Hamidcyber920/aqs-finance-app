@@ -1451,6 +1451,6 @@
 
 ## Next Steps Round 4 (May 11 2026)
 
-- [ ] Stripe pledge webhook handler — /api/stripe/webhook auto-marks pledge as paid on checkout.session.completed
-- [ ] Donor Portal — public /give/:donorToken page with pledge history, Gift Aid declaration download, and Pay Now button
-- [ ] Bulk Gift Aid HMRC R68 export — Export HMRC R68 CSV button on Gift Aid & CRM+ page
+- [x] Stripe pledge webhook handler — /api/stripe/webhook auto-marks pledge as paid on checkout.session.completed
+- [x] Donor Portal — public /give/:donorToken page with pledge history, Gift Aid declaration download, and Pay Now button
+- [x] Bulk Gift Aid HMRC R68 export — Export HMRC R68 CSV button on Gift Aid & CRM+ page
