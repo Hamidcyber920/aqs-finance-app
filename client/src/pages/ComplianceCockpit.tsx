@@ -78,7 +78,7 @@ function ActionForm({ initial, onClose, onSaved }: ActionFormProps) {
   const utils = trpc.useUtils();
   const upsert = (trpc as any).compliance.upsertAction.useMutation({
     onSuccess: () => {
-      utils.compliance.listActions.invalidate();
+      (utils as any).compliance.listActions.invalidate();
       toast.success(initial ? "Action updated" : "Action created");
       onSaved();
     },
@@ -174,7 +174,7 @@ function TrainingForm({ initial, onClose, onSaved }: TrainingFormProps) {
   const utils = trpc.useUtils();
   const upsert = (trpc as any).compliance.upsertTraining.useMutation({
     onSuccess: () => {
-      utils.compliance.listTraining.invalidate();
+      (utils as any).compliance.listTraining.invalidate();
       toast.success(initial ? "Record updated" : "Record created");
       onSaved();
     },
@@ -258,7 +258,7 @@ function PolicyForm({ initial, onClose, onSaved }: PolicyFormProps) {
   const utils = trpc.useUtils();
   const upsert = (trpc as any).compliance.upsertPolicy.useMutation({
     onSuccess: () => {
-      utils.compliance.listPolicies.invalidate();
+      (utils as any).compliance.listPolicies.invalidate();
       toast.success(initial ? "Policy updated" : "Policy created");
       onSaved();
     },
