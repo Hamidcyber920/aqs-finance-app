@@ -42,6 +42,7 @@ const EMPTY_MEETING = {
   scheduledAt: "",
   location: "",
   notes: "",
+  quorumRequired: 3,
 };
 
 const EMPTY_PIPELINE = {
@@ -280,6 +281,30 @@ export default function MeetingsV3Page() {
                       )}
                     </div>
 
+                    {/* Quorum status */}
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-gray-50">
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold text-gray-600">Quorum</p>
+                        <p className="text-sm">
+                          Required: <strong>{(meetingDetail.data?.meeting ?? selectedMeeting).quorumRequired ?? 3} trustees</strong>
+                          {(meetingDetail.data?.meeting ?? selectedMeeting).quorumMet
+                            ? <span className="ml-2 text-green-600 font-medium">✓ Met</span>
+                            : <span className="ml-2 text-red-500 font-medium">✗ Not confirmed</span>}
+                        </p>
+                      </div>
+                      {selectedMeeting.status === "completed" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={(meetingDetail.data?.meeting ?? selectedMeeting).quorumMet ? "border-red-300 text-red-600" : "border-green-300 text-green-600"}
+                          onClick={() => updateMeetingStatus.mutate({ id: selectedMeeting.id, quorumMet: !(meetingDetail.data?.meeting ?? selectedMeeting).quorumMet })}
+                          disabled={updateMeetingStatus.isPending}
+                        >
+                          {(meetingDetail.data?.meeting ?? selectedMeeting).quorumMet ? "Mark Quorum Not Met" : "Mark Quorum Met"}
+                        </Button>
+                      )}
+                    </div>
+
                     {/* AI summary */}
                     {aiSummary && (
                       <div className="bg-indigo-50 rounded-lg p-4">
@@ -401,9 +426,15 @@ export default function MeetingsV3Page() {
                 <Input type="datetime-local" value={meetingForm.scheduledAt} onChange={e => setMeetingForm(f => ({ ...f, scheduledAt: e.target.value }))} />
               </div>
             </div>
-            <div>
-              <Label>Location</Label>
-              <Input value={meetingForm.location} onChange={e => setMeetingForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Hibba House, Room 1 / Zoom" />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Location</Label>
+                <Input value={meetingForm.location} onChange={e => setMeetingForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Hibba House, Room 1 / Zoom" />
+              </div>
+              <div>
+                <Label>Quorum Required (trustees)</Label>
+                <Input type="number" min={1} max={20} value={meetingForm.quorumRequired} onChange={e => setMeetingForm(f => ({ ...f, quorumRequired: parseInt(e.target.value) || 3 }))} />
+              </div>
             </div>
             <div>
               <Label>Notes</Label>

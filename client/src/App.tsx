@@ -44,6 +44,7 @@ import GiftAidPage from "./pages/GiftAid";
 import PayrollV3Page from "./pages/PayrollV3";
 import CommsV3Page from "./pages/CommsV3";
 import MeetingsV3Page from "./pages/MeetingsV3";
+import CommsInboxPage from "./pages/CommsInbox";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay"];
 
@@ -100,6 +101,7 @@ function Router() {
         <Route path="/payroll-v3" component={PayrollV3Page} />
         <Route path="/comms-v3" component={CommsV3Page} />
         <Route path="/meetings" component={MeetingsV3Page} />
+        <Route path="/comms-inbox" component={CommsInboxPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />

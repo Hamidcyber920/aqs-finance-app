@@ -1272,3 +1272,49 @@
 ### Payroll V3 Payslip Email on Approval
 - [x] Backend: payrollV3.emailPayslip procedure — on approve, generate PDF summary (gross, deductions, net, YTD) and email to employee via Gmail API
 - [x] Frontend: PayrollV3.tsx — "Email Payslip" button shown after approval, confirmation toast with recipient name
+
+## Suggested Next Steps (May 11, 2026 — Round 2)
+
+### HMRC R68 Submission Tracking
+- [x] DB: add submittedToHmrc (boolean), submittedAt (timestamp), hmrcRef (varchar) to gift_aid_claims table
+- [x] Backend: donorsV3.markGiftAidSubmitted — set submittedToHmrc=true, submittedAt, hmrcRef on a claim batch
+- [x] Frontend: GiftAid.tsx — "Mark as Submitted to HMRC" button with date/ref input, badge showing submitted vs pending
+
+### Payslip PDF Attachment
+- [x] Backend: payrollV3.emailPayslip — generate pdfkit PDF (gross, tax, NI, pension, net, YTD table) and attach to Gmail email
+- [x] Frontend: PayrollV3.tsx — no UI change needed; email button already present, just improves email content
+
+### Meeting Quorum Checker
+- [x] DB: add attendees (json array of userId) and quorumRequired (int, default 3) to trustee_meetings table
+- [x] Backend: meetingsV3.updateMeeting — accept attendees array, compute quorumMet boolean
+- [x] Backend: sendComplianceDigest — flag meetings where quorumMet=false in the weekly digest
+- [x] Frontend: MeetingsV3.tsx — attendees multi-select field, quorum status badge (Met / Not Met)
+
+## Wave 4 — Master Communications Channel (May 11, 2026)
+
+### DB Schema
+- [x] DB: inbound_emails table (id, gmailMessageId, threadId, fromAddress, fromName, subject, bodyText, bodyHtml, receivedAt, hasAttachments, attachmentUrls json, category, assignedSection, isRead, isArchived, aiSummary, createdAt)
+- [x] DB: email_sections table (id, name, slug, description, colour, sortOrder, isDefault, createdAt) — seeded with: Accounts, HMRC, Gift Aid, Student Accommodation, General Staff, General Enquiries, Urgent, Friday Comms
+- [x] DB: email_assignments table (id, emailId, sectionId, assignedById, assignedAt, notes)
+
+### Wave 4 Backend
+- [x] commsHub.syncInbox (commsInbox.fetchFromGmail) — pull latest emails from Gmail API (inbox label), upsert into inbound_emails, download attachment metadata
+- [x] commsHub.listEmails (commsInbox.listEmails) — paginated list with section/category/read filters
+- [x] commsHub.getEmail (commsInbox.getEmail) — full email detail including AI summary on first open
+- [x] commsHub.assignToSection (commsInbox.updateEmail) — move email to a named section (creates email_assignment row)
+- [x] commsHub.markRead / commsHub.archiveEmail (commsInbox.updateEmail) — read/archive state management
+- [x] commsHub.aiSummariseEmail (commsInbox.aiSummariseEmail) — call LLM with email body + attachments, return summary + suggested section
+- [x] commsHub.aiOcrAttachment (commsInbox.ocrAttachment) — accept attachment URL, call LLM vision, return extracted fields (amount, date, ref, sender)
+- [x] commsHub.replyEmail (via pushEmail) — send reply via Gmail API, log in outbox
+- [x] commsHub.listSections / commsHub.createSection / commsHub.updateSection (commsInbox.listSections/upsertSection) — manage custom sections
+- [x] Accountants section: filter view for Accounts + HMRC + Gift Aid sections with dedicated procedures
+
+### Wave 4 Frontend
+- [x] Master Comms Inbox page (/comms-inbox): sidebar section list, email list panel, email detail panel (3-pane layout)
+- [x] Email list: sender, subject, date, AI summary snippet, section badge, unread indicator
+- [x] Email detail: full body render (HTML/text), AI summary card, "Move to Section" dropdown, "Reply" button
+- [x] AI OCR panel: for emails with attachments, "Read Attachment" button shows extracted fields (amount, date, ref)
+- [x] Accountants Comms page (/accountants-comms): filtered view of Accounts/HMRC/Gift Aid sections only
+- [x] Section management: "Add Section" button, rename/recolour sections inline
+- [x] Sync button: "Fetch Latest Emails" triggers commsHub.syncInbox
+- [x] Add both pages to sidebar under COMMUNICATIONS group and App.tsx routes

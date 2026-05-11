@@ -539,6 +539,35 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
       );
       return { sent: true };
     }),
+
+  /** Mark a batch of gift aid claims as submitted to HMRC with optional reference number */
+  markGiftAidSubmitted: protectedProcedure
+    .input(z.object({
+      taxYear: z.string(),
+      quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]),
+      hmrcRef: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const now = new Date();
+      await db
+        .update(giftAidClaims)
+        .set({
+          submittedToHmrc: true,
+          submittedAt: now,
+          hmrcRef: input.hmrcRef ?? null,
+          claimStatus: "submitted",
+        })
+        .where(
+          and(
+            eq(giftAidClaims.taxYear, input.taxYear),
+            eq(giftAidClaims.quarter, input.quarter),
+            eq(giftAidClaims.submittedToHmrc, false)
+          )
+        );
+      return { submittedAt: now.toISOString() };
+    }),
 });
 
 export type DonorsV3Router = typeof donorsV3Router;

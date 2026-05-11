@@ -1376,6 +1376,8 @@ export const giftAidClaims = mysqlTable("gift_aid_claims", {
   hmrcRef: varchar("hmrcRef", { length: 100 }),
   claimedAt: timestamp("claimedAt"),
   csvExportedAt: timestamp("csvExportedAt"),
+  submittedToHmrc: boolean("submittedToHmrc").default(false).notNull(),
+  submittedAt: timestamp("submittedAt"),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -1489,6 +1491,8 @@ export const trusteeMeetings = mysqlTable("trustee_meetings", {
   transcriptText: text("transcriptText"),
   aiDecisionsExtracted: boolean("aiDecisionsExtracted").default(false).notNull(),
   attendees: json("attendees"), // array of user IDs
+  quorumRequired: int("quorumRequired").default(3).notNull(),
+  quorumMet: boolean("quorumMet").default(false).notNull(),
   notes: text("notes"),
   createdByUserId: int("createdByUserId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -1533,3 +1537,91 @@ export const onboardingPipeline = mysqlTable("onboarding_pipeline", {
 });
 export type OnboardingPipeline = typeof onboardingPipeline.$inferSelect;
 export type InsertOnboardingPipeline = typeof onboardingPipeline.$inferInsert;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WAVE 4 — Master Communications Channel
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Sections / categories (editable by admin — e.g. Accounts, HMRC, Gift Aid, Urgent, etc.)
+export const emailSections = mysqlTable("email_sections", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),           // e.g. "Accounts", "HMRC", "Gift Aid"
+  description: text("description"),
+  color: varchar("color", { length: 20 }).default("#6366f1"), // hex colour for UI badge
+  icon: varchar("icon", { length: 50 }),                      // lucide icon name
+  sortOrder: int("sortOrder").default(0).notNull(),
+  isSystem: boolean("isSystem").default(false).notNull(),     // system sections can't be deleted
+  createdByUserId: int("createdByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type EmailSection = typeof emailSections.$inferSelect;
+export type InsertEmailSection = typeof emailSections.$inferInsert;
+
+// Inbound emails pushed from Gmail or entered manually
+export const inboundEmails = mysqlTable("inbound_emails", {
+  id: int("id").autoincrement().primaryKey(),
+  // Gmail metadata
+  gmailMessageId: varchar("gmailMessageId", { length: 255 }),  // unique Gmail message ID
+  gmailThreadId: varchar("gmailThreadId", { length: 255 }),    // Gmail thread ID
+  // Sender / recipient
+  fromEmail: varchar("fromEmail", { length: 255 }).notNull(),
+  fromName: varchar("fromName", { length: 255 }),
+  toEmail: varchar("toEmail", { length: 255 }),
+  ccEmails: json("ccEmails").$type<string[]>().default([]),
+  // Content
+  subject: varchar("subject", { length: 500 }).notNull(),
+  bodyText: text("bodyText"),                                   // plain text body
+  bodyHtml: text("bodyHtml"),                                   // HTML body
+  snippet: varchar("snippet", { length: 500 }),                 // short preview
+  // Classification
+  sectionId: int("sectionId"),                                  // FK to email_sections.id
+  priority: mysqlEnum("priority", ["urgent", "high", "normal", "low"]).default("normal").notNull(),
+  status: mysqlEnum("status", ["unread", "read", "actioned", "archived"]).default("unread").notNull(),
+  // AI processing
+  aiSummary: text("aiSummary"),                                 // AI-generated summary
+  aiKeyPoints: json("aiKeyPoints").$type<string[]>().default([]),
+  aiActionRequired: boolean("aiActionRequired").default(false).notNull(),
+  aiProcessedAt: timestamp("aiProcessedAt"),
+  // Assignment
+  assignedToUserId: int("assignedToUserId"),                    // FK to users.id
+  assignedAt: timestamp("assignedAt"),
+  // Timestamps
+  receivedAt: timestamp("receivedAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type InboundEmail = typeof inboundEmails.$inferSelect;
+export type InsertInboundEmail = typeof inboundEmails.$inferInsert;
+
+// Attachments on inbound emails (stored in S3)
+export const emailAttachments = mysqlTable("email_attachments", {
+  id: int("id").autoincrement().primaryKey(),
+  emailId: int("emailId").notNull(),                            // FK to inbound_emails.id
+  filename: varchar("filename", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 100 }),
+  sizeBytes: int("sizeBytes"),
+  s3Url: text("s3Url").notNull(),
+  s3Key: varchar("s3Key", { length: 500 }).notNull(),
+  // AI OCR
+  ocrText: text("ocrText"),                                     // extracted text from image/PDF
+  ocrSummary: text("ocrSummary"),                               // AI summary of OCR content
+  ocrProcessedAt: timestamp("ocrProcessedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type EmailAttachment = typeof emailAttachments.$inferSelect;
+export type InsertEmailAttachment = typeof emailAttachments.$inferInsert;
+
+// Email activity log (moves, assignments, status changes)
+export const emailActivityLog = mysqlTable("email_activity_log", {
+  id: int("id").autoincrement().primaryKey(),
+  emailId: int("emailId").notNull(),
+  userId: int("userId").notNull(),
+  action: mysqlEnum("action", ["received", "read", "moved_section", "assigned", "actioned", "archived", "replied", "forwarded", "ocr_processed", "ai_summarised"]).notNull(),
+  fromSectionId: int("fromSectionId"),
+  toSectionId: int("toSectionId"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type EmailActivityLog = typeof emailActivityLog.$inferSelect;
+export type InsertEmailActivityLog = typeof emailActivityLog.$inferInsert;

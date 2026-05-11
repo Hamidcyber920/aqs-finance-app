@@ -129,3 +129,49 @@ describe("payrollV3 emailPayslip procedure", () => {
     expect(keys).toContain("emailPayslip");
   });
 });
+
+// ─── Wave 4: Comms Inbox Router ───────────────────────────────────────────────
+describe("Wave 4 – commsInbox router", () => {
+  it("commsInbox router is registered in the main router", async () => {
+    const { appRouter } = await import("./routers");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.listSections");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.upsertSection");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.deleteSection");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.listEmails");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.getEmail");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.pushEmail");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.updateEmail");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.aiSummariseEmail");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.ocrAttachment");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.uploadAttachment");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.getInboxStats");
+    expect(appRouter._def.procedures).toHaveProperty("commsInbox.fetchFromGmail");
+  });
+
+  it("Wave 4 DB tables exist in schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect(schema.emailSections).toBeDefined();
+    expect(schema.inboundEmails).toBeDefined();
+    expect(schema.emailAttachments).toBeDefined();
+    expect(schema.emailActivityLog).toBeDefined();
+  });
+
+  it("Suggested next steps: markGiftAidSubmitted procedure exists", async () => {
+    const { appRouter } = await import("./routers");
+    expect(appRouter._def.procedures).toHaveProperty("donorsV3.markGiftAidSubmitted");
+  });
+
+  it("Suggested next steps: quorumRequired/quorumMet columns exist in trusteeMeetings schema", async () => {
+    const schema = await import("../drizzle/schema");
+    const cols = Object.keys(schema.trusteeMeetings);
+    expect(cols).toContain("quorumRequired");
+    expect(cols).toContain("quorumMet");
+  });
+
+  it("Suggested next steps: submittedToHmrc/submittedAt columns exist in giftAidClaims schema", async () => {
+    const schema = await import("../drizzle/schema");
+    const cols = Object.keys(schema.giftAidClaims);
+    expect(cols).toContain("submittedToHmrc");
+    expect(cols).toContain("submittedAt");
+  });
+});

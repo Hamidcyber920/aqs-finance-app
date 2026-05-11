@@ -372,6 +372,20 @@
       "when": 1778502217029,
       "tag": "0052_nosy_skullbuster",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "5",
+      "when": 1778511350398,
+      "tag": "0053_fantastic_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "5",
+      "when": 1778511895423,
+      "tag": "0054_huge_kree",
+      "breakpoints": true
     }
   ]
 }

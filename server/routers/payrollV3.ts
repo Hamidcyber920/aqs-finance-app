@@ -385,6 +385,63 @@ All monetary values as numbers (no £ sign). If a field is not visible, return n
           </div>
         </div>`;
 
+      // Generate PDF payslip attachment using pdfkit
+      let pdfBuffer: Buffer | undefined;
+      try {
+        const PDFDocument = (await import("pdfkit")).default;
+        pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+          const doc = new PDFDocument({ size: "A4", margin: 50 });
+          const chunks: Buffer[] = [];
+          doc.on("data", (c: Buffer) => chunks.push(c));
+          doc.on("end", () => resolve(Buffer.concat(chunks)));
+          doc.on("error", reject);
+          // Header
+          doc.rect(0, 0, doc.page.width, 80).fill("#1a5c38");
+          doc.fillColor("#f4c95d").fontSize(18).text("Abdullah Quilliam Society", 50, 20);
+          doc.fillColor("#ffffff").fontSize(12).text(`Payslip — ${monthName} ${record.year}`, 50, 45);
+          doc.fillColor("#000000").moveDown(3);
+          // Employee info
+          doc.fontSize(11).text(`Employee: ${toName}`, 50, 100);
+          doc.text(`Tax Code: ${record.taxCode ?? "N/A"}   NI Number: ${record.niNumber ?? "N/A"}`, 50, 118);
+          doc.text(`Payment Method: ${(record.paymentMethod ?? "bank_transfer").replace("_", " ")}`, 50, 136);
+          // Earnings table
+          doc.moveDown(1);
+          const tableTop = 165;
+          doc.rect(50, tableTop, 495, 22).fill("#1a5c38");
+          doc.fillColor("#ffffff").fontSize(10).text("Description", 55, tableTop + 6);
+          doc.text("Amount", 480, tableTop + 6, { align: "right", width: 60 });
+          const rows2 = [
+            ["Gross Pay", `£${gross}`],
+            ["Income Tax", `-£${tax}`],
+            ["National Insurance", `-£${ni}`],
+            ["Pension (Employee)", `-£${pension}`],
+            ...(Number(other) > 0 ? [["Other Deductions", `-£${other}`]] : []),
+            ["NET PAY", `£${net}`],
+          ];
+          rows2.forEach((row, i) => {
+            const y = tableTop + 22 + i * 22;
+            if (i === rows2.length - 1) doc.rect(50, y, 495, 22).fill("#e8f5e9");
+            else if (i % 2 === 0) doc.rect(50, y, 495, 22).fill("#f9f9f9");
+            doc.fillColor(i === rows2.length - 1 ? "#1a5c38" : "#333333").fontSize(10);
+            doc.text(row[0], 55, y + 6);
+            doc.text(row[1], 480, y + 6, { align: "right", width: 60 });
+          });
+          // YTD
+          const ytdTop = tableTop + 22 + rows2.length * 22 + 20;
+          doc.fillColor("#333").fontSize(11).text("Year-to-Date Summary", 50, ytdTop);
+          const ytdRows = [["YTD Gross", `£${ytdGross}`], ["YTD Tax Paid", `£${ytdTax}`], ["YTD NI Paid", `£${ytdNI}`]];
+          ytdRows.forEach((row, i) => {
+            const y = ytdTop + 20 + i * 20;
+            if (i % 2 === 0) doc.rect(50, y, 495, 20).fill("#f5f5f5");
+            doc.fillColor("#333").fontSize(10).text(row[0], 55, y + 5);
+            doc.text(row[1], 480, y + 5, { align: "right", width: 60 });
+          });
+          doc.end();
+        });
+      } catch (pdfErr) {
+        console.warn("[payrollV3] PDF generation failed, sending email without attachment:", pdfErr);
+      }
+
       try {
         const nodemailer = await import("nodemailer");
         const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
@@ -395,12 +452,20 @@ All monetary values as numbers (no £ sign). If a field is not visible, return n
           port: 465, secure: true,
           auth: { user: smtpUser, pass: smtpPass },
         });
-        await transporter.sendMail({
+        const mailOptions: any = {
           from: `"Abdullah Quilliam Society" <${fromEmail}>`,
           to: toEmail,
           subject: `Your Payslip \u2014 ${monthName} ${record.year}`,
           html,
-        });
+        };
+        if (pdfBuffer) {
+          mailOptions.attachments = [{
+            filename: `Payslip_${toName.replace(/\s+/g, "_")}_${monthName}_${record.year}.pdf`,
+            content: pdfBuffer,
+            contentType: "application/pdf",
+          }];
+        }
+        await transporter.sendMail(mailOptions);
       } catch (e) {
         console.error("[payrollV3] emailPayslip failed:", e);
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to send payslip email" });

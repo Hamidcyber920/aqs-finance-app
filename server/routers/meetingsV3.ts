@@ -61,6 +61,7 @@ export const meetingsV3Router = router({
       scheduledAt: z.string(), // ISO timestamp
       location: z.string().optional(),
       attendees: z.array(z.number()).optional(),
+      quorumRequired: z.number().min(1).max(20).default(3),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -72,6 +73,7 @@ export const meetingsV3Router = router({
         scheduledAt: new Date(input.scheduledAt),
         location: input.location,
         attendees: input.attendees ?? [],
+        quorumRequired: input.quorumRequired,
         notes: input.notes,
         createdByUserId: ctx.user.id,
       });
@@ -90,6 +92,8 @@ export const meetingsV3Router = router({
       transcriptUrl: z.string().optional(),
       transcriptText: z.string().optional(),
       attendees: z.array(z.number()).optional(),
+      quorumRequired: z.number().min(1).max(20).optional(),
+      quorumMet: z.boolean().optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -105,6 +109,8 @@ export const meetingsV3Router = router({
       if (input.transcriptUrl) updates.transcriptUrl = input.transcriptUrl;
       if (input.transcriptText) updates.transcriptText = input.transcriptText;
       if (input.attendees) updates.attendees = input.attendees;
+      if (input.quorumRequired !== undefined) updates.quorumRequired = input.quorumRequired;
+      if (input.quorumMet !== undefined) updates.quorumMet = input.quorumMet;
       if (input.notes !== undefined) updates.notes = input.notes;
       await db.update(trusteeMeetings).set(updates).where(eq(trusteeMeetings.id, input.id));
       return { success: true };

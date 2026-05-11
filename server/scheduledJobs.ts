@@ -542,7 +542,7 @@ export async function sendComplianceDigest() {
     const db = await getDb();
     if (!db) { console.warn("[Scheduled] DB unavailable, skipping compliance digest"); return; }
 
-    const { complianceActions, trainingRecords, policyDocuments, trusteeDecisions } = await import("../drizzle/schema");
+    const { complianceActions, trainingRecords, policyDocuments, trusteeDecisions, trusteeMeetings } = await import("../drizzle/schema");
     const now = new Date();
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
@@ -578,14 +578,22 @@ export async function sendComplianceDigest() {
       d.outcome === "pending" || !d.minutesUrl || (d.votesFor === 0 && d.votesAgainst === 0 && d.abstentions === 0)
     );
 
-    const totalIssues = criticalActions.length + overdueActions.length + trainingGaps.length + policyReviews.length + decisionsNeedingAttention.length;
+    // Quorum: meetings in past 30 days where quorumMet = false
+    const THIRTY_DAYS_AGO = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const allMeetings = await db.select().from(trusteeMeetings);
+    const quorumFailedMeetings = allMeetings.filter((m: any) =>
+      m.scheduledAt && new Date(m.scheduledAt) >= THIRTY_DAYS_AGO &&
+      m.status === "completed" && !m.quorumMet
+    );
+
+    const totalIssues = criticalActions.length + overdueActions.length + trainingGaps.length + policyReviews.length + decisionsNeedingAttention.length + quorumFailedMeetings.length;
     if (totalIssues === 0) {
       console.log("[Scheduled] Compliance digest: no issues to report this week.");
       return;
     }
 
     const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    const score = Math.max(0, 100 - criticalActions.length * 20 - overdueActions.length * 10 - trainingGaps.length * 5 - policyReviews.length * 5 - decisionsNeedingAttention.length * 3);
+    const score = Math.max(0, 100 - criticalActions.length * 20 - overdueActions.length * 10 - trainingGaps.length * 5 - policyReviews.length * 5 - decisionsNeedingAttention.length * 3 - quorumFailedMeetings.length * 10);
     const scoreColor = score >= 80 ? "#00FFC2" : score >= 60 ? "#f59e0b" : "#f87171";
 
     const actionRow = (a: any) => `<tr>
@@ -667,6 +675,7 @@ export async function sendComplianceDigest() {
         { label: "Training Gaps", value: trainingGaps.length, color: "#a78bfa" },
         { label: "Policy Reviews", value: policyReviews.length, color: "#00FFC2" },
         { label: "Decisions Flagged", value: decisionsNeedingAttention.length, color: "#60a5fa" },
+        { label: "Quorum Failures", value: quorumFailedMeetings.length, color: "#f43f5e" },
       ].map(s => `<div style="background:${s.color}11;border:1px solid ${s.color}33;border-radius:12px;padding:14px;text-align:center">
         <p style="margin:0;font-size:24px;font-weight:800;color:${s.value>0?s.color:'rgba(255,255,255,0.3)'}">${s.value}</p>
         <p style="margin:4px 0 0;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.08em">${s.label}</p>
@@ -762,6 +771,28 @@ export async function sendComplianceDigest() {
       </table>
     </div>` : ""}
 
+    ${quorumFailedMeetings.length > 0 ? `
+    <!-- Quorum Failures -->
+    <div style="background:rgba(244,63,94,0.05);border:1px solid rgba(244,63,94,0.2);border-radius:12px;margin-bottom:20px;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(244,63,94,0.2)">
+        <h2 style="margin:0;font-size:14px;font-weight:700;color:#f43f5e">🔴 Quorum Failures — Last 30 Days (${quorumFailedMeetings.length})</h2>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,0.2)">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Meeting</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Date</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Type</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Quorum Required</th>
+        </tr></thead>
+        <tbody>${quorumFailedMeetings.map((m: any) => `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:13px">${m.title ?? "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${m.scheduledAt ? new Date(m.scheduledAt).toLocaleDateString("en-GB") : "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${(m.meetingType ?? "—").replace(/_/g, " ")}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px"><span style="padding:2px 8px;border-radius:999px;background:rgba(244,63,94,0.15);color:#f43f5e;font-weight:600">${m.quorumRequired} trustees</span></td>
+        </tr>`).join("")}</tbody>
+      </table>
+    </div>` : ""}
+
     ${decisionsNeedingAttention.length > 0 ? `
     <!-- Decisions Needing Attention -->
     <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.15);border-radius:12px;margin-bottom:20px;overflow:hidden">
@@ -801,7 +832,7 @@ export async function sendComplianceDigest() {
       `[Hibba] Weekly Compliance Digest — ${totalIssues} item${totalIssues !== 1 ? "s" : ""} require attention`,
       html,
     );
-    console.log(`[Scheduled] Compliance digest sent to Dr. Hamid: ${totalIssues} issues (${criticalActions.length} critical, ${overdueActions.length} overdue, ${trainingGaps.length} training, ${policyReviews.length} policies, ${decisionsNeedingAttention.length} decisions flagged, ${recentDecisions.length} decisions this week)`);
+    console.log(`[Scheduled] Compliance digest sent to Dr. Hamid: ${totalIssues} issues (${criticalActions.length} critical, ${overdueActions.length} overdue, ${trainingGaps.length} training, ${policyReviews.length} policies, ${decisionsNeedingAttention.length} decisions flagged, ${recentDecisions.length} decisions this week, ${quorumFailedMeetings.length} quorum failures)`);
   } catch (e) {
     console.error("[Scheduled] Compliance digest failed:", e);
   }

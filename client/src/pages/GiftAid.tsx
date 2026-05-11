@@ -45,6 +45,8 @@ export default function GiftAidPage() {
   const [r68Total, setR68Total] = useState("0.00");
   const [trusteeEmail, setTrusteeEmail] = useState("");
   const [trusteeName, setTrusteeName] = useState("Dr. Abdul Hamid");
+  const [markHmrcRef, setMarkHmrcRef] = useState("");
+  const [showMarkSubmittedDialog, setShowMarkSubmittedDialog] = useState(false);
   const [lapsedDays, setLapsedDays] = useState(90);
   const [reEngageDonorId, setReEngageDonorId] = useState<number | null>(null);
   const [reEngageMsg, setReEngageMsg] = useState("");
@@ -90,6 +92,17 @@ export default function GiftAidPage() {
 
   const sendR68ToTrustee = trpc.donorsV3.submitGiftAidToTrustee.useMutation({
     onSuccess: () => { toast.success("R68 XML emailed to trustee for review"); setShowR68Dialog(false); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const markSubmitted = trpc.donorsV3.markGiftAidSubmitted.useMutation({
+    onSuccess: (d) => {
+      toast.success(`Marked as submitted to HMRC at ${new Date(d.submittedAt).toLocaleString()}`);
+      setShowMarkSubmittedDialog(false);
+      setShowR68Dialog(false);
+      setMarkHmrcRef("");
+      utils.donorsV3.listGiftAidClaims.invalidate();
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -413,6 +426,48 @@ export default function GiftAidPage() {
               disabled={sendR68ToTrustee.isPending || !trusteeEmail}
             >
               <Send className="h-4 w-4 mr-1" />{sendR68ToTrustee.isPending ? "Sending..." : "Email to Trustee"}
+            </Button>
+            <Button
+              variant="default"
+              className="bg-blue-700 hover:bg-blue-800"
+              onClick={() => setShowMarkSubmittedDialog(true)}
+            >
+              <CheckCircle className="h-4 w-4 mr-1" />Mark as Submitted to HMRC
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mark as Submitted to HMRC confirmation dialog */}
+      <Dialog open={showMarkSubmittedDialog} onOpenChange={setShowMarkSubmittedDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Mark as Submitted to HMRC</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              This will mark all <strong>{taxYear} {quarter}</strong> Gift Aid claims as submitted to HMRC.
+              This action cannot be undone.
+            </p>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">HMRC Reference Number (optional)</p>
+              <Input
+                value={markHmrcRef}
+                onChange={e => setMarkHmrcRef(e.target.value)}
+                placeholder="e.g. R68-2024-Q1-XXXXXXXX"
+              />
+              <p className="text-xs text-gray-400 mt-1">You can find this in your HMRC Charities Online submission confirmation.</p>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-800">
+              <strong>What happens next:</strong> All pending claims for {taxYear} {quarter} will be stamped with today's date and status changed to "submitted". The HMRC reference will be saved for audit purposes.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMarkSubmittedDialog(false)}>Cancel</Button>
+            <Button
+              className="bg-blue-700 hover:bg-blue-800"
+              onClick={() => markSubmitted.mutate({ taxYear, quarter, hmrcRef: markHmrcRef || undefined })}
+              disabled={markSubmitted.isPending}
+            >
+              <CheckCircle className="h-4 w-4 mr-1" />{markSubmitted.isPending ? "Saving..." : "Confirm Submission"}
             </Button>
           </DialogFooter>
         </DialogContent>

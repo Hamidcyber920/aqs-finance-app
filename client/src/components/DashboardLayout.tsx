@@ -29,7 +29,7 @@ import {
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
-  Gift, CalendarDays, Send, UserPlus,
+  Gift, CalendarDays, Send, UserPlus, MailOpen,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -66,6 +66,7 @@ const orgItems = [
   { icon: MessageSquare, label: "Communications", path: "/communications" },
   { icon: Inbox, label: "Comms Hub", path: "/comms-hub" },
   { icon: Send, label: "Comms Hub V3", path: "/comms-v3" },
+  { icon: MailOpen, label: "Master Inbox", path: "/comms-inbox" },
   { icon: CalendarDays, label: "Meetings & Onboarding", path: "/meetings" },
   { icon: Users, label: "Donors", path: "/donors" },
   { icon: Building2, label: "Campaigns", path: "/campaigns" },

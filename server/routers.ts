@@ -20,6 +20,7 @@ import { donorsV3Router } from "./routers/donorsV3";
 import { payrollV3Router } from "./routers/payrollV3";
 import { commsV3Router } from "./routers/commsV3";
 import { meetingsV3Router } from "./routers/meetingsV3";
+import { commsInboxRouter } from "./routers/commsInbox";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -367,6 +368,7 @@ export const appRouter = router({
   payrollV3: payrollV3Router,
   commsV3: commsV3Router,
   meetingsV3: meetingsV3Router,
+  commsInbox: commsInboxRouter,
 
   // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
   succession: router({
