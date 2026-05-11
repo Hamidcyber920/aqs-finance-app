@@ -1024,19 +1024,19 @@ export const appRouter = router({
     mergeFromScan: seniorProcedure
       .input(z.object({
         id: z.number(),
-        fullName: z.string().optional(),
-        role: z.string().optional(),
-        email: z.string().optional(),
-        phone: z.string().optional(),
-        dateOfBirth: z.string().optional(),
-        addressLine1: z.string().optional(),
-        addressLine2: z.string().optional(),
-        city: z.string().optional(),
-        postcode: z.string().optional(),
-        nokName: z.string().optional(),
-        nokPhone: z.string().optional(),
-        nokRelationship: z.string().optional(),
-        notes: z.string().optional(),
+        fullName: z.string().nullish(),
+        role: z.string().nullish(),
+        email: z.string().nullish(),
+        phone: z.string().nullish(),
+        dateOfBirth: z.string().nullish(),
+        addressLine1: z.string().nullish(),
+        addressLine2: z.string().nullish(),
+        city: z.string().nullish(),
+        postcode: z.string().nullish(),
+        nokName: z.string().nullish(),
+        nokPhone: z.string().nullish(),
+        nokRelationship: z.string().nullish(),
+        notes: z.string().nullish(),
       }))
       .mutation(async ({ input }) => {
         const db = await getDb();
@@ -2487,15 +2487,15 @@ export const appRouter = router({
     mergeFromScan: seniorProcedure
       .input(z.object({
         id: z.number(),
-        tenantName: z.string().optional(),
-        amount: z.number().optional(),
-        paymentDate: z.string().optional(),
-        periodStart: z.string().optional(),
-        periodEnd: z.string().optional(),
-        propertyUnit: z.string().optional(),
-        paymentMethod: z.string().optional(),
-        reference: z.string().optional(),
-        notes: z.string().optional(),
+        tenantName: z.string().nullish(),
+        amount: z.number().nullish(),
+        paymentDate: z.string().nullish(),
+        periodStart: z.string().nullish(),
+        periodEnd: z.string().nullish(),
+        propertyUnit: z.string().nullish(),
+        paymentMethod: z.string().nullish(),
+        reference: z.string().nullish(),
+        notes: z.string().nullish(),
       }))
       .mutation(async ({ input }) => {
         const db = await getDb();
@@ -2594,14 +2594,14 @@ export const appRouter = router({
     mergeFromScan: seniorProcedure
       .input(z.object({
         id: z.number(),
-        name: z.string().optional(),
-        email: z.string().optional(),
-        phone: z.string().optional(),
-        addressLine1: z.string().optional(),
-        city: z.string().optional(),
-        postcode: z.string().optional(),
-        giftAid: z.boolean().optional(),
-        notes: z.string().optional(),
+        name: z.string().nullish(),
+        email: z.string().nullish(),
+        phone: z.string().nullish(),
+        addressLine1: z.string().nullish(),
+        city: z.string().nullish(),
+        postcode: z.string().nullish(),
+        giftAid: z.boolean().nullish(),
+        notes: z.string().nullish(),
       }))
       .mutation(async ({ input }) => {
         const db = await getDb();
