@@ -3,9 +3,10 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { Plus, Search, Users, Heart, Star, Mail } from "lucide-react";
+import { Plus, Search, Users, Heart, Star, Mail, ScanLine } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
+import SmartDocumentUpload from "@/components/SmartDocumentUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,7 @@ export default function DonorsPage() {
   const [lastMergedDonorId, setLastMergedDonorId] = useState<number | null>(null);
   const [premergeSnapshot, setPremergeSnapshot] = useState<Record<string, unknown> | null>(null);
   const [appliedFields, setAppliedFields] = useState<Record<string, unknown> | null>(null);
+  const [showDocScan, setShowDocScan] = useState(false);
 
   const { data, refetch } = trpc.donors.list.useQuery({ limit:100 });
   const mergeDonorMutation = trpc.donors.mergeFromScan.useMutation({
@@ -45,6 +47,23 @@ export default function DonorsPage() {
   const regularDonors = donors.filter((d: any) => d.isRegular).length;
   const totalGiven = donors.reduce((s: number, d: any) => s + Number(d.totalGiven ?? 0), 0);
 
+  /** Called when SmartDocumentUpload finishes extracting fields from a donor letter */
+  function handleDocScanExtracted(fields: Record<string, any>) {
+    setShowDocScan(false);
+    // Open the Add Donor form pre-filled with extracted fields
+    setOpen(true);
+    // Small delay to allow dialog to mount before setting values
+    setTimeout(() => {
+      if (fields.name || fields.fullName) setValue('name', fields.name || fields.fullName);
+      if (fields.email) setValue('email', fields.email);
+      if (fields.phone) setValue('phone', fields.phone);
+      if (fields.notes) setValue('notes', fields.notes);
+      if (fields.giftAid !== undefined) setValue('giftAid', fields.giftAid);
+      if (fields.isRegular !== undefined) setValue('isRegular', fields.isRegular);
+    }, 250);
+    toast.success("Donor details extracted — please review and save");
+  }
+
   return (
     <>
       <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
@@ -59,6 +78,13 @@ export default function DonorsPage() {
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Community donors — Sadaqah, Zakat, regular giving</p>
           </div>
           <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            {/* SmartDocumentUpload — scan a donor letter / Gift Aid form */}
+            <Button
+              variant="outline"
+              onClick={() => setShowDocScan(true)}
+              style={{ borderColor:"rgba(0,255,194,0.3)",color:T.mint,background:"rgba(0,255,194,0.06)",borderRadius:12,padding:"10px 18px",fontWeight:600,display:"flex",alignItems:"center",gap:8 }}>
+              <ScanLine size={15}/> Scan Donor Letter
+            </Button>
             <SmartUpload
               moduleType="crm_donor"
               buttonLabel="Scan / Upload"
@@ -66,7 +92,6 @@ export default function DonorsPage() {
               onConfirm={(result) => {
                 const d = result.extractedData as any;
                 if (result.matchedProfile?.id) {
-                  // Merge extracted fields into the matched existing donor
                   mergeDonorMutation.mutate({
                     id: result.matchedProfile.id,
                     name: d.name || d.fullName,
@@ -80,7 +105,6 @@ export default function DonorsPage() {
                   });
                   setLastMergedDonorId(result.matchedProfile.id);
                 } else {
-                  // No match — open Add Donor form pre-filled
                   setOpen(true);
                   setTimeout(() => {
                     if (d.name || d.fullName) setValue('name', d.name || d.fullName);
@@ -226,6 +250,14 @@ export default function DonorsPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* SmartDocumentUpload dialog — scan donor letter / Gift Aid form */}
+        <SmartDocumentUpload
+          open={showDocScan}
+          onClose={() => setShowDocScan(false)}
+          targetType="donor_form"
+          onExtracted={handleDocScanExtracted}
+        />
       </div>
     </>
   );

@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { Search, Filter, Receipt, CheckCircle2, Clock, XCircle, Camera, ShieldAlert, ThumbsUp } from "lucide-react";
+import { Search, Filter, Receipt, CheckCircle2, Clock, XCircle, Camera, ShieldAlert, ThumbsUp, CheckSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -12,7 +12,7 @@ const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted
 const STATUSES = ["All","pending","approved","rejected"];
 const DEPTS = ["All","Mosque","Restaurant/Bistro","Ramadan","Staff/Payroll"];
 
-function Badge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: string }) {
   const map: Record<string,{bg:string;color:string;icon:any}> = {
     approved:{bg:"rgba(0,255,194,0.1)",color:T.mint,icon:CheckCircle2},
     pending:{bg:"rgba(251,191,36,0.1)",color:"#fbbf24",icon:Clock},
@@ -32,6 +32,8 @@ export default function ReceiptsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [deptFilter, setDeptFilter] = useState("All");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkApproving, setBulkApproving] = useState(false);
 
   const { data, refetch } = trpc.receipts.list.useQuery({ limit: 100 });
   const deleteMutation = trpc.receipts.delete?.useMutation?.({
@@ -57,6 +59,47 @@ export default function ReceiptsPage() {
   const total = filtered.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
   const approved = receipts.filter((r: any) => r.status === "approved").length;
   const pending = receipts.filter((r: any) => r.status === "pending").length;
+
+  // Approvable = not submitted by current user
+  const approvableItems: any[] = Array.isArray(pendingSecondApproval)
+    ? pendingSecondApproval.filter((r: any) => r.approvedById !== user?.id)
+    : [];
+
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === approvableItems.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(approvableItems.map((r: any) => r.id)));
+    }
+  }
+
+  async function handleBulkApprove() {
+    if (selectedIds.size === 0) return;
+    setBulkApproving(true);
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          (secondApproveMutation as any)?.mutateAsync?.({ receiptId: id })
+        )
+      );
+      toast.success(`${selectedIds.size} receipt${selectedIds.size !== 1 ? "s" : ""} approved`);
+      setSelectedIds(new Set());
+      refetchPending();
+      refetch();
+    } catch (e: any) {
+      toast.error(`Bulk approve failed: ${e.message}`);
+    } finally {
+      setBulkApproving(false);
+    }
+  }
 
   return (
     <>
@@ -92,18 +135,49 @@ export default function ReceiptsPage() {
           ))}
         </div>
 
-
         {/* ── Second Approver Queue (admin only) ── */}
-        {isAdmin && pendingSecondApproval.length > 0 && (
+        {isAdmin && approvableItems.length > 0 && (
           <div style={{ background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:16,padding:20,marginBottom:24,animation:"fadeUp 0.4s ease both" }}>
-            <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
-              <ShieldAlert size={18} style={{ color:"#fbbf24" }}/>
-              <span style={{ fontSize:14,fontWeight:700,color:"#fbbf24" }}>Pending Second Approval ({pendingSecondApproval.length})</span>
-              <span style={{ fontSize:11,color:T.muted,marginLeft:4 }}>Receipts over £500 require a second approver</span>
+            {/* Queue header with bulk controls */}
+            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                <ShieldAlert size={18} style={{ color:"#fbbf24" }}/>
+                <span style={{ fontSize:14,fontWeight:700,color:"#fbbf24" }}>Pending Second Approval ({approvableItems.length})</span>
+                <span style={{ fontSize:11,color:T.muted,marginLeft:4 }}>Receipts over £500 require a second approver</span>
+              </div>
+              <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                {/* Select all toggle */}
+                <button
+                  onClick={toggleSelectAll}
+                  style={{ padding:"5px 12px",borderRadius:8,background:"rgba(251,191,36,0.1)",border:"1px solid rgba(251,191,36,0.25)",color:"#fbbf24",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
+                  <CheckSquare size={12}/>
+                  {selectedIds.size === approvableItems.length ? "Deselect All" : "Select All"}
+                </button>
+                {/* Approve selected */}
+                {selectedIds.size > 0 && (
+                  <button
+                    onClick={handleBulkApprove}
+                    disabled={bulkApproving}
+                    style={{ padding:"5px 16px",borderRadius:8,background:"rgba(0,255,194,0.15)",border:"1px solid rgba(0,255,194,0.3)",color:T.mint,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,opacity:bulkApproving?0.6:1 }}>
+                    <ThumbsUp size={12}/>
+                    {bulkApproving ? "Approving…" : `Approve ${selectedIds.size} Selected`}
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Queue rows with checkboxes */}
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-              {pendingSecondApproval.map((r: any) => (
-                <div key={r.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 16px",gap:12 }}>
+              {approvableItems.map((r: any) => (
+                <div key={r.id}
+                  style={{ display:"flex",alignItems:"center",justifyContent:"space-between",background:selectedIds.has(r.id)?"rgba(0,255,194,0.06)":"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 16px",gap:12,border:`1px solid ${selectedIds.has(r.id)?"rgba(0,255,194,0.2)":"transparent"}`,transition:"all 0.15s" }}>
+                  {/* Checkbox */}
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(r.id)}
+                    onChange={() => toggleSelect(r.id)}
+                    style={{ width:16,height:16,accentColor:T.mint,flexShrink:0,cursor:"pointer" }}
+                  />
                   <div style={{ flex:1,minWidth:0 }}>
                     <span style={{ fontSize:13,fontWeight:600,color:T.white }}>{r.description ?? r.notes ?? "Receipt"}</span>
                     <span style={{ fontSize:12,color:T.muted,marginLeft:12 }}>£{Number(r.amount ?? 0).toLocaleString("en-GB",{minimumFractionDigits:2})}</span>
@@ -114,18 +188,17 @@ export default function ReceiptsPage() {
                       style={{ padding:"5px 12px",borderRadius:8,background:"rgba(99,91,255,0.1)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,fontSize:11,fontWeight:600,cursor:"pointer" }}>
                       View
                     </button>
-                    {r.approvedById !== user?.id && (
-                      <button onClick={() => secondApproveMutation?.mutate?.({ receiptId: r.id })}
-                        style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
-                        <ThumbsUp size={11}/> Approve
-                      </button>
-                    )}
+                    <button onClick={() => secondApproveMutation?.mutate?.({ receiptId: r.id })}
+                      style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
+                      <ThumbsUp size={11}/> Approve
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         )}
+
         {/* Filters */}
         <div style={{ display:"flex",gap:12,marginBottom:20,flexWrap:"wrap",alignItems:"center" }}>
           <div style={{ position:"relative",flex:1,minWidth:200 }}>
@@ -176,7 +249,7 @@ export default function ReceiptsPage() {
                     <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.department??r.departmentName??"—"}</td>
                     <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.category??r.categoryName??"—"}</td>
                     <td style={{ padding:"12px 12px 12px 0",fontSize:14,fontWeight:700,color:T.mint,borderBottom:`1px solid ${T.border}` }}>£{Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td>
-                    <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}><Badge status={r.status??"pending"}/></td>
+                    <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}><StatusBadge status={r.status??"pending"}/></td>
                     <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.date?new Date(r.date).toLocaleDateString("en-GB"):r.createdAt?new Date(r.createdAt).toLocaleDateString("en-GB"):"—"}</td>
                     <td style={{ padding:"12px 0",borderBottom:`1px solid ${T.border}` }}>
                       <button onClick={e=>{e.stopPropagation();setLocation(`/receipts/${r.id}`);}}

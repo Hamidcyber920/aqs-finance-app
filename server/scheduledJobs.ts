@@ -542,7 +542,7 @@ export async function sendComplianceDigest() {
     const db = await getDb();
     if (!db) { console.warn("[Scheduled] DB unavailable, skipping compliance digest"); return; }
 
-    const { complianceActions, trainingRecords, policyDocuments } = await import("../drizzle/schema");
+    const { complianceActions, trainingRecords, policyDocuments, trusteeDecisions } = await import("../drizzle/schema");
     const now = new Date();
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
@@ -550,6 +550,7 @@ export async function sendComplianceDigest() {
     const actions = await db.select().from(complianceActions);
     const training = await db.select().from(trainingRecords);
     const policies = await db.select().from(policyDocuments);
+    const allDecisions = await db.select().from(trusteeDecisions);
 
     // Filter to actionable items
     const criticalActions = actions.filter((a: any) =>
@@ -568,14 +569,23 @@ export async function sendComplianceDigest() {
       p.status === "overdue" || p.status === "due_review"
     );
 
-    const totalIssues = criticalActions.length + overdueActions.length + trainingGaps.length + policyReviews.length;
+    // Decisions: made in past 7 days, flagged if missing minutes or votes
+    const SEVEN_DAYS_AGO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const recentDecisions = allDecisions.filter((d: any) =>
+      d.createdAt && new Date(d.createdAt) >= SEVEN_DAYS_AGO
+    );
+    const decisionsNeedingAttention = allDecisions.filter((d: any) =>
+      d.outcome === "pending" || !d.minutesUrl || (d.votesFor === 0 && d.votesAgainst === 0 && d.abstentions === 0)
+    );
+
+    const totalIssues = criticalActions.length + overdueActions.length + trainingGaps.length + policyReviews.length + decisionsNeedingAttention.length;
     if (totalIssues === 0) {
       console.log("[Scheduled] Compliance digest: no issues to report this week.");
       return;
     }
 
     const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-    const score = Math.max(0, 100 - criticalActions.length * 20 - overdueActions.length * 10 - trainingGaps.length * 5 - policyReviews.length * 5);
+    const score = Math.max(0, 100 - criticalActions.length * 20 - overdueActions.length * 10 - trainingGaps.length * 5 - policyReviews.length * 5 - decisionsNeedingAttention.length * 3);
     const scoreColor = score >= 80 ? "#00FFC2" : score >= 60 ? "#f59e0b" : "#f87171";
 
     const actionRow = (a: any) => `<tr>
@@ -598,6 +608,21 @@ export async function sendComplianceDigest() {
           <span style="padding:2px 8px;border-radius:999px;background:${isExpired?'rgba(248,113,113,0.15)':'rgba(245,158,11,0.15)'};color:${isExpired?'#f87171':'#f59e0b'};font-weight:600">${isExpired?'Expired':'Expiring soon'}</span>
         </td>
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${exp ? exp.toLocaleDateString("en-GB") : "—"}</td>
+      </tr>`;
+    };
+
+    const decisionRow = (d: any) => {
+      const missingMinutes = !d.minutesUrl;
+      const missingVotes = d.votesFor === 0 && d.votesAgainst === 0 && d.abstentions === 0;
+      const flags = [missingMinutes && "No minutes", missingVotes && "No votes recorded"].filter(Boolean).join(", ");
+      return `<tr>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:13px">${d.title ?? "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${d.proposer ?? "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px">
+          <span style="padding:2px 8px;border-radius:999px;background:${d.outcome==='passed'?'rgba(0,255,194,0.15)':d.outcome==='rejected'?'rgba(248,113,113,0.15)':'rgba(245,158,11,0.15)'};color:${d.outcome==='passed'?'#00FFC2':d.outcome==='rejected'?'#f87171':'#f59e0b'};font-weight:600;text-transform:capitalize">${d.outcome ?? "pending"}</span>
+        </td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${d.meetingDate ? new Date(d.meetingDate).toLocaleDateString("en-GB") : "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#f87171;font-size:12px;font-weight:600">${flags || "✓"}</td>
       </tr>`;
     };
 
@@ -635,12 +660,13 @@ export async function sendComplianceDigest() {
     </div>
 
     <!-- Summary strip -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:24px">
       ${[
         { label: "Critical Actions", value: criticalActions.length, color: "#f87171" },
         { label: "Overdue Items", value: overdueActions.length, color: "#f59e0b" },
         { label: "Training Gaps", value: trainingGaps.length, color: "#a78bfa" },
         { label: "Policy Reviews", value: policyReviews.length, color: "#00FFC2" },
+        { label: "Decisions Flagged", value: decisionsNeedingAttention.length, color: "#60a5fa" },
       ].map(s => `<div style="background:${s.color}11;border:1px solid ${s.color}33;border-radius:12px;padding:14px;text-align:center">
         <p style="margin:0;font-size:24px;font-weight:800;color:${s.value>0?s.color:'rgba(255,255,255,0.3)'}">${s.value}</p>
         <p style="margin:4px 0 0;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.08em">${s.label}</p>
@@ -718,6 +744,43 @@ export async function sendComplianceDigest() {
       </table>
     </div>` : ""}
 
+    ${recentDecisions.length > 0 ? `
+    <!-- Decisions This Week -->
+    <div style="background:rgba(96,165,250,0.05);border:1px solid rgba(96,165,250,0.2);border-radius:12px;margin-bottom:20px;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(96,165,250,0.2)">
+        <h2 style="margin:0;font-size:14px;font-weight:700;color:#60a5fa">🗳 Decisions This Week (${recentDecisions.length})</h2>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,0.2)">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Title</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Proposer</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Outcome</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Meeting Date</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Flags</th>
+        </tr></thead>
+        <tbody>${recentDecisions.map(decisionRow).join("")}</tbody>
+      </table>
+    </div>` : ""}
+
+    ${decisionsNeedingAttention.length > 0 ? `
+    <!-- Decisions Needing Attention -->
+    <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.15);border-radius:12px;margin-bottom:20px;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid rgba(96,165,250,0.15)">
+        <h2 style="margin:0;font-size:14px;font-weight:700;color:#60a5fa">⚠ Decisions Needing Attention (${decisionsNeedingAttention.length})</h2>
+        <p style="margin:4px 0 0;font-size:11px;color:rgba(255,255,255,0.4)">Missing minutes URL, missing vote counts, or still pending</p>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,0.2)">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Title</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Proposer</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Outcome</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Meeting Date</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.1em">Flags</th>
+        </tr></thead>
+        <tbody>${decisionsNeedingAttention.map(decisionRow).join("")}</tbody>
+      </table>
+    </div>` : ""}
+
     <!-- Footer -->
     <div style="text-align:center;padding:20px 0;border-top:1px solid rgba(255,255,255,0.06)">
       <p style="margin:0;font-size:12px;color:rgba(255,255,255,0.3)">
@@ -738,7 +801,7 @@ export async function sendComplianceDigest() {
       `[Hibba] Weekly Compliance Digest — ${totalIssues} item${totalIssues !== 1 ? "s" : ""} require attention`,
       html,
     );
-    console.log(`[Scheduled] Compliance digest sent to Dr. Hamid: ${totalIssues} issues (${criticalActions.length} critical, ${overdueActions.length} overdue, ${trainingGaps.length} training, ${policyReviews.length} policies)`);
+    console.log(`[Scheduled] Compliance digest sent to Dr. Hamid: ${totalIssues} issues (${criticalActions.length} critical, ${overdueActions.length} overdue, ${trainingGaps.length} training, ${policyReviews.length} policies, ${decisionsNeedingAttention.length} decisions flagged, ${recentDecisions.length} decisions this week)`);
   } catch (e) {
     console.error("[Scheduled] Compliance digest failed:", e);
   }

@@ -1346,3 +1346,190 @@ export const trusteeDecisions = mysqlTable("trustee_decisions", {
 });
 export type TrusteeDecision = typeof trusteeDecisions.$inferSelect;
 export type InsertTrusteeDecision = typeof trusteeDecisions.$inferInsert;
+
+// ─── WAVE 3 — PEOPLE MODULE ──────────────────────────────────────────────────
+
+// Donor segments (major / monthly / eid / friday / anonymous)
+export const donorSegments = mysqlTable("donor_segments", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId").notNull(),
+  segment: mysqlEnum("segment", ["major", "monthly", "eid", "friday", "anonymous"]).notNull(),
+  assignedAt: timestamp("assignedAt").defaultNow().notNull(),
+  assignedByUserId: int("assignedByUserId"),
+});
+export type DonorSegment = typeof donorSegments.$inferSelect;
+export type InsertDonorSegment = typeof donorSegments.$inferInsert;
+
+// Gift Aid claims — HMRC-ready quarterly claim tracking
+export const giftAidClaims = mysqlTable("gift_aid_claims", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId").notNull(),
+  donorName: varchar("donorName", { length: 200 }),
+  donorAddress: text("donorAddress"),
+  donorPostcode: varchar("donorPostcode", { length: 20 }),
+  donationDate: date("donationDate").notNull(),
+  donationAmount: decimal("donationAmount", { precision: 10, scale: 2 }).notNull(),
+  giftAidAmount: decimal("giftAidAmount", { precision: 10, scale: 2 }), // 25% of donation
+  taxYear: varchar("taxYear", { length: 10 }).notNull(), // e.g. "2024-25"
+  quarter: mysqlEnum("quarter", ["Q1", "Q2", "Q3", "Q4"]).notNull(),
+  claimStatus: mysqlEnum("claimStatus", ["pending", "submitted", "approved", "rejected"]).default("pending").notNull(),
+  hmrcRef: varchar("hmrcRef", { length: 100 }),
+  claimedAt: timestamp("claimedAt"),
+  csvExportedAt: timestamp("csvExportedAt"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type GiftAidClaim = typeof giftAidClaims.$inferSelect;
+export type InsertGiftAidClaim = typeof giftAidClaims.$inferInsert;
+
+// Donor thank-you log — track automated thank-yous sent
+export const donorThankYouLog = mysqlTable("donor_thank_you_log", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId").notNull(),
+  donationId: int("donationId"),
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+  channel: mysqlEnum("channel", ["email", "sms", "whatsapp"]).default("email").notNull(),
+  status: mysqlEnum("status", ["sent", "failed", "pending"]).default("pending").notNull(),
+  message: text("message"),
+  approvedByUserId: int("approvedByUserId"),
+});
+export type DonorThankYouLog = typeof donorThankYouLog.$inferSelect;
+export type InsertDonorThankYouLog = typeof donorThankYouLog.$inferInsert;
+
+// Payroll V2 — full statutory payroll records
+export const payrollV2 = mysqlTable("payroll_v2", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId"), // FK to users.id (nullable for external staff)
+  employeeName: varchar("employeeName", { length: 200 }).notNull(),
+  niNumber: varchar("niNumber", { length: 20 }),
+  taxCode: varchar("taxCode", { length: 20 }),
+  month: int("month").notNull(), // 1-12
+  year: int("year").notNull(),
+  grossPay: decimal("grossPay", { precision: 10, scale: 2 }).notNull(),
+  incomeTax: decimal("incomeTax", { precision: 10, scale: 2 }).default("0").notNull(),
+  nationalInsurance: decimal("nationalInsurance", { precision: 10, scale: 2 }).default("0").notNull(),
+  pensionEmployee: decimal("pensionEmployee", { precision: 10, scale: 2 }).default("0").notNull(),
+  pensionEmployer: decimal("pensionEmployer", { precision: 10, scale: 2 }).default("0").notNull(),
+  otherDeductions: decimal("otherDeductions", { precision: 10, scale: 2 }).default("0").notNull(),
+  netPay: decimal("netPay", { precision: 10, scale: 2 }).notNull(),
+  ytdGross: decimal("ytdGross", { precision: 10, scale: 2 }).default("0").notNull(),
+  ytdTax: decimal("ytdTax", { precision: 10, scale: 2 }).default("0").notNull(),
+  ytdNI: decimal("ytdNI", { precision: 10, scale: 2 }).default("0").notNull(),
+  payslipUrl: text("payslipUrl"), // S3 URL of uploaded payslip PDF
+  paymentMethod: mysqlEnum("paymentMethod", ["bank_transfer", "cheque", "cash"]).default("bank_transfer").notNull(),
+  status: mysqlEnum("status", ["draft", "approved", "paid"]).default("draft").notNull(),
+  approvedByUserId: int("approvedByUserId"),
+  approvedAt: timestamp("approvedAt"),
+  paidAt: timestamp("paidAt"),
+  notes: text("notes"),
+  createdByUserId: int("createdByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type PayrollV2 = typeof payrollV2.$inferSelect;
+export type InsertPayrollV2 = typeof payrollV2.$inferInsert;
+
+// Communications templates
+export const commsTemplates = mysqlTable("comms_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  category: mysqlEnum("category", [
+    "trustee_meeting", "donor_thankyou", "gift_aid_declaration",
+    "commission_response", "staff_bulletin", "supplier_query",
+    "training_invite", "general"
+  ]).default("general").notNull(),
+  type: mysqlEnum("type", ["email", "sms", "letter"]).default("email").notNull(),
+  subject: varchar("subject", { length: 500 }),
+  body: text("body").notNull(),
+  variables: json("variables"), // array of variable names like ["{{name}}", "{{date}}"]
+  isActive: boolean("isActive").default(true).notNull(),
+  createdByUserId: int("createdByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CommsTemplate = typeof commsTemplates.$inferSelect;
+export type InsertCommsTemplate = typeof commsTemplates.$inferInsert;
+
+// Communications outbox — log of all sent communications
+export const commsOutbox = mysqlTable("comms_outbox", {
+  id: int("id").autoincrement().primaryKey(),
+  templateId: int("templateId"),
+  recipientGroup: mysqlEnum("recipientGroup", [
+    "trustees_all", "staff_all", "donors_all", "donors_major",
+    "donors_monthly", "donors_eid", "donors_friday",
+    "students_current", "suppliers", "individual", "custom"
+  ]).notNull(),
+  recipientIds: json("recipientIds"), // array of user/donor IDs
+  subject: varchar("subject", { length: 500 }),
+  body: text("body").notNull(),
+  type: mysqlEnum("type", ["email", "sms", "letter"]).default("email").notNull(),
+  status: mysqlEnum("status", ["queued", "sending", "sent", "failed", "cancelled"]).default("queued").notNull(),
+  sentCount: int("sentCount").default(0).notNull(),
+  failCount: int("failCount").default(0).notNull(),
+  scheduledAt: timestamp("scheduledAt"),
+  sentAt: timestamp("sentAt"),
+  sentByUserId: int("sentByUserId"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type CommsOutbox = typeof commsOutbox.$inferSelect;
+export type InsertCommsOutbox = typeof commsOutbox.$inferInsert;
+
+// Trustee meetings
+export const trusteeMeetings = mysqlTable("trustee_meetings", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  meetingType: mysqlEnum("meetingType", ["trustee_board", "finance_committee", "safeguarding_committee", "building_committee", "agm", "extraordinary", "staff"]).default("trustee_board").notNull(),
+  scheduledAt: timestamp("scheduledAt").notNull(),
+  location: varchar("location", { length: 300 }),
+  status: mysqlEnum("status", ["scheduled", "in_progress", "completed", "cancelled"]).default("scheduled").notNull(),
+  agendaUrl: text("agendaUrl"),
+  minutesUrl: text("minutesUrl"),
+  transcriptUrl: text("transcriptUrl"),
+  transcriptText: text("transcriptText"),
+  aiDecisionsExtracted: boolean("aiDecisionsExtracted").default(false).notNull(),
+  attendees: json("attendees"), // array of user IDs
+  notes: text("notes"),
+  createdByUserId: int("createdByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type TrusteeMeeting = typeof trusteeMeetings.$inferSelect;
+export type InsertTrusteeMeeting = typeof trusteeMeetings.$inferInsert;
+
+// Meeting agenda items
+export const meetingAgendaItems = mysqlTable("meeting_agenda_items", {
+  id: int("id").autoincrement().primaryKey(),
+  meetingId: int("meetingId").notNull(),
+  itemNumber: int("itemNumber").default(1).notNull(),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  ownerId: int("ownerId"), // FK to users.id
+  actionRequired: boolean("actionRequired").default(false).notNull(),
+  linkedComplianceActionId: int("linkedComplianceActionId"),
+  linkedDecisionId: int("linkedDecisionId"),
+  durationMinutes: int("durationMinutes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type MeetingAgendaItem = typeof meetingAgendaItems.$inferSelect;
+export type InsertMeetingAgendaItem = typeof meetingAgendaItems.$inferInsert;
+
+// Onboarding / offboarding pipeline
+export const onboardingPipeline = mysqlTable("onboarding_pipeline", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(), // FK to users.id
+  pipelineType: mysqlEnum("pipelineType", ["onboarding", "offboarding"]).default("onboarding").notNull(),
+  stage: mysqlEnum("stage", [
+    "contract", "id_check", "dbs", "induction", "training", "payslip", // onboarding
+    "notice_period", "access_revoked", "final_pay", "exit_interview", "p45" // offboarding
+  ]).notNull(),
+  status: mysqlEnum("status", ["pending", "in_progress", "completed", "blocked"]).default("pending").notNull(),
+  completedAt: timestamp("completedAt"),
+  documentUrl: text("documentUrl"),
+  notes: text("notes"),
+  assignedToUserId: int("assignedToUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type OnboardingPipeline = typeof onboardingPipeline.$inferSelect;
+export type InsertOnboardingPipeline = typeof onboardingPipeline.$inferInsert;

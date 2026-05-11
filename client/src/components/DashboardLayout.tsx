@@ -29,6 +29,7 @@ import {
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
+  Gift, CalendarDays, Send, UserPlus,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -52,9 +53,11 @@ const incomeItems = [
   { icon: Home, label: "Student Accommodation", path: "/accommodation" },
   { icon: CreditCard, label: "Payment Hub", path: "/fintech" },
   { icon: UserCheck, label: "Donor CRM", path: "/donor-crm" },
+  { icon: Gift, label: "Gift Aid & CRM+", path: "/gift-aid" },
 ];
 const expenseItems = [
   { icon: Wallet, label: "Payroll", path: "/payroll" },
+  { icon: Wallet, label: "Payroll V3", path: "/payroll-v3" },
   { icon: ClipboardList, label: "Monthly Expenses", path: "/monthly-expenses" },
 ];
 const reconciliationItems = [{ icon: Scale, label: "Reconciliation", path: "/reconciliation" }];
@@ -62,6 +65,8 @@ const orgItems = [
   { icon: GitBranch, label: "Org Chart", path: "/org-chart" },
   { icon: MessageSquare, label: "Communications", path: "/communications" },
   { icon: Inbox, label: "Comms Hub", path: "/comms-hub" },
+  { icon: Send, label: "Comms Hub V3", path: "/comms-v3" },
+  { icon: CalendarDays, label: "Meetings & Onboarding", path: "/meetings" },
   { icon: Users, label: "Donors", path: "/donors" },
   { icon: Building2, label: "Campaigns", path: "/campaigns" },
   { icon: BarChart3, label: "Reports", path: "/reports" },

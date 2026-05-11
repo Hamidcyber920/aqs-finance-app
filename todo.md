@@ -1213,3 +1213,47 @@
 - [x] AI OCR: Wire into Compliance Cockpit training cert upload (auto-fills module, completedAt, expiresAt, provider)
 - [x] AI OCR: Wire into Compliance Cockpit policy doc upload (auto-fills title, version, reviewDate, owner)
 - [x] AI OCR: Wire into Decisions Register minutes upload (auto-fills motionText, proposer, seconder, votes, outcome, meetingDate)
+
+## Wave 2 Remaining Next Steps (May 11, 2026)
+
+- [x] Wire SmartDocumentUpload into Donors.tsx — "Scan Donor Letter" button, targetType="donor", auto-fills name/email/phone/address/giftAid/amount/date
+- [x] Add Decisions Register section to sendComplianceDigest — count of decisions past week, flag missing minutes/votes
+- [x] Bulk-approve on second-approver queue — checkbox column per row, "Approve Selected" button, Promise.all receipts.secondApprove
+
+## Wave 3 — People Module (May 11, 2026)
+
+### DB Schema
+- [x] DB: gift_aid_claims table (id, donorId, donationId, taxYear, claimStatus, hmrcRef, claimedAt, amount)
+- [x] DB: donor_segments table (id, donorId, segment enum: major/monthly/eid/friday/anonymous)
+- [x] DB: donor_campaigns table (id, donorId, campaignId, donationId, attributedAt)
+- [x] DB: payroll_v2 table (id, employeeId, employeeName, month, year, grossPay, incomeTax, nationalInsurance, pensionEmployee, pensionEmployer, netPay, ytdGross, ytdTax, ytdNI, payslipUrl, status, approvedById, approvedAt, notes)
+- [x] DB: comms_templates table (id, name, type enum: email/sms/letter, subject, body, category, isActive)
+- [x] DB: comms_outbox table (id, templateId, recipientType, recipientIds, subject, body, sentAt, status, sentCount, failCount)
+- [x] DB: trustee_meetings table (id, title, scheduledAt, location, status, agendaUrl, minutesUrl, transcriptUrl, notes)
+- [x] DB: meeting_agenda_items table (id, meetingId, itemNumber, title, description, ownerId, actionRequired)
+- [x] DB: onboarding_pipeline table (id, userId, stage enum: contract/id_check/dbs/induction/training/payslip, status, completedAt, notes, documentUrl)
+
+### Wave 3 Backend
+- [x] donors.updateSegment procedure — set donor segment (major/monthly/eid/friday/anonymous)
+- [x] donors.listLapsed procedure — donors who gave last year but not this year, with AI re-engagement draft
+- [x] donors.buildGiftAidCsv procedure — HMRC-ready CSV for all eligible donations in a tax year quarter
+- [x] donors.sendThankYou procedure — send personalised thank-you email within 24h of donation, queue via notifyOwner
+- [x] payroll.createV2 procedure — create payroll record with statutory deductions
+- [x] payroll.analyzePayslipV2 procedure — OCR payslip PDF via LLM, extract all fields
+- [x] payroll.listByEmployee procedure — per-employee payslip history with YTD
+- [x] comms.listTemplates / comms.upsertTemplate procedures
+- [x] comms.bulkSend procedure — send to trustee-all / staff-all / donors-by-segment with quiet hours + Friday filter
+- [x] comms.listOutbox procedure — paginated outbox with status
+- [x] meetings.list / meetings.upsert / meetings.delete procedures
+- [x] meetings.generateAgenda procedure — AI drafts agenda from open compliance actions + pending decisions
+- [x] meetings.transcribeMinutes procedure — accepts audio URL, calls Whisper, returns transcript
+- [x] meetings.extractDecisions procedure — AI parses transcript, auto-creates decision records
+- [x] onboarding.list / onboarding.upsert / onboarding.advanceStage procedures
+
+### Wave 3 Frontend
+- [x] Enhanced Donors page: segment badges, Gift Aid status column, "Build Gift Aid CSV" button, lapsed donor AI flag
+- [x] Payroll V2 page (/payroll-v2): per-employee dashboard, payslip upload OCR, manual entry, YTD stats
+- [x] Communications page (/communications): template library, compose & bulk send, outbox log
+- [x] Meetings page (/meetings): meeting list, schedule meeting, AI agenda, minutes upload + transcription, auto-extract decisions
+- [x] Onboarding pipeline page (/onboarding): kanban-style pipeline (contract → ID → DBS → induction → training → payslip)
+- [x] Add all new pages to sidebar and App.tsx routes
