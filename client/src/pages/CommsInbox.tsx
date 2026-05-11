@@ -191,6 +191,38 @@ export default function CommsInboxPage() {
     onError: (e) => toast.error(`Delete failed: ${e.message}`),
   });
 
+  const linkToReceipt = trpc.commsInbox.linkToReceipt.useMutation({
+    onSuccess: () => {
+      toast.success("Email linked to receipt");
+      setShowLinkReceiptDialog(false);
+      setReceiptSearchQuery("");
+      setSelectedReceiptId(null);
+      setLinkReceiptNote("");
+      refetchDetail();
+    },
+    onError: (e) => toast.error(`Link failed: ${e.message}`),
+  });
+
+  const classifyPriority = trpc.commsInbox.classifyPriority.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Priority set to ${data.priority} — ${data.reason}`);
+      refetchEmails();
+      refetchDetail();
+    },
+    onError: (e) => toast.error(`Classification failed: ${e.message}`),
+  });
+
+  // Link to Receipt dialog state
+  const [showLinkReceiptDialog, setShowLinkReceiptDialog] = useState(false);
+  const [receiptSearchQuery, setReceiptSearchQuery] = useState("");
+  const [selectedReceiptId, setSelectedReceiptId] = useState<number | null>(null);
+  const [linkReceiptNote, setLinkReceiptNote] = useState("");
+
+  const { data: receiptSearchResults = [] } = trpc.commsInbox.searchReceiptsForLink.useQuery(
+    { query: receiptSearchQuery },
+    { enabled: receiptSearchQuery.length >= 2 }
+  );
+
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handleMoveSection = () => {
     if (!movingEmailId || !moveTargetSectionId) return;
@@ -560,9 +592,28 @@ export default function CommsInboxPage() {
                     onClick={() => updateEmail.mutate({ id: (selectedEmail as any).id, status: "archived" })}>
                     <Archive className="w-3 h-3" />
                   </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+                    onClick={() => classifyPriority.mutate({ emailId: (selectedEmail as any).id })}
+                    disabled={classifyPriority.isPending}>
+                    {classifyPriority.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Tag className="w-3 h-3 mr-1" />}
+                    Auto-Priority
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-xs border-purple-500/40 text-purple-400 hover:bg-purple-500/10"
+                    onClick={() => setShowLinkReceiptDialog(true)}>
+                    <Paperclip className="w-3 h-3 mr-1" /> Link Receipt
+                  </Button>
                 </div>
               </div>
             </div>
+
+            {/* Linked receipt badge */}
+            {(selectedEmail as any).linkedReceiptId && (
+              <div className="mx-4 mt-2 flex items-center gap-2 text-xs text-purple-400 bg-purple-500/10 border border-purple-500/20 rounded-lg px-3 py-2">
+                <Paperclip className="w-3 h-3" />
+                <span>Linked to Receipt #{(selectedEmail as any).linkedReceiptId}</span>
+                {(selectedEmail as any).linkedReceiptNote && <span className="text-gray-400">— {(selectedEmail as any).linkedReceiptNote}</span>}
+              </div>
+            )}
 
             {/* Email body + AI panel */}
             <div className="flex-1 overflow-y-auto">
@@ -993,6 +1044,81 @@ export default function CommsInboxPage() {
               className="bg-indigo-600 hover:bg-indigo-700">
               {bulkAction.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Link to Receipt Dialog ────────────────────────────────────────────────── */}
+      <Dialog open={showLinkReceiptDialog} onOpenChange={setShowLinkReceiptDialog}>
+        <DialogContent className="bg-[#1a1f2e] border-white/10 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Paperclip className="w-4 h-4 text-purple-400" /> Link Email to Receipt
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs text-gray-400 mb-1 block">Search Receipts</Label>
+              <Input
+                placeholder="Search by description, vendor, amount..."
+                value={receiptSearchQuery}
+                onChange={e => setReceiptSearchQuery(e.target.value)}
+                className="bg-white/5 border-white/20 text-white placeholder:text-gray-500"
+              />
+            </div>
+            {receiptSearchResults.length > 0 && (
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {receiptSearchResults.map((r: any) => (
+                  <button
+                    key={r.id}
+                    onClick={() => setSelectedReceiptId(r.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                      selectedReceiptId === r.id
+                        ? "bg-purple-600/30 border border-purple-500/50 text-white"
+                        : "bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10"
+                    }`}
+                  >
+                    <div className="font-medium">{r.description || r.vendor || "Receipt"}</div>
+                    <div className="text-xs text-gray-400">
+                      {r.vendor && <span>{r.vendor} · </span>}
+                      {r.amount && <span>£{Number(r.amount).toFixed(2)} · </span>}
+                      {r.date && <span>{new Date(r.date).toLocaleDateString()}</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {receiptSearchQuery.length >= 2 && receiptSearchResults.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-3">No receipts found for "{receiptSearchQuery}"</p>
+            )}
+            {selectedReceiptId && (
+              <div>
+                <Label className="text-xs text-gray-400 mb-1 block">Note (optional)</Label>
+                <Input
+                  placeholder="e.g. Invoice confirmation email"
+                  value={linkReceiptNote}
+                  onChange={e => setLinkReceiptNote(e.target.value)}
+                  className="bg-white/5 border-white/20 text-white placeholder:text-gray-500"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLinkReceiptDialog(false)}
+              className="border-white/20 text-gray-300 hover:text-white hover:bg-white/10">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedEmailId && selectedReceiptId && linkToReceipt.mutate({
+                emailId: selectedEmailId,
+                receiptId: selectedReceiptId,
+                note: linkReceiptNote || undefined,
+              })}
+              disabled={!selectedReceiptId || linkToReceipt.isPending}
+              className="bg-purple-600 hover:bg-purple-700">
+              {linkToReceipt.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Paperclip className="w-4 h-4 mr-2" />}
+              Link Receipt
             </Button>
           </DialogFooter>
         </DialogContent>

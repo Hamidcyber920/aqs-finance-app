@@ -248,3 +248,47 @@ describe("Wave 4 Round 2 — CommsInbox search/filter/bulk/template-reply", () =
     expect(src).toContain("clearFilters");
   });
 });
+
+// ─── Wave 4 Round 3: Email Priority, Gmail Sync, Email-Receipt Link ────────────
+describe("Wave 4 Round 3 — Email Priority, Gmail Sync, Email-Receipt Link", () => {
+  it("commsInbox.classifyPriority procedure exists in router source", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf-8");
+    expect(src).toContain("classifyPriority");
+    expect(src).toContain("priority");
+  });
+
+  it("commsInbox.linkToReceipt procedure exists in router source", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf-8");
+    expect(src).toContain("linkToReceipt");
+    expect(src).toContain("linkedReceiptId");
+  });
+
+  it("commsInbox.searchReceiptsForLink procedure exists in router source", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf-8");
+    expect(src).toContain("searchReceiptsForLink");
+  });
+
+  it("scheduledJobs.ts contains syncGmailInbox function", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "scheduledJobs.ts"), "utf-8");
+    expect(src).toContain("syncGmailInbox");
+    expect(src).toContain("Gmail sync");
+  });
+
+  it("scheduledJobs.ts registers hourly Gmail sync cron", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "scheduledJobs.ts"), "utf-8");
+    expect(src).toContain("syncGmailInbox");
+    expect(src).toContain("registerScheduledJobs");
+  });
+
+  it("inbound_emails schema has linkedReceiptId and linkedReceiptNote columns", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../drizzle/schema.ts"), "utf-8");
+    expect(src).toContain("linkedReceiptId");
+    expect(src).toContain("linkedReceiptNote");
+  });
+
+  it("gmailWebhook.ts handles push notifications", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "gmailWebhook.ts"), "utf-8");
+    expect(src).toContain("gmail/push");
+    expect(src).toContain("Pub/Sub");
+  });
+});

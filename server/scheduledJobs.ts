@@ -345,7 +345,12 @@ export function registerScheduledJobs() {
     sendComplianceDigest().catch(console.error);
   }, { timezone: "Europe/London" });
 
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30)");
+  // Every hour between 06:00 and 22:00 UK time — auto-sync Gmail inbox
+  cron.schedule("0 6-22 * * *", () => {
+    syncGmailInbox().catch(console.error);
+  }, { timezone: "Europe/London" });
+
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
@@ -835,5 +840,157 @@ export async function sendComplianceDigest() {
     console.log(`[Scheduled] Compliance digest sent to Dr. Hamid: ${totalIssues} issues (${criticalActions.length} critical, ${overdueActions.length} overdue, ${trainingGaps.length} training, ${policyReviews.length} policies, ${decisionsNeedingAttention.length} decisions flagged, ${recentDecisions.length} decisions this week, ${quorumFailedMeetings.length} quorum failures)`);
   } catch (e) {
     console.error("[Scheduled] Compliance digest failed:", e);
+  }
+}
+
+// ─── Scheduled Gmail Inbox Sync ───────────────────────────────────────────────
+/**
+ * Runs every hour between 06:00 and 22:00 UK time.
+ * Fetches the latest 20 emails from Gmail and stores any new ones in inbound_emails.
+ * Uses the same Gmail OAuth tokens as the commsInbox.fetchFromGmail procedure.
+ */
+async function syncGmailInbox() {
+  console.log("[Scheduled] Running Gmail inbox sync...");
+  try {
+    const db = await getDb();
+    if (!db) { console.log("[Scheduled] Gmail sync: DB unavailable, skipping."); return; }
+
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+    const fromEmail = process.env.GMAIL_FROM_EMAIL;
+    if (!clientId || !clientSecret || !refreshToken || !fromEmail) {
+      console.log("[Scheduled] Gmail sync: credentials not configured, skipping.");
+      return;
+    }
+
+    // Get access token
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    const tokenData = await tokenRes.json() as { access_token?: string };
+    if (!tokenData.access_token) {
+      console.log("[Scheduled] Gmail sync: failed to get access token.");
+      return;
+    }
+    const accessToken = tokenData.access_token;
+
+    // Fetch latest 20 messages from INBOX
+    const listRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&labelIds=INBOX`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const listData = await listRes.json() as { messages?: { id: string }[] };
+    const messages = listData.messages ?? [];
+
+    const { inboundEmails, emailSections } = await import("../drizzle/schema");
+    const { invokeLLM } = await import("./_core/llm");
+    const { eq, like, or, desc } = await import("drizzle-orm");
+
+    // Get or create default section
+    let defaultSectionId: number | null = null;
+    const sections = await db.select().from(emailSections).limit(1);
+    if (sections.length > 0) defaultSectionId = sections[0].id;
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const msg of messages) {
+      // Check if already imported
+      const existing = await db.select({ id: inboundEmails.id })
+        .from(inboundEmails)
+        .where(eq(inboundEmails.gmailMessageId, msg.id))
+        .limit(1);
+      if (existing.length > 0) { skipped++; continue; }
+
+      // Fetch full message
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const msgData = await msgRes.json() as any;
+
+      const headers: { name: string; value: string }[] = msgData.payload?.headers ?? [];
+      const getHeader = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value ?? "";
+
+      const subject = getHeader("Subject") || "(no subject)";
+      const fromRaw = getHeader("From");
+      const fromMatch = fromRaw.match(/^(?:"?([^"<]+)"?\s*)?<?([^>]+)>?$/);
+      const fromName = fromMatch?.[1]?.trim() ?? "";
+      const fromEmail2 = fromMatch?.[2]?.trim() ?? fromRaw;
+      const toEmail = getHeader("To");
+      const snippet = (msgData.snippet ?? "").substring(0, 500);
+      const threadId = msgData.threadId ?? null;
+      const internalDate = msgData.internalDate ? new Date(parseInt(msgData.internalDate)) : new Date();
+
+      // Extract body
+      let bodyText = "";
+      let bodyHtml = "";
+      const extractBody = (payload: any) => {
+        if (!payload) return;
+        if (payload.mimeType === "text/plain" && payload.body?.data) {
+          bodyText = Buffer.from(payload.body.data, "base64").toString("utf-8");
+        } else if (payload.mimeType === "text/html" && payload.body?.data) {
+          bodyHtml = Buffer.from(payload.body.data, "base64").toString("utf-8");
+        }
+        if (payload.parts) payload.parts.forEach(extractBody);
+      };
+      extractBody(msgData.payload);
+
+      // AI priority classification
+      let autoPriority: "urgent" | "high" | "normal" | "low" = "normal";
+      try {
+        const priorityRes = await invokeLLM({
+          messages: [
+            { role: "system", content: "You are an email triage assistant for a UK charity. Classify the email priority as one of: urgent, high, normal, low. Respond with JSON only: {\"priority\": \"urgent|high|normal|low\"}" },
+            { role: "user", content: `Subject: ${subject}\nFrom: ${fromEmail2}\nSnippet: ${snippet}` },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "email_priority",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: { priority: { type: "string", enum: ["urgent", "high", "normal", "low"] } },
+                required: ["priority"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const content = priorityRes.choices[0].message.content;
+        const p = JSON.parse(typeof content === "string" ? content : JSON.stringify(content)) as { priority: "urgent" | "high" | "normal" | "low" };
+        autoPriority = p.priority;
+      } catch { /* fallback to normal */ }
+
+      await db.insert(inboundEmails).values({
+        gmailMessageId: msg.id,
+        gmailThreadId: threadId,
+        fromEmail: fromEmail2,
+        fromName: fromName || null,
+        toEmail: toEmail || null,
+        subject,
+        bodyText: bodyText || null,
+        bodyHtml: bodyHtml || null,
+        snippet: snippet || null,
+        sectionId: defaultSectionId,
+        priority: autoPriority,
+        status: "unread",
+        receivedAt: internalDate,
+      });
+      imported++;
+    }
+
+    console.log(`[Scheduled] Gmail sync complete: ${imported} imported, ${skipped} skipped.`);
+  } catch (e) {
+    console.error("[Scheduled] Gmail sync failed:", e);
   }
 }

@@ -1583,6 +1583,9 @@ export const inboundEmails = mysqlTable("inbound_emails", {
   aiKeyPoints: json("aiKeyPoints").$type<string[]>().default([]),
   aiActionRequired: boolean("aiActionRequired").default(false).notNull(),
   aiProcessedAt: timestamp("aiProcessedAt"),
+  // Linked receipt/expense
+  linkedReceiptId: int("linkedReceiptId"),                      // FK to receipts.id
+  linkedReceiptNote: varchar("linkedReceiptNote", { length: 255 }),
   // Assignment
   assignedToUserId: int("assignedToUserId"),                    // FK to users.id
   assignedAt: timestamp("assignedAt"),
@@ -1617,7 +1620,7 @@ export const emailActivityLog = mysqlTable("email_activity_log", {
   id: int("id").autoincrement().primaryKey(),
   emailId: int("emailId").notNull(),
   userId: int("userId").notNull(),
-  action: mysqlEnum("action", ["received", "read", "moved_section", "assigned", "actioned", "archived", "replied", "forwarded", "ocr_processed", "ai_summarised"]).notNull(),
+  action: mysqlEnum("action", ["received", "read", "moved_section", "assigned", "actioned", "archived", "replied", "forwarded", "ocr_processed", "ai_summarised", "linked_receipt"]).notNull(),
   fromSectionId: int("fromSectionId"),
   toSectionId: int("toSectionId"),
   notes: text("notes"),

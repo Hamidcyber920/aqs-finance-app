@@ -490,6 +490,38 @@ export const commsInboxRouter = router({
           status: "unread",
           priority: "normal",
         });
+        // AI priority classification
+        let autoPriority: "urgent" | "high" | "normal" | "low" = "normal";
+        try {
+          const priorityRes = await invokeLLM({
+            messages: [
+              { role: "system", content: "You are an email triage assistant for a UK charity. Classify the email priority as one of: urgent, high, normal, low. Respond with JSON only: {\"priority\": \"urgent|high|normal|low\"}" },
+              { role: "user", content: `Subject: ${subject}\nFrom: ${fromEmail}\nSnippet: ${snippet}` },
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "email_priority",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: { priority: { type: "string", enum: ["urgent", "high", "normal", "low"] } },
+                  required: ["priority"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          });
+          const content = priorityRes.choices[0].message.content;
+          const p = JSON.parse(typeof content === "string" ? content : JSON.stringify(content)) as { priority: "urgent" | "high" | "normal" | "low" };
+          autoPriority = p.priority;
+        } catch { /* fallback to normal */ }
+        // Update the inserted email with the auto-classified priority
+        if (autoPriority !== "normal") {
+          await db.update(inboundEmails)
+            .set({ priority: autoPriority })
+            .where(eq(inboundEmails.gmailMessageId, msg.id));
+        }
         await db.insert(emailActivityLog).values({
           emailId: 0, // will be updated below if needed
           userId: ctx.user.id,
@@ -663,6 +695,97 @@ export const commsInboxRouter = router({
         }))
       );
       return { updated: input.emailIds.length };
+    }),
+
+  // ── Link email to a receipt/expense record ─────────────────────────────────
+  linkToReceipt: protectedProcedure
+    .input(z.object({
+      emailId: z.number(),
+      receiptId: z.number(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.update(inboundEmails)
+        .set({ linkedReceiptId: input.receiptId, linkedReceiptNote: input.note ?? null })
+        .where(eq(inboundEmails.id, input.emailId));
+      await db.insert(emailActivityLog).values({
+        emailId: input.emailId,
+        userId: ctx.user.id,
+        action: "linked_receipt",
+        notes: `Linked to receipt #${input.receiptId}${input.note ? ': ' + input.note : ''}`,
+      });
+      return { success: true };
+    }),
+
+  // ── Search receipts for the link picker ──────────────────────────────────────
+  searchReceiptsForLink: protectedProcedure
+    .input(z.object({
+      query: z.string().min(1).max(100),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { receipts } = await import("../../drizzle/schema");
+      const q = `%${input.query}%`;
+      const rows = await db
+        .select({
+          id: receipts.id,
+          vendor: receipts.vendor,
+          amount: receipts.amount,
+          receiptDate: receipts.receiptDate,
+          categoryName: receipts.categoryName,
+          status: receipts.status,
+        })
+        .from(receipts)
+        .where(or(
+          like(receipts.vendor, q),
+          like(receipts.categoryName, q),
+        ))
+        .orderBy(desc(receipts.receiptDate))
+        .limit(20);
+      return rows;
+    }),
+
+  // ── AI priority classifier ────────────────────────────────────────────────────
+  classifyPriority: protectedProcedure
+    .input(z.object({
+      emailId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [email] = await db.select().from(inboundEmails).where(eq(inboundEmails.id, input.emailId));
+      if (!email) throw new TRPCError({ code: "NOT_FOUND", message: "Email not found" });
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "You are an email triage assistant for a UK charity. Classify the email priority as one of: urgent, high, normal, low. Respond with JSON only: {\"priority\": \"urgent|high|normal|low\", \"reason\": \"brief reason\"}" },
+          { role: "user", content: `Subject: ${email.subject}\nFrom: ${email.fromEmail}\nSnippet: ${email.snippet ?? ''}` },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "email_priority",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                priority: { type: "string", enum: ["urgent", "high", "normal", "low"] },
+                reason: { type: "string" },
+              },
+              required: ["priority", "reason"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+      const content = response.choices[0].message.content;
+      const parsed = JSON.parse(typeof content === "string" ? content : JSON.stringify(content)) as { priority: "urgent" | "high" | "normal" | "low"; reason: string };
+      await db.update(inboundEmails)
+        .set({ priority: parsed.priority })
+        .where(eq(inboundEmails.id, input.emailId));
+      return { priority: parsed.priority, reason: parsed.reason };
     }),
 
   // ── Per-section unread counts (for sidebar badges) ───────────────────────

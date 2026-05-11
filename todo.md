@@ -1336,8 +1336,22 @@
 
 ## Wave 4 Next Steps Round 2 (May 11, 2026)
 
-- [ ] Backend: commsInbox.searchEmails — full-text search across sender/subject/body, filter by section/priority/read status/date range
-- [ ] Backend: commsInbox.bulkAction — accept array of emailIds + action (markRead, markUnread, archive, moveToSection), execute in batch
-- [ ] Frontend: CommsInbox.tsx — search bar at top of email list with debounce, filter chips (section, priority, unread, date)
-- [ ] Frontend: CommsInbox.tsx — checkbox column in email list, floating bulk action bar when items selected (Mark Read, Move, Archive)
-- [ ] Frontend: CommsInbox.tsx — "Use Template" dropdown in Reply tab, fetches commsV3 templates and pre-fills compose area
+- [x] Backend: commsInbox.searchEmails — full-text search across sender/subject/body, filter by section/priority/read status/date range
+- [x] Backend: commsInbox.bulkAction — accept array of emailIds + action (markRead, markUnread, archive, moveToSection), execute in batch
+- [x] Frontend: CommsInbox.tsx — search bar at top of email list with debounce, filter chips (section, priority, unread, date)
+- [x] Frontend: CommsInbox.tsx — checkbox column in email list, floating bulk action bar when items selected (Mark Read, Move, Archive)
+- [x] Frontend: CommsInbox.tsx — "Use Template" dropdown in Reply tab, fetches commsV3 templates and pre-fills compose area
+
+## Wave 4 Next Steps Round 3 (May 11, 2026)
+
+### Email Priority Auto-Detection
+- [x] Backend: commsInbox — on fetchFromGmail, run LLM classifier to set priority (urgent/high/normal/low) based on subject+sender+snippet
+- [x] Backend: gmailWebhook.ts — also run priority classifier on push-triggered email fetch
+
+### Scheduled Gmail Sync
+- [x] Backend: scheduledJobs.ts — add hourly cron job that calls fetchFromGmail automatically (every hour, 06:00–22:00)
+
+### Email-to-Receipt Linking
+- [x] Backend: commsInbox.linkToReceipt — link emailId to receiptId, store in email_activity_log with action="linked_receipt"
+- [x] Backend: commsInbox.searchReceiptsForLink — search receipts/expenses by keyword for the link picker dialog
+- [x] Frontend: CommsInbox.tsx — "Link to Receipt" button in email detail, opens search dialog, shows linked receipt badge
