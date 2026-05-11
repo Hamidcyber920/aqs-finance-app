@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Upload, Camera, FileText, AlertTriangle, CheckCircle, Loader2, X, FileSpreadsheet, UserCheck, UserPlus, Users, ArrowRight, Eye } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 export type ModuleType =
@@ -321,6 +322,8 @@ export function SmartUpload({
     name: string; email?: string; phone?: string; moduleType: ModuleType;
   } | null>(null);
   const [fieldDiffs, setFieldDiffs] = useState<FieldDiff[]>([]);
+  // Per-row checkbox: key = field key, value = whether to include this change
+  const [checkedFields, setCheckedFields] = useState<Record<string, boolean>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extractMutation = trpc.documents.extract.useMutation();
@@ -416,6 +419,7 @@ export function SmartUpload({
     setSelectedMatch(null);
     setMatchQueryInput(null);
     setFieldDiffs([]);
+    setCheckedFields({});
   };
 
   /** After user selects a match, build the diff and move to review step */
@@ -428,13 +432,31 @@ export function SmartUpload({
       labels
     );
     setFieldDiffs(diffs);
+    // Default all rows to checked
+    const initial: Record<string, boolean> = {};
+    for (const d of diffs) initial[d.key] = true;
+    setCheckedFields(initial);
     setMatchStep("review");
   };
 
-  /** User confirmed the diff — now actually call onConfirm to save */
+  /** User confirmed the diff — now actually call onConfirm to save, passing only checked fields */
   const handleConfirmSave = () => {
     if (!result || !selectedMatch) return;
-    onConfirm({ ...result, matchedProfile: selectedMatch, createNew: false });
+    // Build a filtered extractedData containing only the checked fields
+    const filteredData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(result.extractedData as Record<string, unknown>)) {
+      // Always pass through non-diff fields (bulk records, etc.)
+      if (key === "records" || key === "transactions") {
+        filteredData[key] = value;
+        continue;
+      }
+      // Only include fields that are in the diff AND are checked
+      const inDiff = fieldDiffs.some(d => d.key === key);
+      if (!inDiff || checkedFields[key]) {
+        filteredData[key] = value;
+      }
+    }
+    onConfirm({ ...result, extractedData: filteredData, matchedProfile: selectedMatch, createNew: false });
     resetAndClose();
   };
 
@@ -674,6 +696,24 @@ export function SmartUpload({
                 </p>
               </div>
 
+              {/* Select/deselect all */}
+              {fieldDiffs.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Checkbox
+                    id="select-all"
+                    checked={Object.values(checkedFields).every(Boolean)}
+                    onCheckedChange={(checked) => {
+                      const next: Record<string, boolean> = {};
+                      for (const d of fieldDiffs) next[d.key] = !!checked;
+                      setCheckedFields(next);
+                    }}
+                  />
+                  <label htmlFor="select-all" className="cursor-pointer select-none">
+                    {Object.values(checkedFields).filter(Boolean).length} of {fieldDiffs.length} change{fieldDiffs.length !== 1 ? "s" : ""} selected
+                  </label>
+                </div>
+              )}
+
               {fieldDiffs.length === 0 ? (
                 <Card className="border-amber-400/40 bg-amber-50/30 dark:bg-amber-950/20">
                   <CardContent className="pt-3 pb-3">
@@ -695,8 +735,21 @@ export function SmartUpload({
                     </thead>
                     <tbody>
                       {fieldDiffs.map((diff, i) => (
-                        <tr key={diff.key} className={`border-b last:border-0 ${i % 2 === 0 ? "bg-background" : "bg-muted/20"}`}>
-                          <td className="px-4 py-3 font-medium text-foreground">{diff.label}</td>
+                        <tr
+                          key={diff.key}
+                          className={`border-b last:border-0 transition-opacity ${i % 2 === 0 ? "bg-background" : "bg-muted/20"} ${!checkedFields[diff.key] ? "opacity-40" : ""}`}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                checked={!!checkedFields[diff.key]}
+                                onCheckedChange={(checked) =>
+                                  setCheckedFields(prev => ({ ...prev, [diff.key]: !!checked }))
+                                }
+                              />
+                              <span className={`font-medium ${checkedFields[diff.key] ? "text-foreground" : "text-muted-foreground"}`}>{diff.label}</span>
+                            </div>
+                          </td>
                           <td className="px-4 py-3 text-muted-foreground">
                             {diff.isNew ? (
                               <span className="italic text-xs text-muted-foreground/60">empty</span>
@@ -738,10 +791,14 @@ export function SmartUpload({
                   <Button variant="outline" onClick={handleClose}>Cancel</Button>
                   <Button
                     onClick={handleConfirmSave}
+                    disabled={fieldDiffs.length > 0 && Object.values(checkedFields).every(v => !v)}
                     className="gap-1"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    {fieldDiffs.length === 0 ? "No Changes to Save" : `Confirm & Save ${fieldDiffs.length} Change${fieldDiffs.length !== 1 ? "s" : ""}`}
+                    {fieldDiffs.length === 0
+                      ? "No Changes to Save"
+                      : `Confirm & Save ${Object.values(checkedFields).filter(Boolean).length} Change${Object.values(checkedFields).filter(Boolean).length !== 1 ? "s" : ""}`
+                    }
                   </Button>
                 </div>
               </div>

@@ -6,6 +6,7 @@ import {
   Plus, X, Check, Users, Shield, Briefcase,
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
+import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
 import { usePermissions } from "@/hooks/usePermissions";
 
 const T = {
@@ -392,14 +393,17 @@ function AddMemberForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: (
 
 export default function TrusteesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
+  const [lastMergedId, setLastMergedId] = useState<number | null>(null);
   const { data, refetch } = trpc.trustees.list.useQuery();
   const { canAdd } = usePermissions();
   const mergeMutation = trpc.trustees.mergeFromScan.useMutation({
-    onSuccess: (res) => {
+    onSuccess: (res: any) => {
       refetch();
+      // snapshotId is returned by the backend but not yet in the inferred type
+      if (res.snapshotId && res.snapshotId > 0) setLastMergedId(res.snapshotId);
       toast.success(`Profile updated — ${res.updatedFields.length} field${res.updatedFields.length !== 1 ? 's' : ''} merged: ${res.updatedFields.join(', ')}`);
     },
-    onError: (e) => toast.error(`Merge failed: ${e.message}`),
+    onError: (e: any) => toast.error(`Merge failed: ${e.message}`),
   });
   const allMembers: any[] = Array.isArray(data) ? data : [];
   const active = allMembers.filter((t: any) => t.isActive !== false);
@@ -457,9 +461,11 @@ export default function TrusteesPage() {
                     postcode: d.postcode,
                     nokName: d.nokName,
                     nokPhone: d.nokPhone,
+                    nokEmail: d.nokEmail,
                     nokRelationship: d.nokRelationship,
                     notes: d.notes,
                   });
+                  setLastMergedId(result.matchedProfile.id);
                 } else {
                   // No match — open the Add Member form pre-filled
                   toast.info(`AI extracted: ${d.name || d.fullName || 'staff member'}. Complete the record below.`);
@@ -475,6 +481,16 @@ export default function TrusteesPage() {
             )}
           </div>
         </div>
+
+        {lastMergedId !== null && (
+          <div className="mb-4">
+            <ScanMergeUndoBanner
+              tableName="trustees"
+              recordId={lastMergedId}
+              onReverted={() => { refetch(); setLastMergedId(null); }}
+            />
+          </div>
+        )}
 
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:12,marginBottom:24,animation:"fadeUp 0.5s ease 60ms both" }}>
           {[

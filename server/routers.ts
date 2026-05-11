@@ -1039,35 +1039,41 @@ export const appRouter = router({
         nokRelationship: z.string().nullish(),
         notes: z.string().nullish(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         // Helper: normalise any date string to YYYY-MM-DD
         const normaliseDate = (v: string): string => {
-          // DD/MM/YYYY or DD-MM-YYYY
           const ukMatch = v.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
           if (ukMatch) return `${ukMatch[3]}-${ukMatch[2].padStart(2,'0')}-${ukMatch[1].padStart(2,'0')}`;
-          // Already ISO YYYY-MM-DD
           if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-          // Try parsing as a general date
           const d = new Date(v);
           if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
           return v;
         };
         const { id, ...fields } = input;
-        // Fetch existing record so we can protect non-null fields
-        const { trustees: trusteesTable } = await import('../drizzle/schema');
+        const { trustees: trusteesTable, scanMergeSnapshots } = await import('../drizzle/schema');
+        // Fetch existing record so we can protect non-null fields and snapshot it
         const [existing] = await db.select().from(trusteesTable).where(eq(trusteesTable.id, id)).limit(1);
+        // Save snapshot BEFORE applying any changes
+        let snapshotId: number | null = null;
+        if (existing) {
+          const [snapResult] = await db.insert(scanMergeSnapshots).values({
+            tableName: 'trustees',
+            recordId: id,
+            snapshotJson: JSON.stringify(existing),
+            mergedByUserId: ctx.user.id,
+            mergedByName: ctx.user.name,
+          });
+          snapshotId = (snapResult as any).insertId ?? null;
+        }
         const updates: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(fields)) {
           if (v !== undefined && v !== null && v !== '') {
             // GUARD: never overwrite the member's own phone with a NOK phone value.
-            // If the existing record already has a phone number, skip the phone field
-            // (the AI sometimes puts the NOK contact number in the phone field).
             if (k === 'phone' && existing?.phone && existing.phone.trim() !== '') {
-              continue; // preserve existing phone
+              continue;
             }
-            // Normalise date fields
             if ((k === 'dateOfBirth' || k === 'date') && typeof v === 'string') {
               updates[k] = normaliseDate(v);
             } else {
@@ -1078,7 +1084,7 @@ export const appRouter = router({
         if (Object.keys(updates).length > 0) {
           await db.update(trusteesTable).set(updates as any).where(eq(trusteesTable.id, id));
         }
-        return { success: true, updatedFields: Object.keys(updates) };
+        return { success: true, updatedFields: Object.keys(updates), snapshotId };
       }),
   }),
 
@@ -2637,19 +2643,33 @@ export const appRouter = router({
         giftAid: z.boolean().nullish(),
         notes: z.string().nullish(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         const { id, ...fields } = input;
+        const { donors: donorsTable, scanMergeSnapshots } = await import('../drizzle/schema');
+        // Fetch existing record for snapshot
+        const [existing] = await db.select().from(donorsTable).where(eq(donorsTable.id, id)).limit(1);
+        // Save snapshot BEFORE applying any changes
+        let snapshotId: number | null = null;
+        if (existing) {
+          const [snapResult] = await db.insert(scanMergeSnapshots).values({
+            tableName: 'donors',
+            recordId: id,
+            snapshotJson: JSON.stringify(existing),
+            mergedByUserId: ctx.user.id,
+            mergedByName: ctx.user.name,
+          });
+          snapshotId = (snapResult as any).insertId ?? null;
+        }
         const updates: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(fields)) {
           if (v !== undefined && v !== null && v !== '') updates[k] = v;
         }
         if (Object.keys(updates).length > 0) {
-          const { donors: donorsTable } = await import('../drizzle/schema');
           await db.update(donorsTable).set(updates as any).where(eq(donorsTable.id, id));
         }
-        return { success: true, updatedFields: Object.keys(updates) };
+        return { success: true, updatedFields: Object.keys(updates), snapshotId };
       }),
   }),
   // ─── EMAIL CAMPAIGNS ──────────────────────────────────────────────────────
@@ -3928,11 +3948,11 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
             if (s > 0.3) candidates.push({ id: row.id, name: row.fullName, subtitle: row.role, email: row.email, phone: row.phone, score: s, table: 'trustees', currentFields: { fullName: row.fullName, role: row.role, email: row.email, phone: row.phone, dateOfBirth: row.dateOfBirth, addressLine1: row.addressLine1, addressLine2: row.addressLine2, city: row.city, postcode: row.postcode, nokName: row.nokName, nokPhone: row.nokPhone, nokEmail: row.nokEmail, nokRelationship: row.nokRelationship, notes: row.notes } });
           }
           const [spRows] = await db.execute(
-            'SELECT sp.id, COALESCE(sp.fullName, u.name) AS displayName, u.email, sp.contractType FROM staff_profiles sp JOIN users u ON sp.userId = u.id LIMIT 200'
+            'SELECT sp.id, COALESCE(sp.fullName, u.name) AS displayName, u.email, sp.fullName, sp.contractType, sp.niNumber, sp.taxCode, sp.bankName, sp.bankAccountNumber, sp.bankSortCode, sp.startDate, sp.annualSalary, sp.hourlyRate FROM staff_profiles sp JOIN users u ON sp.userId = u.id LIMIT 200'
           ) as any;
           for (const row of (spRows as any[])) {
             const s = scoreCandidate(row.displayName, row.email);
-            if (s > 0.3) candidates.push({ id: row.id, name: row.displayName, subtitle: row.contractType || 'Staff', email: row.email, score: s, table: 'staff_profiles' });
+            if (s > 0.3) candidates.push({ id: row.id, name: row.displayName, subtitle: row.contractType || 'Staff', email: row.email, score: s, table: 'staff_profiles', currentFields: { fullName: row.fullName, email: row.email, contractType: row.contractType, niNumber: row.niNumber, taxCode: row.taxCode, bankName: row.bankName, bankAccountNumber: row.bankAccountNumber, bankSortCode: row.bankSortCode, startDate: row.startDate, annualSalary: row.annualSalary, hourlyRate: row.hourlyRate } });
           }
           const [omRows] = await db.execute(
             'SELECT id, name, title FROM org_members WHERE isActive = 1 LIMIT 200'
@@ -3945,11 +3965,11 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 
         if (donorTypes.includes(input.moduleType)) {
           const [donorRows] = await db.execute(
-            'SELECT id, name, email, phone FROM donors LIMIT 500'
+            'SELECT id, name, email, phone, address, isRegular, notes FROM donors LIMIT 500'
           ) as any;
           for (const row of (donorRows as any[])) {
             const s = scoreCandidate(row.name, row.email, row.phone);
-            if (s > 0.3) candidates.push({ id: row.id, name: row.name, subtitle: 'Donor', email: row.email, phone: row.phone, score: s, table: 'donors' });
+            if (s > 0.3) candidates.push({ id: row.id, name: row.name, subtitle: 'Donor', email: row.email, phone: row.phone, score: s, table: 'donors', currentFields: { name: row.name, email: row.email, phone: row.phone, address: row.address, isRegular: row.isRegular, notes: row.notes } });
           }
         }
 
@@ -4818,6 +4838,70 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
       );
       return rows[0] as unknown as any[];
     }),
+  }),
+
+  // ─── SCAN MERGE UNDO ──────────────────────────────────────────────────────
+  scanMerge: router({
+    /**
+     * Revert a scan-merge by restoring the record from the snapshot.
+     * Only allowed within 10 minutes of the merge (enforced server-side).
+     */
+    revert: seniorProcedure
+      .input(z.object({ snapshotId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { scanMergeSnapshots, trustees: trusteesTable, donors: donorsTable } = await import('../drizzle/schema');
+        // Fetch the snapshot
+        const [snap] = await db.select().from(scanMergeSnapshots).where(eq(scanMergeSnapshots.id, input.snapshotId)).limit(1);
+        if (!snap) throw new TRPCError({ code: 'NOT_FOUND', message: 'Snapshot not found' });
+        // Enforce 10-minute window
+        const ageMs = Date.now() - new Date(snap.mergedAt).getTime();
+        if (ageMs > 10 * 60 * 1000) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Undo window has expired (10 minutes)' });
+        }
+        // Parse the snapshot
+        const original = JSON.parse(snap.snapshotJson);
+        // Restore the record
+        if (snap.tableName === 'trustees') {
+          // Strip non-updatable fields
+          const { id: _id, createdAt: _ca, updatedAt: _ua, ...restoreFields } = original;
+          await db.update(trusteesTable).set(restoreFields).where(eq(trusteesTable.id, snap.recordId));
+        } else if (snap.tableName === 'donors') {
+          const { id: _id, createdAt: _ca, updatedAt: _ua, ...restoreFields } = original;
+          await db.update(donorsTable).set(restoreFields).where(eq(donorsTable.id, snap.recordId));
+        } else {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `Revert not supported for table: ${snap.tableName}` });
+        }
+        return { success: true, tableName: snap.tableName, recordId: snap.recordId };
+      }),
+
+    /**
+     * Get the most recent snapshot for a record (to check if undo is available).
+     * Returns null if no snapshot exists or the 10-minute window has passed.
+     */
+    getLatest: seniorProcedure
+      .input(z.object({ tableName: z.string(), recordId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return null;
+        const { scanMergeSnapshots } = await import('../drizzle/schema');
+        const [snap] = await db
+          .select()
+          .from(scanMergeSnapshots)
+          .where(
+            and(
+              eq(scanMergeSnapshots.tableName, input.tableName),
+              eq(scanMergeSnapshots.recordId, input.recordId)
+            )
+          )
+          .orderBy(sql`mergedAt DESC`)
+          .limit(1);
+        if (!snap) return null;
+        const ageMs = Date.now() - new Date(snap.mergedAt).getTime();
+        if (ageMs > 10 * 60 * 1000) return null; // expired
+        return { snapshotId: snap.id, mergedAt: snap.mergedAt, mergedByName: snap.mergedByName, expiresInMs: 10 * 60 * 1000 - ageMs };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

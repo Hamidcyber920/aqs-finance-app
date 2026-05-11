@@ -1246,3 +1246,18 @@ export const commsReplies = mysqlTable("comms_replies", {
 });
 export type CommsReply = typeof commsReplies.$inferSelect;
 export type InsertCommsReply = typeof commsReplies.$inferInsert;
+
+// ─── SCAN MERGE SNAPSHOTS (undo/revert support) ───────────────────────────────
+// Stores a JSON snapshot of a record immediately before a scan-merge overwrites it.
+// The revert procedure restores the record from this snapshot within 10 minutes.
+export const scanMergeSnapshots = mysqlTable("scan_merge_snapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  tableName: varchar("tableName", { length: 100 }).notNull(),  // e.g. "trustees", "donors"
+  recordId: int("recordId").notNull(),
+  snapshotJson: text("snapshotJson").notNull(),  // JSON.stringify of the full record before merge
+  mergedByUserId: int("mergedByUserId"),
+  mergedByName: varchar("mergedByName", { length: 200 }),
+  mergedAt: timestamp("mergedAt").defaultNow().notNull(),
+});
+export type ScanMergeSnapshot = typeof scanMergeSnapshots.$inferSelect;
+export type InsertScanMergeSnapshot = typeof scanMergeSnapshots.$inferInsert;

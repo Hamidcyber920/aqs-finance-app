@@ -1117,3 +1117,15 @@
 - [x] Add pre-save confirmation step in SmartUpload: show table of proposed field changes (field | current | new) before committing
 - [x] matchProfile response must return current field values of matched record for diff display
 - [x] Update Trustees.tsx NOK card to display nokEmail (was already implemented)
+
+## Suggested Next Steps Implementation (May 2026)
+- [x] Extend matchProfile currentFields to donors table (name, email, phone, addressLine1, city, postcode, giftAid, notes)
+- [x] Extend matchProfile currentFields to staff_profiles table (fullName, contractType, niNumber, taxCode)
+- [x] SmartUpload diff table: add per-row checkbox so user can deselect individual proposed changes before saving
+- [x] SmartUpload: pass only checked fields to onConfirm so merge only applies selected changes
+- [x] DB: scan_merge_snapshots table (id, tableName, recordId, snapshotJson, mergedBy, mergedAt)
+- [x] Backend: trustees.mergeFromScan — save snapshot before merge, return snapshotId
+- [x] Backend: donors.mergeFromScan — save snapshot before merge, return snapshotId
+- [x] Backend: scanMerge.revert procedure — restore record from snapshot (only within 10 min)
+- [x] Frontend: Trustees page — show "Undo last scan import" toast/button for 10 min after merge
+- [x] Frontend: Donors page — show "Undo last scan import" toast/button for 10 min after merge

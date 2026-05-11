@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { Plus, Search, Users, Heart, Star, Mail } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
+import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted
 export default function DonorsPage() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [lastMergedDonorId, setLastMergedDonorId] = useState<number | null>(null);
 
   const { data, refetch } = trpc.donors.list.useQuery({ limit:100 });
   const mergeDonorMutation = trpc.donors.mergeFromScan.useMutation({
@@ -71,6 +73,7 @@ export default function DonorsPage() {
                     giftAid: d.giftAid,
                     notes: d.notes,
                   });
+                  setLastMergedDonorId(result.matchedProfile.id);
                 } else {
                   // No match — open Add Donor form pre-filled
                   setOpen(true);
@@ -89,6 +92,17 @@ export default function DonorsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Undo banner */}
+        {lastMergedDonorId !== null && (
+          <div className="mb-4">
+            <ScanMergeUndoBanner
+              tableName="donors"
+              recordId={lastMergedDonorId}
+              onReverted={() => { refetch(); setLastMergedDonorId(null); }}
+            />
+          </div>
+        )}
 
         {/* Stats */}
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:16,marginBottom:24 }}>
