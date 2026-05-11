@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { Search, Filter, Receipt, CheckCircle2, Clock, XCircle, Camera } from "lucide-react";
+import { Search, Filter, Receipt, CheckCircle2, Clock, XCircle, Camera, ShieldAlert, ThumbsUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -40,6 +40,12 @@ export default function ReceiptsPage() {
   });
 
   const receipts: any[] = data?.rows ?? [];
+  const { data: pendingSecondApproval = [], refetch: refetchPending } = (trpc as any).receipts.listPendingSecondApproval?.useQuery?.() ?? { data: [] };
+  const secondApproveMutation = (trpc as any).receipts.secondApprove?.useMutation?.({
+    onSuccess: () => { toast.success("Second approval granted"); refetchPending(); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const isAdmin = user?.role === "superadmin" || user?.role === "trustee" || user?.role === "admin";
 
   const filtered = receipts.filter((r: any) => {
     const matchSearch = !search || (r.description??r.notes??"").toLowerCase().includes(search.toLowerCase());
@@ -86,6 +92,40 @@ export default function ReceiptsPage() {
           ))}
         </div>
 
+
+        {/* ── Second Approver Queue (admin only) ── */}
+        {isAdmin && pendingSecondApproval.length > 0 && (
+          <div style={{ background:"rgba(251,191,36,0.06)",border:"1px solid rgba(251,191,36,0.2)",borderRadius:16,padding:20,marginBottom:24,animation:"fadeUp 0.4s ease both" }}>
+            <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
+              <ShieldAlert size={18} style={{ color:"#fbbf24" }}/>
+              <span style={{ fontSize:14,fontWeight:700,color:"#fbbf24" }}>Pending Second Approval ({pendingSecondApproval.length})</span>
+              <span style={{ fontSize:11,color:T.muted,marginLeft:4 }}>Receipts over £500 require a second approver</span>
+            </div>
+            <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+              {pendingSecondApproval.map((r: any) => (
+                <div key={r.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 16px",gap:12 }}>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <span style={{ fontSize:13,fontWeight:600,color:T.white }}>{r.description ?? r.notes ?? "Receipt"}</span>
+                    <span style={{ fontSize:12,color:T.muted,marginLeft:12 }}>£{Number(r.amount ?? 0).toLocaleString("en-GB",{minimumFractionDigits:2})}</span>
+                    <span style={{ fontSize:11,color:T.muted,marginLeft:12 }}>{r.date ? new Date(r.date).toLocaleDateString("en-GB") : ""}</span>
+                  </div>
+                  <div style={{ display:"flex",gap:8,flexShrink:0 }}>
+                    <button onClick={() => setLocation(`/receipts/${r.id}`)}
+                      style={{ padding:"5px 12px",borderRadius:8,background:"rgba(99,91,255,0.1)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                      View
+                    </button>
+                    {r.approvedById !== user?.id && (
+                      <button onClick={() => secondApproveMutation?.mutate?.({ receiptId: r.id })}
+                        style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
+                        <ThumbsUp size={11}/> Approve
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Filters */}
         <div style={{ display:"flex",gap:12,marginBottom:20,flexWrap:"wrap",alignItems:"center" }}>
           <div style={{ position:"relative",flex:1,minWidth:200 }}>

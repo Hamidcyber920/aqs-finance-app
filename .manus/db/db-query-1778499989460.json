@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `trustee_decisions` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`title` varchar(500) NOT NULL,\n\t`motionText` text,\n\t`proposer` varchar(200),\n\t`seconder` varchar(200),\n\t`votesFor` int NOT NULL DEFAULT 0,\n\t`votesAgainst` int NOT NULL DEFAULT 0,\n\t`abstentions` int NOT NULL DEFAULT 0,\n\t`outcome` varchar(50) NOT NULL DEFAULT 'pending',\n\t`meetingDate` timestamp,\n\t`minutesUrl` text,\n\t`notes` text,\n\t`createdByUserId` int,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `trustee_decisions_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE `trustee_decisions` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`title` varchar(500) NOT NULL,\n\t`motionText` text,\n\t`proposer` varchar(200),\n\t`seconder` varchar(200),\n\t`votesFor` int NOT NULL DEFAULT 0,\n\t`votesAgainst` int NOT NULL DEFAULT 0,\n\t`abstentions` int NOT NULL DEFAULT 0,\n\t`outcome` varchar(50) NOT NULL DEFAULT 'pending',\n\t`meetingDate` timestamp,\n\t`minutesUrl` text,\n\t`notes` text,\n\t`createdByUserId` int,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `trustee_decisions_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 492
+}

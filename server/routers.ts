@@ -34,8 +34,8 @@ import {
   getPayrollRecords, createPayrollRecord, updatePayrollRecord, getStaffProfile, upsertStaffProfile,
   getDashboardStats,
 } from "./db";
-import { eq, and, sql } from "drizzle-orm";
-import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users } from "../drizzle/schema";
+import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 // sendGmail is defined locally in this file (line ~123)
 
@@ -649,6 +649,16 @@ export const appRouter = router({
         } as any).where(eq(receiptsTable.id, input.id));
         return { success: true };
       }),
+    listPendingSecondApproval: adminProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      const { receipts: receiptsTable } = await import("../drizzle/schema");
+      const rows = await db.select().from(receiptsTable)
+        .where(and(eq((receiptsTable as any).secondApproverRequired, 1), isNull((receiptsTable as any).secondApprovedAt)))
+        .orderBy(desc(receiptsTable.createdAt))
+        .limit(50);
+      return rows;
+    }),
     // Admin-only: list all active users (for filter dropdown)
     adminUserList: adminProcedure.query(async () => {
       const { rows } = await listAllUsers(200, 0);
@@ -4115,11 +4125,59 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
             score: Math.round(c.score * 100),
             table: c.table,
             currentFields: c.currentFields ?? null,
-          })),
+           })),
         };
       }),
-  }),
 
+    // Universal AI OCR: extract fields from any document type
+    extractFields: seniorProcedure
+      .input(z.object({
+        fileUrl: z.string().url(),
+        mimeType: z.string(),
+        targetType: z.enum([
+          "training_certificate", "policy_document", "decision_minutes",
+          "receipt", "invoice", "donor_form", "staff_profile", "loan_application",
+          "payroll", "bank_statement", "general",
+        ]),
+      }))
+      .mutation(async ({ input }) => {
+        const PROMPTS: Record<string, string> = {
+          training_certificate: `Extract training certificate details. Return JSON with: userName (string|null), module (string|null), provider (string|null), completedAt (YYYY-MM-DD|null), expiresAt (YYYY-MM-DD|null), certificateNumber (string|null), notes (string|null). Use null for missing fields.`,
+          policy_document: `Extract policy document details. Return JSON with: title (string|null), category (string|null), owner (string|null), version (string|null), reviewDate (YYYY-MM-DD|null), approvedAt (YYYY-MM-DD|null), approvedBy (string|null), status ("draft"|"active"|"archived"|null), notes (string|null). Use null for missing fields.`,
+          decision_minutes: `Extract trustee meeting decision details. Return JSON with: title (string|null), motionText (string|null), proposer (string|null), seconder (string|null), votesFor (number|null), votesAgainst (number|null), abstentions (number|null), outcome ("passed"|"rejected"|"deferred"|"pending"|null), meetingDate (YYYY-MM-DD|null), notes (string|null). Use null for missing fields.`,
+          receipt: `Extract receipt details. Return JSON with: vendor (string|null), date (YYYY-MM-DD|null), amount (number|null), tax (number|null), currency (string), paymentMethod (string|null), receiptNumber (string|null), categoryName (string|null), departmentGuess (string|null), notes (string|null). Use null for missing fields.`,
+          invoice: `Extract invoice details. Return JSON with: vendorName (string|null), invoiceNumber (string|null), amount (number|null), vatAmount (number|null), invoiceDate (YYYY-MM-DD|null), dueDate (YYYY-MM-DD|null), description (string|null), category (string|null). Use null for missing fields.`,
+          donor_form: `Extract donor registration details. Return JSON with: name (string|null), email (string|null), phone (string|null), addressLine1 (string|null), city (string|null), postcode (string|null), giftAid (boolean|null), donationType (string|null), amount (number|null), notes (string|null). Use null for missing fields.`,
+          staff_profile: `Extract staff profile details. Return JSON with: fullName (string|null), email (string|null), phone (string|null), contractType (string|null), niNumber (string|null), taxCode (string|null), startDate (YYYY-MM-DD|null), role (string|null), department (string|null), notes (string|null). Use null for missing fields.`,
+          loan_application: `Extract loan application details. Return JSON with: applicantName (string|null), amountRequested (number|null), purpose (string|null), monthlyIncome (number|null), employmentStatus (string|null), repaymentTerm (number|null), guarantorName (string|null), notes (string|null). Use null for missing fields.`,
+          payroll: `Extract payroll details. Return JSON with: employeeName (string|null), grossPay (number|null), netPay (number|null), deductions (number|null), payPeriod (number|null), payYear (number|null), niNumber (string|null), taxCode (string|null), notes (string|null). Use null for missing fields.`,
+          bank_statement: `Extract bank statement details. Return JSON with: accountName (string|null), accountNumber (string|null), sortCode (string|null), statementDate (YYYY-MM-DD|null), openingBalance (number|null), closingBalance (number|null), currency (string), notes (string|null). Use null for missing fields.`,
+          general: `Extract all key information from this document. Return JSON with: title (string|null), date (YYYY-MM-DD|null), author (string|null), summary (string|null), keyFields (object with any relevant key-value pairs). Use null for missing fields.`,
+        };
+        const prompt = PROMPTS[input.targetType] ?? PROMPTS.general;
+        const isImage = input.mimeType.startsWith("image/");
+        const userContent = isImage
+          ? [{ type: "image_url" as const, image_url: { url: input.fileUrl, detail: "high" as const } }, { type: "text" as const, text: prompt }]
+          : [{ type: "file_url" as const, file_url: { url: input.fileUrl, mime_type: input.mimeType as any } }, { type: "text" as const, text: prompt }];
+        const response = await invokeLLM({
+          messages: [
+            { role: "system", content: "You are a precise document data extraction assistant for a UK charity. Always return valid JSON only, no markdown, no explanation." },
+            { role: "user", content: userContent as any },
+          ],
+        });
+        const raw = response.choices?.[0]?.message?.content;
+        if (!raw) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No response from AI" });
+        const content = typeof raw === "string" ? raw : JSON.stringify(raw);
+        // Strip markdown code fences if present
+        const cleaned = content.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+        try {
+          const fields = JSON.parse(cleaned);
+          return { fields, targetType: input.targetType };
+        } catch {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI returned invalid JSON" });
+        }
+      }),
+  }),
   // ─── BANK STATEMENT AI READER ─────────────────────────────────────────────
   bankStatement: router({
     extract: adminProcedure
@@ -5259,6 +5317,97 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           const [result] = await db.insert(policyDocuments).values(data);
           return { id: (result as any).insertId };
         }
+      }),
+
+    // Upload evidence (cert URL or policy file URL)
+    uploadEvidence: protectedProcedure
+      .input(z.object({
+        recordType: z.enum(["training", "policy"]),
+        recordId: z.number().int(),
+        fileUrl: z.string().url(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        if (input.recordType === "training") {
+          const { trainingRecords: tr } = await import('../drizzle/schema');
+          await db.update(tr).set({ certificateUrl: input.fileUrl }).where(eq(tr.id, input.recordId));
+        } else {
+          const { policyDocuments: pd } = await import('../drizzle/schema');
+          await db.update(pd).set({ fileUrl: input.fileUrl }).where(eq(pd.id, input.recordId));
+        }
+        return { ok: true };
+      }),
+  }),
+
+  // ── Decisions Register ────────────────────────────────────────────────────
+  decisions: router({
+    list: protectedProcedure
+      .input(z.object({
+        limit: z.number().int().min(1).max(200).default(100),
+        offset: z.number().int().min(0).default(0),
+        outcome: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const rows = await db.select().from(trusteeDecisions)
+          .orderBy(desc(trusteeDecisions.meetingDate))
+          .limit(input.limit).offset(input.offset);
+        return rows;
+      }),
+
+    upsert: protectedProcedure
+      .input(z.object({
+        id: z.number().int().optional(),
+        title: z.string().min(1).max(500),
+        motionText: z.string().optional(),
+        proposer: z.string().optional(),
+        seconder: z.string().optional(),
+        votesFor: z.number().int().min(0).default(0),
+        votesAgainst: z.number().int().min(0).default(0),
+        abstentions: z.number().int().min(0).default(0),
+        outcome: z.enum(["passed", "rejected", "deferred", "pending"]).default("pending"),
+        meetingDate: z.string().optional(),
+        minutesUrl: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const SENIOR = ["superadmin", "trustee", "admin", "manager"];
+        if (!SENIOR.includes(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN" });
+        const data = {
+          title: input.title,
+          motionText: input.motionText ?? null,
+          proposer: input.proposer ?? null,
+          seconder: input.seconder ?? null,
+          votesFor: input.votesFor,
+          votesAgainst: input.votesAgainst,
+          abstentions: input.abstentions,
+          outcome: input.outcome,
+          meetingDate: input.meetingDate ? new Date(input.meetingDate) : null,
+          minutesUrl: input.minutesUrl ?? null,
+          notes: input.notes ?? null,
+          updatedAt: new Date(),
+        };
+        if (input.id) {
+          await db.update(trusteeDecisions).set(data).where(eq(trusteeDecisions.id, input.id));
+          return { id: input.id };
+        } else {
+          const [result] = await db.insert(trusteeDecisions).values({ ...data, createdByUserId: ctx.user.id });
+          return { id: (result as any).insertId };
+        }
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number().int() }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        assertCanDelete(ctx.user);
+        await db.delete(trusteeDecisions).where(eq(trusteeDecisions.id, input.id));
+        return { ok: true };
       }),
   }),
 });

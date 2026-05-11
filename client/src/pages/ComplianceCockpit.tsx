@@ -13,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import {
   ShieldCheck, AlertTriangle, Clock, CheckCircle2, Plus, Pencil,
-  GraduationCap, FileText, ExternalLink, RefreshCw,
-} from "lucide-react";
+  GraduationCap, FileText, ExternalLink, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import SmartDocumentUpload from "@/components/SmartDocumentUpload";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -342,6 +342,8 @@ export default function ComplianceCockpit() {
   const [actionDialog, setActionDialog] = useState<{ open: boolean; item?: any }>({ open: false });
   const [trainingDialog, setTrainingDialog] = useState<{ open: boolean; item?: any }>({ open: false });
   const [policyDialog, setPolicyDialog] = useState<{ open: boolean; item?: any }>({ open: false });
+  const [showTrainingOcr, setShowTrainingOcr] = useState(false);
+  const [showPolicyOcr, setShowPolicyOcr] = useState(false);
 
   const { data: actions = [], isLoading: actionsLoading, refetch: refetchActions } = (trpc as any).compliance.listActions.useQuery();
   const { data: training = [], isLoading: trainingLoading, refetch: refetchTraining } = (trpc as any).compliance.listTraining.useQuery();
@@ -522,9 +524,14 @@ export default function ComplianceCockpit() {
                     <RefreshCw className="h-3.5 w-3.5" />
                   </Button>
                   {isAdmin && (
-                    <Button size="sm" onClick={() => setTrainingDialog({ open: true })}>
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Add Record
-                    </Button>
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => setShowTrainingOcr(true)}>
+                        <Upload className="h-3.5 w-3.5 mr-1" /> Scan Certificate
+                      </Button>
+                      <Button size="sm" onClick={() => setTrainingDialog({ open: true })}>
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Add Record
+                      </Button>
+                    </>
                   )}
                 </div>
               </CardHeader>
@@ -604,9 +611,14 @@ export default function ComplianceCockpit() {
                     <RefreshCw className="h-3.5 w-3.5" />
                   </Button>
                   {isAdmin && (
-                    <Button size="sm" onClick={() => setPolicyDialog({ open: true })}>
-                      <Plus className="h-3.5 w-3.5 mr-1" /> Add Policy
-                    </Button>
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => setShowPolicyOcr(true)}>
+                        <Upload className="h-3.5 w-3.5 mr-1" /> Scan Policy Doc
+                      </Button>
+                      <Button size="sm" onClick={() => setPolicyDialog({ open: true })}>
+                        <Plus className="h-3.5 w-3.5 mr-1" /> Add Policy
+                      </Button>
+                    </>
                   )}
                 </div>
               </CardHeader>
@@ -721,6 +733,48 @@ export default function ComplianceCockpit() {
           />
         </DialogContent>
       </Dialog>
+      {/* ── AI OCR: Training Certificate Upload ── */}
+      {showTrainingOcr && (
+        <SmartDocumentUpload
+          open={true}
+          targetType="training_certificate"
+          onClose={() => setShowTrainingOcr(false)}
+          onExtracted={(fields) => {
+            setShowTrainingOcr(false);
+            setTrainingDialog({ open: true, item: {
+              userName: fields.personName || fields.name || "",
+              module: fields.module || fields.courseName || fields.title || "",
+              provider: fields.provider || fields.issuer || fields.organisation || "",
+              completedAt: fields.completedDate || fields.issueDate || fields.date || "",
+              expiresAt: fields.expiryDate || fields.validUntil || "",
+              certificateUrl: fields.fileUrl || "",
+              notes: fields.notes || "",
+            }});
+          }}
+        />
+      )}
+      {/* ── AI OCR: Policy Document Upload ── */}
+      {showPolicyOcr && (
+        <SmartDocumentUpload
+          open={true}
+          targetType="policy_document"
+          onClose={() => setShowPolicyOcr(false)}
+          onExtracted={(fields) => {
+            setShowPolicyOcr(false);
+            setPolicyDialog({ open: true, item: {
+              title: fields.title || fields.policyName || "",
+              category: fields.category || fields.type || "",
+              owner: fields.owner || fields.author || fields.responsiblePerson || "",
+              version: fields.version || fields.versionNumber || "",
+              reviewDate: fields.reviewDate || fields.nextReviewDate || "",
+              approvedAt: fields.approvedDate || fields.approvalDate || "",
+              approvedBy: fields.approvedBy || fields.signedBy || "",
+              fileUrl: fields.fileUrl || "",
+              notes: fields.notes || fields.summary || "",
+            }});
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

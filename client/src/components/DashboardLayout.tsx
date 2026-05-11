@@ -27,7 +27,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import {
   BarChart3, BookOpen, Building2, Camera, ClipboardList, Scale,
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
-  Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck,
+  Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -70,6 +70,7 @@ const adminItems = [
   { icon: ShieldCheck, label: "Admin Panel", path: "/admin" },
   { icon: Users, label: "Trustees & Staff Contacts", path: "/trustees" },
   { icon: ClipboardCheck, label: "Compliance Cockpit", path: "/compliance" },
+  { icon: Gavel, label: "Decisions Register", path: "/decisions" },
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Settings, label: "Settings", path: "/settings" },

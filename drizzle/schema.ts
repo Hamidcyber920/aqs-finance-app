@@ -1325,3 +1325,24 @@ export const policyDocuments = mysqlTable("policy_documents", {
 });
 export type PolicyDocument = typeof policyDocuments.$inferSelect;
 export type InsertPolicyDocument = typeof policyDocuments.$inferInsert;
+
+// ── Trustee Decisions Register ─────────────────────────────────────────────
+export const trusteeDecisions = mysqlTable("trustee_decisions", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  motionText: text("motionText"),
+  proposer: varchar("proposer", { length: 200 }),
+  seconder: varchar("seconder", { length: 200 }),
+  votesFor: int("votesFor").default(0).notNull(),
+  votesAgainst: int("votesAgainst").default(0).notNull(),
+  abstentions: int("abstentions").default(0).notNull(),
+  outcome: varchar("outcome", { length: 50 }).default("pending").notNull(), // passed | rejected | deferred | pending
+  meetingDate: timestamp("meetingDate"),
+  minutesUrl: text("minutesUrl"),
+  notes: text("notes"),
+  createdByUserId: int("createdByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type TrusteeDecision = typeof trusteeDecisions.$inferSelect;
+export type InsertTrusteeDecision = typeof trusteeDecisions.$inferInsert;

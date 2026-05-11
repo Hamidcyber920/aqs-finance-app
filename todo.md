@@ -1188,3 +1188,28 @@
 - [x] Backend: receipts.checkDuplicate, receipts.secondApprove procedures added
 - [x] Frontend: duplicate warning banner in Capture.tsx, fund allocation section for £500+ receipts
 - [x] Fund allocation confirmation: fund allocation step shown when amount >= £500, with add/remove fund rows
+
+## Wave 2 Features (May 11, 2026)
+
+### Phase 1 — Decisions Register
+- [ ] DB: trustee_decisions table (id, title, motionText, proposer, seconder, votesFor, votesAgainst, abstentions, outcome, meetingDate, minutesUrl, notes, createdByUserId, createdAt)
+- [ ] Backend: decisions.list, decisions.upsert, decisions.delete procedures (protected, admin/trustee only)
+- [ ] Frontend: Decisions Register page (/decisions) with CRUD table and vote recording
+- [ ] Register /decisions route in App.tsx and add sidebar nav item under ADMINISTRATION
+
+### Phase 2 — Second-Approver Queue
+- [ ] Frontend: Receipts page — add "Pending 2nd Approval" tab showing receipts with secondApproverRequired=true and not yet secondApproved
+- [ ] Frontend: Pending 2nd Approval tab — approve button calling receipts.secondApprove, prevents same-person approval
+
+### Phase 3 — Compliance Evidence Upload
+- [ ] Backend: compliance.uploadEvidence procedure — accept fileUrl + recordId + recordType, save to training_records.certUrl or policy_documents.fileUrl
+- [ ] Frontend: Training Matrix rows — add upload button that opens file picker, uploads to S3, calls compliance.uploadEvidence
+- [ ] Frontend: Policy Register rows — add upload button that opens file picker, uploads to S3, calls compliance.uploadEvidence
+
+### Phase 4 — AI OCR Smart Document Upload
+- [ ] AI OCR: SmartDocumentUpload component — accepts any file (image/PDF/doc), sends to LLM vision, returns extracted fields as JSON
+- [ ] AI OCR: LLM prompt detects document type (training cert, policy doc, decision minute, receipt, donor form, staff profile) and returns typed field set
+- [ ] AI OCR: SmartDocumentUpload shows auto-populated form with editable fields before saving
+- [ ] AI OCR: Wire into Compliance Cockpit training cert upload (auto-fills module, completedAt, expiresAt, provider)
+- [ ] AI OCR: Wire into Compliance Cockpit policy doc upload (auto-fills title, version, reviewDate, owner)
+- [ ] AI OCR: Wire into Decisions Register minutes upload (auto-fills motionText, proposer, seconder, votes, outcome, meetingDate)
