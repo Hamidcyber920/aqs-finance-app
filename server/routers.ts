@@ -2681,6 +2681,282 @@ export const appRouter = router({
         return match ?? null;
       }),
   }),
+
+  // ─── PAYROLL RUNS (two-trustee approval workflow) ──────────────────────────
+  payrollRuns: router({
+    get: seniorProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return null;
+        const { payrollRuns: prRunTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const rows = await db.select().from(prRunTable)
+          .where(andFn(eqFn(prRunTable.month, input.month), eqFn(prRunTable.year, input.year)))
+          .limit(1);
+        return rows[0] ?? null;
+      }),
+
+    submit: seniorProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number(), notes: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { payrollRuns: prRunTable, payrollRecords: prTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const records = await db.select().from(prTable)
+          .where(andFn(eqFn(prTable.month, input.month), eqFn(prTable.year, input.year)));
+        if (records.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No payroll records for this period' });
+        const totals = records.reduce((acc, r) => ({
+          gross: acc.gross + parseFloat(String(r.grossPay ?? 0)),
+          tax: acc.tax + parseFloat(String(r.incomeTax ?? 0)),
+          ni: acc.ni + parseFloat(String(r.nationalInsurance ?? 0)),
+          pension: acc.pension + parseFloat(String(r.pensionContribution ?? 0)),
+          net: acc.net + parseFloat(String(r.netPay ?? 0)),
+        }), { gross: 0, tax: 0, ni: 0, pension: 0, net: 0 });
+        const submitterName = (ctx.user as any).name ?? ctx.user.email ?? 'Unknown';
+        const runData = {
+          month: input.month, year: input.year, status: 'submitted' as const,
+          submittedById: ctx.user.id, submittedByName: submitterName,
+          submittedAt: new Date(),
+          totalGross: String(totals.gross.toFixed(2)),
+          totalTax: String(totals.tax.toFixed(2)),
+          totalNI: String(totals.ni.toFixed(2)),
+          totalPension: String(totals.pension.toFixed(2)),
+          totalNet: String(totals.net.toFixed(2)),
+          employeeCount: records.length,
+          notes: input.notes ?? null,
+        };
+        const existing = await db.select().from(prRunTable)
+          .where(andFn(eqFn(prRunTable.month, input.month), eqFn(prRunTable.year, input.year)))
+          .limit(1);
+        if (existing.length > 0) {
+          if (existing[0].status === 'finalised') throw new TRPCError({ code: 'BAD_REQUEST', message: 'Payroll run is already finalised' });
+          await db.update(prRunTable).set(runData as any)
+            .where(andFn(eqFn(prRunTable.month, input.month), eqFn(prRunTable.year, input.year)));
+        } else {
+          await db.insert(prRunTable).values(runData as any);
+        }
+        try {
+          const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+          await notifyOwner({ title: `Payroll Run Submitted — ${monthNames[input.month-1]} ${input.year}`, content: `${submitterName} submitted payroll for ${monthNames[input.month-1]} ${input.year} (${records.length} employees, gross £${totals.gross.toFixed(2)}). Please review and approve.` });
+        } catch {}
+        return { success: true };
+      }),
+
+    approve: seniorProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number(), comment: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { payrollRuns: prRunTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const rows = await db.select().from(prRunTable)
+          .where(andFn(eqFn(prRunTable.month, input.month), eqFn(prRunTable.year, input.year)))
+          .limit(1);
+        if (rows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Payroll run not found — submit it first' });
+        const run = rows[0];
+        if (!['submitted', 'approved'].includes(run.status)) throw new TRPCError({ code: 'BAD_REQUEST', message: `Cannot approve a run with status: ${run.status}` });
+        const approverName = (ctx.user as any).name ?? ctx.user.email ?? 'Unknown';
+        const now = new Date();
+        let updateData: any = {};
+        if (!run.approver1Id) {
+          updateData = { approver1Id: ctx.user.id, approver1Name: approverName, approver1At: now, approver1Comment: input.comment ?? null, status: 'approved' };
+        } else if (!run.approver2Id && run.approver1Id !== ctx.user.id) {
+          updateData = { approver2Id: ctx.user.id, approver2Name: approverName, approver2At: now, approver2Comment: input.comment ?? null, status: 'finalised' };
+        } else if (run.approver1Id === ctx.user.id) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'You already approved this run. A second trustee must approve.' });
+        } else {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'This payroll run already has two approvals.' });
+        }
+        await db.update(prRunTable).set(updateData)
+          .where(andFn(eqFn(prRunTable.month, input.month), eqFn(prRunTable.year, input.year)));
+        return { success: true, newStatus: updateData.status };
+      }),
+
+    reject: seniorProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number(), comment: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { payrollRuns: prRunTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const rejectorName = (ctx.user as any).name ?? ctx.user.email ?? 'Unknown';
+        await db.update(prRunTable).set({
+          status: 'rejected', rejectedById: ctx.user.id, rejectedByName: rejectorName,
+          rejectedAt: new Date(), rejectionComment: input.comment,
+        } as any).where(andFn(eqFn(prRunTable.month, input.month), eqFn(prRunTable.year, input.year)));
+        return { success: true };
+      }),
+
+    exportFps: seniorProcedure
+      .input(z.object({
+        month: z.number().min(1).max(12), year: z.number(),
+        payeRef: z.string().default('000/AQ00001'),
+        accountsOfficeRef: z.string().default('000PA00000001'),
+        employerName: z.string().default('AQ Society'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { payrollRuns: prRunTable, payrollRecords: prTable, staffProfiles: spTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const records = await db.select().from(prTable)
+          .where(andFn(eqFn(prTable.month, input.month), eqFn(prTable.year, input.year)));
+        if (records.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No payroll records for this period' });
+        const profiles = await db.select().from(spTable);
+        const profileMap = new Map(profiles.map((p: any) => [p.userId, p]));
+        const { generateFpsXml, deriveTaxYear } = await import('./payrollFps');
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const paymentDate = `${input.year}-${String(input.month).padStart(2,'0')}-28`;
+        const fpsEmployees = records.map((r: any) => {
+          const profile: any = profileMap.get(r.userId);
+          return {
+            employeeName: r.employeeName ?? profile?.fullName ?? `Employee #${r.userId}`,
+            niNumber: r.niNumber ?? profile?.niNumber,
+            taxCode: r.taxCode ?? profile?.taxCode,
+            paymentDate,
+            grossPay: parseFloat(String(r.grossPay ?? 0)),
+            incomeTax: parseFloat(String(r.incomeTax ?? 0)),
+            nationalInsurance: parseFloat(String(r.nationalInsurance ?? 0)),
+            pensionContribution: parseFloat(String(r.pensionContribution ?? 0)),
+            netPay: parseFloat(String(r.netPay ?? 0)),
+            paymentMethod: r.paymentMethod === 'bank_transfer' ? 'BACS' : r.paymentMethod === 'cheque' ? 'Cheque' : 'Cash',
+          };
+        });
+        const taxYear = deriveTaxYear(input.month, input.year);
+        const xml = generateFpsXml({ payeRef: input.payeRef, accountsOfficeRef: input.accountsOfficeRef, employerName: input.employerName, taxYear, month: input.month, year: input.year }, fpsEmployees);
+        const fileKey = `fps-xml/${input.year}-${String(input.month).padStart(2,'0')}-fps-${Date.now()}.xml`;
+        const { url } = await storagePut(fileKey, Buffer.from(xml, 'utf-8'), 'application/xml');
+        await db.update(prRunTable).set({ fpsXmlUrl: url, fpsExportedAt: new Date(), fpsExportedById: ctx.user.id } as any)
+          .where(andFn(eqFn(prRunTable.month, input.month), eqFn(prRunTable.year, input.year)));
+        return { url, xml, monthLabel: `${monthNames[input.month-1]} ${input.year}`, employeeCount: records.length };
+      }),
+  }),
+
+  // ─── PENSION AUTO-ENROLMENT ────────────────────────────────────────────────
+  pension: router({
+    assess: seniorProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return { employees: [], summary: { enrolled: 0, eligible: 0, notEligible: 0, approachingThreshold: 0, totalEmployeeContribs: 0, totalEmployerContribs: 0 } };
+        const { payrollRecords: prTable, pensionEnrolments: peTable, staffProfiles: spTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const MONTHLY_TRIGGER = 833.33;
+        const MONTHLY_LOWER_QE = 520.00;
+        const MONTHLY_UPPER_QE = 4189.17;
+        const records = await db.select().from(prTable)
+          .where(andFn(eqFn(prTable.month, input.month), eqFn(prTable.year, input.year)));
+        const enrolments = await db.select().from(peTable);
+        const enrolmentMap = new Map(enrolments.map((e: any) => [e.employeeName.toLowerCase(), e]));
+        const profiles = await db.select().from(spTable);
+        const profileMap = new Map(profiles.map((p: any) => [p.userId, p]));
+        const employees = records.map((r: any) => {
+          const name = r.employeeName ?? `Employee #${r.userId}`;
+          const gross = parseFloat(String(r.grossPay ?? 0));
+          const profile: any = profileMap.get(r.userId);
+          const existing: any = enrolmentMap.get(name.toLowerCase());
+          const qe = Math.max(0, Math.min(gross, MONTHLY_UPPER_QE) - MONTHLY_LOWER_QE);
+          const isEligible = gross >= MONTHLY_TRIGGER;
+          const isApproaching = !isEligible && gross >= MONTHLY_TRIGGER * 0.90;
+          const empPct = parseFloat(String(existing?.employeeContributionPct ?? '5.00'));
+          const erPct = parseFloat(String(existing?.employerContributionPct ?? '3.00'));
+          return {
+            employeeName: name, niNumber: r.niNumber ?? profile?.niNumber ?? null,
+            grossPay: gross, qualifyingEarnings: parseFloat(qe.toFixed(2)),
+            isEligible, isApproaching, monthlyTrigger: MONTHLY_TRIGGER,
+            status: existing?.status ?? (isEligible ? 'eligible_not_enrolled' : 'not_eligible'),
+            enrolmentDate: existing?.enrolmentDate ?? null, optOutDate: existing?.optOutDate ?? null,
+            pensionProvider: existing?.pensionProvider ?? null, pensionSchemeRef: existing?.pensionSchemeRef ?? null,
+            employeeContributionPct: empPct, employerContributionPct: erPct,
+            employeeContribAmount: parseFloat((qe * empPct / 100).toFixed(2)),
+            employerContribAmount: parseFloat((qe * erPct / 100).toFixed(2)),
+            totalContribAmount: parseFloat((qe * (empPct + erPct) / 100).toFixed(2)),
+            enrolmentId: existing?.id ?? null,
+          };
+        });
+        const summary = {
+          enrolled: employees.filter((e: any) => e.status === 'enrolled').length,
+          eligible: employees.filter((e: any) => e.isEligible).length,
+          notEligible: employees.filter((e: any) => !e.isEligible).length,
+          approachingThreshold: employees.filter((e: any) => e.isApproaching).length,
+          totalEmployeeContribs: employees.filter((e: any) => e.status === 'enrolled').reduce((s: number, e: any) => s + e.employeeContribAmount, 0),
+          totalEmployerContribs: employees.filter((e: any) => e.status === 'enrolled').reduce((s: number, e: any) => s + e.employerContribAmount, 0),
+        };
+        return { employees, summary };
+      }),
+
+    enrol: seniorProcedure
+      .input(z.object({
+        employeeName: z.string(), niNumber: z.string().optional(), userId: z.number().optional(),
+        pensionProvider: z.string().optional(), pensionSchemeRef: z.string().optional(),
+        employeeContributionPct: z.number().min(0).max(100).default(5),
+        employerContributionPct: z.number().min(0).max(100).default(3),
+        enrolmentDate: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { pensionEnrolments: peTable } = await import('../drizzle/schema');
+        const { eq: eqFn } = await import('drizzle-orm');
+        const today = new Date().toISOString().slice(0, 10);
+        const existing = await db.select().from(peTable).where(eqFn(peTable.employeeName, input.employeeName)).limit(1);
+        if (existing.length > 0) {
+          await db.update(peTable).set({ status: 'enrolled', enrolmentDate: input.enrolmentDate ?? today, pensionProvider: input.pensionProvider ?? null, pensionSchemeRef: input.pensionSchemeRef ?? null, employeeContributionPct: String(input.employeeContributionPct), employerContributionPct: String(input.employerContributionPct), niNumber: input.niNumber ?? null } as any).where(eqFn(peTable.id, existing[0].id));
+          return { success: true, id: existing[0].id };
+        }
+        await db.insert(peTable).values({ employeeName: input.employeeName, userId: input.userId ?? 0, niNumber: input.niNumber ?? null, status: 'enrolled', enrolmentDate: input.enrolmentDate ?? today, assessmentDate: today, pensionProvider: input.pensionProvider ?? null, pensionSchemeRef: input.pensionSchemeRef ?? null, employeeContributionPct: String(input.employeeContributionPct), employerContributionPct: String(input.employerContributionPct) } as any);
+        return { success: true };
+      }),
+
+    optOut: seniorProcedure
+      .input(z.object({ employeeName: z.string(), optOutDate: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { pensionEnrolments: peTable } = await import('../drizzle/schema');
+        const { eq: eqFn } = await import('drizzle-orm');
+        const today = new Date().toISOString().slice(0, 10);
+        await db.update(peTable).set({ status: 'opted_out', optOutDate: input.optOutDate ?? today } as any).where(eqFn(peTable.employeeName, input.employeeName));
+        return { success: true };
+      }),
+
+    list: seniorProcedure.query(async () => {
+      const db = await import('./db').then(m => m.getDb());
+      if (!db) return [];
+      const { pensionEnrolments: peTable } = await import('../drizzle/schema');
+      return db.select().from(peTable).orderBy(peTable.employeeName);
+    }),
+
+    contributionSchedule: seniorProcedure
+      .input(z.object({ month: z.number().min(1).max(12), year: z.number() }))
+      .query(async ({ input }) => {
+        const db = await import('./db').then(m => m.getDb());
+        if (!db) return { rows: [], totals: { employee: 0, employer: 0, total: 0 } };
+        const { payrollRecords: prTable, pensionEnrolments: peTable } = await import('../drizzle/schema');
+        const { and: andFn, eq: eqFn } = await import('drizzle-orm');
+        const MONTHLY_LOWER_QE = 520.00;
+        const MONTHLY_UPPER_QE = 4189.17;
+        const records = await db.select().from(prTable)
+          .where(andFn(eqFn(prTable.month, input.month), eqFn(prTable.year, input.year)));
+        const enrolments = await db.select().from(peTable).where(eqFn(peTable.status, 'enrolled'));
+        const enrolmentMap = new Map(enrolments.map((e: any) => [e.employeeName.toLowerCase(), e]));
+        const rows = records.map((r: any) => {
+          const name = r.employeeName ?? `Employee #${r.userId}`;
+          const enrolment: any = enrolmentMap.get(name.toLowerCase());
+          if (!enrolment) return null;
+          const gross = parseFloat(String(r.grossPay ?? 0));
+          const qe = Math.max(0, Math.min(gross, MONTHLY_UPPER_QE) - MONTHLY_LOWER_QE);
+          const empPct = parseFloat(String(enrolment.employeeContributionPct ?? '5'));
+          const erPct = parseFloat(String(enrolment.employerContributionPct ?? '3'));
+          return { employeeName: name, niNumber: enrolment.niNumber ?? null, grossPay: gross, qualifyingEarnings: parseFloat(qe.toFixed(2)), employeeContribPct: empPct, employerContribPct: erPct, employeeContrib: parseFloat((qe * empPct / 100).toFixed(2)), employerContrib: parseFloat((qe * erPct / 100).toFixed(2)), totalContrib: parseFloat((qe * (empPct + erPct) / 100).toFixed(2)), pensionProvider: enrolment.pensionProvider ?? 'Not specified', pensionSchemeRef: enrolment.pensionSchemeRef ?? null };
+        }).filter(Boolean) as any[];
+        const totals = rows.reduce((acc: any, r: any) => ({ employee: acc.employee + r.employeeContrib, employer: acc.employer + r.employerContrib, total: acc.total + r.totalContrib }), { employee: 0, employer: 0, total: 0 });
+        return { rows, totals: { employee: parseFloat(totals.employee.toFixed(2)), employer: parseFloat(totals.employer.toFixed(2)), total: parseFloat(totals.total.toFixed(2)) } };
+      }),
+  }),
+
   // ─── RECONCILIATION ────────────────────────────────────────────────────────
   reconciliation: router({
 

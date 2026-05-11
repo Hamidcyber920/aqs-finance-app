@@ -1078,3 +1078,81 @@ export const campaignMilestones = mysqlTable("campaign_milestones", {
 });
 export type CampaignMilestone = typeof campaignMilestones.$inferSelect;
 export type InsertCampaignMilestone = typeof campaignMilestones.$inferInsert;
+
+// ─── PAYROLL RUNS (approval workflow) ────────────────────────────────────────
+// A payroll run groups all payroll records for a given month/year and tracks
+// the two-trustee approval workflow before records are finalised.
+export const payrollRuns = mysqlTable("payroll_runs", {
+  id: int("id").autoincrement().primaryKey(),
+  month: int("month").notNull(),
+  year: int("year").notNull(),
+  // status: draft → submitted → approved (both trustees) → finalised | rejected
+  status: mysqlEnum("status", ["draft", "submitted", "approved", "finalised", "rejected"]).default("draft").notNull(),
+  submittedById: int("submittedById"),
+  submittedByName: varchar("submittedByName", { length: 200 }),
+  submittedAt: timestamp("submittedAt"),
+  // First trustee approval
+  approver1Id: int("approver1Id"),
+  approver1Name: varchar("approver1Name", { length: 200 }),
+  approver1At: timestamp("approver1At"),
+  approver1Comment: text("approver1Comment"),
+  // Second trustee approval
+  approver2Id: int("approver2Id"),
+  approver2Name: varchar("approver2Name", { length: 200 }),
+  approver2At: timestamp("approver2At"),
+  approver2Comment: text("approver2Comment"),
+  // Rejection
+  rejectedById: int("rejectedById"),
+  rejectedByName: varchar("rejectedByName", { length: 200 }),
+  rejectedAt: timestamp("rejectedAt"),
+  rejectionComment: text("rejectionComment"),
+  // FPS export
+  fpsXmlUrl: text("fpsXmlUrl"),
+  fpsExportedAt: timestamp("fpsExportedAt"),
+  fpsExportedById: int("fpsExportedById"),
+  // Totals snapshot at time of submission
+  totalGross: decimal("totalGross", { precision: 12, scale: 2 }).default("0"),
+  totalTax: decimal("totalTax", { precision: 12, scale: 2 }).default("0"),
+  totalNI: decimal("totalNI", { precision: 12, scale: 2 }).default("0"),
+  totalPension: decimal("totalPension", { precision: 12, scale: 2 }).default("0"),
+  totalNet: decimal("totalNet", { precision: 12, scale: 2 }).default("0"),
+  employeeCount: int("employeeCount").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type PayrollRun = typeof payrollRuns.$inferSelect;
+export type InsertPayrollRun = typeof payrollRuns.$inferInsert;
+
+// ─── PENSION AUTO-ENROLMENT ───────────────────────────────────────────────────
+// Tracks each employee's auto-enrolment status and contribution schedule.
+// UK auto-enrolment threshold (2024/25): £10,000 p.a. / £833/month qualifying earnings.
+export const pensionEnrolments = mysqlTable("pension_enrolments", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().default(0),
+  employeeName: varchar("employeeName", { length: 200 }).notNull(),
+  niNumber: varchar("niNumber", { length: 20 }),
+  // Status: not_eligible | eligible_not_enrolled | enrolled | opted_out | postponed
+  status: mysqlEnum("status", ["not_eligible", "eligible_not_enrolled", "enrolled", "opted_out", "postponed"]).default("not_eligible").notNull(),
+  // Qualifying earnings (monthly)
+  monthlyQualifyingEarnings: decimal("monthlyQualifyingEarnings", { precision: 10, scale: 2 }).default("0"),
+  // Contribution rates (%)
+  employeeContributionPct: decimal("employeeContributionPct", { precision: 5, scale: 2 }).default("5.00"),
+  employerContributionPct: decimal("employerContributionPct", { precision: 5, scale: 2 }).default("3.00"),
+  // Dates
+  assessmentDate: date("assessmentDate"),
+  enrolmentDate: date("enrolmentDate"),
+  optOutDate: date("optOutDate"),
+  postponementEndDate: date("postponementEndDate"),
+  // Pension provider details
+  pensionProvider: varchar("pensionProvider", { length: 200 }),
+  pensionSchemeRef: varchar("pensionSchemeRef", { length: 100 }),
+  // Flags
+  approachingThreshold: boolean("approachingThreshold").default(false), // within 10% of threshold
+  notifiedAt: timestamp("notifiedAt"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type PensionEnrolment = typeof pensionEnrolments.$inferSelect;
+export type InsertPensionEnrolment = typeof pensionEnrolments.$inferInsert;

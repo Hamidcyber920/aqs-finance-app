@@ -1065,3 +1065,14 @@
 - [x] Add SmartUpload button to Communications.tsx (business_card — extracts contact info)
 - [x] Add SmartUpload button to Reports.tsx (bank_statement — extracts closing balance)
 - [x] Add SmartUpload button to AdminPanel.tsx (staff_profile — opens Create Staff dialog)
+
+## Payroll Enhancements (May 2026)
+- [x] PAYE RTI FPS XML export — HMRC-formatted Full Payment Submission generator (server/payrollFps.ts)
+- [x] Payroll approval workflow — submit, first trustee approve, second trustee approve, reject, finalise
+- [x] Pension auto-enrolment tracker — assess eligibility, enrol, opt-out, contribution schedule
+- [x] payrollRuns DB table — stores run status, approver chain, FPS export history
+- [x] pensionEnrolments DB table — stores enrolment status, contributions, provider
+- [x] Approval Workflow tab in Payroll page — timeline, totals, approve/reject dialogs
+- [x] Pension Tracker tab in Payroll page — summary cards, contribution schedule, employee assessment
+- [x] RTI FPS Export dialog — configurable PAYE ref, AOR ref, employer name
+- [x] 30 Vitest tests for FPS XML, tax year derivation, pension thresholds, approval state machine

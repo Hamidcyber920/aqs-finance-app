@@ -6,7 +6,8 @@ import {
   Plus, Upload, Wallet, Users, CheckCircle2, Clock, FileText,
   ChevronDown, ChevronUp, Camera, Loader2, Banknote, CreditCard,
   Coins, Image as ImageIcon, X, CheckSquare, Square, Sparkles,
-  Calendar, User, ShieldCheck
+  Calendar, User, ShieldCheck, Send, ThumbsUp, ThumbsDown, Download,
+  AlertTriangle, TrendingUp, PiggyBank, BadgeCheck, XCircle, Info
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,7 +96,23 @@ export default function PayrollPage() {
 
   // Expanded row in saved table
   const [expandedSavedRow, setExpandedSavedRow] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<'payroll' | 'cheques'>('payroll');
+  const [activeTab, setActiveTab] = useState<'payroll' | 'cheques' | 'approval' | 'pension'>('payroll');
+  // Approval workflow state
+  const [approvalComment, setApprovalComment] = useState('');
+  const [rejectComment, setRejectComment] = useState('');
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showFpsDialog, setShowFpsDialog] = useState(false);
+  const [fpsPayeRef, setFpsPayeRef] = useState('000/AQ00001');
+  const [fpsAorRef, setFpsAorRef] = useState('000PA00000001');
+  const [fpsEmployerName, setFpsEmployerName] = useState('AQ Society');
+  // Pension enrolment state
+  const [showEnrolDialog, setShowEnrolDialog] = useState(false);
+  const [enrolEmployee, setEnrolEmployee] = useState<any>(null);
+  const [enrolProvider, setEnrolProvider] = useState('');
+  const [enrolSchemeRef, setEnrolSchemeRef] = useState('');
+  const [enrolEmpPct, setEnrolEmpPct] = useState(5);
+  const [enrolErPct, setEnrolErPct] = useState(3);
   const [exportingCsv, setExportingCsv] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [chequeYear, setChequeYear] = useState(new Date().getFullYear());
@@ -104,6 +121,17 @@ export default function PayrollPage() {
   const chequeRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const { data, refetch } = trpc.payroll.list.useQuery({ month, year });
+  // Approval workflow queries/mutations
+  const { data: payrollRun, refetch: refetchRun } = trpc.payrollRuns.get.useQuery({ month, year });
+  const submitRunMutation = trpc.payrollRuns.submit.useMutation({ onSuccess: () => { refetchRun(); toast.success('Payroll run submitted for approval'); } });
+  const approveRunMutation = trpc.payrollRuns.approve.useMutation({ onSuccess: (d) => { refetchRun(); toast.success(d.newStatus === 'finalised' ? '✅ Payroll run finalised with two approvals!' : '✅ First approval recorded — awaiting second trustee'); setShowApproveDialog(false); } });
+  const rejectRunMutation = trpc.payrollRuns.reject.useMutation({ onSuccess: () => { refetchRun(); toast.error('Payroll run rejected'); setShowRejectDialog(false); } });
+  const exportFpsMutation = trpc.payrollRuns.exportFps.useMutation({ onSuccess: (d) => { toast.success(`FPS XML generated for ${d.monthLabel} (${d.employeeCount} employees)`); setShowFpsDialog(false); const blob = new Blob([d.xml], { type: 'application/xml' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `FPS-${d.monthLabel.replace(' ', '-')}.xml`; a.click(); } });
+  // Pension queries/mutations
+  const { data: pensionData, refetch: refetchPension } = trpc.pension.assess.useQuery({ month, year });
+  const { data: contributionSchedule } = trpc.pension.contributionSchedule.useQuery({ month, year });
+  const enrolMutation = trpc.pension.enrol.useMutation({ onSuccess: () => { refetchPension(); toast.success('Employee enrolled in pension scheme'); setShowEnrolDialog(false); } });
+  const optOutMutation = trpc.pension.optOut.useMutation({ onSuccess: () => { refetchPension(); toast.success('Employee opted out of pension scheme'); } });
   const { data: chequeData, refetch: refetchCheques } = trpc.payroll.getChequeRegister.useQuery({ year: chequeYear });
   const markChequeBanked = trpc.payroll.markChequeBanked.useMutation({ onSuccess: () => { refetchCheques(); toast.success('Cheque marked as banked'); } });
   const analyzePayslipBulk = trpc.payroll.analyzePayslipBulk.useMutation();
@@ -389,13 +417,28 @@ export default function PayrollPage() {
         </div>
 
         {/* ── Tab Navigation ── */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "rgba(255,255,255,0.04)", border: `1px solid ${T.border}`, borderRadius: 12, padding: 4, width: "fit-content" }}>
-          {([['payroll', 'Payroll Records'], ['cheques', 'Cheque Register']] as const).map(([tab, label]) => (
+        <div style={{ display: "flex", gap: 4, marginBottom: 20, background: "rgba(255,255,255,0.04)", border: `1px solid ${T.border}`, borderRadius: 12, padding: 4, flexWrap: "wrap" }}>
+          {([
+            ['payroll', 'Payroll Records'],
+            ['cheques', 'Cheque Register'],
+            ['approval', 'Approval Workflow'],
+            ['pension', 'Pension Tracker'],
+          ] as const).map(([tab, label]) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               style={{ padding: "8px 18px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, transition: "all 0.2s",
                 background: activeTab === tab ? T.purple : "transparent",
                 color: activeTab === tab ? T.white : T.muted }}>
               {label}
+              {tab === 'approval' && payrollRun && payrollRun.status !== 'finalised' && (
+                <span style={{ marginLeft: 6, background: payrollRun.status === 'submitted' ? '#fbbf24' : payrollRun.status === 'approved' ? T.mint : '#f87171', color: '#000', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
+                  {payrollRun.status === 'submitted' ? 'Pending' : payrollRun.status === 'approved' ? '1/2' : payrollRun.status === 'rejected' ? 'Rejected' : ''}
+                </span>
+              )}
+              {tab === 'pension' && (pensionData?.summary?.approachingThreshold ?? 0) > 0 && (
+                <span style={{ marginLeft: 6, background: '#f87171', color: '#fff', borderRadius: 999, padding: '1px 7px', fontSize: 10, fontWeight: 700 }}>
+                  {pensionData!.summary.approachingThreshold}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -759,6 +802,401 @@ export default function PayrollPage() {
             </div>
           </div>
         )}
+
+        {/* ── Approval Workflow Tab ── */}
+        {activeTab === 'approval' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, animation: 'fadeUp 0.4s ease both' }}>
+            {/* Status Banner */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+                <div>
+                  <h2 style={{ fontSize: 16, fontWeight: 800, color: T.white, margin: 0 }}>Payroll Run Approval</h2>
+                  <p style={{ fontSize: 12, color: T.muted, margin: '4px 0 0' }}>
+                    {new Date(year, month - 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' })} — {records.length} employee{records.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {(!payrollRun || payrollRun.status === 'draft' || payrollRun.status === 'rejected') && records.length > 0 && (
+                    <Button onClick={() => submitRunMutation.mutate({ month, year })} disabled={submitRunMutation.isPending}
+                      style={{ background: `linear-gradient(135deg,${T.purple},#4f46e5)`, color: T.white, border: 'none', borderRadius: 10, padding: '10px 20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {submitRunMutation.isPending ? <Loader2 size={14} className='animate-spin' /> : <Send size={14} />}
+                      Submit for Approval
+                    </Button>
+                  )}
+                  {payrollRun && ['submitted', 'approved'].includes(payrollRun.status) && (
+                    <>
+                      <Button onClick={() => setShowApproveDialog(true)}
+                        style={{ background: 'rgba(0,255,194,0.12)', border: '1px solid rgba(0,255,194,0.3)', color: T.mint, borderRadius: 10, padding: '10px 20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <ThumbsUp size={14} /> Approve
+                      </Button>
+                      <Button onClick={() => setShowRejectDialog(true)}
+                        style={{ background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', borderRadius: 10, padding: '10px 20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <ThumbsDown size={14} /> Reject
+                      </Button>
+                    </>
+                  )}
+                  {payrollRun && (payrollRun.status === 'approved' || payrollRun.status === 'finalised') && (
+                    <Button onClick={() => setShowFpsDialog(true)}
+                      style={{ background: 'rgba(99,91,255,0.12)', border: '1px solid rgba(99,91,255,0.3)', color: T.purple, borderRadius: 10, padding: '10px 20px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Download size={14} /> Export RTI FPS XML
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Run status display */}
+              {!payrollRun ? (
+                <div style={{ textAlign: 'center', padding: 40, color: T.muted }}>
+                  <Info size={32} style={{ opacity: 0.4, marginBottom: 12 }} />
+                  <p style={{ margin: 0 }}>No payroll run submitted yet for this period.</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 12 }}>Add payroll records then click “Submit for Approval”.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16 }}>
+                  {/* Totals */}
+                  {[{ label: 'Total Gross', value: `£${parseFloat(String(payrollRun.totalGross ?? 0)).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`, color: T.mint },
+                    { label: 'Total Tax', value: `£${parseFloat(String(payrollRun.totalTax ?? 0)).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`, color: '#f87171' },
+                    { label: 'Total NI', value: `£${parseFloat(String(payrollRun.totalNI ?? 0)).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`, color: '#fbbf24' },
+                    { label: 'Total Net', value: `£${parseFloat(String(payrollRun.totalNet ?? 0)).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`, color: T.white },
+                  ].map(s => (
+                    <div key={s.label} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${T.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                      <p style={{ fontSize: 11, color: T.muted, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{s.label}</p>
+                      <p style={{ fontSize: 18, fontWeight: 800, color: s.color, margin: 0 }}>{s.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Approval Timeline */}
+            {payrollRun && (
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 24 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: T.white, margin: '0 0 20px' }}>Approval Timeline</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {[
+                    { label: 'Submitted', by: payrollRun.submittedByName, at: payrollRun.submittedAt, done: !!payrollRun.submittedAt, color: T.purple },
+                    { label: 'First Trustee Approval', by: payrollRun.approver1Name, at: payrollRun.approver1At, done: !!payrollRun.approver1At, color: T.mint, comment: payrollRun.approver1Comment },
+                    { label: 'Second Trustee Approval', by: payrollRun.approver2Name, at: payrollRun.approver2At, done: !!payrollRun.approver2At, color: '#a78bfa', comment: payrollRun.approver2Comment },
+                    { label: 'Finalised', by: null, at: payrollRun.approver2At, done: payrollRun.status === 'finalised', color: T.mint },
+                  ].map((step, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 16, paddingBottom: i < 3 ? 24 : 0, position: 'relative' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: step.done ? `${step.color}22` : 'rgba(255,255,255,0.06)', border: `2px solid ${step.done ? step.color : T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {step.done ? <BadgeCheck size={16} style={{ color: step.color }} /> : <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.border }} />}
+                        </div>
+                        {i < 3 && <div style={{ width: 2, flex: 1, background: step.done ? `${step.color}44` : T.border, marginTop: 4 }} />}
+                      </div>
+                      <div style={{ paddingTop: 4 }}>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: step.done ? T.white : T.muted, margin: 0 }}>{step.label}</p>
+                        {step.by && <p style={{ fontSize: 11, color: T.muted, margin: '2px 0 0' }}>{step.by}</p>}
+                        {step.at && <p style={{ fontSize: 10, color: T.muted, margin: '2px 0 0' }}>{new Date(step.at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>}
+                        {(step as any).comment && <p style={{ fontSize: 11, color: '#a78bfa', margin: '4px 0 0', fontStyle: 'italic' }}>“{(step as any).comment}”</p>}
+                      </div>
+                    </div>
+                  ))}
+                  {payrollRun.status === 'rejected' && (
+                    <div style={{ marginTop: 16, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 10, padding: 14 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#f87171', margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 6 }}><XCircle size={14} /> Rejected by {payrollRun.rejectedByName}</p>
+                      {payrollRun.rejectionComment && <p style={{ fontSize: 12, color: T.muted, margin: 0, fontStyle: 'italic' }}>“{payrollRun.rejectionComment}”</p>}
+                      {payrollRun.rejectedAt && <p style={{ fontSize: 10, color: T.muted, margin: '4px 0 0' }}>{new Date(payrollRun.rejectedAt).toLocaleString('en-GB')}</p>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* FPS export history */}
+            {payrollRun?.fpsXmlUrl && (
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 24 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: T.white, margin: '0 0 12px' }}>RTI FPS Export History</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <FileText size={16} style={{ color: T.purple }} />
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: T.white, margin: 0 }}>FPS XML exported</p>
+                    {payrollRun.fpsExportedAt && <p style={{ fontSize: 11, color: T.muted, margin: '2px 0 0' }}>{new Date(payrollRun.fpsExportedAt).toLocaleString('en-GB')}</p>}
+                  </div>
+                  <a href={payrollRun.fpsXmlUrl} target='_blank' rel='noopener noreferrer'
+                    style={{ marginLeft: 'auto', fontSize: 12, color: T.purple, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+                    <Download size={12} /> Download
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Pension Auto-Enrolment Tab ── */}
+        {activeTab === 'pension' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, animation: 'fadeUp 0.4s ease both' }}>
+            {/* Summary cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 16 }}>
+              {[
+                { label: 'Enrolled', value: pensionData?.summary?.enrolled ?? 0, color: T.mint, icon: BadgeCheck },
+                { label: 'Eligible (not enrolled)', value: pensionData?.summary?.eligible ?? 0, color: '#fbbf24', icon: AlertTriangle },
+                { label: 'Not Eligible', value: pensionData?.summary?.notEligible ?? 0, color: T.muted, icon: Info },
+                { label: 'Approaching Threshold', value: pensionData?.summary?.approachingThreshold ?? 0, color: '#f87171', icon: TrendingUp },
+              ].map(s => (
+                <div key={s.label} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: `${s.color}22`, border: `1px solid ${s.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <s.icon size={16} style={{ color: s.color }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 20, fontWeight: 800, color: T.white, margin: 0 }}>{s.value}</p>
+                    <p style={{ fontSize: 10, color: T.muted, margin: 0 }}>{s.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Contribution schedule */}
+            {contributionSchedule && contributionSchedule.rows.length > 0 && (
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 24 }}>
+                <h3 style={{ fontSize: 14, fontWeight: 700, color: T.white, margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <PiggyBank size={16} style={{ color: T.mint }} /> Contribution Schedule — {new Date(year, month - 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' })}
+                </h3>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+                    <thead>
+                      <tr>
+                        {['Employee', 'NI Number', 'Gross Pay', 'Qualifying Earnings', 'Employee (5%)', 'Employer (3%)', 'Total', 'Provider'].map(h => (
+                          <th key={h} style={{ padding: '8px 12px 8px 0', fontSize: 10, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'left', borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contributionSchedule.rows.map((r: any, i: number) => (
+                        <tr key={i}>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 13, fontWeight: 600, color: T.white, borderBottom: `1px solid ${T.border}` }}>{r.employeeName}</td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 11, color: T.muted, borderBottom: `1px solid ${T.border}`, fontFamily: 'monospace' }}>{r.niNumber ?? '—'}</td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 12, color: T.mint, borderBottom: `1px solid ${T.border}` }}>£{r.grossPay.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>£{r.qualifyingEarnings.toLocaleString('en-GB', { minimumFractionDigits: 2 })}</td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 12, color: '#a78bfa', borderBottom: `1px solid ${T.border}` }}>£{r.employeeContrib.toFixed(2)}</td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 12, color: T.purple, borderBottom: `1px solid ${T.border}` }}>£{r.employerContrib.toFixed(2)}</td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 13, fontWeight: 700, color: T.white, borderBottom: `1px solid ${T.border}` }}>£{r.totalContrib.toFixed(2)}</td>
+                          <td style={{ padding: '12px 0', fontSize: 11, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{r.pensionProvider}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: `2px solid rgba(99,91,255,0.3)` }}>
+                        <td colSpan={4} style={{ padding: '12px 12px 12px 0', fontSize: 12, fontWeight: 700, color: T.muted, textTransform: 'uppercase' }}>Totals</td>
+                        <td style={{ padding: '12px 12px 12px 0', fontSize: 14, fontWeight: 800, color: '#a78bfa' }}>£{contributionSchedule.totals.employee.toFixed(2)}</td>
+                        <td style={{ padding: '12px 12px 12px 0', fontSize: 14, fontWeight: 800, color: T.purple }}>£{contributionSchedule.totals.employer.toFixed(2)}</td>
+                        <td style={{ padding: '12px 0', fontSize: 14, fontWeight: 800, color: T.white }}>£{contributionSchedule.totals.total.toFixed(2)}</td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Employee assessment table */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: 24 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: T.white, margin: '0 0 16px' }}>Employee Assessment</h3>
+              {(!pensionData || pensionData.employees.length === 0) ? (
+                <div style={{ textAlign: 'center', padding: 40, color: T.muted }}>
+                  <PiggyBank size={32} style={{ opacity: 0.4, marginBottom: 12 }} />
+                  <p>No payroll records for this period to assess.</p>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+                    <thead>
+                      <tr>
+                        {['Employee', 'Gross Pay', 'Eligible?', 'Status', 'Enrolment Date', 'Provider', 'Actions'].map(h => (
+                          <th key={h} style={{ padding: '8px 12px 8px 0', fontSize: 10, fontWeight: 700, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em', textAlign: 'left', borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pensionData.employees.map((emp: any, i: number) => (
+                        <tr key={i}>
+                          <td style={{ padding: '12px 12px 12px 0', borderBottom: `1px solid ${T.border}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ width: 28, height: 28, borderRadius: '50%', background: T.purple, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: T.white, flexShrink: 0 }}>
+                                {emp.employeeName[0]}
+                              </div>
+                              <div>
+                                <p style={{ fontSize: 13, fontWeight: 600, color: T.white, margin: 0 }}>{emp.employeeName}</p>
+                                {emp.niNumber && <p style={{ fontSize: 10, color: T.muted, margin: 0, fontFamily: 'monospace' }}>{emp.niNumber}</p>}
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 13, color: T.mint, borderBottom: `1px solid ${T.border}` }}>
+                            £{emp.grossPay.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                            {emp.isApproaching && (
+                              <span style={{ display: 'block', fontSize: 10, color: '#f87171', marginTop: 2 }}>
+                                <AlertTriangle size={9} style={{ display: 'inline' }} /> Approaching £833/mo threshold
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 12px 12px 0', borderBottom: `1px solid ${T.border}` }}>
+                            {emp.isEligible
+                              ? <span style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: 'rgba(0,255,194,0.1)', color: T.mint }}>Yes</span>
+                              : <span style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.06)', color: T.muted }}>No</span>}
+                          </td>
+                          <td style={{ padding: '12px 12px 12px 0', borderBottom: `1px solid ${T.border}` }}>
+                            {{
+                              enrolled: <span style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: 'rgba(0,255,194,0.1)', color: T.mint }}>Enrolled</span>,
+                              eligible_not_enrolled: <span style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>Not Enrolled</span>,
+                              not_eligible: <span style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: 'rgba(255,255,255,0.06)', color: T.muted }}>Not Eligible</span>,
+                              opted_out: <span style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>Opted Out</span>,
+                              postponed: <span style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, fontWeight: 600, background: 'rgba(251,191,36,0.1)', color: '#fbbf24' }}>Postponed</span>,
+                            }[emp.status as string] ?? <span style={{ color: T.muted }}>{emp.status}</span>}
+                          </td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 11, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
+                            {emp.enrolmentDate ? new Date(emp.enrolmentDate).toLocaleDateString('en-GB') : '—'}
+                          </td>
+                          <td style={{ padding: '12px 12px 12px 0', fontSize: 11, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
+                            {emp.pensionProvider ?? '—'}
+                          </td>
+                          <td style={{ padding: '12px 0', borderBottom: `1px solid ${T.border}` }}>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              {emp.status !== 'enrolled' && emp.isEligible && (
+                                <button onClick={() => { setEnrolEmployee(emp); setShowEnrolDialog(true); }}
+                                  style={{ fontSize: 11, fontWeight: 600, color: T.mint, background: 'rgba(0,255,194,0.1)', border: '1px solid rgba(0,255,194,0.3)', borderRadius: 8, padding: '4px 10px', cursor: 'pointer' }}>
+                                  Enrol
+                                </button>
+                              )}
+                              {emp.status === 'enrolled' && (
+                                <button onClick={() => optOutMutation.mutate({ employeeName: emp.employeeName })}
+                                  disabled={optOutMutation.isPending}
+                                  style={{ fontSize: 11, fontWeight: 600, color: '#f87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '4px 10px', cursor: 'pointer' }}>
+                                  Opt Out
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Approve Dialog ── */}
+        <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+          <DialogContent style={{ background: '#0D2240', border: `1px solid ${T.border}`, borderRadius: 20, maxWidth: 440 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: T.white, fontSize: 18, fontWeight: 800 }}>Approve Payroll Run</DialogTitle>
+            </DialogHeader>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 8 }}>
+              <p style={{ color: T.muted, fontSize: 13, margin: 0 }}>
+                You are approving the {new Date(year, month - 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' })} payroll run.
+                {!payrollRun?.approver1Id ? ' This will be the first of two required trustee approvals.' : ' This will be the second and final approval, finalising the payroll run.'}
+              </p>
+              <div>
+                <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Comment (optional)</Label>
+                <Input value={approvalComment} onChange={e => setApprovalComment(e.target.value)} placeholder='Add a comment…'
+                  style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+              </div>
+              <Button onClick={() => approveRunMutation.mutate({ month, year, comment: approvalComment || undefined })} disabled={approveRunMutation.isPending}
+                style={{ background: 'linear-gradient(135deg,#10B981,#059669)', color: T.white, border: 'none', borderRadius: 12, height: 48, fontWeight: 700 }}>
+                {approveRunMutation.isPending ? <Loader2 size={16} className='animate-spin mr-2' /> : <ThumbsUp size={16} style={{ marginRight: 8 }} />}
+                Confirm Approval
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Reject Dialog ── */}
+        <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+          <DialogContent style={{ background: '#0D2240', border: `1px solid ${T.border}`, borderRadius: 20, maxWidth: 440 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: '#f87171', fontSize: 18, fontWeight: 800 }}>Reject Payroll Run</DialogTitle>
+            </DialogHeader>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 8 }}>
+              <p style={{ color: T.muted, fontSize: 13, margin: 0 }}>Please provide a reason for rejection. The submitter will be notified.</p>
+              <div>
+                <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Reason for Rejection *</Label>
+                <Input value={rejectComment} onChange={e => setRejectComment(e.target.value)} placeholder='Explain why this run is being rejected…'
+                  style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+              </div>
+              <Button onClick={() => rejectRunMutation.mutate({ month, year, comment: rejectComment })} disabled={rejectRunMutation.isPending || !rejectComment.trim()}
+                style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.4)', color: '#f87171', borderRadius: 12, height: 48, fontWeight: 700 }}>
+                {rejectRunMutation.isPending ? <Loader2 size={16} className='animate-spin mr-2' /> : <ThumbsDown size={16} style={{ marginRight: 8 }} />}
+                Confirm Rejection
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── FPS Export Dialog ── */}
+        <Dialog open={showFpsDialog} onOpenChange={setShowFpsDialog}>
+          <DialogContent style={{ background: '#0D2240', border: `1px solid ${T.border}`, borderRadius: 20, maxWidth: 480 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: T.white, fontSize: 18, fontWeight: 800 }}>Export PAYE RTI FPS XML</DialogTitle>
+            </DialogHeader>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 8 }}>
+              <p style={{ color: T.muted, fontSize: 13, margin: 0 }}>Generate an HMRC-formatted Full Payment Submission (FPS) XML file for {new Date(year, month - 1).toLocaleString('en-GB', { month: 'long', year: 'numeric' })}.</p>
+              <div>
+                <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>PAYE Reference</Label>
+                <Input value={fpsPayeRef} onChange={e => setFpsPayeRef(e.target.value)} placeholder='e.g. 123/AB45678'
+                  style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+              </div>
+              <div>
+                <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Accounts Office Reference</Label>
+                <Input value={fpsAorRef} onChange={e => setFpsAorRef(e.target.value)} placeholder='e.g. 123PA00012345'
+                  style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+              </div>
+              <div>
+                <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Employer Name</Label>
+                <Input value={fpsEmployerName} onChange={e => setFpsEmployerName(e.target.value)} placeholder='e.g. AQ Society'
+                  style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+              </div>
+              <Button onClick={() => exportFpsMutation.mutate({ month, year, payeRef: fpsPayeRef, accountsOfficeRef: fpsAorRef, employerName: fpsEmployerName })} disabled={exportFpsMutation.isPending}
+                style={{ background: `linear-gradient(135deg,${T.purple},#4f46e5)`, color: T.white, border: 'none', borderRadius: 12, height: 48, fontWeight: 700 }}>
+                {exportFpsMutation.isPending ? <Loader2 size={16} className='animate-spin mr-2' /> : <Download size={16} style={{ marginRight: 8 }} />}
+                Generate & Download FPS XML
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Pension Enrolment Dialog ── */}
+        <Dialog open={showEnrolDialog} onOpenChange={setShowEnrolDialog}>
+          <DialogContent style={{ background: '#0D2240', border: `1px solid ${T.border}`, borderRadius: 20, maxWidth: 460 }}>
+            <DialogHeader>
+              <DialogTitle style={{ color: T.white, fontSize: 18, fontWeight: 800 }}>Enrol in Pension Scheme</DialogTitle>
+            </DialogHeader>
+            {enrolEmployee && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 8 }}>
+                <p style={{ color: T.muted, fontSize: 13, margin: 0 }}>Enrolling <strong style={{ color: T.white }}>{enrolEmployee.employeeName}</strong> in the workplace pension scheme.</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Employee Contribution %</Label>
+                    <Input type='number' value={enrolEmpPct} onChange={e => setEnrolEmpPct(Number(e.target.value))} min={0} max={100} step={0.5}
+                      style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+                  </div>
+                  <div>
+                    <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Employer Contribution %</Label>
+                    <Input type='number' value={enrolErPct} onChange={e => setEnrolErPct(Number(e.target.value))} min={0} max={100} step={0.5}
+                      style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+                  </div>
+                </div>
+                <div>
+                  <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Pension Provider</Label>
+                  <Input value={enrolProvider} onChange={e => setEnrolProvider(e.target.value)} placeholder='e.g. NEST, The People’s Pension…'
+                    style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+                </div>
+                <div>
+                  <Label style={{ fontSize: 11, fontWeight: 600, color: T.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Scheme Reference</Label>
+                  <Input value={enrolSchemeRef} onChange={e => setEnrolSchemeRef(e.target.value)} placeholder='Pension scheme reference number'
+                    style={{ marginTop: 6, background: 'rgba(255,255,255,0.06)', border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 44 }} />
+                </div>
+                <Button onClick={() => enrolMutation.mutate({ employeeName: enrolEmployee.employeeName, niNumber: enrolEmployee.niNumber, pensionProvider: enrolProvider || undefined, pensionSchemeRef: enrolSchemeRef || undefined, employeeContributionPct: enrolEmpPct, employerContributionPct: enrolErPct })} disabled={enrolMutation.isPending}
+                  style={{ background: 'linear-gradient(135deg,#10B981,#059669)', color: T.white, border: 'none', borderRadius: 12, height: 48, fontWeight: 700 }}>
+                  {enrolMutation.isPending ? <Loader2 size={16} className='animate-spin mr-2' /> : <BadgeCheck size={16} style={{ marginRight: 8 }} />}
+                  Confirm Enrolment
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* ── Manual Entry Dialog ── */}
         <Dialog open={open} onOpenChange={setOpen}>
