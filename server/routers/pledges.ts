@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { pledges, pledgePayments, donors } from "../../drizzle/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
+import { logAudit } from "./auditTrail";
 
 export const pledgesRouter = router({
   // List all pledges, optionally filtered by donorId or status
@@ -77,7 +78,16 @@ export const pledgesRouter = router({
         notes: input.notes ?? null,
         createdById: ctx.user.id,
       });
-      return { id: (result as any).insertId };
+      const pledgeId = (result as any).insertId;
+      await logAudit({
+        userId: ctx.user.id,
+        userName: ctx.user.name ?? ctx.user.email ?? undefined,
+        action: "create",
+        entity: "pledge",
+        entityId: Number(pledgeId),
+        meta: { donorId: input.donorId, totalAmount: input.totalAmount, frequency: input.frequency },
+      });
+      return { id: pledgeId };
     }),
 
   // Update a pledge (status, notes, nextDueDate)
@@ -88,7 +98,7 @@ export const pledgesRouter = router({
       nextDueDate: z.string().optional(),
       notes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       const data: Record<string, unknown> = { updatedAt: new Date() };
@@ -96,6 +106,14 @@ export const pledgesRouter = router({
       if (input.nextDueDate !== undefined) data.nextDueDate = new Date(input.nextDueDate);
       if (input.notes !== undefined) data.notes = input.notes;
       await db.update(pledges).set(data).where(eq(pledges.id, input.id));
+      await logAudit({
+        userId: ctx.user.id,
+        userName: ctx.user.name ?? ctx.user.email ?? undefined,
+        action: "update",
+        entity: "pledge",
+        entityId: Number(input.id),
+        meta: { status: input.status },
+      });
       return { ok: true };
     }),
 
@@ -135,6 +153,14 @@ export const pledgesRouter = router({
         status: newStatus,
         updatedAt: new Date(),
       }).where(eq(pledges.id, input.pledgeId));
+      await logAudit({
+        userId: ctx.user.id,
+        userName: ctx.user.name ?? ctx.user.email ?? undefined,
+        action: "payment",
+        entity: "pledge",
+        entityId: Number(input.pledgeId),
+        meta: { amount: input.amount, newStatus },
+      });
       return { ok: true, newStatus };
     }),
 

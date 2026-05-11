@@ -894,6 +894,54 @@ export const commsInboxRouter = router({
       await db.delete(sectionReplyTemplates).where(eq(sectionReplyTemplates.id, input.id));
       return { success: true };
     }),
+  // ── AI Suggested Replies (3 options per inbound email) ────────────────────
+  suggestReplies: protectedProcedure
+    .input(z.object({ emailId: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [email] = await db.select().from(inboundEmails).where(eq(inboundEmails.id, input.emailId)).limit(1);
+      if (!email) throw new TRPCError({ code: "NOT_FOUND", message: "Email not found" });
+      const prompt = `You are a helpful assistant for the Abdullah Quilliam Society (AQS), a UK charity. 
+Generate exactly 3 different reply options for the following inbound email. Each reply should:
+- Begin with "Assalamu Alaikum,"
+- Be professional, warm, and Islamic in tone
+- End with "JazakAllah Khair"
+- Be concise (2-4 sentences)
+- Vary in tone: formal, friendly, and brief
+
+Email subject: ${email.subject ?? "(no subject)"}
+From: ${email.fromName ?? email.fromEmail}
+Body: ${(email.bodyText ?? email.bodyHtml ?? "").slice(0, 1500)}
+
+Return JSON with this exact structure: { "replies": ["reply1", "reply2", "reply3"] }`;
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "You are a helpful assistant for a UK Islamic charity. Always respond with valid JSON only." },
+          { role: "user", content: prompt },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "suggested_replies",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                replies: { type: "array", items: { type: "string" }, minItems: 3, maxItems: 3 },
+              },
+              required: ["replies"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+      const raw = response.choices?.[0]?.message?.content;
+      if (!raw) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No response from AI" });
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      return { replies: parsed.replies as string[] };
+    }),
+
   // ── Per-section unread counts (for sidebar badges) ───────────────────────
   getSectionUnreadCounts: protectedProcedure.query(async () => {
     const db = await getDb();

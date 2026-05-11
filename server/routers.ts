@@ -27,6 +27,10 @@ import { pledgesRouter } from "./routers/pledges";
 import { donorPipelineRouter } from "./routers/donorPipeline";
 import { majorDonorRouter } from "./routers/majorDonor";
 import { bulkApprovalsRouter } from "./routers/bulkApprovals";
+import { conflictsRouter } from "./routers/conflicts";
+import { savedViewsRouter } from "./routers/savedViews";
+import { qrCodesRouter } from "./routers/qrCodes";
+import { recognitionTiersRouter } from "./routers/recognitionTiers";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -381,6 +385,10 @@ export const appRouter = router({
   donorPipeline: donorPipelineRouter,
   majorDonor: majorDonorRouter,
   bulkApprovals: bulkApprovalsRouter,
+  conflicts: conflictsRouter,
+  savedViews: savedViewsRouter,
+  qrCodes: qrCodesRouter,
+  recognitionTiers: recognitionTiersRouter,
 
   // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
   succession: router({
@@ -808,7 +816,7 @@ export const appRouter = router({
         const volunteerMatches = await db.select({
           id: volunteerPayments.id,
           type: sql<string>`'volunteer'`,
-          label: volunteerPayments.volunteerName,
+          label: volunteerPayments.recipientName,
           amount: volunteerPayments.amount,
           date: volunteerPayments.createdAt,
         }).from(volunteerPayments)

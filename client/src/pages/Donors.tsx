@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { Plus, Search, Users, Heart, Star, Mail, ScanLine } from "lucide-react";
+import { Plus, Search, Users, Heart, Star, Mail, ScanLine, ExternalLink, BarChart2 } from "lucide-react";
+import { Link } from "wouter";
 import { SmartUpload } from "@/components/SmartUpload";
 import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
 import SmartDocumentUpload from "@/components/SmartDocumentUpload";
@@ -23,6 +24,20 @@ export default function DonorsPage() {
   const [showDocScan, setShowDocScan] = useState(false);
 
   const { data, refetch } = trpc.donors.list.useQuery({ limit:100 });
+  const computeRfmMut = (trpc as any).donorsV3.computeRfmScores.useMutation({
+    onSuccess: (r: any) => { toast.success(`RFM scores updated for ${r.updated} donors`); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const RFM_COLORS: Record<string, string> = {
+    Champions: "#a855f7",
+    "Loyal Customers": "#3b82f6",
+    "Potential Loyalists": "#06b6d4",
+    "At Risk": "#f59e0b",
+    "Cannot Lose Them": "#ef4444",
+    Hibernating: "#6b7280",
+    "New Customers": "#22c55e",
+  };
   const mergeDonorMutation = trpc.donors.mergeFromScan.useMutation({
     onSuccess: (res: any) => {
       refetch();
@@ -115,6 +130,10 @@ export default function DonorsPage() {
                 }
               }}
             />
+            <Button onClick={() => computeRfmMut.mutate({})} disabled={computeRfmMut.isPending}
+              style={{ background:"rgba(99,91,255,0.15)",color:T.purple,border:`1px solid rgba(99,91,255,0.3)`,borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+              <BarChart2 size={16}/> {computeRfmMut.isPending ? "Scoring…" : "Run RFM Scoring"}
+            </Button>
             <Button onClick={() => setOpen(true)}
               style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
               <Plus size={16}/> Add Donor
@@ -180,11 +199,18 @@ export default function DonorsPage() {
                     <p style={{ fontSize:11,color:T.muted,margin:0 }}>{d.email??"No email"}</p>
                   </div>
                 </div>
-                {d.isRegular && (
-                  <span style={{ fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:999,background:"rgba(0,255,194,0.1)",color:T.mint,border:"1px solid rgba(0,255,194,0.2)",flexShrink:0 }}>
-                    REGULAR
-                  </span>
-                )}
+                <div style={{ display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end" }}>
+                  {d.isRegular && (
+                    <span style={{ fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:999,background:"rgba(0,255,194,0.1)",color:T.mint,border:"1px solid rgba(0,255,194,0.2)",flexShrink:0 }}>
+                      REGULAR
+                    </span>
+                  )}
+                  {d.rfmSegment && (
+                    <span style={{ fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:999,background:`${RFM_COLORS[d.rfmSegment] ?? "#6b7280"}22`,color:RFM_COLORS[d.rfmSegment] ?? "#9ca3af",border:`1px solid ${RFM_COLORS[d.rfmSegment] ?? "#6b7280"}44`,flexShrink:0 }}>
+                      {d.rfmSegment}
+                    </span>
+                  )}
+                </div>
               </div>
               <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14 }}>
                 <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 12px" }}>
@@ -199,9 +225,16 @@ export default function DonorsPage() {
               {d.phone && (
                 <p style={{ fontSize:12,color:T.muted,margin:"0 0 12px" }}>📞 {d.phone}</p>
               )}
-              <button style={{ width:"100%",padding:"8px",borderRadius:10,background:"rgba(99,91,255,0.1)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
-                <Mail size={12}/> Send Thank You
-              </button>
+              <div style={{ display:"flex",gap:8 }}>
+                <button style={{ flex:1,padding:"8px",borderRadius:10,background:"rgba(99,91,255,0.1)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6 }}>
+                  <Mail size={12}/> Send Thank You
+                </button>
+                <Link href={`/donors/${d.id}`}>
+                  <button style={{ padding:"8px 12px",borderRadius:10,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:4 }}>
+                    <ExternalLink size={12}/> Profile
+                  </button>
+                </Link>
+              </div>
             </div>
           ))}
         </div>

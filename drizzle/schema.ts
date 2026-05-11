@@ -1785,3 +1785,66 @@ export const bulkMessageApprovals = mysqlTable("bulk_message_approvals", {
 });
 export type BulkMessageApproval = typeof bulkMessageApprovals.$inferSelect;
 export type InsertBulkMessageApproval = typeof bulkMessageApprovals.$inferInsert;
+// ─── CONFLICTS OF INTEREST REGISTER ──────────────────────────────────────────
+export const conflictsOfInterest = mysqlTable("conflicts_of_interest", {
+  id: int("id").autoincrement().primaryKey(),
+  trusteeId: int("trusteeId").notNull(),
+  trusteeName: varchar("trusteeName", { length: 200 }).notNull(),
+  description: text("description").notNull(),
+  donorId: int("donorId"),
+  donorName: varchar("donorName", { length: 200 }),
+  donationAmount: decimal("donationAmount", { precision: 12, scale: 2 }),
+  disclosedAt: timestamp("disclosedAt").defaultNow().notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+  resolution: text("resolution"),
+  status: mysqlEnum("status", ["open", "resolved", "noted"]).default("open").notNull(),
+  createdById: int("createdById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ConflictOfInterest = typeof conflictsOfInterest.$inferSelect;
+export type InsertConflictOfInterest = typeof conflictsOfInterest.$inferInsert;
+// ─── SAVED VIEWS ──────────────────────────────────────────────────────────────
+export const savedViews = mysqlTable("saved_views", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  module: varchar("module", { length: 100 }).notNull().default("donors"),
+  filters: json("filters").notNull(),
+  isDefault: boolean("isDefault").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type SavedView = typeof savedViews.$inferSelect;
+export type InsertSavedView = typeof savedViews.$inferInsert;
+// ─── QR CODES ─────────────────────────────────────────────────────────────────
+export const qrCodes = mysqlTable("qr_codes", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId"),
+  campaignName: varchar("campaignName", { length: 300 }),
+  label: varchar("label", { length: 200 }),
+  targetUrl: text("targetUrl").notNull(),
+  utmSource: varchar("utmSource", { length: 100 }),
+  utmMedium: varchar("utmMedium", { length: 100 }),
+  utmCampaign: varchar("utmCampaign", { length: 200 }),
+  scanCount: int("scanCount").default(0).notNull(),
+  createdById: int("createdById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type QrCode = typeof qrCodes.$inferSelect;
+export type InsertQrCode = typeof qrCodes.$inferInsert;
+// ─── RECOGNITION TIERS ────────────────────────────────────────────────────────
+export const recognitionTiers = mysqlTable("recognition_tiers", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId"),
+  name: varchar("name", { length: 200 }).notNull(),
+  minAmount: decimal("minAmount", { precision: 12, scale: 2 }).notNull(),
+  maxAmount: decimal("maxAmount", { precision: 12, scale: 2 }),
+  description: text("description"),
+  benefitDescription: text("benefitDescription"),
+  color: varchar("color", { length: 50 }).default("#4CAF50"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type RecognitionTier = typeof recognitionTiers.$inferSelect;
+export type InsertRecognitionTier = typeof recognitionTiers.$inferInsert;

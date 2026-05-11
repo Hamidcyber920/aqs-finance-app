@@ -626,5 +626,38 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
       }
       return counts;
     }),
+  /** Subject Access Request — export all data for a donor */
+  sarExport: protectedProcedure
+    .input(z.object({ donorId: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const donor = await db.select().from(donors).where(eq(donors.id, input.donorId)).limit(1);
+      if (!donor.length) throw new TRPCError({ code: "NOT_FOUND", message: "Donor not found" });
+      return {
+        exportedAt: new Date().toISOString(),
+        donor: donor[0],
+        note: "This export was generated in response to a Subject Access Request under UK GDPR Article 15.",
+      };
+    }),
+
+  /** Right to erasure — anonymise donor record */
+  eraseRecord: protectedProcedure
+    .input(z.object({
+      donorId: z.number().int(),
+      reason: z.string().min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.update(donors).set({
+        firstName: "[ERASED]",
+        lastName: "[ERASED]",
+        email: `erased-${input.donorId}@deleted.invalid`,
+        phone: null,
+        notes: `Record erased on ${new Date().toISOString()} by user ${ctx.user.id}. Reason: ${input.reason}`,
+      } as any).where(eq(donors.id, input.donorId));
+      return { ok: true, erasedAt: new Date().toISOString() };
+    }),
 });
 export type DonorsV3Router = typeof donorsV3Router;

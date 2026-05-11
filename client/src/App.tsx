@@ -50,6 +50,12 @@ import SystemHealthPage from "./pages/SystemHealth";
 import PledgesPage from "./pages/Pledges";
 import DonorPipelinePage from "./pages/DonorPipeline";
 import MajorDonorPage from "./pages/MajorDonor";
+import BulkApprovalsPage from "./pages/BulkApprovals";
+import ConflictsRegisterPage from "./pages/ConflictsRegister";
+import RecognitionTiersPage from "./pages/RecognitionTiers";
+import QRCodesPage from "./pages/QRCodes";
+import DonorProfilePage from "./pages/DonorProfile";
+import SavedViewsPage from "./pages/SavedViews";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay"];
 
@@ -89,6 +95,7 @@ function Router() {
         <Route path="/monthly-expenses" component={MonthlyExpensesPage} />
         <Route path="/reconciliation" component={ReconciliationPage} />
         <Route path="/donors" component={DonorsPage} />
+        <Route path="/donors/:id" component={DonorProfilePage} />
         <Route path="/campaigns" component={CampaignsPage} />
         <Route path="/org-chart" component={OrgChartPage} />
         <Route path="/communications" component={CommunicationsPage} />
@@ -112,6 +119,11 @@ function Router() {
         <Route path="/pledges" component={PledgesPage} />
         <Route path="/donor-pipeline" component={DonorPipelinePage} />
         <Route path="/major-donor" component={MajorDonorPage} />
+        <Route path="/bulk-approvals" component={BulkApprovalsPage} />
+        <Route path="/conflicts-register" component={ConflictsRegisterPage} />
+        <Route path="/recognition-tiers" component={RecognitionTiersPage} />
+        <Route path="/qr-codes" component={QRCodesPage} />
+        <Route path="/saved-views" component={SavedViewsPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />

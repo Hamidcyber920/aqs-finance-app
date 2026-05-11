@@ -59,12 +59,12 @@ export default function PledgesPage() {
 
   const createMutation = trpc.pledges.create.useMutation({
     onSuccess: () => { toast.success("Pledge created"); setShowCreate(false); refetch(); createForm.reset(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   const markPaidMutation = trpc.pledges.markPaid.useMutation({
     onSuccess: () => { toast.success("Payment recorded"); setShowPayment(null); refetch(); payForm.reset(); },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   const createForm = useForm<any>({ defaultValues: { frequency: "one_off", isGiftAid: false } });

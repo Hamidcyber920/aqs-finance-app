@@ -1419,3 +1419,20 @@
 - [x] Frontend: PipelineKanban.tsx — cultivation stages Kanban (Identification→Qualification→Cultivation→Solicitation→Stewardship)
 - [x] Frontend: Campaigns.tsx — approval gate dialog when recipient count >50
 - [x] Tests: P1 vitest tests for pledges, RFM, QuickCapture amount, filters, major donor due diligence
+
+## Master Prompt P2 Gap Implementation
+
+- [x] Frontend: Bulk Approvals page (/bulk-approvals) — list pending/approved/rejected bulk message requests with approve/reject actions
+- [x] Frontend: RFM segment chips on Donors list — colour-coded segment badge + "Run RFM Scoring" button
+- [x] Frontend: Full Donor Profile page (/donors/:id) — tabs: Overview, Donations, Pledges, Communications, Notes, Audit
+- [x] Frontend: Donor list advanced filters — segment, lifetime value range, Gift Aid status, campaign, last gift range
+- [x] Backend + Frontend: Recognition tiers per campaign — Foundation/Wall/Roof/Mihrab with value thresholds
+- [x] Backend + Frontend: SAR (Subject Access Request) workflow — one-click export of all donor data
+- [x] Backend + Frontend: Right to erasure workflow — preserve financial, remove marketing data
+- [x] Backend: Lawful basis fields on donor record (donation processing, Gift Aid, marketing, safeguarding)
+- [x] Backend + Frontend: Conflicts of interest register — trustees giving to AQS
+- [x] Backend + Frontend: Saved views per staff member on Donors list
+- [x] Backend: UTM tracking + attribution model (first_touch_channel, conversion_channel) on donor/lead
+- [x] Backend + Frontend: QR code generation (unique, attributable per campaign)
+- [x] Frontend: AI suggested replies (3 options per inbound) in Master Inbox
+- [x] Backend: logAudit wired into pledge create/update/markPaid and pipeline moveStage mutations

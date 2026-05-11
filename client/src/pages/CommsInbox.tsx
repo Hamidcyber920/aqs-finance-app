@@ -74,6 +74,7 @@ export default function CommsInboxPage() {
   // Reply state
   const [replyBody, setReplyBody] = useState("");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
 
   // Gmail push webhook registration state
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
@@ -206,6 +207,11 @@ export default function CommsInboxPage() {
   const deleteSection = trpc.commsInbox.deleteSection.useMutation({
     onSuccess: () => { toast.success("Section deleted"); refetchSections(); },
     onError: (e) => toast.error(`Delete failed: ${e.message}`),
+  });
+
+  const suggestRepliesMut = (trpc as any).commsInbox.suggestReplies.useMutation({
+    onSuccess: (data: any) => { setAiSuggestions(data.replies); toast.success("3 AI reply suggestions ready"); },
+    onError: (e: any) => toast.error(`AI suggestions failed: ${e.message}`),
   });
 
   const linkToReceipt = trpc.commsInbox.linkToReceipt.useMutation({
@@ -847,6 +853,35 @@ export default function CommsInboxPage() {
                     </div>
                   )}
 
+                  {/* AI Suggested Replies */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-gray-400">AI Suggested Replies</Label>
+                      <Button
+                        size="sm" variant="outline"
+                        className="h-6 text-xs border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+                        disabled={suggestRepliesMut.isPending}
+                        onClick={() => { setAiSuggestions([]); suggestRepliesMut.mutate({ emailId: (selectedEmail as any).id }); }}
+                      >
+                        {suggestRepliesMut.isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Zap className="w-3 h-3 mr-1" />}
+                        {suggestRepliesMut.isPending ? "Generating…" : "Generate 3 Replies"}
+                      </Button>
+                    </div>
+                    {aiSuggestions.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        {aiSuggestions.map((s, idx) => (
+                          <button
+                            key={idx}
+                            className="text-left text-xs px-3 py-2 rounded-lg border border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-500/40 text-gray-300 hover:text-white transition-colors"
+                            onClick={() => setReplyBody(s)}
+                          >
+                            <span className="block font-semibold text-purple-400 mb-0.5">Option {idx + 1}</span>
+                            <span className="line-clamp-2">{s.slice(0, 120)}{s.length > 120 ? "…" : ""}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <Textarea
                     value={replyBody}
                     onChange={e => setReplyBody(e.target.value)}

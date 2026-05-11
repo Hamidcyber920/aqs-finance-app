@@ -30,7 +30,7 @@ import {
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
   Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity,
-  TrendingUp, Flag, Handshake,
+  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -58,6 +58,9 @@ const incomeItems = [
   { icon: TrendingUp, label: "Pledges", path: "/pledges" },
   { icon: Handshake, label: "Cultivation Pipeline", path: "/donor-pipeline" },
   { icon: Flag, label: "Major Donor DD", path: "/major-donor" },
+  { icon: Bookmark, label: "Saved Views", path: "/saved-views" },
+  { icon: QrCode, label: "QR Codes", path: "/qr-codes" },
+  { icon: Trophy, label: "Recognition Tiers", path: "/recognition-tiers" },
 ];
 const expenseItems = [
   { icon: Wallet, label: "Payroll", path: "/payroll" },
@@ -80,7 +83,9 @@ const adminItems = [
   { icon: ShieldCheck, label: "Admin Panel", path: "/admin" },
   { icon: Users, label: "Trustees & Staff Contacts", path: "/trustees" },
   { icon: ClipboardCheck, label: "Compliance Cockpit", path: "/compliance" },
+  { icon: AlertTriangle, label: "Conflicts Register", path: "/conflicts-register" },
   { icon: Gavel, label: "Decisions Register", path: "/decisions" },
+  { icon: AlertTriangle, label: "Bulk Approvals", path: "/bulk-approvals" },
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Shield, label: "Audit Trail", path: "/audit-trail" },
