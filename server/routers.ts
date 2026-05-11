@@ -1041,10 +1041,29 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        // Helper: normalise any date string to YYYY-MM-DD
+        const normaliseDate = (v: string): string => {
+          // DD/MM/YYYY or DD-MM-YYYY
+          const ukMatch = v.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+          if (ukMatch) return `${ukMatch[3]}-${ukMatch[2].padStart(2,'0')}-${ukMatch[1].padStart(2,'0')}`;
+          // Already ISO YYYY-MM-DD
+          if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+          // Try parsing as a general date
+          const d = new Date(v);
+          if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+          return v;
+        };
         const { id, ...fields } = input;
         const updates: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(fields)) {
-          if (v !== undefined && v !== null && v !== '') updates[k] = v;
+          if (v !== undefined && v !== null && v !== '') {
+            // Normalise date fields
+            if ((k === 'dateOfBirth' || k === 'date') && typeof v === 'string') {
+              updates[k] = normaliseDate(v);
+            } else {
+              updates[k] = v;
+            }
+          }
         }
         if (Object.keys(updates).length > 0) {
           const { trustees: trusteesTable } = await import('../drizzle/schema');
@@ -2498,10 +2517,19 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const normDate = (v: string) => {
+          const m = v.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+          if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+          const d = new Date(v); return isNaN(d.getTime()) ? v : d.toISOString().slice(0,10);
+        };
+        const DATE_KEYS = new Set(['paymentDate','periodStart','periodEnd']);
         const { id, ...fields } = input;
         const updates: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(fields)) {
-          if (v !== undefined && v !== null && v !== '') updates[k] = v;
+          if (v !== undefined && v !== null && v !== '') {
+            updates[k] = (DATE_KEYS.has(k) && typeof v === 'string') ? normDate(v) : v;
+          }
         }
         if (Object.keys(updates).length > 0) {
           const { incomeRecords } = await import('../drizzle/schema');
