@@ -65,7 +65,7 @@ export default function CapturePage() {
     onSuccess: () => { toast.success("Receipt submitted"); setSubmitted(true); setTimeout(() => setLocation("/receipts"), 1800); },
     onError: (e) => toast.error(e.message),
   });
-  const checkDuplicateQuery = trpc.receipts.checkDuplicate.useQuery(
+  const checkDuplicateQuery = (trpc as any).receipts.checkDuplicate.useQuery(
     { imageHash: imageHash ?? undefined, vendor: extracted?.vendor, amount: extracted?.amount ? String(extracted.amount) : undefined, date: extracted?.date },
     { enabled: !!(imageHash || (extracted?.vendor && extracted?.amount)), staleTime: 30000 }
   )
