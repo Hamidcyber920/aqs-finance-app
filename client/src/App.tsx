@@ -36,6 +36,7 @@ import DonorCRMPage from "./pages/DonorCRM";
 import PaymentSuccessPage from "./pages/PaymentSuccess";
 import PaymentCancelledPage from "./pages/PaymentCancelled";
 import PayPage from "./pages/Pay";
+import CommHubPage from "./pages/CommHub";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay"];
 
@@ -78,6 +79,7 @@ function Router() {
         <Route path="/campaigns" component={CampaignsPage} />
         <Route path="/org-chart" component={OrgChartPage} />
         <Route path="/communications" component={CommunicationsPage} />
+        <Route path="/comms-hub" component={CommHubPage} />
         <Route path="/admin" component={AdminPanelPage} />
         <Route path="/trustees" component={TrusteesPage} />
         <Route path="/backups" component={BackupsPage} />

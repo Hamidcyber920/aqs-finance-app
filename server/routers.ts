@@ -4136,6 +4136,387 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         return { success: true };
       }),
   }),
+
+  // ─── MASTER COMMUNICATIONS HUB ───────────────────────────────────────────────
+  commsHub: router({
+    // ── Sections ──────────────────────────────────────────────────────────────
+    listSections: seniorProcedure.query(async ({ ctx }) => {
+      const rows = await (await getDb())!.execute(
+        sql`SELECT * FROM comms_sections WHERE isArchived = 0 ORDER BY sortOrder ASC, id ASC`
+      );
+      return rows[0] as unknown as any[];
+    }),
+
+    createSection: seniorProcedure
+      .input(z.object({
+        name: z.string().min(1).max(200),
+        description: z.string().optional(),
+        icon: z.string().optional().default('hash'),
+        color: z.string().optional().default('#635BFF'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '-' + Date.now();
+        await (await getDb())!.execute(
+          sql`INSERT INTO comms_sections (name, slug, description, icon, color, sortOrder, isSystem, createdById)
+              VALUES (${input.name}, ${slug}, ${input.description ?? null}, ${input.icon}, ${input.color},
+                      (SELECT COALESCE(MAX(s2.sortOrder),0)+1 FROM comms_sections s2), 0, ${ctx.user.id})`
+        );
+        return { success: true, slug };
+      }),
+
+    updateSection: seniorProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().min(1).max(200).optional(),
+        description: z.string().optional(),
+        icon: z.string().optional(),
+        color: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...fields } = input;
+        if (fields.name) await (await getDb())!.execute(sql`UPDATE comms_sections SET name=${fields.name} WHERE id=${id}`);
+        if (fields.description !== undefined) await (await getDb())!.execute(sql`UPDATE comms_sections SET description=${fields.description} WHERE id=${id}`);
+        if (fields.icon) await (await getDb())!.execute(sql`UPDATE comms_sections SET icon=${fields.icon} WHERE id=${id}`);
+        if (fields.color) await (await getDb())!.execute(sql`UPDATE comms_sections SET color=${fields.color} WHERE id=${id}`);
+        return { success: true };
+      }),
+
+    archiveSection: seniorProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const rows = await (await getDb())!.execute(sql`SELECT isSystem FROM comms_sections WHERE id=${input.id}`) as any;
+        if (rows[0]?.[0]?.isSystem) throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot archive a system section' });
+        await (await getDb())!.execute(sql`UPDATE comms_sections SET isArchived=1 WHERE id=${input.id}`);
+        return { success: true };
+      }),
+
+    // ── Messages ───────────────────────────────────────────────────────────────
+    listMessages: seniorProcedure
+      .input(z.object({
+        sectionId: z.number().optional(),
+        status: z.enum(['unread','read','actioned','archived','flagged']).optional(),
+        priority: z.enum(['urgent','high','normal','low']).optional(),
+        search: z.string().optional(),
+        limit: z.number().default(50),
+        offset: z.number().default(0),
+      }))
+      .query(async ({ ctx, input }) => {
+        let whereClause = '1=1';
+        if (input.sectionId) whereClause += ` AND m.sectionId = ${input.sectionId}`;
+        if (input.status) whereClause += ` AND m.status = '${input.status}'`;
+        if (input.priority) whereClause += ` AND m.priority = '${input.priority}'`;
+        if (input.search) {
+          const q = input.search.replace(/'/g, "''");
+          whereClause += ` AND (m.subject LIKE '%${q}%' OR m.fromName LIKE '%${q}%' OR m.fromEmail LIKE '%${q}%')`;
+        }
+        const rows = await (await getDb())!.execute(
+          sql.raw(`SELECT m.*, s.name as sectionName, s.color as sectionColor, s.icon as sectionIcon,
+                   (SELECT COUNT(*) FROM comms_attachments a WHERE a.messageId = m.id) as attachmentCount,
+                   (SELECT COUNT(*) FROM comms_replies r WHERE r.messageId = m.id) as replyCount
+                   FROM comms_messages m
+                   LEFT JOIN comms_sections s ON s.id = m.sectionId
+                   WHERE ${whereClause}
+                   ORDER BY m.isPinned DESC, m.receivedAt DESC
+                   LIMIT ${input.limit} OFFSET ${input.offset}`)
+        );
+        return rows[0] as unknown as any[];
+      }),
+
+    getMessage: seniorProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const rows = await (await getDb())!.execute(
+          sql`SELECT m.*, s.name as sectionName, s.color as sectionColor
+              FROM comms_messages m
+              LEFT JOIN comms_sections s ON s.id = m.sectionId
+              WHERE m.id = ${input.id}`
+        ) as any;
+        const msg = rows[0]?.[0];
+        if (!msg) throw new TRPCError({ code: 'NOT_FOUND' });
+        if (msg.status === 'unread') {
+          await (await getDb())!.execute(
+            sql`UPDATE comms_messages SET status='read', readAt=NOW(), readById=${ctx.user.id} WHERE id=${input.id}`
+          );
+          msg.status = 'read';
+        }
+        const attRows = await (await getDb())!.execute(
+          sql`SELECT * FROM comms_attachments WHERE messageId=${input.id} ORDER BY uploadedAt ASC`
+        ) as any;
+        const repRows = await (await getDb())!.execute(
+          sql`SELECT * FROM comms_replies WHERE messageId=${input.id} ORDER BY createdAt ASC`
+        ) as any;
+        return { ...msg, attachments: attRows[0] ?? [], replies: repRows[0] ?? [] };
+      }),
+
+    createMessage: seniorProcedure
+      .input(z.object({
+        sectionId: z.number(),
+        subject: z.string().min(1).max(500),
+        fromName: z.string().optional(),
+        fromEmail: z.string().email().optional(),
+        toNames: z.string().optional(),
+        body: z.string().optional(),
+        priority: z.enum(['urgent','high','normal','low']).default('normal'),
+        visibility: z.enum(['all_senior','trustees_only','chair_only']).default('all_senior'),
+        source: z.enum(['gmail_push','internal_compose','manual_entry']).default('manual_entry'),
+        gmailMessageId: z.string().optional(),
+        gmailThreadId: z.string().optional(),
+        receivedAt: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
+        const result = await (await getDb())!.execute(
+          sql`INSERT INTO comms_messages
+              (sectionId, source, subject, fromName, fromEmail, toNames, body, priority, visibility,
+               gmailMessageId, gmailThreadId, status, receivedAt, createdById)
+              VALUES
+              (${input.sectionId}, ${input.source}, ${input.subject}, ${input.fromName ?? null},
+               ${input.fromEmail ?? null}, ${input.toNames ?? null}, ${input.body ?? null},
+               ${input.priority}, ${input.visibility},
+               ${input.gmailMessageId ?? null}, ${input.gmailThreadId ?? null},
+               'unread', ${receivedAt}, ${ctx.user.id})`
+        ) as any;
+        return { success: true, id: result[0]?.insertId };
+      }),
+
+    updateMessageStatus: seniorProcedure
+      .input(z.object({
+        id: z.number(),
+        status: z.enum(['unread','read','actioned','archived','flagged']).optional(),
+        priority: z.enum(['urgent','high','normal','low']).optional(),
+        isStarred: z.boolean().optional(),
+        isPinned: z.boolean().optional(),
+        sectionId: z.number().optional(),
+        actionNote: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...fields } = input;
+        if (fields.status !== undefined) {
+          await (await getDb())!.execute(sql`UPDATE comms_messages SET status=${fields.status} WHERE id=${id}`);
+          if (fields.status === 'actioned') {
+            await (await getDb())!.execute(sql`UPDATE comms_messages SET actionedAt=NOW(), actionedById=${ctx.user.id}, actionNote=${fields.actionNote ?? null} WHERE id=${id}`);
+          }
+        }
+        if (fields.priority !== undefined) await (await getDb())!.execute(sql`UPDATE comms_messages SET priority=${fields.priority} WHERE id=${id}`);
+        if (fields.isStarred !== undefined) await (await getDb())!.execute(sql`UPDATE comms_messages SET isStarred=${fields.isStarred?1:0} WHERE id=${id}`);
+        if (fields.isPinned !== undefined) await (await getDb())!.execute(sql`UPDATE comms_messages SET isPinned=${fields.isPinned?1:0} WHERE id=${id}`);
+        if (fields.sectionId !== undefined) await (await getDb())!.execute(sql`UPDATE comms_messages SET sectionId=${fields.sectionId} WHERE id=${id}`);
+        return { success: true };
+      }),
+
+    deleteMessage: seniorProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await (await getDb())!.execute(sql`DELETE FROM comms_attachments WHERE messageId=${input.id}`);
+        await (await getDb())!.execute(sql`DELETE FROM comms_replies WHERE messageId=${input.id}`);
+        await (await getDb())!.execute(sql`DELETE FROM comms_messages WHERE id=${input.id}`);
+        return { success: true };
+      }),
+
+    // ── AI Summarise ───────────────────────────────────────────────────────────
+    summariseMessage: seniorProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const rows = await (await getDb())!.execute(
+          sql`SELECT subject, fromName, fromEmail, body, receivedAt FROM comms_messages WHERE id=${input.id}`
+        ) as any;
+        const msg = rows[0]?.[0];
+        if (!msg) throw new TRPCError({ code: 'NOT_FOUND' });
+        const attRows = await (await getDb())!.execute(
+          sql`SELECT fileName, ocrText FROM comms_attachments WHERE messageId=${input.id} AND ocrText IS NOT NULL`
+        ) as any;
+        const attachmentContext = (attRows[0] ?? []).map((a: any) =>
+          `[Attachment: ${a.fileName}]\n${a.ocrText}`
+        ).join('\n\n');
+        const content = [
+          `Subject: ${msg.subject}`,
+          `From: ${msg.fromName ?? ''} <${msg.fromEmail ?? ''}>`,
+          `Received: ${msg.receivedAt}`,
+          `Body:\n${msg.body ?? '(no body)'}`,
+          attachmentContext ? `Attachments:\n${attachmentContext}` : '',
+        ].filter(Boolean).join('\n');
+        const aiResp = await invokeLLM({
+          messages: [
+            { role: 'system', content: 'You are an executive assistant for a mosque charity. Summarise emails concisely for the chair and trustees. Return JSON with keys: summary (2-3 sentences), keyPoints (array of strings, max 5), actionItems (array of strings, max 5), urgency (low|normal|high|urgent).' },
+            { role: 'user', content: `Please summarise this email:\n\n${content}` },
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'email_summary',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  summary: { type: 'string' },
+                  keyPoints: { type: 'array', items: { type: 'string' } },
+                  actionItems: { type: 'array', items: { type: 'string' } },
+                  urgency: { type: 'string', enum: ['low','normal','high','urgent'] },
+                },
+                required: ['summary','keyPoints','actionItems','urgency'],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const parsed = JSON.parse(aiResp.choices[0].message.content as string);
+        await (await getDb())!.execute(
+          sql`UPDATE comms_messages
+              SET aiSummary=${parsed.summary},
+                  aiKeyPoints=${JSON.stringify(parsed.keyPoints)},
+                  aiActionItems=${JSON.stringify(parsed.actionItems)},
+                  aiSummarisedAt=NOW(),
+                  aiSummarisedById=${ctx.user.id}
+              WHERE id=${input.id}`
+        );
+        return parsed;
+      }),
+
+    // ── OCR Attachment ─────────────────────────────────────────────────────────
+    ocrAttachment: seniorProcedure
+      .input(z.object({ attachmentId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const rows = await (await getDb())!.execute(
+          sql`SELECT * FROM comms_attachments WHERE id=${input.attachmentId}`
+        ) as any;
+        const att = rows[0]?.[0];
+        if (!att) throw new TRPCError({ code: 'NOT_FOUND' });
+        const aiResp = await invokeLLM({
+          messages: [
+            { role: 'system', content: 'You are an OCR assistant. Extract all text from the provided image or document. Return JSON with keys: text (full extracted text), summary (2-3 sentence summary of the document content).' },
+            { role: 'user', content: [
+              { type: 'text' as const, text: 'Please extract all text from this document and summarise it.' },
+              { type: 'image_url' as const, image_url: { url: att.fileUrl, detail: 'high' as const } },
+            ]},
+          ],
+          response_format: {
+            type: 'json_schema',
+            json_schema: {
+              name: 'ocr_result',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  text: { type: 'string' },
+                  summary: { type: 'string' },
+                },
+                required: ['text','summary'],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+        const parsed = JSON.parse(aiResp.choices[0].message.content as string);
+        await (await getDb())!.execute(
+          sql`UPDATE comms_attachments
+              SET ocrText=${parsed.text}, ocrSummary=${parsed.summary}, ocrProcessedAt=NOW()
+              WHERE id=${input.attachmentId}`
+        );
+        return parsed;
+      }),
+
+    // ── Replies ────────────────────────────────────────────────────────────────
+    addReply: seniorProcedure
+      .input(z.object({
+        messageId: z.number(),
+        body: z.string().min(1),
+        isInternal: z.boolean().default(true),
+        sendEmail: z.boolean().default(false),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await (await getDb())!.execute(
+          sql`INSERT INTO comms_replies (messageId, body, fromName, fromEmail, isInternal, sentViaEmail, createdById)
+              VALUES (${input.messageId}, ${input.body}, ${ctx.user.name ?? null},
+                      ${ctx.user.email ?? null}, ${input.isInternal?1:0}, ${input.sendEmail?1:0}, ${ctx.user.id})`
+        );
+        if (input.sendEmail) {
+          await (await getDb())!.execute(
+            sql`UPDATE comms_messages SET status='actioned', actionedAt=NOW(), actionedById=${ctx.user.id} WHERE id=${input.messageId}`
+          );
+        }
+        return { success: true };
+      }),
+
+    // ── Attachments ────────────────────────────────────────────────────────────
+    addAttachment: seniorProcedure
+      .input(z.object({
+        messageId: z.number(),
+        fileName: z.string(),
+        fileKey: z.string(),
+        fileUrl: z.string(),
+        mimeType: z.string().optional(),
+        fileSizeBytes: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await (await getDb())!.execute(
+          sql`INSERT INTO comms_attachments (messageId, fileName, fileKey, fileUrl, mimeType, fileSizeBytes, uploadedById)
+              VALUES (${input.messageId}, ${input.fileName}, ${input.fileKey}, ${input.fileUrl},
+                      ${input.mimeType ?? null}, ${input.fileSizeBytes ?? null}, ${ctx.user.id})`
+        );
+        return { success: true };
+      }),
+
+    // ── Gmail Push-In ──────────────────────────────────────────────────────────
+    pushGmailMessage: seniorProcedure
+      .input(z.object({
+        subject: z.string(),
+        fromName: z.string().optional(),
+        fromEmail: z.string().optional(),
+        toNames: z.string().optional(),
+        body: z.string().optional(),
+        htmlBody: z.string().optional(),
+        gmailMessageId: z.string().optional(),
+        gmailThreadId: z.string().optional(),
+        gmailLabels: z.string().optional(),
+        receivedAt: z.string().optional(),
+        suggestedSectionSlug: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        let sectionSlug = input.suggestedSectionSlug ?? 'general';
+        const fromLower = (input.fromEmail ?? '').toLowerCase();
+        const fromName = (input.fromName ?? '').toLowerCase();
+        const subjectLower = (input.subject ?? '').toLowerCase();
+        if (fromName.includes('galib') || fromLower.includes('galib')) sectionSlug = 'galib-khan';
+        else if (fromLower.includes('hmrc') || subjectLower.includes('hmrc') || subjectLower.includes('gift aid')) sectionSlug = 'accountants';
+        else if (subjectLower.includes('urgent') || subjectLower.includes('asap')) sectionSlug = 'urgent';
+        else if (subjectLower.includes('booking') || subjectLower.includes('facilities')) sectionSlug = 'facilities';
+        else if (subjectLower.includes('accommodation') || subjectLower.includes('student') || subjectLower.includes('tenancy')) sectionSlug = 'student-accommodation';
+        const secRows = await (await getDb())!.execute(
+          sql`SELECT id FROM comms_sections WHERE slug=${sectionSlug} LIMIT 1`
+        ) as any;
+        const sectionId = secRows[0]?.[0]?.id;
+        if (!sectionId) throw new TRPCError({ code: 'NOT_FOUND', message: `Section '${sectionSlug}' not found` });
+        const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
+        const result = await (await getDb())!.execute(
+          sql`INSERT INTO comms_messages
+              (sectionId, source, subject, fromName, fromEmail, toNames, body, htmlBody,
+               gmailMessageId, gmailThreadId, gmailLabels, status, receivedAt, createdById)
+              VALUES
+              (${sectionId}, 'gmail_push', ${input.subject}, ${input.fromName ?? null},
+               ${input.fromEmail ?? null}, ${input.toNames ?? null}, ${input.body ?? null},
+               ${input.htmlBody ?? null}, ${input.gmailMessageId ?? null},
+               ${input.gmailThreadId ?? null}, ${input.gmailLabels ?? null},
+               'unread', ${receivedAt}, ${ctx.user.id})`
+        ) as any;
+        return { success: true, id: result[0]?.insertId, sectionSlug };
+      }),
+
+    // ── Stats ──────────────────────────────────────────────────────────────────
+    getStats: seniorProcedure.query(async ({ ctx }) => {
+      const rows = await (await getDb())!.execute(
+        sql`SELECT s.id, s.name, s.slug, s.color, s.icon,
+                   COUNT(m.id) as total,
+                   SUM(CASE WHEN m.status='unread' THEN 1 ELSE 0 END) as unread,
+                   SUM(CASE WHEN m.priority='urgent' THEN 1 ELSE 0 END) as urgent
+            FROM comms_sections s
+            LEFT JOIN comms_messages m ON m.sectionId = s.id AND m.status != 'archived'
+            WHERE s.isArchived = 0
+            GROUP BY s.id, s.name, s.slug, s.color, s.icon
+            ORDER BY s.sortOrder ASC`
+      );
+      return rows[0] as unknown as any[];
+    }),
+  }),
 });
 export type AppRouter = typeof appRouter;
 // ─── ORG CHART ROUTER (appended) ─────────────────────────────────────────────

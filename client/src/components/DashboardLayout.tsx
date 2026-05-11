@@ -28,7 +28,7 @@ import {
   BarChart3, BookOpen, Building2, Camera, ClipboardList, Scale,
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
   Settings, ShieldCheck, Users, Wallet, GitBranch,
-  ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck,
+  ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -61,6 +61,7 @@ const reconciliationItems = [{ icon: Scale, label: "Reconciliation", path: "/rec
 const orgItems = [
   { icon: GitBranch, label: "Org Chart", path: "/org-chart" },
   { icon: MessageSquare, label: "Communications", path: "/communications" },
+  { icon: Inbox, label: "Comms Hub", path: "/comms-hub" },
   { icon: Users, label: "Donors", path: "/donors" },
   { icon: Building2, label: "Campaigns", path: "/campaigns" },
   { icon: BarChart3, label: "Reports", path: "/reports" },

@@ -1,0 +1,81 @@
+CREATE TABLE `comms_attachments` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`messageId` int NOT NULL,
+	`fileName` varchar(300) NOT NULL,
+	`fileKey` varchar(500) NOT NULL,
+	`fileUrl` text NOT NULL,
+	`mimeType` varchar(100),
+	`fileSizeBytes` int,
+	`ocrText` text,
+	`ocrSummary` text,
+	`ocrProcessedAt` timestamp,
+	`uploadedById` int,
+	`uploadedAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `comms_attachments_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `comms_messages` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`sectionId` int NOT NULL,
+	`source` enum('gmail_push','internal_compose','manual_entry') NOT NULL DEFAULT 'manual_entry',
+	`subject` varchar(500) NOT NULL,
+	`fromName` varchar(200),
+	`fromEmail` varchar(320),
+	`toNames` text,
+	`ccNames` text,
+	`body` text,
+	`htmlBody` text,
+	`aiSummary` text,
+	`aiKeyPoints` text,
+	`aiActionItems` text,
+	`aiSummarisedAt` timestamp,
+	`aiSummarisedById` int,
+	`gmailMessageId` varchar(200),
+	`gmailThreadId` varchar(200),
+	`gmailLabels` text,
+	`status` enum('unread','read','actioned','archived','flagged') NOT NULL DEFAULT 'unread',
+	`priority` enum('urgent','high','normal','low') NOT NULL DEFAULT 'normal',
+	`isStarred` boolean NOT NULL DEFAULT false,
+	`isPinned` boolean NOT NULL DEFAULT false,
+	`visibility` enum('all_senior','trustees_only','chair_only') NOT NULL DEFAULT 'all_senior',
+	`receivedAt` timestamp NOT NULL DEFAULT (now()),
+	`readAt` timestamp,
+	`readById` int,
+	`actionedAt` timestamp,
+	`actionedById` int,
+	`actionNote` text,
+	`createdById` int,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `comms_messages_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `comms_replies` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`messageId` int NOT NULL,
+	`body` text NOT NULL,
+	`fromName` varchar(200),
+	`fromEmail` varchar(320),
+	`isInternal` boolean NOT NULL DEFAULT true,
+	`sentViaEmail` boolean NOT NULL DEFAULT false,
+	`createdById` int,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `comms_replies_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `comms_sections` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`name` varchar(200) NOT NULL,
+	`slug` varchar(100) NOT NULL,
+	`description` text,
+	`icon` varchar(50) DEFAULT 'hash',
+	`color` varchar(20) DEFAULT '#635BFF',
+	`sortOrder` int NOT NULL DEFAULT 0,
+	`isSystem` boolean NOT NULL DEFAULT false,
+	`isArchived` boolean NOT NULL DEFAULT false,
+	`createdById` int,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `comms_sections_id` PRIMARY KEY(`id`),
+	CONSTRAINT `comms_sections_slug_unique` UNIQUE(`slug`)
+);

@@ -1156,3 +1156,93 @@ export const pensionEnrolments = mysqlTable("pension_enrolments", {
 });
 export type PensionEnrolment = typeof pensionEnrolments.$inferSelect;
 export type InsertPensionEnrolment = typeof pensionEnrolments.$inferInsert;
+
+// ─── MASTER COMMUNICATIONS HUB ───────────────────────────────────────────────
+// Sections (inbox categories) — chair/trustees/managers can create custom ones
+export const commsSections = mysqlTable("comms_sections", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  description: text("description"),
+  icon: varchar("icon", { length: 50 }).default("hash"),
+  color: varchar("color", { length: 20 }).default("#635BFF"),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  isSystem: boolean("isSystem").default(false).notNull(),
+  isArchived: boolean("isArchived").default(false).notNull(),
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CommsSection = typeof commsSections.$inferSelect;
+export type InsertCommsSection = typeof commsSections.$inferInsert;
+
+// Messages — emails pushed in from Gmail or composed internally
+export const commsMessages = mysqlTable("comms_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  sectionId: int("sectionId").notNull(),
+  source: mysqlEnum("source", ["gmail_push", "internal_compose", "manual_entry"]).default("manual_entry").notNull(),
+  subject: varchar("subject", { length: 500 }).notNull(),
+  fromName: varchar("fromName", { length: 200 }),
+  fromEmail: varchar("fromEmail", { length: 320 }),
+  toNames: text("toNames"),
+  ccNames: text("ccNames"),
+  body: text("body"),
+  htmlBody: text("htmlBody"),
+  aiSummary: text("aiSummary"),
+  aiKeyPoints: text("aiKeyPoints"),
+  aiActionItems: text("aiActionItems"),
+  aiSummarisedAt: timestamp("aiSummarisedAt"),
+  aiSummarisedById: int("aiSummarisedById"),
+  gmailMessageId: varchar("gmailMessageId", { length: 200 }),
+  gmailThreadId: varchar("gmailThreadId", { length: 200 }),
+  gmailLabels: text("gmailLabels"),
+  status: mysqlEnum("status", ["unread", "read", "actioned", "archived", "flagged"]).default("unread").notNull(),
+  priority: mysqlEnum("priority", ["urgent", "high", "normal", "low"]).default("normal").notNull(),
+  isStarred: boolean("isStarred").default(false).notNull(),
+  isPinned: boolean("isPinned").default(false).notNull(),
+  visibility: mysqlEnum("visibility", ["all_senior", "trustees_only", "chair_only"]).default("all_senior").notNull(),
+  receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  readAt: timestamp("readAt"),
+  readById: int("readById"),
+  actionedAt: timestamp("actionedAt"),
+  actionedById: int("actionedById"),
+  actionNote: text("actionNote"),
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CommsMessage = typeof commsMessages.$inferSelect;
+export type InsertCommsMessage = typeof commsMessages.$inferInsert;
+
+// Attachments — files/images attached to messages
+export const commsAttachments = mysqlTable("comms_attachments", {
+  id: int("id").autoincrement().primaryKey(),
+  messageId: int("messageId").notNull(),
+  fileName: varchar("fileName", { length: 300 }).notNull(),
+  fileKey: varchar("fileKey", { length: 500 }).notNull(),
+  fileUrl: text("fileUrl").notNull(),
+  mimeType: varchar("mimeType", { length: 100 }),
+  fileSizeBytes: int("fileSizeBytes"),
+  ocrText: text("ocrText"),
+  ocrSummary: text("ocrSummary"),
+  ocrProcessedAt: timestamp("ocrProcessedAt"),
+  uploadedById: int("uploadedById"),
+  uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
+});
+export type CommsAttachment = typeof commsAttachments.$inferSelect;
+export type InsertCommsAttachment = typeof commsAttachments.$inferInsert;
+
+// Message replies / internal thread notes
+export const commsReplies = mysqlTable("comms_replies", {
+  id: int("id").autoincrement().primaryKey(),
+  messageId: int("messageId").notNull(),
+  body: text("body").notNull(),
+  fromName: varchar("fromName", { length: 200 }),
+  fromEmail: varchar("fromEmail", { length: 320 }),
+  isInternal: boolean("isInternal").default(true).notNull(),
+  sentViaEmail: boolean("sentViaEmail").default(false).notNull(),
+  createdById: int("createdById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type CommsReply = typeof commsReplies.$inferSelect;
+export type InsertCommsReply = typeof commsReplies.$inferInsert;

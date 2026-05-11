@@ -1011,26 +1011,26 @@
 - [x] Frontend: NI/Tax Code auto-fill shows a "Pre-filled from staff profile" badge when auto-populated
 
 ## Universal AI Scan/Upload — All Pages (May 2026)
-- [ ] Shared ScanUploadFAB component: floating camera/upload button, accepts photo/camera/PDF/file
-- [ ] Shared useAIScan hook: uploads file to S3, calls documents.extract with moduleType, returns extracted fields + confidence
-- [ ] ScanUploadFAB: shows AI extraction result panel with field-by-field validation checkboxes
-- [ ] ScanUploadFAB: auto-matches extracted name to existing profiles (tenants, donors, staff, trustees)
-- [ ] ScanUploadFAB: pre-fills the page's Add/Edit form with extracted data for admin approval
-- [ ] Finance: Fundraising — scan donation receipt/collection sheet, match to donor CRM
-- [ ] Finance: Qarde Hasan Loans — scan loan agreement/repayment slip, match to borrower register
-- [ ] Finance: Income & Rentals — scan bank statement/rental receipt, match to tenant/income category
-- [ ] Finance: Student Accommodation — scan tenancy agreement/rent receipt, auto-select tenant from register
-- [ ] Finance: Donor CRM — scan donor card/letter, create or update donor profile
-- [ ] Finance: Monthly Expenses — scan invoice/receipt, extract supplier, amount, category
-- [ ] Finance: Reconciliation — scan bank statement, extract transactions for reconciliation matching
-- [ ] Organisation: Org Chart — scan org chart document, extract staff names and roles
-- [ ] Organisation: Communications — scan letter/document, extract recipient and content for message compose
-- [ ] Organisation: Donors — scan donor form, create/update donor profile
-- [ ] Organisation: Campaigns — scan campaign flyer/report, extract campaign details
-- [ ] Organisation: Reports — scan external report PDF, attach as evidence to report record
-- [ ] Administration: Admin Panel — scan governance document, attach as evidence
-- [ ] Administration: Trustees & Staff Contacts — scan business card/staff form, create/update staff profile
-- [ ] Settings — scan configuration document, extract settings values
+- [x] Shared ScanUploadFAB component: floating camera/upload button, accepts photo/camera/PDF/file
+- [x] Shared useAIScan hook: uploads file to S3, calls documents.extract with moduleType, returns extracted fields + confidence
+- [x] ScanUploadFAB: shows AI extraction result panel with field-by-field validation checkboxes
+- [x] ScanUploadFAB: auto-matches extracted name to existing profiles (tenants, donors, staff, trustees)
+- [x] ScanUploadFAB: pre-fills the page's Add/Edit form with extracted data for admin approval
+- [x] Finance: Fundraising — scan donation receipt/collection sheet, match to donor CRM
+- [x] Finance: Qarde Hasan Loans — scan loan agreement/repayment slip, match to borrower register
+- [x] Finance: Income & Rentals — scan bank statement/rental receipt, match to tenant/income category
+- [x] Finance: Student Accommodation — scan tenancy agreement/rent receipt, auto-select tenant from register
+- [x] Finance: Donor CRM — scan donor card/letter, create or update donor profile
+- [x] Finance: Monthly Expenses — scan invoice/receipt, extract supplier, amount, category
+- [x] Finance: Reconciliation — scan bank statement, extract transactions for reconciliation matching
+- [x] Organisation: Org Chart — scan org chart document, extract staff names and roles
+- [x] Organisation: Communications — scan letter/document, extract recipient and content for message compose
+- [x] Organisation: Donors — scan donor form, create/update donor profile
+- [x] Organisation: Campaigns — scan campaign flyer/report, extract campaign details
+- [x] Organisation: Reports — scan external report PDF, attach as evidence to report record
+- [x] Administration: Admin Panel — scan governance document, attach as evidence
+- [x] Administration: Trustees & Staff Contacts — scan business card/staff form, create/update staff profile
+- [x] Settings — scan configuration document, extract settings values
 
 ## Universal AI Scan/Upload Feature — All Pages (May 2026)
 
@@ -1076,3 +1076,26 @@
 - [x] Pension Tracker tab in Payroll page — summary cards, contribution schedule, employee assessment
 - [x] RTI FPS Export dialog — configurable PAYE ref, AOR ref, employer name
 - [x] 30 Vitest tests for FPS XML, tax year derivation, pension thresholds, approval state machine
+
+## Master Communications Hub
+- [x] DB schema: comms_sections, comms_messages, comms_attachments, comms_replies tables
+- [x] Seed 8 default sections (General, Urgent, Accountants, HMRC/Gift Aid, Trustees, Facilities, Bookings, Student Accommodation)
+- [x] Backend: commsHub.listSections, getStats, createSection, updateSection, archiveSection
+- [x] Backend: commsHub.listMessages, getMessage, createMessage, updateMessageStatus, deleteMessage
+- [x] Backend: commsHub.pushGmailMessage with AI auto-routing to correct section
+- [x] Backend: commsHub.summariseMessage with AI key points and action items extraction
+- [x] Backend: commsHub.addAttachment, ocrAttachment (AI OCR + summary)
+- [x] Backend: commsHub.addReply (internal note or send email)
+- [x] Frontend: CommHub page with 3-panel layout (sections sidebar, message list, detail panel)
+- [x] Frontend: Compose/Add Message dialog with Gmail Push-In source option
+- [x] Frontend: Add Section dialog with icon and colour picker
+- [x] Frontend: AI Summarise button per message (key points + action items)
+- [x] Frontend: OCR button per attachment (AI reads image/PDF and summarises)
+- [x] Frontend: Move-to-section dropdown in message detail
+- [x] Frontend: Star, flag, archive, mark actioned, delete actions
+- [x] Frontend: Reply panel (internal note or send email)
+- [x] Frontend: Unread/urgent badge counts per section in sidebar
+- [x] Frontend: Status filter pills (All, Unread, Flagged, Actioned)
+- [x] Frontend: Search across all messages
+- [x] Frontend: Role-gated (superadmin, trustee, manager, deputy, admin only)
+- [x] 30 Vitest tests for slug generation, priority validation, visibility rules, auto-routing, status transitions, date formatting
