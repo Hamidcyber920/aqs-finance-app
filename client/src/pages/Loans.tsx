@@ -10,6 +10,7 @@ import {
   Plus, BookOpen, Clock, CheckCircle2, Mail,
   ChevronRight, Download, Send, AlertCircle, Users, TrendingDown, BarChart2
 } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,7 +97,7 @@ export default function LoansPage() {
     onError: (e) => toast.error(`Failed to send report: ${e.message}`),
   });
 
-  const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<any>({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<any>({
     resolver: zodResolver(loanSchema),
     defaultValues: { termUnit: "months", termValue: 6 },
   });
@@ -244,6 +245,22 @@ export default function LoansPage() {
                 <Mail size={15} /> {monthlyReportMutation.isPending ? "Sending…" : "Send Monthly Report"}
               </Button>
             )}
+            <SmartUpload
+              moduleType="loan_application"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                setOpen(true);
+                setTimeout(() => {
+                  if (d.applicantName) setValue("applicantName", d.applicantName);
+                  if (d.amountRequested) setValue("amount", String(d.amountRequested));
+                  if (d.purpose) setValue("purpose", d.purpose);
+                  if (d.guarantorName) setValue("guarantorName", d.guarantorName);
+                  if (d.notes) setValue("notes", d.notes);
+                }, 200);
+              }}
+            />
             <Button onClick={() => setOpen(true)}
               style={{ background: `linear-gradient(135deg,${T.purple},#4f46e5)`, color: T.white, border: "none", borderRadius: 12, padding: "10px 20px", fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
               <Plus size={16} /> New Application

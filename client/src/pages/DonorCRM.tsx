@@ -17,6 +17,7 @@ import {
   CheckCircle2, Clock, AlertCircle, MessageCircle, Mail, Plus, Download,
   ChevronRight, Building2, BookOpen
 } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtCurrency(v: string | number | null | undefined) {
@@ -867,11 +868,22 @@ export default function DonorCRM() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Donor CRM</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          QuickCapture · Progressive Profiling · Gift Aid · Donor Portal · Sadaqah Jariyah
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">Donor CRM</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            QuickCapture · Progressive Profiling · Gift Aid · Donor Portal · Sadaqah Jariyah
+          </p>
+        </div>
+        <SmartUpload
+          moduleType="crm_donor"
+          buttonLabel="Scan / Upload"
+          buttonVariant="outline"
+          onConfirm={(result) => {
+            const d = result.extractedData as any;
+            toast.info(`AI extracted donor: ${d.name || d.fullName || "unknown"}. Use QuickCapture tab to add them.`);
+          }}
+        />
       </div>
 
       {/* Stats */}

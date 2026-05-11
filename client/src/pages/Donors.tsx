@@ -4,6 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { Plus, Search, Users, Heart, Star, Mail } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +22,7 @@ export default function DonorsPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const { register, handleSubmit, reset } = useForm<any>();
+  const { register, handleSubmit, reset, setValue } = useForm<any>();
 
   const donors: any[] = Array.isArray(data) ? data : [];
   const filtered = donors.filter((d: any) =>
@@ -43,10 +44,27 @@ export default function DonorsPage() {
             </h1>
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Community donors — Sadaqah, Zakat, regular giving</p>
           </div>
-          <Button onClick={() => setOpen(true)}
-            style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
-            <Plus size={16}/> Add Donor
-          </Button>
+          <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            <SmartUpload
+              moduleType="crm_donor"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                setOpen(true);
+                setTimeout(() => {
+                  if (d.name || d.fullName) setValue("name", d.name || d.fullName);
+                  if (d.email) setValue("email", d.email);
+                  if (d.phone) setValue("phone", d.phone);
+                  if (d.notes) setValue("notes", d.notes);
+                }, 200);
+              }}
+            />
+            <Button onClick={() => setOpen(true)}
+              style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+              <Plus size={16}/> Add Donor
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}

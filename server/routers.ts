@@ -72,10 +72,11 @@ const ownerProcedure = protectedProcedure.use(({ ctx, next }) => {
   return next({ ctx });
 });
 
-// Superadmin or Trustee only — used for AI document import and sensitive data entry
+// Managers, trustees, superadmins — used for AI document import and sensitive data entry
+const SENIOR_ROLES = ["superadmin", "trustee", "manager", "deputy", "admin"];
 const seniorProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (!isOwnerOrSuperAdmin(ctx.user) && ctx.user.role !== "trustee")
-    throw new TRPCError({ code: "FORBIDDEN", message: "Only superadmins and trustees can perform this action" });
+  if (!SENIOR_ROLES.includes(ctx.user.role) && !isOwnerOrSuperAdmin(ctx.user))
+    throw new TRPCError({ code: "FORBIDDEN", message: "Only managers, trustees and superadmins can perform this action" });
   return next({ ctx });
 });
 
@@ -3175,7 +3176,7 @@ export const appRouter = router({
           'income_rental', 'loan_repayment', 'loan_application',
           'invoice', 'payroll', 'friday_collection',
           'fundraising_donation', 'receipt', 'bank_statement',
-          'handwritten_collection', 'business_card', 'bank_transfer_screenshot', 'crm_donor'
+          'handwritten_collection', 'business_card', 'bank_transfer_screenshot', 'crm_donor', 'staff_profile'
         ]),
         // Optional: existing record IDs to check for discrepancies
         existingRecordIds: z.array(z.number()).optional(),
@@ -3332,6 +3333,20 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 - campaignName: campaign or project name
 - giftAid: true if Gift Aid is ticked/declared, false otherwise
 - beneficiaryName: if this is a Sadaqah Jariyah dedication, the name of the person it is for
+- notes: any additional notes
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+          staff_profile: `You are an expert at extracting staff and trustee profile information for a UK Islamic charity. This image may be a CV, ID document, business card, or staff form. Extract:
+- fullName: full legal name
+- role: job title or role (e.g. Trustee, Manager, Staff, Volunteer)
+- email: email address
+- phone: UK phone number
+- dateOfBirth: date of birth (YYYY-MM-DD)
+- addressLine1: street address
+- city: city or town
+- postcode: UK postcode
+- nokName: next of kin full name
+- nokPhone: next of kin phone number
+- nokRelationship: relationship to next of kin (e.g. spouse, parent)
 - notes: any additional notes
 Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
         };

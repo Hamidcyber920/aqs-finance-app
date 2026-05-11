@@ -8,6 +8,7 @@ import {
   ClipboardList, ChevronDown, ChevronUp, Check, X,
   Upload, Camera, Clock, AlertCircle, Send, Plus, Calendar
 } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -170,6 +171,15 @@ export default function MonthlyExpensesPage() {
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Authorise, defer and track all outgoing payments</p>
           </div>
           <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            <SmartUpload
+              moduleType="invoice"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                toast.info(`AI extracted: ${d.vendorName || "vendor"} — £${d.amount || d.totalAmount || "?"}. Please use the Invoices section to add this record.`);
+              }}
+            />
             <div style={{ display:"flex",gap:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:12,padding:"6px 12px",alignItems:"center" }}>
               <Calendar size={14} style={{ color:T.muted }}/>
               <select value={month} onChange={e=>setMonth(Number(e.target.value))}

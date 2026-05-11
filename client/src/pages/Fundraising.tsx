@@ -4,6 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { Plus, HandHeart, Target, TrendingUp, Users } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,7 +50,7 @@ export default function FundraisingPage() {
   });
 
   const { register: regC, handleSubmit: handleC, reset: resetC } = useForm<any>();
-  const { register: regD, handleSubmit: handleD, reset: resetD } = useForm<any>();
+  const { register: regD, handleSubmit: handleD, reset: resetD, setValue: setValueD } = useForm<any>();
 
   const campaigns = (data as any[]) ?? [];
   const totalRaised = campaigns.reduce((s: number, c: any) => s + Number(c.currentAmount ?? 0), 0);
@@ -69,12 +70,28 @@ export default function FundraisingPage() {
             </h1>
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Track campaigns, donations and progress</p>
           </div>
-          {isAdmin && (
-            <Button onClick={() => setCampaignOpen(true)}
-              style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
-              <Plus size={16}/> New Campaign
-            </Button>
-          )}
+          <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            <SmartUpload
+              moduleType="fundraising_donation"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                setDonationOpen(true);
+                setTimeout(() => {
+                  if (d.donorName) setValueD("donorName", d.donorName);
+                  if (d.amount) setValueD("amount", String(d.amount));
+                  if (d.paymentMethod) setValueD("paymentMethod", d.paymentMethod);
+                }, 200);
+              }}
+            />
+            {isAdmin && (
+              <Button onClick={() => setCampaignOpen(true)}
+                style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+                <Plus size={16}/> New Campaign
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Stats */}

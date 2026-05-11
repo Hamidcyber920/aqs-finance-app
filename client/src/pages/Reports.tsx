@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { FileText, Download, TrendingUp, DollarSign, Receipt, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SmartUpload } from "@/components/SmartUpload";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -89,6 +90,15 @@ export default function ReportsPage() {
               <input type="number" value={year} onChange={e=>setYear(Number(e.target.value))}
                 style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",width:52 }}/>
             </div>
+            <SmartUpload
+              moduleType="bank_statement"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                toast.info(`AI extracted bank statement: closing balance £${d.closingBalance ?? "?"}. Review data below.`);
+              }}
+            />
             <Button onClick={handleGeneratePDF} disabled={generating}
               style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
               <Download size={15}/>{generating?"Generating…":"Export PDF"}

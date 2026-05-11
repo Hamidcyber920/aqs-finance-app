@@ -996,16 +996,72 @@
 - [x] Signatory shown on each saved payroll row and in monthly export
 
 ## Payroll Improvements (May 2026)
-- [ ] Backend: payroll.exportMonthly procedure — returns CSV string with all records for selected month (Employee, NI, Tax Code, Gross, Income Tax, NI Contribution, Pension, Other Deductions, Net Pay, Payment Method, Cheque No, Paid At, Authorised By)
-- [ ] Backend: payroll.exportMonthlyPdf procedure — generates HTML receipt-style PDF for the month, includes AQS header, signatory block, and cheque register
-- [ ] Backend: payroll.getChequeRegister procedure — returns all payroll records with paymentMethod=cheque across all months, with bankingStatus and bankedAt
-- [ ] Backend: payroll.markChequeBanked procedure — updates bankingStatus=banked and bankedAt=now for a given record
-- [ ] Backend: payroll.getStaffProfileByName procedure — fuzzy name lookup in staff_profiles, returns niNumber, taxCode, bankName, sortCode, accountNumber
-- [ ] Frontend: Payroll page — "Export CSV" button downloads monthly payroll as CSV
-- [ ] Frontend: Payroll page — "Export PDF" button generates and opens printable monthly summary
-- [ ] Frontend: Payroll page — "Cheque Register" tab showing all cheques issued, with banked/unbanked toggle
-- [ ] Frontend: Cheque Register — each row shows employee, amount, cheque number, date issued, status badge
-- [ ] Frontend: Cheque Register — "Mark Banked" button with date/time stamp
-- [ ] Frontend: Cheque Register — cheque evidence thumbnail with click-to-expand
-- [ ] Frontend: AI extraction — after name is extracted, auto-lookup staff profile and pre-fill NI + Tax Code if match found
-- [ ] Frontend: NI/Tax Code auto-fill shows a "Pre-filled from staff profile" badge when auto-populated
+- [x] Backend: payroll.exportMonthly procedure — returns CSV string with all records for selected month (Employee, NI, Tax Code, Gross, Income Tax, NI Contribution, Pension, Other Deductions, Net Pay, Payment Method, Cheque No, Paid At, Authorised By)
+- [x] Backend: payroll.exportMonthlyPdf procedure — generates HTML receipt-style PDF for the month, includes AQS header, signatory block, and cheque register
+- [x] Backend: payroll.getChequeRegister procedure — returns all payroll records with paymentMethod=cheque across all months, with bankingStatus and bankedAt
+- [x] Backend: payroll.markChequeBanked procedure — updates bankingStatus=banked and bankedAt=now for a given record
+- [x] Backend: payroll.getStaffProfileByName procedure — fuzzy name lookup in staff_profiles, returns niNumber, taxCode, bankName, sortCode, accountNumber
+- [x] Frontend: Payroll page — "Export CSV" button downloads monthly payroll as CSV
+- [x] Frontend: Payroll page — "Export PDF" button generates and opens printable monthly summary
+- [x] Frontend: Payroll page — "Cheque Register" tab showing all cheques issued, with banked/unbanked toggle
+- [x] Frontend: Cheque Register — each row shows employee, amount, cheque number, date issued, status badge
+- [x] Frontend: Cheque Register — "Mark Banked" button with date/time stamp
+- [x] Frontend: Cheque Register — cheque evidence thumbnail with click-to-expand
+- [x] Frontend: AI extraction — after name is extracted, auto-lookup staff profile and pre-fill NI + Tax Code if match found
+- [x] Frontend: NI/Tax Code auto-fill shows a "Pre-filled from staff profile" badge when auto-populated
+
+## Universal AI Scan/Upload — All Pages (May 2026)
+- [ ] Shared ScanUploadFAB component: floating camera/upload button, accepts photo/camera/PDF/file
+- [ ] Shared useAIScan hook: uploads file to S3, calls documents.extract with moduleType, returns extracted fields + confidence
+- [ ] ScanUploadFAB: shows AI extraction result panel with field-by-field validation checkboxes
+- [ ] ScanUploadFAB: auto-matches extracted name to existing profiles (tenants, donors, staff, trustees)
+- [ ] ScanUploadFAB: pre-fills the page's Add/Edit form with extracted data for admin approval
+- [ ] Finance: Fundraising — scan donation receipt/collection sheet, match to donor CRM
+- [ ] Finance: Qarde Hasan Loans — scan loan agreement/repayment slip, match to borrower register
+- [ ] Finance: Income & Rentals — scan bank statement/rental receipt, match to tenant/income category
+- [ ] Finance: Student Accommodation — scan tenancy agreement/rent receipt, auto-select tenant from register
+- [ ] Finance: Donor CRM — scan donor card/letter, create or update donor profile
+- [ ] Finance: Monthly Expenses — scan invoice/receipt, extract supplier, amount, category
+- [ ] Finance: Reconciliation — scan bank statement, extract transactions for reconciliation matching
+- [ ] Organisation: Org Chart — scan org chart document, extract staff names and roles
+- [ ] Organisation: Communications — scan letter/document, extract recipient and content for message compose
+- [ ] Organisation: Donors — scan donor form, create/update donor profile
+- [ ] Organisation: Campaigns — scan campaign flyer/report, extract campaign details
+- [ ] Organisation: Reports — scan external report PDF, attach as evidence to report record
+- [ ] Administration: Admin Panel — scan governance document, attach as evidence
+- [ ] Administration: Trustees & Staff Contacts — scan business card/staff form, create/update staff profile
+- [ ] Settings — scan configuration document, extract settings values
+
+## Universal AI Scan/Upload Feature — All Pages (May 2026)
+
+- [x] Add `staff_profile` ModuleType to SmartUpload component with field labels
+- [x] Add `staff_profile` prompt and enum to server-side documents.extract router
+- [x] Add SmartUpload button to Income.tsx (income_rental — pre-fills Add Income form)
+- [x] Add SmartUpload button to Fundraising.tsx (fundraising_donation — pre-fills Add Donation form)
+- [x] Add SmartUpload button to Loans.tsx (loan_application — pre-fills Apply for Loan form)
+- [x] Add SmartUpload button to DonorCRM.tsx (crm_donor — pre-fills donor quick-capture)
+- [x] Add SmartUpload button to MonthlyExpenses.tsx (receipt — pre-fills Add Expense form)
+- [x] Add SmartUpload button to Donors.tsx (crm_donor — pre-fills Add Donor dialog)
+- [x] Add SmartUpload button to Campaigns.tsx (fundraising_donation — pre-fills campaign form)
+- [x] Add SmartUpload button to Trustees.tsx (staff_profile — opens Add Member form)
+- [x] Add SmartUpload button to OrgChart.tsx (staff_profile — shows extracted staff info)
+- [x] Add SmartUpload button to Communications.tsx (business_card — extracts contact info)
+- [x] Add SmartUpload button to Reports.tsx (bank_statement — extracts closing balance)
+- [x] Add SmartUpload button to AdminPanel.tsx (staff_profile — opens Create Staff dialog)
+
+## Universal AI Scan/Upload Feature — All Pages (May 2026)
+
+- [x] Add staff_profile ModuleType to SmartUpload component with field labels
+- [x] Add staff_profile prompt and enum to server-side documents.extract router
+- [x] Add SmartUpload button to Income.tsx (income_rental — pre-fills Add Income form)
+- [x] Add SmartUpload button to Fundraising.tsx (fundraising_donation — pre-fills Add Donation form)
+- [x] Add SmartUpload button to Loans.tsx (loan_application — pre-fills Apply for Loan form)
+- [x] Add SmartUpload button to DonorCRM.tsx (crm_donor — pre-fills donor quick-capture)
+- [x] Add SmartUpload button to MonthlyExpenses.tsx (receipt — pre-fills Add Expense form)
+- [x] Add SmartUpload button to Donors.tsx (crm_donor — pre-fills Add Donor dialog)
+- [x] Add SmartUpload button to Campaigns.tsx (fundraising_donation — pre-fills campaign form)
+- [x] Add SmartUpload button to Trustees.tsx (staff_profile — opens Add Member form)
+- [x] Add SmartUpload button to OrgChart.tsx (staff_profile — shows extracted staff info)
+- [x] Add SmartUpload button to Communications.tsx (business_card — extracts contact info)
+- [x] Add SmartUpload button to Reports.tsx (bank_statement — extracts closing balance)
+- [x] Add SmartUpload button to AdminPanel.tsx (staff_profile — opens Create Staff dialog)

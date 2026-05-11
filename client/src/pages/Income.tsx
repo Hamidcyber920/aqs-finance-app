@@ -5,6 +5,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft, Upload, X, Camera, Search, Download, ChevronDown } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -548,6 +549,23 @@ export default function IncomePage() {
               style={{ padding:"8px 14px",borderRadius:12,fontSize:12,fontWeight:600,border:`1px solid ${showAll ? T.mint : T.border}`,background:showAll ? `rgba(52,211,153,0.15)` : `rgba(255,255,255,0.06)`,color:showAll ? T.mint : T.muted,cursor:"pointer",transition:"all 0.2s" }}>
               {showAll ? "Showing All" : "Show All"}
             </button>
+            <SmartUpload
+              moduleType="income_rental"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                openDialog(d.category || "");
+                setTimeout(() => {
+                  if (d.amount) setValue("amount", String(d.amount));
+                  if (d.tenantName) setValue("tenantName", d.tenantName);
+                  if (d.paymentDate) setValue("incomeDate", d.paymentDate);
+                  if (d.paymentMethod) setValue("paymentMethod", d.paymentMethod);
+                  if (d.reference) setValue("reference", d.reference);
+                  if (d.notes) setValue("notes", d.notes);
+                }, 200);
+              }}
+            />
             <Button onClick={()=>{ openDialog(); }}
               style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
               <Plus size={16}/> Add Income

@@ -4,6 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { Plus, Send, Mail, Users, Clock, CheckCircle2, Calendar, Eye } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,10 +76,21 @@ export default function CampaignsPage() {
             </h1>
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Communicate with donors — Ramadan appeals, Zakat, thank-yous</p>
           </div>
-          <Button onClick={() => setOpen(true)}
-            style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
-            <Plus size={15}/> New Campaign
-          </Button>
+          <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            <SmartUpload
+              moduleType="fundraising_donation"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                toast.info(`AI extracted: ${d.donorName || "donor"} — £${d.amount || "?"}. Use the donation section to record.`);
+              }}
+            />
+            <Button onClick={() => setOpen(true)}
+              style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+              <Plus size={15}/> New Campaign
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}

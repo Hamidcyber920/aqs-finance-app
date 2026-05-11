@@ -8,6 +8,7 @@ import {
   Plus, RefreshCw, ArrowLeft, UserPlus, ChevronDown, LogIn, Trash2,
   BookOpen, Save, History, ChevronRight, Clock, Tag,
 } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -1085,11 +1086,22 @@ export default function CommunicationsPage() {
       <div style={{minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,fontFamily:"'DM Sans',sans-serif",padding:"16px"}}>
 
         {/* Header */}
-        <div style={{marginBottom:16,animation:"fadeUp 0.4s ease both"}}>
-          <h1 style={{fontSize:"clamp(20px,3vw,26px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em"}}>
-            Communications <span style={{color:T.mint}}>Hub</span>
-          </h1>
-          <p style={{fontSize:12,color:T.muted,margin:"4px 0 0"}}>AQS internal messaging — email &amp; WhatsApp</p>
+        <div style={{marginBottom:16,animation:"fadeUp 0.4s ease both",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+          <div>
+            <h1 style={{fontSize:"clamp(20px,3vw,26px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em"}}>
+              Communications <span style={{color:T.mint}}>Hub</span>
+            </h1>
+            <p style={{fontSize:12,color:T.muted,margin:"4px 0 0"}}>AQS internal messaging — email &amp; WhatsApp</p>
+          </div>
+          <SmartUpload
+            moduleType="business_card"
+            buttonLabel="Scan / Upload"
+            buttonVariant="outline"
+            onConfirm={(result) => {
+              const d = result.extractedData as any;
+              toast.info(`AI extracted contact: ${d.name || d.fullName || "unknown"}. Use the contact directory to add them.`);
+            }}
+          />
         </div>
 
         {/* Grid */}

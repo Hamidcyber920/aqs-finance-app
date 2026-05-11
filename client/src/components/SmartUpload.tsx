@@ -23,7 +23,8 @@ export type ModuleType =
   | "handwritten_collection"
   | "business_card"
   | "bank_transfer_screenshot"
-  | "crm_donor";
+  | "crm_donor"
+  | "staff_profile";
 
 export interface ExtractedField {
   key: string;
@@ -63,6 +64,19 @@ interface SmartUploadProps {
 }
 
 const DEFAULT_FIELD_LABELS: Record<string, Record<string, string>> = {
+  staff_profile: {
+    fullName: "Full Name",
+    role: "Role / Position",
+    email: "Email",
+    phone: "Phone",
+    dateOfBirth: "Date of Birth",
+    addressLine1: "Address Line 1",
+    city: "City",
+    postcode: "Postcode",
+    nokName: "Next of Kin Name",
+    nokPhone: "Next of Kin Phone",
+    notes: "Notes",
+  },
   income_rental: {
     tenantName: "Tenant Name",
     amount: "Amount (£)",
@@ -170,7 +184,7 @@ export function SmartUpload({
   buttonVariant = "outline",
   className,
   fieldLabels,
-  allowedRoles = ["superadmin", "trustee"],
+  allowedRoles = ["superadmin", "trustee", "manager", "deputy", "admin"],
 }: SmartUploadProps) {
   const { user } = useAuth();
   const userRole = user?.role ?? "";
@@ -300,7 +314,7 @@ export function SmartUpload({
             </span>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Only superadmins and trustees can import documents</p>
+            <p>Only managers, trustees and superadmins can import documents</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

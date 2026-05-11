@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Mail, Phone, Pencil, ChevronDown, ChevronUp, Check, X, MapPin, Heart, Cake } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -415,11 +416,22 @@ export default function OrgChartPage() {
       `}</style>
       <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,padding:"20px 16px",fontFamily:"'DM Sans',sans-serif" }}>
 
-        <div style={{ marginBottom:24,animation:"fadeUp 0.4s ease both" }}>
-          <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
-            Organisation <span style={{ color:T.mint }}>Chart</span>
-          </h1>
-          <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Abdullah Quilliam Society — tap ▾ to expand, ✏️ to edit</p>
+        <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:24,flexWrap:"wrap",gap:12,animation:"fadeUp 0.4s ease both" }}>
+          <div>
+            <h1 style={{ fontSize:"clamp(22px,3vw,30px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
+              Organisation <span style={{ color:T.mint }}>Chart</span>
+            </h1>
+            <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Abdullah Quilliam Society — tap ▾ to expand, ✏️ to edit</p>
+          </div>
+          <SmartUpload
+            moduleType="staff_profile"
+            buttonLabel="Scan / Upload"
+            buttonVariant="outline"
+            onConfirm={(result) => {
+              const d = result.extractedData as any;
+              toast.info(`AI extracted: ${d.name || d.fullName || "staff member"}. Go to Trustees to add them.`);
+            }}
+          />
         </div>
 
         {missingDob.length > 0 && (

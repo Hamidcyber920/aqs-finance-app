@@ -5,6 +5,7 @@ import {
   Mail, Phone, Pencil, ChevronDown, ChevronUp, MapPin, Heart,
   Plus, X, Check, Users, Shield, Briefcase,
 } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { usePermissions } from "@/hooks/usePermissions";
 
 const T = {
@@ -427,12 +428,24 @@ export default function TrusteesPage() {
             </h1>
             <p style={{ fontSize:12,color:T.muted,margin:"4px 0 0" }}>AQS trustees, managers and staff — contact directory &amp; emergency details</p>
           </div>
-          {canAdd && (
-            <button onClick={()=>setShowAddForm(!showAddForm)}
-              style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 18px",borderRadius:12,background:showAddForm?"rgba(0,255,194,0.12)":`linear-gradient(135deg,${T.purple},#4f46e5)`,border:showAddForm?"1px solid rgba(0,255,194,0.4)":"none",color:showAddForm?T.mint:T.white,fontWeight:700,cursor:"pointer",fontSize:13 }}>
-              {showAddForm ? <><X size={14}/>Cancel</> : <><Plus size={14}/>Add Member</>}
-            </button>
-          )}
+          <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            <SmartUpload
+              moduleType="staff_profile"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                toast.info(`AI extracted: ${d.name || d.fullName || "staff member"}. Use Add Member to complete the record.`);
+                setShowAddForm(true);
+              }}
+            />
+            {canAdd && (
+              <button onClick={()=>setShowAddForm(!showAddForm)}
+                style={{ display:"flex",alignItems:"center",gap:8,padding:"10px 18px",borderRadius:12,background:showAddForm?"rgba(0,255,194,0.12)":`linear-gradient(135deg,${T.purple},#4f46e5)`,border:showAddForm?"1px solid rgba(0,255,194,0.4)":"none",color:showAddForm?T.mint:T.white,fontWeight:700,cursor:"pointer",fontSize:13 }}>
+                {showAddForm ? <><X size={14}/>Cancel</> : <><Plus size={14}/>Add Member</>}
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:12,marginBottom:24,animation:"fadeUp 0.5s ease 60ms both" }}>

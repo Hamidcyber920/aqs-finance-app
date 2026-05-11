@@ -7,6 +7,7 @@ import {
   ShieldCheck, Users, UserPlus, Check, X, Settings,
   Eye, EyeOff, Lock, Unlock, Badge as BadgeIcon
 } from "lucide-react";
+import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -113,10 +114,22 @@ export default function AdminPanelPage() {
             </h1>
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>User management, approvals and permissions</p>
           </div>
-          <Button onClick={() => setCreateOpen(true)}
-            style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
-            <UserPlus size={15}/> Create Staff
-          </Button>
+          <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            <SmartUpload
+              moduleType="staff_profile"
+              buttonLabel="Scan / Upload"
+              buttonVariant="outline"
+              onConfirm={(result) => {
+                const d = result.extractedData as any;
+                toast.info(`AI extracted: ${d.fullName || "staff member"}. Use Create Staff to complete the account.`);
+                setCreateOpen(true);
+              }}
+            />
+            <Button onClick={() => setCreateOpen(true)}
+              style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,border:"none",borderRadius:12,padding:"10px 20px",fontWeight:700,display:"flex",alignItems:"center",gap:8 }}>
+              <UserPlus size={15}/> Create Staff
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
