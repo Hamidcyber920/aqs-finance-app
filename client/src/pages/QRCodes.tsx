@@ -7,14 +7,72 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { QrCode, Plus, Download, ExternalLink, Copy } from "lucide-react";
+import { QrCode, Plus, Download, ExternalLink, Copy, Printer } from "lucide-react";
+import { QRCodeCanvas } from "qrcode.react";
+
+/** Build the full URL with UTM params appended */
+function buildQrUrl(qr: { targetUrl: string; utmSource?: string | null; utmMedium?: string | null; utmCampaign?: string | null }) {
+  try {
+    const url = new URL(qr.targetUrl);
+    if (qr.utmSource) url.searchParams.set("utm_source", qr.utmSource);
+    if (qr.utmMedium) url.searchParams.set("utm_medium", qr.utmMedium);
+    if (qr.utmCampaign) url.searchParams.set("utm_campaign", qr.utmCampaign);
+    return url.toString();
+  } catch {
+    return qr.targetUrl;
+  }
+}
+
+/** Download the QR canvas as a PNG file */
+function downloadQrPng(canvasId: string, label: string) {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) { toast.error("QR canvas not found"); return; }
+  const link = document.createElement("a");
+  link.download = `${label.replace(/\s+/g, "-").toLowerCase()}-qr.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+  toast.success("QR code downloaded");
+}
+
+/** Open a print window with the QR code and label */
+function printQr(canvasId: string, label: string, targetUrl: string) {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) { toast.error("QR canvas not found"); return; }
+  const dataUrl = canvas.toDataURL("image/png");
+  const win = window.open("", "_blank");
+  if (!win) { toast.error("Pop-up blocked — please allow pop-ups for this site"); return; }
+  win.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>QR Code — ${label}</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 40px; }
+          img { width: 300px; height: 300px; display: block; margin: 0 auto 16px; }
+          h2 { margin: 0 0 8px; font-size: 22px; }
+          p { color: #555; font-size: 13px; word-break: break-all; max-width: 320px; margin: 0 auto; }
+          @media print { button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <img src="${dataUrl}" alt="QR Code" />
+        <h2>${label}</h2>
+        <p>${targetUrl}</p>
+        <br/>
+        <button onclick="window.print()">Print</button>
+        <script>window.onload = () => window.print();<\/script>
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
 
 export default function QRCodes() {
   const [showGenerate, setShowGenerate] = useState(false);
   const [form, setForm] = useState({ label: "", targetUrl: "", campaignId: "", utmSource: "qr", utmMedium: "print", utmCampaign: "" });
 
   const { data: qrCodes, refetch } = (trpc as any).qrCodes.list.useQuery();
-  const { data: campaigns } = (trpc as any).fundraising.getCampaigns.useQuery();
+  const { data: campaigns } = (trpc as any).fundraising.listCampaigns.useQuery();
 
   const createMut = (trpc as any).qrCodes.create.useMutation({
     onSuccess: () => { toast.success("QR code generated"); refetch(); setShowGenerate(false); },
@@ -54,28 +112,49 @@ export default function QRCodes() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex justify-center items-center w-32 h-32 mx-auto border rounded bg-muted/30">
-                  <QrCode className="w-12 h-12 text-muted-foreground" />
-                </div>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <p className="truncate"><strong>URL:</strong> {qr.targetUrl}</p>
-                  {qr.utmSource && <p><strong>UTM:</strong> {qr.utmSource}/{qr.utmMedium}/{qr.utmCampaign}</p>}
-                  <p><strong>Scans:</strong> {qr.scanCount ?? 0}</p>
-                  <p><strong>Created:</strong> {new Date(qr.createdAt).toLocaleDateString("en-GB")}</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1" onClick={() => copyUrl(qr.targetUrl)}>
-                    <Copy className="w-3 h-3 mr-1" /> Copy URL
-                  </Button>
-                  <Button size="sm" variant="outline" asChild>
-                    <a href={qr.targetUrl} target="_blank" rel="noopener noreferrer">
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => deleteMut.mutate({ id: qr.id })}>
-                    ×
-                  </Button>
-                </div>
+                {/* Real QR code rendered on canvas */}
+                {(() => {
+                  const fullUrl = buildQrUrl(qr);
+                  const canvasId = `qr-canvas-${qr.id}`;
+                  return (
+                    <>
+                      <div className="flex justify-center items-center p-3 border rounded bg-white">
+                        <QRCodeCanvas
+                          id={canvasId}
+                          value={fullUrl}
+                          size={160}
+                          level="H"
+                          includeMargin={true}
+                        />
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p className="truncate"><strong>URL:</strong> {qr.targetUrl}</p>
+                        {qr.utmSource && <p><strong>UTM:</strong> {qr.utmSource}/{qr.utmMedium}/{qr.utmCampaign}</p>}
+                        <p><strong>Scans:</strong> {qr.scanCount ?? 0}</p>
+                        <p><strong>Created:</strong> {new Date(qr.createdAt).toLocaleDateString("en-GB")}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button size="sm" variant="outline" onClick={() => downloadQrPng(canvasId, qr.label || "qr-code")}>
+                          <Download className="w-3 h-3 mr-1" /> Download PNG
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => printQr(canvasId, qr.label || "QR Code", fullUrl)}>
+                          <Printer className="w-3 h-3 mr-1" /> Print
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => copyUrl(fullUrl)}>
+                          <Copy className="w-3 h-3 mr-1" /> Copy URL
+                        </Button>
+                        <Button size="sm" variant="outline" asChild>
+                          <a href={fullUrl} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="w-3 h-3 mr-1" /> Open
+                          </a>
+                        </Button>
+                      </div>
+                      <Button size="sm" variant="destructive" className="w-full" onClick={() => deleteMut.mutate({ id: qr.id })}>
+                        Delete
+                      </Button>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           ))}

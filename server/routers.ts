@@ -989,6 +989,29 @@ export const appRouter = router({
 
   fundraising: router({
     listCampaigns: protectedProcedure.query(() => getFundraisingCampaigns()),
+    getDonationsByDonor: adminProcedure
+      .input(z.object({ donorId: z.number().int(), limit: z.number().default(50) }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        const { fundraisingDonations: fd, fundraisingCampaigns: fc, donors: dt } = await import("../drizzle/schema");
+        // Get donor email/name first
+        const [donorRow] = await db.select({ email: dt.email, name: dt.name }).from(dt).where(eq(dt.id, input.donorId)).limit(1);
+        if (!donorRow) return [];
+        const rows = await db.select({
+          id: fd.id, amount: fd.amount, donatedAt: fd.donatedAt,
+          paymentMethod: fd.paymentMethod, giftAidDeclared: fd.giftAidDeclared,
+          notes: fd.notes, campaignId: fd.campaignId, campaignName: fc.name,
+          donorName: fd.donorName, donorEmail: fd.donorEmail,
+        }).from(fd)
+          .leftJoin(fc, eq(fd.campaignId, fc.id))
+          .where(donorRow.email
+            ? sql`${fd.donorEmail} = ${donorRow.email}`
+            : sql`${fd.donorName} = ${donorRow.name}`)
+          .orderBy(desc(fd.donatedAt))
+          .limit(input.limit);
+        return rows;
+      }),
     getCampaign: protectedProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => {
       const campaign = await getCampaignById(input.id);
       if (!campaign) throw new TRPCError({ code: "NOT_FOUND" });

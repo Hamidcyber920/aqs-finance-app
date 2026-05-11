@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -6,8 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen } from "lucide-react";
+import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen, Plus } from "lucide-react";
 import { Link } from "wouter";
 
 const TABS = [
@@ -29,18 +32,28 @@ const RFM_COLORS: Record<string, string> = {
   "New Customers": "bg-green-100 text-green-800",
 };
 
+const EMPTY_DONATION_FORM = {
+  amount: "",
+  campaignId: "",
+  paymentMethod: "cash",
+  isGiftAid: false,
+  notes: "",
+};
+
 export default function DonorProfile() {
   const [, params] = useRoute("/donors/:id");
   const donorId = params ? parseInt(params.id) : null;
   const [activeTab, setActiveTab] = useState("overview");
   const [noteText, setNoteText] = useState("");
+  const [showDonationDialog, setShowDonationDialog] = useState(false);
+  const [donationForm, setDonationForm] = useState(EMPTY_DONATION_FORM);
 
   const { data: donor } = (trpc as any).donors.get.useQuery(
     { id: donorId! },
     { enabled: !!donorId }
   );
 
-  const { data: donations } = (trpc as any).fundraising.getDonationsByDonor.useQuery(
+  const { data: donations, refetch: refetchDonations } = (trpc as any).fundraising.getDonationsByDonor.useQuery(
     { donorId: donorId! },
     { enabled: !!donorId && activeTab === "donations" }
   );
@@ -65,10 +78,44 @@ export default function DonorProfile() {
     { enabled: !!donor && activeTab === "audit" }
   );
 
+  const { data: campaigns } = (trpc as any).fundraising.listCampaigns.useQuery(
+    undefined,
+    { enabled: showDonationDialog }
+  );
+
   const addNoteMut = (trpc as any).donorPipeline.addNote.useMutation({
     onSuccess: () => { toast.success("Note added"); refetchNotes(); setNoteText(""); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const recordDonationMut = (trpc as any).fundraising.recordDonation.useMutation({
+    onSuccess: () => {
+      toast.success(`Donation of £${donationForm.amount} recorded for ${donor?.fullName || donor?.name}`);
+      setShowDonationDialog(false);
+      setDonationForm(EMPTY_DONATION_FORM);
+      refetchDonations();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleRecordDonation = () => {
+    if (!donationForm.amount || !donationForm.campaignId) {
+      toast.error("Please enter an amount and select a campaign");
+      return;
+    }
+    recordDonationMut.mutate({
+      campaignId: Number(donationForm.campaignId),
+      donorName: donor?.fullName || donor?.name || "Unknown",
+      donorEmail: donor?.email || undefined,
+      amount: donationForm.amount,
+      paymentMethod: donationForm.paymentMethod,
+      isGiftAid: donationForm.isGiftAid,
+      notes: donationForm.notes || undefined,
+    });
+  };
+
+  // Pre-fill Gift Aid from donor record
+  const defaultGiftAid = useMemo(() => !!donor?.isGiftAidEligible, [donor]);
 
   if (!donorId) return null;
 
@@ -83,7 +130,7 @@ export default function DonorProfile() {
             </Button>
           </Link>
           {donor && (
-            <div className="flex-1">
+            <div className="flex-1 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                   <User className="w-5 h-5 text-primary" />
@@ -103,6 +150,18 @@ export default function DonorProfile() {
                     )}
                   </div>
                 </div>
+              </div>
+              {/* Quick Actions */}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setDonationForm({ ...EMPTY_DONATION_FORM, isGiftAid: defaultGiftAid });
+                    setShowDonationDialog(true);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1" /> New Donation
+                </Button>
               </div>
             </div>
           )}
@@ -164,7 +223,15 @@ export default function DonorProfile() {
 
         {activeTab === "donations" && (
           <Card>
-            <CardHeader><CardTitle>Donation History</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Donation History</CardTitle>
+              <Button size="sm" onClick={() => {
+                setDonationForm({ ...EMPTY_DONATION_FORM, isGiftAid: defaultGiftAid });
+                setShowDonationDialog(true);
+              }}>
+                <Plus className="w-4 h-4 mr-1" /> Record Donation
+              </Button>
+            </CardHeader>
             <CardContent>
               {!donations?.length ? (
                 <p className="text-muted-foreground text-sm py-4 text-center">No donations recorded</p>
@@ -175,16 +242,18 @@ export default function DonorProfile() {
                       <th className="text-left py-2 pr-4">Date</th>
                       <th className="text-left py-2 pr-4">Amount</th>
                       <th className="text-left py-2 pr-4">Campaign</th>
+                      <th className="text-left py-2 pr-4">Method</th>
                       <th className="text-left py-2">Gift Aid</th>
                     </tr>
                   </thead>
                   <tbody>
                     {donations.map((d: any) => (
                       <tr key={d.id} className="border-b hover:bg-muted/20">
-                        <td className="py-2 pr-4">{d.donationDate ? new Date(d.donationDate).toLocaleDateString("en-GB") : "—"}</td>
+                        <td className="py-2 pr-4">{d.donatedAt ? new Date(d.donatedAt).toLocaleDateString("en-GB") : "—"}</td>
                         <td className="py-2 pr-4 font-semibold">£{Number(d.amount).toLocaleString()}</td>
                         <td className="py-2 pr-4 text-muted-foreground">{d.campaignName || "—"}</td>
-                        <td className="py-2">{d.isGiftAid ? <Badge className="bg-green-100 text-green-800">Yes</Badge> : "No"}</td>
+                        <td className="py-2 pr-4 text-muted-foreground capitalize">{d.paymentMethod?.replace("_", " ") || "—"}</td>
+                        <td className="py-2">{d.giftAidDeclared ? <Badge className="bg-green-100 text-green-800">Yes</Badge> : "No"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -252,7 +321,12 @@ export default function DonorProfile() {
             <Card>
               <CardHeader><CardTitle>Add Note</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <Textarea value={noteText} onChange={e => setNoteText(e.target.value)} placeholder="Add a note about this donor..." rows={3} />
+                <Textarea
+                  value={noteText}
+                  onChange={e => setNoteText(e.target.value)}
+                  placeholder="Add a note about this donor..."
+                  rows={3}
+                />
                 <Button disabled={!noteText || addNoteMut.isPending}
                   onClick={() => addNoteMut.mutate({ donorId: donorId!, note: noteText })}>
                   Add Note
@@ -307,6 +381,89 @@ export default function DonorProfile() {
           </Card>
         )}
       </div>
+
+      {/* Quick-Add Donation Dialog */}
+      <Dialog open={showDonationDialog} onOpenChange={setShowDonationDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Donation — {donor?.fullName || donor?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Donor pre-fill info */}
+            <div className="bg-muted/40 rounded p-3 text-sm space-y-1">
+              <p><span className="text-muted-foreground">Donor:</span> <strong>{donor?.fullName || donor?.name}</strong></p>
+              {donor?.email && <p><span className="text-muted-foreground">Email:</span> {donor.email}</p>}
+              {donor?.isGiftAidEligible && <Badge className="bg-green-100 text-green-800 text-xs">Gift Aid Eligible</Badge>}
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Amount (£) *</label>
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={donationForm.amount}
+                onChange={e => setDonationForm(f => ({ ...f, amount: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Campaign *</label>
+              <Select value={donationForm.campaignId} onValueChange={v => setDonationForm(f => ({ ...f, campaignId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select campaign..." /></SelectTrigger>
+                <SelectContent>
+                  {campaigns?.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Payment Method</label>
+              <Select value={donationForm.paymentMethod} onValueChange={v => setDonationForm(f => ({ ...f, paymentMethod: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="online">Online</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="giftAidCheck"
+                checked={donationForm.isGiftAid}
+                onChange={e => setDonationForm(f => ({ ...f, isGiftAid: e.target.checked }))}
+                className="w-4 h-4"
+              />
+              <label htmlFor="giftAidCheck" className="text-sm">
+                Gift Aid declaration confirmed
+                {donor?.isGiftAidEligible && <span className="text-green-600 ml-1">(donor is eligible)</span>}
+              </label>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Notes (optional)</label>
+              <Textarea
+                value={donationForm.notes}
+                onChange={e => setDonationForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Any notes about this donation..."
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDonationDialog(false)}>Cancel</Button>
+            <Button
+              disabled={recordDonationMut.isPending || !donationForm.amount || !donationForm.campaignId}
+              onClick={handleRecordDonation}
+            >
+              {recordDonationMut.isPending ? "Recording..." : "Record Donation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
