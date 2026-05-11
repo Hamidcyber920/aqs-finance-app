@@ -1,8 +1,8 @@
 import { TRPCError } from "@trpc/server";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db";
-import { recognitionTiers } from "../../drizzle/schema";
+import { recognitionTiers, fundraisingDonations } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
 
 export const recognitionTiersRouter = router({
@@ -57,6 +57,47 @@ export const recognitionTiersRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       await db.delete(recognitionTiers).where(eq(recognitionTiers.id, input.id));
       return { ok: true };
+    }),
+
+  /**
+   * Leaderboard: for a given campaign, aggregate each donor's total giving
+   * and assign the highest tier they qualify for.
+   */
+  leaderboard: protectedProcedure
+    .input(z.object({ campaignId: z.number().int() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      // Get all tiers for this campaign sorted by minAmount ascending
+      const tiers = await db
+        .select()
+        .from(recognitionTiers)
+        .where(eq(recognitionTiers.campaignId, input.campaignId))
+        .orderBy(asc(recognitionTiers.sortOrder));
+      if (!tiers.length) return [];
+      // Aggregate donations per donor for this campaign
+      const rows = await db
+        .select({
+          donorName: fundraisingDonations.donorName,
+          donorEmail: fundraisingDonations.donorEmail,
+          donorLeadId: fundraisingDonations.donorLeadId,
+          totalGiven: sql<string>`SUM(${fundraisingDonations.amount})`,
+        })
+        .from(fundraisingDonations)
+        .where(eq(fundraisingDonations.campaignId, input.campaignId))
+        .groupBy(
+          fundraisingDonations.donorName,
+          fundraisingDonations.donorEmail,
+          fundraisingDonations.donorLeadId
+        )
+        .orderBy(sql`SUM(${fundraisingDonations.amount}) DESC`);
+      // Sort tiers by minAmount descending to find the highest qualifying tier
+      const sortedTiers = [...tiers].sort((a, b) => Number(b.minAmount) - Number(a.minAmount));
+      return rows.map(row => {
+        const total = Number(row.totalGiven);
+        const tier = sortedTiers.find(t => total >= Number(t.minAmount)) ?? null;
+        return { ...row, totalGiven: total, tier };
+      });
     }),
 
   /** Seed default Hibba tiers for a campaign */

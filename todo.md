@@ -1442,3 +1442,9 @@
 - [x] Pledge reminders: nightly scheduled job finds overdue/due-soon pledges and sends personalised email reminders
 - [x] Donor Profile Communications tab: wire to inbound_emails filtered by donor email address
 - [x] Recognition tier badge: show donor's current tier on Donor Profile Overview tab based on lifetime giving total
+
+## Next Steps Round 3 (May 11 2026)
+
+- [ ] Stripe pledge payment link: backend createPledgeCheckout procedure + Pay Now button on Pledges tab + link in reminder email
+- [x] Donor Profile — New Pledge quick-create dialog on Pledges tab (pre-filled with donor name + Gift Aid status)
+- [x] Recognition Tiers — campaign leaderboard view showing donors ranked by total giving with tier badges

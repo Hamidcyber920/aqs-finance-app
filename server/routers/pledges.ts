@@ -5,6 +5,9 @@ import { getDb } from "../db";
 import { pledges, pledgePayments, donors } from "../../drizzle/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { logAudit } from "./auditTrail";
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-04-22.dahlia" });
 
 export const pledgesRouter = router({
   // List all pledges, optionally filtered by donorId or status
@@ -162,6 +165,55 @@ export const pledgesRouter = router({
         meta: { amount: input.amount, newStatus },
       });
       return { ok: true, newStatus };
+    }),
+
+  // Create a Stripe Checkout session for a pledge payment
+  createPledgeCheckout: protectedProcedure
+    .input(z.object({
+      pledgeId: z.number().int(),
+      origin: z.string(), // window.location.origin from frontend
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [pledge] = await db.select().from(pledges).where(eq(pledges.id, input.pledgeId));
+      if (!pledge) throw new TRPCError({ code: "NOT_FOUND", message: "Pledge not found" });
+      if (pledge.status === "fulfilled") throw new TRPCError({ code: "BAD_REQUEST", message: "Pledge is already fulfilled" });
+      const balanceOwing = parseFloat(pledge.balanceOwing);
+      if (balanceOwing < 0.5) throw new TRPCError({ code: "BAD_REQUEST", message: "Balance owing is below minimum payment amount (£0.50)" });
+      // Look up donor email if available
+      let donorEmail: string | undefined;
+      if (pledge.donorId) {
+        const [donor] = await db.select({ email: donors.email }).from(donors).where(eq(donors.id, pledge.donorId));
+        donorEmail = donor?.email ?? undefined;
+      }
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card", "bacs_debit"],
+        line_items: [{
+          price_data: {
+            currency: "gbp",
+            product_data: {
+              name: pledge.campaignName ? `Pledge Payment — ${pledge.campaignName}` : "AQ Society Pledge Payment",
+              description: `Pledge #${pledge.id} — Balance owing: £${balanceOwing.toFixed(2)}`,
+            },
+            unit_amount: Math.round(balanceOwing * 100),
+          },
+          quantity: 1,
+        }],
+        mode: "payment",
+        customer_email: donorEmail,
+        client_reference_id: String(pledge.id),
+        metadata: {
+          pledge_id: String(pledge.id),
+          donor_name: pledge.donorName ?? "",
+          campaign_name: pledge.campaignName ?? "",
+          balance_owing: String(balanceOwing),
+        },
+        success_url: `${input.origin}/pledges?paid=1&pledge_id=${pledge.id}`,
+        cancel_url: `${input.origin}/pledges?cancelled=1&pledge_id=${pledge.id}`,
+        allow_promotion_codes: true,
+      });
+      return { checkoutUrl: session.url, pledgeId: pledge.id, amount: balanceOwing };
     }),
 
   // Summary stats for dashboard

@@ -39,6 +39,15 @@ const EMPTY_DONATION_FORM = {
   isGiftAid: false,
   notes: "",
 };
+const EMPTY_PLEDGE_FORM = {
+  totalAmount: "",
+  frequency: "one_off" as "one_off" | "monthly" | "quarterly" | "annual",
+  campaignId: "",
+  startDate: "",
+  nextDueDate: "",
+  isGiftAid: false,
+  notes: "",
+};
 
 export default function DonorProfile() {
   const [, params] = useRoute("/donors/:id");
@@ -47,6 +56,9 @@ export default function DonorProfile() {
   const [noteText, setNoteText] = useState("");
   const [showDonationDialog, setShowDonationDialog] = useState(false);
   const [donationForm, setDonationForm] = useState(EMPTY_DONATION_FORM);
+  const [showPledgeDialog, setShowPledgeDialog] = useState(false);
+  const [pledgeForm, setPledgeForm] = useState(EMPTY_PLEDGE_FORM);
+  const [payingPledgeId, setPayingPledgeId] = useState<number | null>(null);
 
   const { data: donor } = (trpc as any).donors.get.useQuery(
     { id: donorId! },
@@ -98,6 +110,44 @@ export default function DonorProfile() {
     return sorted.find((t: any) => totalGiven >= Number(t.minAmount)) ?? null;
   }, [allTiers, donor]);
 
+  const { data: pledgeRefetch, refetch: refetchPledges } = (trpc as any).pledges.list.useQuery(
+    { donorId: donorId! },
+    { enabled: false }
+  );
+  void pledgeRefetch;
+  const createPledgeMut = (trpc as any).pledges.create.useMutation({
+    onSuccess: () => {
+      toast.success("Pledge created successfully");
+      setShowPledgeDialog(false);
+      setPledgeForm(EMPTY_PLEDGE_FORM);
+      refetchPledges();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const createPledgeCheckoutMut = (trpc as any).pledges.createPledgeCheckout.useMutation({
+    onSuccess: (data: any) => {
+      setPayingPledgeId(null);
+      if (data?.checkoutUrl) {
+        toast.info("Redirecting to Stripe Checkout...");
+        window.open(data.checkoutUrl, "_blank");
+      }
+    },
+    onError: (e: any) => { setPayingPledgeId(null); toast.error(e.message); },
+  });
+  const handleCreatePledge = () => {
+    if (!pledgeForm.totalAmount || !donorId) { toast.error("Please enter a pledge amount"); return; }
+    createPledgeMut.mutate({
+      donorId: donorId!,
+      donorName: donor?.fullName || donor?.name || undefined,
+      campaignId: pledgeForm.campaignId ? Number(pledgeForm.campaignId) : undefined,
+      totalAmount: pledgeForm.totalAmount,
+      frequency: pledgeForm.frequency,
+      startDate: pledgeForm.startDate || undefined,
+      nextDueDate: pledgeForm.nextDueDate || undefined,
+      isGiftAid: pledgeForm.isGiftAid,
+      notes: pledgeForm.notes || undefined,
+    });
+  };
   const addNoteMut = (trpc as any).donorPipeline.addNote.useMutation({
     onSuccess: () => { toast.success("Note added"); refetchNotes(); setNoteText(""); },
     onError: (e: any) => toast.error(e.message),
@@ -293,26 +343,48 @@ export default function DonorProfile() {
 
         {activeTab === "pledges" && (
           <Card>
-            <CardHeader><CardTitle>Pledges</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Pledges</CardTitle>
+              <Button size="sm" onClick={() => setShowPledgeDialog(true)}>
+                <Plus className="h-4 w-4 mr-1" /> New Pledge
+              </Button>
+            </CardHeader>
             <CardContent>
               {!pledges?.length ? (
-                <p className="text-muted-foreground text-sm py-4 text-center">No pledges recorded</p>
+                <p className="text-muted-foreground text-sm py-4 text-center">No pledges recorded yet</p>
               ) : (
                 <div className="space-y-3">
-                  {pledges.map((p: any) => (
+                  {(pledges as any[]).map((p: any) => (
                     <div key={p.id} className="border rounded p-3">
-                      <div className="flex justify-between items-start">
-                        <div>
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0">
                           <p className="font-medium">£{Number(p.totalAmount).toLocaleString()}</p>
-                          <p className="text-sm text-muted-foreground">{p.description || "No description"}</p>
+                          {p.campaignName && <p className="text-xs text-muted-foreground">{p.campaignName}</p>}
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {p.frequency?.replace("_", "-")} · Paid: £{Number(p.paidAmount || 0).toLocaleString()} · Balance: £{Number(p.balanceOwing || 0).toLocaleString()}
+                          </p>
+                          {p.nextDueDate && <p className="text-xs text-muted-foreground">Next due: {new Date(p.nextDueDate).toLocaleDateString("en-GB")}</p>}
                         </div>
-                        <Badge className={p.status === "fulfilled" ? "bg-green-100 text-green-800" : p.status === "overdue" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}>
-                          {p.status}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <Badge className={p.status === "fulfilled" ? "bg-green-100 text-green-800" : p.status === "lapsed" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}>
+                            {p.status}
+                          </Badge>
+                          {p.status !== "fulfilled" && Number(p.balanceOwing) >= 0.5 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 px-2"
+                              disabled={payingPledgeId === p.id || createPledgeCheckoutMut.isPending}
+                              onClick={() => {
+                                setPayingPledgeId(p.id);
+                                createPledgeCheckoutMut.mutate({ pledgeId: p.id, origin: window.location.origin });
+                              }}
+                            >
+                              {payingPledgeId === p.id ? "Opening..." : "Pay Now"}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Paid: £{Number(p.paidAmount || 0).toLocaleString()} · Due: {p.dueDate ? new Date(p.dueDate).toLocaleDateString("en-GB") : "—"}
-                      </p>
                     </div>
                   ))}
                 </div>
@@ -420,6 +492,93 @@ export default function DonorProfile() {
           </Card>
         )}
       </div>
+
+      {/* Quick-Add Pledge Dialog */}
+      <Dialog open={showPledgeDialog} onOpenChange={setShowPledgeDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Pledge — {donor?.fullName || donor?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted/40 rounded p-3 text-sm space-y-1">
+              <p><span className="text-muted-foreground">Donor:</span> <strong>{donor?.fullName || donor?.name}</strong></p>
+              {donor?.isGiftAidEligible && <Badge className="bg-green-100 text-green-800 text-xs">Gift Aid Eligible</Badge>}
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Total Pledge Amount (£) *</label>
+              <Input
+                type="number" min="0.50" step="0.01"
+                value={pledgeForm.totalAmount}
+                onChange={e => setPledgeForm(f => ({ ...f, totalAmount: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Frequency</label>
+              <Select value={pledgeForm.frequency} onValueChange={v => setPledgeForm(f => ({ ...f, frequency: v as any }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="one_off">One-off</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="annual">Annual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Campaign (optional)</label>
+              <Select value={pledgeForm.campaignId} onValueChange={v => setPledgeForm(f => ({ ...f, campaignId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select campaign..." /></SelectTrigger>
+                <SelectContent>
+                  {campaigns?.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium mb-1 block">Start Date</label>
+                <Input type="date" value={pledgeForm.startDate} onChange={e => setPledgeForm(f => ({ ...f, startDate: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-sm font-medium mb-1 block">Next Due Date</label>
+                <Input type="date" value={pledgeForm.nextDueDate} onChange={e => setPledgeForm(f => ({ ...f, nextDueDate: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox" id="pledgeGiftAid"
+                checked={pledgeForm.isGiftAid}
+                onChange={e => setPledgeForm(f => ({ ...f, isGiftAid: e.target.checked }))}
+                className="w-4 h-4"
+              />
+              <label htmlFor="pledgeGiftAid" className="text-sm">
+                Gift Aid declaration confirmed
+                {donor?.isGiftAidEligible && <span className="text-green-600 ml-1">(donor is eligible)</span>}
+              </label>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Notes (optional)</label>
+              <Textarea
+                value={pledgeForm.notes}
+                onChange={e => setPledgeForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Any notes about this pledge..."
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPledgeDialog(false)}>Cancel</Button>
+            <Button
+              disabled={createPledgeMut.isPending || !pledgeForm.totalAmount}
+              onClick={handleCreatePledge}
+            >
+              {createPledgeMut.isPending ? "Creating..." : "Create Pledge"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Quick-Add Donation Dialog */}
       <Dialog open={showDonationDialog} onOpenChange={setShowDonationDialog}>
