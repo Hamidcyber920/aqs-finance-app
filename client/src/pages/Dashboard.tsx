@@ -144,9 +144,9 @@ export default function DashboardPage() {
     { enabled: isAdmin }
   );
   const { data: users } = trpc.users.list.useQuery({}, { enabled: isAdmin });
-  const { data: complianceActions = [] } = trpc.compliance.listActions.useQuery(undefined, { enabled: isAdmin });
-  const { data: trainingData = [] } = trpc.compliance.listTraining.useQuery(undefined, { enabled: isAdmin });
-  const { data: policies = [] } = trpc.compliance.listPolicies.useQuery(undefined, { enabled: isAdmin });
+  const { data: complianceActions = [] } = (trpc as any).compliance.listActions.useQuery(undefined, { enabled: isAdmin });
+  const { data: trainingData = [] } = (trpc as any).compliance.listTraining.useQuery(undefined, { enabled: isAdmin });
+  const { data: policies = [] } = (trpc as any).compliance.listPolicies.useQuery(undefined, { enabled: isAdmin });
 
   // Compliance heat map stats
   const criticalItems = (complianceActions as any[]).filter((a: any) => a.priority === 'critical' && a.status !== 'completed').length;

@@ -551,7 +551,7 @@ export default function ComplianceCockpit() {
                         </tr>
                       </thead>
                       <tbody>
-                        {training.map(t => {
+                        {training.map((t: any) => {
                           const days = daysUntil(t.expiresAt);
                           return (
                             <tr key={t.id}>
