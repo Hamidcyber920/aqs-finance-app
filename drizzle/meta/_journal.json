@@ -393,6 +393,13 @@
       "when": 1778514878731,
       "tag": "0055_wet_namorita",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "5",
+      "when": 1778519268659,
+      "tag": "0056_cold_domino",
+      "breakpoints": true
     }
   ]
 }

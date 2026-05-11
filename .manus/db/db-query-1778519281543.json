@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `audit_log` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int,\n\t`userName` varchar(200),\n\t`action` varchar(100) NOT NULL,\n\t`entity` varchar(100) NOT NULL,\n\t`entityId` int,\n\t`meta` json,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `audit_log_id` PRIMARY KEY(`id`)\n);\nCREATE TABLE `section_reply_templates` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`sectionId` int,\n\t`title` varchar(200) NOT NULL,\n\t`body` text NOT NULL,\n\t`createdById` int NOT NULL,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `section_reply_templates_id` PRIMARY KEY(`id`)\n);\nALTER TABLE `receipts` ADD `linkedExpenseId` int;\nALTER TABLE `receipts` ADD `linkedExpenseNote` text;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE `audit_log` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int,\n\t`userName` varchar(200),\n\t`action` varchar(100) NOT NULL,\n\t`entity` varchar(100) NOT NULL,\n\t`entityId` int,\n\t`meta` json,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `audit_log_id` PRIMARY KEY(`id`)\n);\nCREATE TABLE `section_reply_templates` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`sectionId` int,\n\t`title` varchar(200) NOT NULL,\n\t`body` text NOT NULL,\n\t`createdById` int NOT NULL,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `section_reply_templates_id` PRIMARY KEY(`id`)\n);\nALTER TABLE `receipts` ADD `linkedExpenseId` int;\nALTER TABLE `receipts` ADD `linkedExpenseNote` text;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1677
+}

@@ -357,3 +357,185 @@ describe("Wave 4 Round 4 — Priority Stats, Last Sync, Receipt Cross-Reference"
     expect(src).toContain("email.fromEmail");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wave 4 Round 5 — Section Reply Templates, Unread Digest, Receipt-Expense Link
+// ─────────────────────────────────────────────────────────────────────────────
+describe("Wave 4 Round 5", () => {
+  it("section_reply_templates table exists in schema.ts", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../drizzle/schema.ts"), "utf-8");
+    expect(src).toContain("section_reply_templates");
+    expect(src).toContain("sectionId");
+    expect(src).toContain("title");
+    expect(src).toContain("body");
+  });
+
+  it("audit_log table exists in schema.ts", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../drizzle/schema.ts"), "utf-8");
+    expect(src).toContain("audit_log");
+    expect(src).toContain("action");
+    expect(src).toContain("entity");
+    expect(src).toContain("entityId");
+  });
+
+  it("receipts table has linkedExpenseId and linkedExpenseNote columns", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../drizzle/schema.ts"), "utf-8");
+    expect(src).toContain("linkedExpenseId");
+    expect(src).toContain("linkedExpenseNote");
+  });
+
+  it("commsInbox router has listSectionTemplates, upsertSectionTemplate, deleteSectionTemplate", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf-8");
+    expect(src).toContain("listSectionTemplates");
+    expect(src).toContain("upsertSectionTemplate");
+    expect(src).toContain("deleteSectionTemplate");
+  });
+
+  it("receipts router has suggestExpenseLink and confirmExpenseLink procedures", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers.ts"), "utf-8");
+    expect(src).toContain("suggestExpenseLink");
+    expect(src).toContain("confirmExpenseLink");
+  });
+
+  it("scheduledJobs.ts has unread digest cron job", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "scheduledJobs.ts"), "utf-8");
+    expect(src).toContain("unread digest");
+    expect(src).toContain("urgent");
+    expect(src).toContain("high");
+  });
+
+  it("CommsInbox.tsx has Manage Templates button and template manager dialog", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/CommsInbox.tsx"), "utf-8");
+    expect(src).toContain("Manage Templates");
+    expect(src).toContain("showTemplateManager");
+    expect(src).toContain("sectionTemplates");
+    expect(src).toContain("upsertSectionTemplate");
+  });
+
+  it("CommsInbox.tsx renders section-specific template picker in reply tab", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/CommsInbox.tsx"), "utf-8");
+    expect(src).toContain("Section Templates");
+    expect(src).toContain("listSectionTemplates");
+    expect(src).toContain("setReplyBody(t.body)");
+  });
+
+  it("ReceiptDetail.tsx queries suggestExpenseLink and confirmExpenseLink", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/ReceiptDetail.tsx"), "utf-8");
+    expect(src).toContain("suggestExpenseLink");
+    expect(src).toContain("confirmExpenseLink");
+    expect(src).toContain("expenseSuggestions");
+  });
+
+  it("ReceiptDetail.tsx renders expense auto-link suggestion card", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/ReceiptDetail.tsx"), "utf-8");
+    expect(src).toContain("Suggested Expense Match");
+    expect(src).toContain("dismissedExpenseLink");
+    expect(src).toContain("linkedExpenseId");
+  });
+});
+
+// ─── Wave 5: Audit Trail & System Health ─────────────────────────────────────
+describe("Wave 5: Audit Trail Router", () => {
+  it("auditTrail.ts exports auditTrailRouter and logAudit helper", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/auditTrail.ts"), "utf-8");
+    expect(src).toContain("export const auditTrailRouter");
+    expect(src).toContain("export async function logAudit");
+  });
+  it("auditTrailRouter has list, stats, getEntityTypes, getActionTypes, getForEntity procedures", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/auditTrail.ts"), "utf-8");
+    expect(src).toContain("list: protectedProcedure");
+    expect(src).toContain("stats: protectedProcedure");
+    expect(src).toContain("getEntityTypes: protectedProcedure");
+    expect(src).toContain("getActionTypes: protectedProcedure");
+    expect(src).toContain("getForEntity: protectedProcedure");
+  });
+  it("logAudit helper is non-throwing (catches errors internally)", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/auditTrail.ts"), "utf-8");
+    expect(src).toContain("} catch {");
+    expect(src).toContain("// Non-critical");
+  });
+  it("auditTrail stats procedure returns total, uniqueUsers, todayCount, topEntity", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/auditTrail.ts"), "utf-8");
+    expect(src).toContain("total:");
+    expect(src).toContain("uniqueUsers:");
+    expect(src).toContain("todayCount:");
+    expect(src).toContain("topEntity:");
+  });
+  it("auditTrailRouter is registered in routers.ts", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers.ts"), "utf-8");
+    expect(src).toContain("import { auditTrailRouter }");
+    expect(src).toContain("auditTrail: auditTrailRouter");
+  });
+});
+
+describe("Wave 5: System Health Router", () => {
+  it("systemHealth.ts exports systemHealthRouter", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/systemHealth.ts"), "utf-8");
+    expect(src).toContain("export const systemHealthRouter");
+  });
+  it("systemHealthRouter has snapshot and ping procedures", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/systemHealth.ts"), "utf-8");
+    expect(src).toContain("snapshot: protectedProcedure");
+    expect(src).toContain("ping: protectedProcedure");
+  });
+  it("snapshot procedure returns dbOk, tables, scheduledJobs, gmailLastSyncedAt, serverTime", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/systemHealth.ts"), "utf-8");
+    expect(src).toContain("dbOk");
+    expect(src).toContain("tables:");
+    expect(src).toContain("scheduledJobs");
+    expect(src).toContain("gmailLastSyncedAt");
+    expect(src).toContain("serverTime:");
+  });
+  it("systemHealthRouter is registered in routers.ts", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers.ts"), "utf-8");
+    expect(src).toContain("import { systemHealthRouter }");
+    expect(src).toContain("systemHealth: systemHealthRouter");
+  });
+});
+
+describe("Wave 5: Audit Trail & System Health Frontend Pages", () => {
+  it("AuditTrail.tsx exists and uses auditTrail tRPC procedures", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/AuditTrail.tsx"), "utf-8");
+    expect(src).toContain("trpc.auditTrail.list.useQuery");
+    expect(src).toContain("trpc.auditTrail.stats.useQuery");
+    expect(src).toContain("trpc.auditTrail.getEntityTypes.useQuery");
+    expect(src).toContain("trpc.auditTrail.getActionTypes.useQuery");
+  });
+  it("AuditTrail.tsx renders stats row, filters, table, and pagination", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/AuditTrail.tsx"), "utf-8");
+    expect(src).toContain("Audit Trail");
+    expect(src).toContain("Total Entries");
+    expect(src).toContain("Unique Users");
+    expect(src).toContain("entityFilter");
+    expect(src).toContain("actionFilter");
+    expect(src).toContain("totalPages");
+  });
+  it("SystemHealth.tsx exists and uses systemHealth tRPC procedures", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/SystemHealth.tsx"), "utf-8");
+    expect(src).toContain("trpc.systemHealth.snapshot.useQuery");
+    expect(src).toContain("trpc.systemHealth.ping.useQuery");
+  });
+  it("SystemHealth.tsx renders DB status, server time, Gmail sync, scheduled jobs, table counts", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/SystemHealth.tsx"), "utf-8");
+    expect(src).toContain("System Health");
+    expect(src).toContain("Database");
+    expect(src).toContain("Gmail Sync");
+    expect(src).toContain("Scheduled Jobs");
+    expect(src).toContain("Database Tables");
+    expect(src).toContain("latencyMs");
+  });
+  it("App.tsx registers /audit-trail and /system-health routes", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/App.tsx"), "utf-8");
+    expect(src).toContain("/audit-trail");
+    expect(src).toContain("/system-health");
+    expect(src).toContain("AuditTrailPage");
+    expect(src).toContain("SystemHealthPage");
+  });
+  it("DashboardLayout.tsx has Audit Trail and System Health nav items", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/components/DashboardLayout.tsx"), "utf-8");
+    expect(src).toContain("Audit Trail");
+    expect(src).toContain("System Health");
+    expect(src).toContain("/audit-trail");
+    expect(src).toContain("/system-health");
+  });
+});

@@ -1366,3 +1366,33 @@
 - [x] Frontend: CommsInbox.tsx — "Last synced X min ago" indicator in inbox header, auto-refreshes every 60s
 - [x] Frontend: Receipts page or receipt detail — "Linked Emails" section showing emails linked to this receipt
 - [x] Tests: Wave 4 Round 4 vitest tests for all 4 new procedures and frontend components
+
+## Wave 4 Round 5 — Section Reply Templates, Unread Digest, Receipt-Expense Auto-Link
+
+- [x] DB: section_reply_templates table (sectionId nullable, title, body, createdAt)
+- [x] Backend: commsInbox.listSectionTemplates — list templates for a given section (or global)
+- [x] Backend: commsInbox.upsertSectionTemplate — create/update a section reply template
+- [x] Backend: commsInbox.deleteSectionTemplate — delete a section reply template
+- [x] Backend: scheduledJobs.ts — daily 08:00 unread digest cron (urgent+high emails → notifyOwner)
+- [x] Backend: receipts.suggestExpenseLink — given receiptId, search expenses by amount+date proximity
+- [x] Backend: receipts.confirmExpenseLink — save the receipt↔expense link
+- [x] DB: receipts table — add linkedExpenseId column
+- [x] Frontend: CommsInbox.tsx — section template picker in reply tab (per-section templates shown first)
+- [x] Frontend: CommsInbox.tsx — "Manage Templates" button in section header to add/edit/delete templates
+- [x] Frontend: ReceiptDetail.tsx — "Suggested Expense Match" card when suggestExpenseLink returns results
+- [x] Tests: Wave 4 Round 5 vitest tests
+
+## Wave 5 — Final Wave: Reports Dashboard, Audit Trail, System Health
+
+- [x] DB: audit_log table (userId, action, entity, entityId, meta JSON, createdAt)
+- [x] Backend: audit.log helper — called from key mutations (approve, delete, pay, link)
+- [x] Backend: audit.list procedure — paginated audit log with filters (entity, userId, dateRange)
+- [x] Backend: reports.annualSummary — income vs expenses by month for a given year
+- [x] Backend: reports.categoryBreakdown — top expense categories for a period
+- [x] Backend: reports.donorRetention — new vs returning donors by month
+- [x] Backend: reports.systemHealth — DB row counts, last sync time, pending approvals, failed jobs
+- [x] Frontend: Reports page (/reports) — annual income/expense chart, category breakdown, donor retention chart
+- [x] Frontend: Audit Trail page (/audit) — paginated log table with entity/user/date filters (superadmin only)
+- [x] Frontend: System Health page (/system-health) — live stats cards (DB counts, sync status, pending items)
+- [x] Sidebar: add Reports, Audit Trail, System Health nav items (role-gated)
+- [x] Tests: Wave 5 vitest tests (audit, reports, systemHealth procedures)

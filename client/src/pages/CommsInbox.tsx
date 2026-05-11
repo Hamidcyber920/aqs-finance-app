@@ -108,6 +108,21 @@ export default function CommsInboxPage() {
 
   // Templates for reply
   const { data: templates = [] } = trpc.commsV3.listTemplates.useQuery({});
+  // Section reply templates
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [templateForm, setTemplateForm] = useState({ id: undefined as number | undefined, title: "", body: "" });
+  const { data: sectionTemplates = [], refetch: refetchSectionTemplates } = (trpc as any).commsInbox.listSectionTemplates.useQuery(
+    { sectionId: selectedSectionId ?? null },
+    { enabled: true }
+  );
+  const upsertSectionTemplate = (trpc as any).commsInbox.upsertSectionTemplate.useMutation({
+    onSuccess: () => { toast.success("Template saved"); setTemplateForm({ id: undefined, title: "", body: "" }); refetchSectionTemplates(); },
+    onError: (e: any) => toast.error(`Failed: ${e.message}`),
+  });
+  const deleteSectionTemplate = (trpc as any).commsInbox.deleteSectionTemplate.useMutation({
+    onSuccess: () => { toast.success("Template deleted"); refetchSectionTemplates(); },
+    onError: (e: any) => toast.error(`Failed: ${e.message}`),
+  });
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const fetchGmail = trpc.commsInbox.fetchFromGmail.useMutation({
@@ -411,6 +426,10 @@ export default function CommsInboxPage() {
           <Button size="sm" variant="outline" className="w-full text-xs border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/10"
             onClick={() => setShowWebhookDialog(true)}>
             <Zap className="w-3 h-3 mr-1" /> Enable Push
+          </Button>
+          <Button size="sm" variant="outline" className="w-full text-xs border-white/10 text-gray-400 hover:text-white hover:bg-white/5"
+            onClick={() => setShowTemplateManager(true)}>
+            <Tag className="w-3 h-3 mr-1" /> Manage Templates
           </Button>
         </div>
       </div>
@@ -787,7 +806,25 @@ export default function CommsInboxPage() {
                     <div><span className="text-gray-500">Subject:</span> <span className="text-gray-200">{(selectedEmail as any)?.subject?.startsWith("Re:") ? (selectedEmail as any)?.subject : `Re: ${(selectedEmail as any)?.subject}`}</span></div>
                   </div>
 
-                  {/* Template picker */}
+                  {/* Section-specific template picker */}
+                  {sectionTemplates.length > 0 && (
+                    <div>
+                      <Label className="text-xs text-gray-400">Section Templates</Label>
+                      <div className="flex flex-col gap-1 mt-1">
+                        {sectionTemplates.map((t: any) => (
+                          <button
+                            key={t.id}
+                            className="text-left text-xs px-2 py-1.5 rounded border border-white/10 bg-white/5 hover:bg-indigo-600/20 hover:border-indigo-500/40 text-gray-300 hover:text-white transition-colors"
+                            onClick={() => setReplyBody(t.body)}
+                          >
+                            <span className="font-medium">{t.title}</span>
+                            <span className="block text-gray-500 truncate">{t.body.slice(0, 60)}{t.body.length > 60 ? "…" : ""}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Global template picker */}
                   {templates.length > 0 && (
                     <div>
                       <Label className="text-xs text-gray-400">Use Template</Label>
@@ -1152,6 +1189,75 @@ export default function CommsInboxPage() {
               className="bg-purple-600 hover:bg-purple-700">
               {linkToReceipt.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Paperclip className="w-4 h-4 mr-2" />}
               Link Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template Manager Dialog */}
+      <Dialog open={showTemplateManager} onOpenChange={setShowTemplateManager}>
+        <DialogContent className="bg-[#0d1226] border-white/10 text-white max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Tag className="w-4 h-4 text-indigo-400" />
+              {selectedSectionId ? `Templates for ${sections.find((s: any) => s.id === selectedSectionId)?.name ?? "Section"}` : "All Section Templates"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Existing templates */}
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {sectionTemplates.length === 0 ? (
+                <p className="text-xs text-gray-500 text-center py-4">No templates yet. Add one below.</p>
+              ) : sectionTemplates.map((t: any) => (
+                <div key={t.id} className="flex items-start gap-2 p-2 rounded border border-white/10 bg-white/5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-200">{t.title}</p>
+                    <p className="text-xs text-gray-500 truncate">{t.body.slice(0, 80)}{t.body.length > 80 ? "…" : ""}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <button className="text-gray-500 hover:text-indigo-400" onClick={() => setTemplateForm({ id: t.id, title: t.title, body: t.body })}>
+                      <FileText className="w-3.5 h-3.5" />
+                    </button>
+                    <button className="text-gray-500 hover:text-red-400" onClick={() => deleteSectionTemplate.mutate({ id: t.id })}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Add / edit form */}
+            <div className="space-y-2 border-t border-white/10 pt-3">
+              <Label className="text-xs text-gray-400">{templateForm.id ? "Edit Template" : "New Template"}</Label>
+              <Input
+                placeholder="Template title…"
+                value={templateForm.title}
+                onChange={e => setTemplateForm(f => ({ ...f, title: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white text-sm"
+              />
+              <Textarea
+                placeholder="Template body…"
+                value={templateForm.body}
+                onChange={e => setTemplateForm(f => ({ ...f, body: e.target.value }))}
+                className="bg-white/5 border-white/10 text-white text-sm min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="border-white/20 text-gray-300 hover:text-white hover:bg-white/10"
+              onClick={() => { setShowTemplateManager(false); setTemplateForm({ id: undefined, title: "", body: "" }); }}>
+              Close
+            </Button>
+            <Button
+              disabled={!templateForm.title.trim() || !templateForm.body.trim() || upsertSectionTemplate.isPending}
+              className="bg-indigo-600 hover:bg-indigo-700"
+              onClick={() => upsertSectionTemplate.mutate({
+                id: templateForm.id,
+                sectionId: selectedSectionId ?? null,
+                title: templateForm.title,
+                body: templateForm.body,
+              })}>
+              {upsertSectionTemplate.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              {templateForm.id ? "Update" : "Add Template"}
             </Button>
           </DialogFooter>
         </DialogContent>

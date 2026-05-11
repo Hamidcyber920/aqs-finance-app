@@ -45,6 +45,8 @@ import PayrollV3Page from "./pages/PayrollV3";
 import CommsV3Page from "./pages/CommsV3";
 import MeetingsV3Page from "./pages/MeetingsV3";
 import CommsInboxPage from "./pages/CommsInbox";
+import AuditTrailPage from "./pages/AuditTrail";
+import SystemHealthPage from "./pages/SystemHealth";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay"];
 
@@ -102,6 +104,8 @@ function Router() {
         <Route path="/comms-v3" component={CommsV3Page} />
         <Route path="/meetings" component={MeetingsV3Page} />
         <Route path="/comms-inbox" component={CommsInboxPage} />
+        <Route path="/audit-trail" component={AuditTrailPage} />
+        <Route path="/system-health" component={SystemHealthPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />

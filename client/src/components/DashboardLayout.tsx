@@ -29,7 +29,7 @@ import {
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
-  Gift, CalendarDays, Send, UserPlus, MailOpen,
+  Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -79,6 +79,8 @@ const adminItems = [
   { icon: Gavel, label: "Decisions Register", path: "/decisions" },
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
+  { icon: Shield, label: "Audit Trail", path: "/audit-trail" },
+  { icon: Activity, label: "System Health", path: "/system-health" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ];
 

@@ -7,6 +7,7 @@ import {
   inboundEmails,
   emailAttachments,
   emailActivityLog,
+  sectionReplyTemplates,
 } from "../../drizzle/schema";
 import { eq, desc, and, or, like, isNull, sql, gte, lte, inArray } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
@@ -835,6 +836,63 @@ export const commsInboxRouter = router({
         .orderBy(desc(inboundEmails.receivedAt))
         .limit(50);
       return rows;
+    }),
+
+  // ── Section reply templates ───────────────────────────────────────────────
+  listSectionTemplates: protectedProcedure
+    .input(z.object({ sectionId: z.number().nullable().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const conditions = [];
+      if (input.sectionId !== undefined) {
+        // Return templates for this section + global templates
+        conditions.push(
+          or(
+            eq(sectionReplyTemplates.sectionId, input.sectionId!),
+            isNull(sectionReplyTemplates.sectionId)
+          )
+        );
+      }
+      const rows = await db
+        .select()
+        .from(sectionReplyTemplates)
+        .where(conditions.length ? conditions[0] : undefined)
+        .orderBy(sectionReplyTemplates.sectionId, sectionReplyTemplates.title);
+      return rows;
+    }),
+  upsertSectionTemplate: protectedProcedure
+    .input(z.object({
+      id: z.number().optional(),
+      sectionId: z.number().nullable().optional(),
+      title: z.string().min(1).max(200),
+      body: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      if (input.id) {
+        await db.update(sectionReplyTemplates)
+          .set({ title: input.title, body: input.body, sectionId: input.sectionId ?? null })
+          .where(eq(sectionReplyTemplates.id, input.id));
+        return { id: input.id };
+      } else {
+        const [result] = await db.insert(sectionReplyTemplates).values({
+          sectionId: input.sectionId ?? null,
+          title: input.title,
+          body: input.body,
+          createdById: ctx.user.id,
+        });
+        return { id: (result as any).insertId };
+      }
+    }),
+  deleteSectionTemplate: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(sectionReplyTemplates).where(eq(sectionReplyTemplates.id, input.id));
+      return { success: true };
     }),
   // ── Per-section unread counts (for sidebar badges) ───────────────────────
   getSectionUnreadCounts: protectedProcedure.query(async () => {

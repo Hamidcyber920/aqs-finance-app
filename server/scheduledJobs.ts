@@ -321,6 +321,40 @@ async function sendBirthdayAlerts() {
 
 // ─── Register cron jobs ───────────────────────────────────────────────────────
 
+// ─── Daily unread digest ──────────────────────────────────────────────────────
+async function sendUnreadEmailDigest() {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const { inboundEmails } = await import("../drizzle/schema");
+    const { notifyOwner } = await import("./_core/notification");
+    const { eq, inArray, gte } = await import("drizzle-orm");
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const urgent = await db.select({ id: inboundEmails.id, subject: inboundEmails.subject, fromEmail: inboundEmails.fromEmail })
+      .from(inboundEmails)
+      .where(
+        (inboundEmails as any).status ? 
+          (inboundEmails as any).priority ?
+            (await import("drizzle-orm")).and(
+              eq(inboundEmails.status, "unread"),
+              (await import("drizzle-orm")).inArray(inboundEmails.priority as any, ["urgent", "high"]),
+              gte(inboundEmails.receivedAt, since)
+            ) : eq(inboundEmails.status, "unread")
+          : eq(inboundEmails.status, "unread")
+      )
+      .limit(20);
+    if (urgent.length === 0) return;
+    const lines = urgent.map((e: any) => `• [${e.id}] ${e.subject ?? "(no subject)"} — from ${e.fromEmail}`).join("\n");
+    await notifyOwner({
+      title: `📬 Daily Unread Digest — ${urgent.length} urgent/high email${urgent.length !== 1 ? "s" : ""}`,
+      content: `The following unread urgent/high-priority emails arrived in the last 24 hours:\n\n${lines}`,
+    });
+    console.log(`[Scheduled] Unread digest sent: ${urgent.length} emails`);
+  } catch (e) {
+    console.error("[Scheduled] Unread digest failed:", e);
+  }
+}
+
 export function registerScheduledJobs() {
   // Every Monday at 08:00 UK time (UTC+1 in summer = 07:00 UTC)
   // Using "0 7 * * 1" (07:00 UTC = 08:00 BST)
@@ -351,7 +385,11 @@ export function registerScheduledJobs() {
     syncGmailInbox().catch(console.error);
   }, { timezone: "Europe/London" });
 
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22)");
+  // Daily at 08:00 UK time — unread urgent/high email digest
+  cron.schedule("0 8 * * *", () => {
+    sendUnreadEmailDigest().catch(console.error);
+  }, { timezone: "Europe/London" });
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };

@@ -174,6 +174,9 @@ export const receipts = mysqlTable("receipts", {
   secondApprovedAt: timestamp("secondApprovedAt"),
   // Fund allocation (JSON: [{fund: string, amount: number}])
   fundAllocation: json("fundAllocation").$type<Array<{ fund: string; amount: number }>>(),
+  // Expense cross-reference
+  linkedExpenseId: int("linkedExpenseId"),
+  linkedExpenseNote: text("linkedExpenseNote"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -1628,3 +1631,31 @@ export const emailActivityLog = mysqlTable("email_activity_log", {
 });
 export type EmailActivityLog = typeof emailActivityLog.$inferSelect;
 export type InsertEmailActivityLog = typeof emailActivityLog.$inferInsert;
+
+// ─── SECTION REPLY TEMPLATES ─────────────────────────────────────────────────
+export const sectionReplyTemplates = mysqlTable("section_reply_templates", {
+  id: int("id").autoincrement().primaryKey(),
+  sectionId: int("sectionId"),                                  // null = global template
+  title: varchar("title", { length: 200 }).notNull(),
+  body: text("body").notNull(),
+  createdById: int("createdById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type SectionReplyTemplate = typeof sectionReplyTemplates.$inferSelect;
+export type InsertSectionReplyTemplate = typeof sectionReplyTemplates.$inferInsert;
+
+// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+export const auditLog = mysqlTable("audit_log", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),                                        // null = system action
+  userName: varchar("userName", { length: 200 }),
+  action: varchar("action", { length: 100 }).notNull(),        // e.g. "approve", "delete", "pay"
+  entity: varchar("entity", { length: 100 }).notNull(),        // e.g. "receipt", "loan", "payroll"
+  entityId: int("entityId"),
+  meta: json("meta").$type<Record<string, unknown>>(),         // extra context
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type AuditLog = typeof auditLog.$inferSelect;
+export type InsertAuditLog = typeof auditLog.$inferInsert;
+

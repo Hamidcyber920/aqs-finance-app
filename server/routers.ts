@@ -21,6 +21,8 @@ import { payrollV3Router } from "./routers/payrollV3";
 import { commsV3Router } from "./routers/commsV3";
 import { meetingsV3Router } from "./routers/meetingsV3";
 import { commsInboxRouter } from "./routers/commsInbox";
+import { auditTrailRouter } from "./routers/auditTrail";
+import { systemHealthRouter } from "./routers/systemHealth";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -39,7 +41,7 @@ import {
   getPayrollRecords, createPayrollRecord, updatePayrollRecord, getStaffProfile, upsertStaffProfile,
   getDashboardStats,
 } from "./db";
-import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, gte, lte } from "drizzle-orm";
 import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 // sendGmail is defined locally in this file (line ~123)
@@ -369,6 +371,8 @@ export const appRouter = router({
   commsV3: commsV3Router,
   meetingsV3: meetingsV3Router,
   commsInbox: commsInboxRouter,
+  auditTrail: auditTrailRouter,
+  systemHealth: systemHealthRouter,
 
   // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
   succession: router({
@@ -767,8 +771,60 @@ export const appRouter = router({
         const csvRows = rows.map(r => [r.id, `"${(r.vendor ?? "").replace(/"/g, '""')}"`, r.receiptDate ? new Date(r.receiptDate).toISOString().split("T")[0] : "", r.amount ?? "", r.tax ?? "", r.currency ?? "GBP", `"${(r.categoryName ?? "").replace(/"/g, '""')}"`, r.status, `"${(r.notes ?? "").replace(/"/g, '""')}"`, new Date(r.createdAt).toISOString()]);
         return { csv: [headers.join(","), ...csvRows.map(r => r.join(","))].join("\n"), count: rows.length };
       }),
+    // ── Expense auto-link ────────────────────────────────────────────────────
+    suggestExpenseLink: protectedProcedure
+      .input(z.object({ receiptId: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        const { receipts: receiptsTable, payrollRecords, volunteerPayments } = await import("../drizzle/schema");
+        const [receipt] = await db.select().from(receiptsTable).where(eq(receiptsTable.id, input.receiptId)).limit(1);
+        if (!receipt || !receipt.amount) return [];
+        const amount = parseFloat(String(receipt.amount));
+        const dateFrom = receipt.receiptDate ? new Date(receipt.receiptDate.getTime() - 7 * 86400000) : undefined;
+        const dateTo = receipt.receiptDate ? new Date(receipt.receiptDate.getTime() + 7 * 86400000) : undefined;
+        const payrollMatches = await db.select({
+          id: payrollRecords.id,
+          type: sql<string>`'payroll'`,
+          label: payrollRecords.employeeName,
+          amount: payrollRecords.netPay,
+          date: payrollRecords.createdAt,
+        }).from(payrollRecords)
+          .where(and(
+            sql`ABS(CAST(${payrollRecords.netPay} AS DECIMAL) - ${amount}) / ${amount} < 0.05`,
+            dateFrom ? gte(payrollRecords.createdAt, dateFrom) : undefined,
+            dateTo ? lte(payrollRecords.createdAt, dateTo) : undefined,
+          ) as any).limit(5);
+        const volunteerMatches = await db.select({
+          id: volunteerPayments.id,
+          type: sql<string>`'volunteer'`,
+          label: volunteerPayments.volunteerName,
+          amount: volunteerPayments.amount,
+          date: volunteerPayments.createdAt,
+        }).from(volunteerPayments)
+          .where(and(
+            sql`ABS(CAST(${volunteerPayments.amount} AS DECIMAL) - ${amount}) / ${amount} < 0.05`,
+            dateFrom ? gte(volunteerPayments.createdAt, dateFrom) : undefined,
+            dateTo ? lte(volunteerPayments.createdAt, dateTo) : undefined,
+          ) as any).limit(5);
+        return [...payrollMatches, ...volunteerMatches];
+      }),
+    confirmExpenseLink: protectedProcedure
+      .input(z.object({
+        receiptId: z.number(),
+        linkedExpenseId: z.number(),
+        linkedExpenseNote: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const { receipts: receiptsTable } = await import("../drizzle/schema");
+        await db.update(receiptsTable)
+          .set({ linkedExpenseId: input.linkedExpenseId, linkedExpenseNote: input.linkedExpenseNote ?? null } as any)
+          .where(eq(receiptsTable.id, input.receiptId));
+        return { success: true };
+      }),
   }),
-
   upload: router({
     getUploadUrl: protectedProcedure
       .input(z.object({ filename: z.string(), mimeType: z.string(), sizeBytes: z.number() }))

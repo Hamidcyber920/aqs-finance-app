@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Edit2, Save, X, RefreshCw, Loader2, Receipt,
   Calendar, DollarSign, Tag, FileText, ExternalLink, Trash2,
-  Mail, Link2,
+  Mail, Link2, Zap, CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,18 @@ export default function ReceiptDetailPage() {
     { receiptId: id },
     { enabled: !!id }
   );
+  const { data: expenseSuggestions = [] } = (trpc as any).receipts.suggestExpenseLink.useQuery(
+    { receiptId: id },
+    { enabled: !!id }
+  );
+  const confirmExpenseLink = (trpc as any).receipts.confirmExpenseLink.useMutation({
+    onSuccess: () => {
+      toast.success("Expense linked successfully");
+      utils.receipts.get.invalidate({ id });
+    },
+    onError: () => toast.error("Failed to link expense"),
+  });
+  const [dismissedExpenseLink, setDismissedExpenseLink] = useState(false);
 
   const [editing, setEditing] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -408,6 +420,58 @@ export default function ReceiptDetailPage() {
                 </div>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+      {/* Expense auto-link suggestion */}
+      {!dismissedExpenseLink && expenseSuggestions.length > 0 && !(receipt as any).linkedExpenseId && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-400" /> Suggested Expense Match
+              <button
+                className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setDismissedExpenseLink(true)}
+              >Dismiss</button>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">These expense records have a similar amount and date to this receipt. Confirm to link them.</p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {expenseSuggestions.map((s: any) => (
+              <div key={`${s.type}-${s.id}`} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 uppercase font-semibold">{s.type}</span>
+                    <span className="text-sm font-medium truncate">{s.label}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    £{parseFloat(String(s.amount ?? 0)).toFixed(2)} · {s.date ? new Date(s.date).toLocaleDateString() : "—"}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-xs border-amber-500/40 hover:bg-amber-500/10"
+                  disabled={confirmExpenseLink.isPending}
+                  onClick={() => confirmExpenseLink.mutate({ receiptId: id, linkedExpenseId: s.id })}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Link
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      {(receipt as any).linkedExpenseId && (
+        <Card className="border-green-500/30 bg-green-500/5">
+          <CardContent className="py-3">
+            <div className="flex items-center gap-2 text-sm text-green-400">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Linked to expense record #{(receipt as any).linkedExpenseId}</span>
+              {(receipt as any).linkedExpenseNote && (
+                <span className="text-muted-foreground">· {(receipt as any).linkedExpenseNote}</span>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
