@@ -4878,6 +4878,12 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         }
         // Mark snapshot as reverted
         await db.update(scanMergeSnapshots).set({ revertedAt: new Date() }).where(eq(scanMergeSnapshots.id, snap.id));
+        // Notify owner of the full revert
+        const revokerName = ctx.user?.name ?? ctx.user?.email ?? 'Unknown user';
+        await notifyOwner({
+          title: `Scan Merge Reverted — ${snap.tableName} #${snap.recordId}`,
+          content: `${revokerName} performed a full undo of a scan import on ${snap.tableName} record #${snap.recordId} (originally merged by ${snap.mergedByName ?? 'unknown'} at ${new Date(snap.mergedAt).toLocaleString()}).`,
+        }).catch(() => {});
         return { success: true, tableName: snap.tableName, recordId: snap.recordId };
       }),
 
@@ -4933,6 +4939,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
             mergedByName: scanMergeSnapshots.mergedByName,
             mergedAt: scanMergeSnapshots.mergedAt,
             revertedAt: scanMergeSnapshots.revertedAt,
+            snapshotJson: scanMergeSnapshots.snapshotJson,
           })
           .from(scanMergeSnapshots)
           .where(conditions.length > 0 ? conditions[0] : sql`1=1`)
@@ -4986,6 +4993,12 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         } else {
           throw new TRPCError({ code: 'BAD_REQUEST', message: `Partial revert not supported for table: ${snap.tableName}` });
         }
+        // Notify owner of the partial revert
+        const revertedFieldList = Object.keys(partialUpdate).join(', ');
+        await notifyOwner({
+          title: `Partial Scan Merge Revert — ${snap.tableName} #${snap.recordId}`,
+          content: `A partial undo was applied to ${snap.tableName} record #${snap.recordId}. Fields restored: ${revertedFieldList}. (Originally merged by ${snap.mergedByName ?? 'unknown'} at ${new Date(snap.mergedAt).toLocaleString()})`,
+        }).catch(() => {});
         return { success: true, revertedFields: Object.keys(partialUpdate) };
       }),
   }),

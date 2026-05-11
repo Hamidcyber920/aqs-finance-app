@@ -227,3 +227,33 @@ describe("scanMerge.getLatest — queries", () => {
     expect(result!.expiresInMs).toBeLessThanOrEqual(8 * 60 * 1000); // ~8 min remaining
   });
 });
+
+describe("scanMerge.revert — notifyOwner", () => {
+  it("calls notifyOwner after a successful full revert", async () => {
+    const notificationModule = await import("./_core/notification");
+    const notifySpy = vi.spyOn(notificationModule, "notifyOwner").mockResolvedValue(true);
+
+    const freshSnapshot = makeSnapshot({ mergedAt: new Date() });
+
+    const { getDb } = await import("./db");
+    (getDb as any).mockResolvedValueOnce({
+      select: vi.fn().mockReturnThis(),
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValueOnce([freshSnapshot]),
+      update: vi.fn().mockReturnThis(),
+      set: vi.fn().mockReturnThis(),
+    });
+
+    const caller = appRouter.createCaller(createContext("superadmin"));
+    await caller.scanMerge.revert({ snapshotId: 1 });
+
+    expect(notifySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: expect.stringContaining("Scan Merge Reverted"),
+      })
+    );
+
+    notifySpy.mockRestore();
+  });
+});

@@ -1140,3 +1140,11 @@
 - [x] Backend: scanMerge.revertFields procedure — accepts snapshotId + array of field names to restore selectively
 - [x] Frontend: ScanMergeUndoBanner — add "Partial Undo" button that opens a dialog showing snapshot diff with checkboxes, calling revertFields
 - [x] Vitest: scanMerge schema mock updated; 7/7 tests passing including revert, getLatest, role gates
+
+## Merge History Enhancements (May 2026)
+- [x] Backend: scanMerge.listHistory — include snapshotJson in response for diff panel
+- [x] Frontend: MergeHistory page — "View Diff" button per row opens side panel showing full field diff (before vs after)
+- [x] Frontend: MergeHistory page — CSV export button downloads all rows (filtered by current table filter)
+- [x] Backend: scanMerge.revert — call notifyOwner after successful full revert
+- [x] Backend: scanMerge.revertFields — call notifyOwner after successful partial revert
+- [x] Vitest: notifyOwner called on revert (mock + spy) — 8/8 scanMerge tests pass
