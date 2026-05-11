@@ -1439,6 +1439,6 @@
 
 ## Next Steps Round 2 (May 11 2026)
 
-- [ ] Pledge reminders: nightly scheduled job finds overdue/due-soon pledges and sends personalised email reminders
+- [x] Pledge reminders: nightly scheduled job finds overdue/due-soon pledges and sends personalised email reminders
 - [x] Donor Profile Communications tab: wire to inbound_emails filtered by donor email address
-- [ ] Recognition tier badge: show donor's current tier on Donor Profile Overview tab based on lifetime giving total
+- [x] Recognition tier badge: show donor's current tier on Donor Profile Overview tab based on lifetime giving total
