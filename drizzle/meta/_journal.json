@@ -400,6 +400,13 @@
       "when": 1778519268659,
       "tag": "0056_cold_domino",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "5",
+      "when": 1778522561906,
+      "tag": "0057_mighty_jackal",
+      "breakpoints": true
     }
   ]
 }

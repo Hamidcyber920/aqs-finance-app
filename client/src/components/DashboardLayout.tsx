@@ -30,6 +30,7 @@ import {
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
   Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity,
+  TrendingUp, Flag, Handshake,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -54,6 +55,9 @@ const incomeItems = [
   { icon: CreditCard, label: "Payment Hub", path: "/fintech" },
   { icon: UserCheck, label: "Donor CRM", path: "/donor-crm" },
   { icon: Gift, label: "Gift Aid & CRM+", path: "/gift-aid" },
+  { icon: TrendingUp, label: "Pledges", path: "/pledges" },
+  { icon: Handshake, label: "Cultivation Pipeline", path: "/donor-pipeline" },
+  { icon: Flag, label: "Major Donor DD", path: "/major-donor" },
 ];
 const expenseItems = [
   { icon: Wallet, label: "Payroll", path: "/payroll" },

@@ -23,6 +23,10 @@ import { meetingsV3Router } from "./routers/meetingsV3";
 import { commsInboxRouter } from "./routers/commsInbox";
 import { auditTrailRouter } from "./routers/auditTrail";
 import { systemHealthRouter } from "./routers/systemHealth";
+import { pledgesRouter } from "./routers/pledges";
+import { donorPipelineRouter } from "./routers/donorPipeline";
+import { majorDonorRouter } from "./routers/majorDonor";
+import { bulkApprovalsRouter } from "./routers/bulkApprovals";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -373,6 +377,10 @@ export const appRouter = router({
   commsInbox: commsInboxRouter,
   auditTrail: auditTrailRouter,
   systemHealth: systemHealthRouter,
+  pledges: pledgesRouter,
+  donorPipeline: donorPipelineRouter,
+  majorDonor: majorDonorRouter,
+  bulkApprovals: bulkApprovalsRouter,
 
   // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
   succession: router({

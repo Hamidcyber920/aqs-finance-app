@@ -539,3 +539,187 @@ describe("Wave 5: Audit Trail & System Health Frontend Pages", () => {
     expect(src).toContain("/system-health");
   });
 });
+
+// ─── Gap Analysis P1: Pledges Router ─────────────────────────────────────────
+describe("Gap Analysis P1 — Pledges Router", () => {
+  it("pledgesRouter exports a router object", async () => {
+    const mod = await import("./routers/pledges");
+    expect(mod.pledgesRouter).toBeDefined();
+    expect(typeof mod.pledgesRouter).toBe("object");
+  });
+
+  it("pledgesRouter has list, create, getById, stats, markPaid procedures", async () => {
+    const mod = await import("./routers/pledges");
+    const r = mod.pledgesRouter as any;
+    const procedures = Object.keys(r._def?.record ?? {});
+    expect(procedures).toContain("list");
+    expect(procedures).toContain("create");
+    expect(procedures).toContain("getById");
+    expect(procedures).toContain("stats");
+    expect(procedures).toContain("markPaid");
+  });
+
+  it("pledgesRouter markPaid procedure exists in appRouter", async () => {
+    const { appRouter } = await import("./routers");
+    expect(appRouter._def.procedures).toHaveProperty("pledges.markPaid");
+  });
+});
+
+// ─── Gap Analysis P1: Donor Pipeline Router ──────────────────────────────────
+describe("Gap Analysis P1 — Donor Pipeline Router", () => {
+  it("donorPipelineRouter exports a router object", async () => {
+    const mod = await import("./routers/donorPipeline");
+    expect(mod.donorPipelineRouter).toBeDefined();
+  });
+
+  it("donorPipelineRouter has kanban, create, moveStage, delete, addNote, listNotes, deleteNote", async () => {
+    const mod = await import("./routers/donorPipeline");
+    const r = mod.donorPipelineRouter as any;
+    const procedures = Object.keys(r._def?.record ?? {});
+    expect(procedures).toContain("kanban");
+    expect(procedures).toContain("create");
+    expect(procedures).toContain("moveStage");
+    expect(procedures).toContain("delete");
+    expect(procedures).toContain("addNote");
+    expect(procedures).toContain("listNotes");
+    expect(procedures).toContain("deleteNote");
+  });
+
+  it("kanban and moveStage exist in appRouter procedures", async () => {
+    const { appRouter } = await import("./routers");
+    expect(appRouter._def.procedures).toHaveProperty("donorPipeline.kanban");
+    expect(appRouter._def.procedures).toHaveProperty("donorPipeline.moveStage");
+  });
+});
+
+// ─── Gap Analysis P1: Major Donor Due Diligence Router ───────────────────────
+describe("Gap Analysis P1 — Major Donor Due Diligence Router", () => {
+  it("majorDonorRouter exports a router object", async () => {
+    const mod = await import("./routers/majorDonor");
+    expect(mod.majorDonorRouter).toBeDefined();
+  });
+
+  it("majorDonorRouter has list, getById, trigger, updateSanctionsCheck, trusteeSignOff, fileSIR", async () => {
+    const mod = await import("./routers/majorDonor");
+    const r = mod.majorDonorRouter as any;
+    const procedures = Object.keys(r._def?.record ?? {});
+    expect(procedures).toContain("list");
+    expect(procedures).toContain("getById");
+    expect(procedures).toContain("trigger");
+    expect(procedures).toContain("updateSanctionsCheck");
+    expect(procedures).toContain("trusteeSignOff");
+    expect(procedures).toContain("fileSIR");
+  });
+
+  it("trigger and fileSIR exist in appRouter procedures", async () => {
+    const { appRouter } = await import("./routers");
+    expect(appRouter._def.procedures).toHaveProperty("majorDonor.trigger");
+    expect(appRouter._def.procedures).toHaveProperty("majorDonor.fileSIR");
+  });
+});
+
+// ─── Gap Analysis P1: Bulk Approvals Router ──────────────────────────────────
+describe("Gap Analysis P1 — Bulk Approvals Router", () => {
+  it("bulkApprovalsRouter exports a router object", async () => {
+    const mod = await import("./routers/bulkApprovals");
+    expect(mod.bulkApprovalsRouter).toBeDefined();
+  });
+
+  it("bulkApprovalsRouter has list, request, review, checkThreshold", async () => {
+    const mod = await import("./routers/bulkApprovals");
+    const r = mod.bulkApprovalsRouter as any;
+    const procedures = Object.keys(r._def?.record ?? {});
+    expect(procedures).toContain("list");
+    expect(procedures).toContain("request");
+    expect(procedures).toContain("review");
+    expect(procedures).toContain("checkThreshold");
+  });
+
+  it("request and review exist in appRouter procedures", async () => {
+    const { appRouter } = await import("./routers");
+    expect(appRouter._def.procedures).toHaveProperty("bulkApprovals.request");
+    expect(appRouter._def.procedures).toHaveProperty("bulkApprovals.review");
+  });
+});
+
+// ─── Gap Analysis P1: New Schema Tables ──────────────────────────────────────
+describe("Gap Analysis P1 — New Schema Tables", () => {
+  it("pledges table is exported from schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect((schema as any).pledges).toBeDefined();
+  });
+
+  it("pledgePayments table is exported from schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect((schema as any).pledgePayments).toBeDefined();
+  });
+
+  it("donorPipeline table is exported from schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect((schema as any).donorPipeline).toBeDefined();
+  });
+
+  it("majorDonorDueDiligence table is exported from schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect((schema as any).majorDonorDueDiligence).toBeDefined();
+  });
+
+  it("donorNotes table is exported from schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect((schema as any).donorNotes).toBeDefined();
+  });
+
+  it("bulkMessageApprovals table is exported from schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect((schema as any).bulkMessageApprovals).toBeDefined();
+  });
+
+  it("sectionReplyTemplates table is exported from schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect((schema as any).sectionReplyTemplates).toBeDefined();
+  });
+
+  it("auditLog table is exported from schema", async () => {
+    const schema = await import("../drizzle/schema");
+    expect((schema as any).auditLog).toBeDefined();
+  });
+});
+
+// ─── Gap Analysis P1: AppRouter Registration ─────────────────────────────────
+describe("Gap Analysis P1 — AppRouter Router Registration", () => {
+  it("appRouter includes pledges router", async () => {
+    const mod = await import("./routers");
+    const r = (mod as any).appRouter;
+    expect(r._def?.record?.pledges).toBeDefined();
+  });
+
+  it("appRouter includes donorPipeline router", async () => {
+    const mod = await import("./routers");
+    const r = (mod as any).appRouter;
+    expect(r._def?.record?.donorPipeline).toBeDefined();
+  });
+
+  it("appRouter includes majorDonor router", async () => {
+    const mod = await import("./routers");
+    const r = (mod as any).appRouter;
+    expect(r._def?.record?.majorDonor).toBeDefined();
+  });
+
+  it("appRouter includes bulkApprovals router", async () => {
+    const mod = await import("./routers");
+    const r = (mod as any).appRouter;
+    expect(r._def?.record?.bulkApprovals).toBeDefined();
+  });
+
+  it("appRouter includes auditTrail router", async () => {
+    const mod = await import("./routers");
+    const r = (mod as any).appRouter;
+    expect(r._def?.record?.auditTrail).toBeDefined();
+  });
+
+  it("appRouter includes systemHealth router", async () => {
+    const mod = await import("./routers");
+    const r = (mod as any).appRouter;
+    expect(r._def?.record?.systemHealth).toBeDefined();
+  });
+});

@@ -1659,3 +1659,124 @@ export const auditLog = mysqlTable("audit_log", {
 export type AuditLog = typeof auditLog.$inferSelect;
 export type InsertAuditLog = typeof auditLog.$inferInsert;
 
+
+// ─── PLEDGES ─────────────────────────────────────────────────────────────────
+export const pledges = mysqlTable("pledges", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId").notNull(),
+  donorName: varchar("donorName", { length: 200 }),
+  campaignId: int("campaignId"),
+  campaignName: varchar("campaignName", { length: 200 }),
+  totalAmount: decimal("totalAmount", { precision: 12, scale: 2 }).notNull(),
+  frequency: mysqlEnum("frequency", ["one_off", "monthly", "quarterly", "annual"]).default("one_off").notNull(),
+  paidAmount: decimal("paidAmount", { precision: 12, scale: 2 }).default("0").notNull(),
+  balanceOwing: decimal("balanceOwing", { precision: 12, scale: 2 }).notNull(),
+  status: mysqlEnum("status", ["active", "fulfilled", "lapsed", "cancelled"]).default("active").notNull(),
+  nextDueDate: date("nextDueDate"),
+  startDate: date("startDate"),
+  endDate: date("endDate"),
+  isGiftAid: boolean("isGiftAid").default(false).notNull(),
+  notes: text("notes"),
+  createdById: int("createdById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Pledge = typeof pledges.$inferSelect;
+export type InsertPledge = typeof pledges.$inferInsert;
+
+// ─── PLEDGE PAYMENTS ─────────────────────────────────────────────────────────
+export const pledgePayments = mysqlTable("pledge_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  pledgeId: int("pledgeId").notNull(),
+  donorId: int("donorId").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  paymentDate: date("paymentDate").notNull(),
+  paymentMethod: mysqlEnum("paymentMethod", ["cash", "card", "bacs", "cheque", "paypal", "stripe", "other"]).default("cash").notNull(),
+  reference: varchar("reference", { length: 200 }),
+  notes: text("notes"),
+  recordedById: int("recordedById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type PledgePayment = typeof pledgePayments.$inferSelect;
+export type InsertPledgePayment = typeof pledgePayments.$inferInsert;
+
+// ─── MAJOR DONOR DUE DILIGENCE ────────────────────────────────────────────────
+export const majorDonorDueDiligence = mysqlTable("major_donor_due_diligence", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId"),
+  donorName: varchar("donorName", { length: 200 }),
+  donationAmount: decimal("donationAmount", { precision: 12, scale: 2 }).notNull(),
+  donationSource: varchar("donationSource", { length: 100 }),
+  donationRef: varchar("donationRef", { length: 200 }),
+  isAnonymous: boolean("isAnonymous").default(false).notNull(),
+  sanctionsCheckStatus: mysqlEnum("sanctionsCheckStatus", ["pending", "clear", "flagged", "not_required"]).default("pending").notNull(),
+  sanctionsCheckNotes: text("sanctionsCheckNotes"),
+  sanctionsCheckedAt: timestamp("sanctionsCheckedAt"),
+  sanctionsCheckedById: int("sanctionsCheckedById"),
+  trusteeSignOffRequired: boolean("trusteeSignOffRequired").default(true).notNull(),
+  trusteeSignOffUserId: int("trusteeSignOffUserId"),
+  trusteeSignOffAt: timestamp("trusteeSignOffAt"),
+  trusteeSignOffNotes: text("trusteeSignOffNotes"),
+  sirRequired: boolean("sirRequired").default(false).notNull(),
+  sirFiledAt: timestamp("sirFiledAt"),
+  status: mysqlEnum("status", ["open", "cleared", "escalated", "sir_filed"]).default("open").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type MajorDonorDueDiligence = typeof majorDonorDueDiligence.$inferSelect;
+export type InsertMajorDonorDueDiligence = typeof majorDonorDueDiligence.$inferInsert;
+
+// ─── DONOR PIPELINE (Cultivation Stages) ─────────────────────────────────────
+export const donorPipeline = mysqlTable("donor_pipeline", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId").notNull(),
+  donorName: varchar("donorName", { length: 200 }),
+  stage: mysqlEnum("stage", ["identification", "qualification", "cultivation", "solicitation", "stewardship"]).default("identification").notNull(),
+  targetAmount: decimal("targetAmount", { precision: 12, scale: 2 }),
+  campaignId: int("campaignId"),
+  assignedToUserId: int("assignedToUserId"),
+  assignedToName: varchar("assignedToName", { length: 200 }),
+  nextAction: text("nextAction"),
+  nextActionDate: date("nextActionDate"),
+  notes: text("notes"),
+  stageChangedAt: timestamp("stageChangedAt").defaultNow(),
+  createdById: int("createdById").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type DonorPipeline = typeof donorPipeline.$inferSelect;
+export type InsertDonorPipeline = typeof donorPipeline.$inferInsert;
+
+// ─── DONOR NOTES ─────────────────────────────────────────────────────────────
+export const donorNotes = mysqlTable("donor_notes", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId").notNull(),
+  note: text("note").notNull(),
+  isPinned: boolean("isPinned").default(false).notNull(),
+  createdById: int("createdById").notNull(),
+  createdByName: varchar("createdByName", { length: 200 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type DonorNote = typeof donorNotes.$inferSelect;
+export type InsertDonorNote = typeof donorNotes.$inferInsert;
+
+// ─── BULK MESSAGE APPROVALS ───────────────────────────────────────────────────
+export const bulkMessageApprovals = mysqlTable("bulk_message_approvals", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId"),
+  requestedById: int("requestedById").notNull(),
+  requestedByName: varchar("requestedByName", { length: 200 }),
+  recipientCount: int("recipientCount").notNull(),
+  messageSubject: varchar("messageSubject", { length: 300 }),
+  messagePreview: text("messagePreview"),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).default("pending").notNull(),
+  reviewedById: int("reviewedById"),
+  reviewedByName: varchar("reviewedByName", { length: 200 }),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewNotes: text("reviewNotes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BulkMessageApproval = typeof bulkMessageApprovals.$inferSelect;
+export type InsertBulkMessageApproval = typeof bulkMessageApprovals.$inferInsert;
