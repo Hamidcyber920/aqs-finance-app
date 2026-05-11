@@ -1454,3 +1454,7 @@
 - [x] Stripe pledge webhook handler — /api/stripe/webhook auto-marks pledge as paid on checkout.session.completed
 - [x] Donor Portal — public /give/:donorToken page with pledge history, Gift Aid declaration download, and Pay Now button
 - [x] Bulk Gift Aid HMRC R68 export — Export HMRC R68 CSV button on Gift Aid & CRM+ page
+
+## Bug Fixes (May 11 2026)
+
+- [x] Fix broken donor portal link in WhatsApp messages — URL now uses /give/:token path with correct deployed domain

@@ -105,8 +105,8 @@ export const crmRouter = router({
       });
 
       // Build the WhatsApp welcome message with profile completion link
-      const origin = process.env.VITE_OAUTH_PORTAL_URL?.replace("/oauth", "") || "https://receiptapp-excmtodu.manus.space";
-      const profileUrl = `${origin}/donor-portal?token=${token}`;
+      const origin = "https://receiptapp-excmtodu.manus.space";
+      const profileUrl = `${origin}/give/${token}`;
       const waMessage = `Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${input.name.split(" ")[0]}! 🌙\n\nJazakAllah Khayran for your interest in supporting Abdullah Quilliam Society.\n\nTo complete your donor profile (and enable Gift Aid on your donations), please click the link below — it only takes 2 minutes:\n\n${profileUrl}\n\nBarakAllahu feekum,\nAQS Finance Team`;
 
       return {
@@ -336,7 +336,7 @@ export const crmRouter = router({
       });
 
       const origin = input.origin || "https://receiptapp-excmtodu.manus.space";
-      const portalUrl = `${origin}/donor-portal?token=${token}`;
+      const portalUrl = `${origin}/give/${token}`;
 
       return { token, portalUrl, expiresAt: expiresAt.toISOString() };
     }),

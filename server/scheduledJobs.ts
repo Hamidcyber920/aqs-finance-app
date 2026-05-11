@@ -469,7 +469,7 @@ export async function sendPledgeReminders() {
       try {
         if (process.env.STRIPE_SECRET_KEY && Number(pledge.balanceOwing ?? 0) >= 0.5) {
           const amountPence = Math.round(Number(pledge.balanceOwing ?? 0) * 100);
-          const appUrl = process.env.VITE_APP_URL || "https://receipt-scanner.manus.space";
+          const appUrl = process.env.VITE_APP_URL || "https://receiptapp-excmtodu.manus.space";
           const checkoutSession = await stripeScheduler.checkout.sessions.create({
             payment_method_types: ["card"],
             line_items: [{
