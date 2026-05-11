@@ -463,11 +463,16 @@ export const donors = mysqlTable("donors", {
   lastGiftAmount: decimal("lastGiftAmount", { precision: 10, scale: 2 }),
   preferredContact: mysqlEnum("preferredContact", ["email", "phone", "both"]).default("email"),
   notes: text("notes"),
-  tags: json("tags").$type<string[]>(),
+   tags: json("tags").$type<string[]>(),
+  // RFM scoring
+  rfmScore: varchar("rfmScore", { length: 5 }),
+  rfmSegment: varchar("rfmSegment", { length: 50 }),
+  rfmLastCalculated: timestamp("rfmLastCalculated"),
+  // Lawful basis for data processing (GDPR)
+  lawfulBasis: mysqlEnum("lawfulBasis", ["consent", "legitimate_interest", "contract", "legal_obligation"]).default("legitimate_interest"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type Donor = typeof donors.$inferSelect;
 export type InsertDonor = typeof donors.$inferInsert;
 

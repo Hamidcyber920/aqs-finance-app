@@ -407,6 +407,13 @@
       "when": 1778522561906,
       "tag": "0057_mighty_jackal",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "5",
+      "when": 1778523745372,
+      "tag": "0058_chilly_spitfire",
+      "breakpoints": true
     }
   ]
 }

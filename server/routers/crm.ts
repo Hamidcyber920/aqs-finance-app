@@ -69,6 +69,8 @@ export const crmRouter = router({
         whatsapp: z.string().min(7),
         campaignId: z.number().optional(),
         notes: z.string().optional(),
+        amount: z.number().min(0).optional(),
+        paymentMethod: z.enum(["cash", "card", "bank_transfer", "cheque", "standing_order", "other"]).optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -76,11 +78,14 @@ export const crmRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
 
       const now = new Date();
+      const notesWithAmount = input.amount
+        ? `[Initial donation: £${input.amount.toFixed(2)} via ${input.paymentMethod ?? "cash"}] ${input.notes ?? ""}`.trim()
+        : input.notes;
       const [result] = await db.insert(donorLeads).values({
         name: input.name,
         whatsapp: input.whatsapp,
         campaignId: input.campaignId,
-        notes: input.notes,
+        notes: notesWithAmount,
         source: "quickcapture",
         profileComplete: false,
         incompleteProfileFlaggedAt: now,

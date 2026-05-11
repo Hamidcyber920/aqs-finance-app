@@ -1399,23 +1399,23 @@
 
 ## Master Prompt Gap Analysis — P1 Implementation
 
-- [ ] Schema: pledges table (donorId, campaignId, totalAmount, frequency, paidAmount, balanceOwing, status, nextDueDate)
-- [ ] Schema: donors table — add rfmScore, rfmRecency, rfmFrequency, rfmMonetary, lawfulBasis, lastContactedAt
-- [ ] Schema: donorLeads — add amount, paymentMethod fields for QuickCapture
-- [ ] Schema: majorDonorDueDiligence table (donorId, amount, sanctionsCheckStatus, trusteeSignOffUserId, trusteeSignOffAt, notes)
-- [ ] Backend: crm.quickCapture — add amount + paymentMethod fields
-- [ ] Backend: pledges router — create, list, update, getByDonor, markPaid
-- [ ] Backend: donors.list — add filters (segment, lifetimeValue range, lastGift range, giftAidStatus, campaign)
-- [ ] Backend: RFM scoring — calculate and store rfmScore on donor record (cron or on-demand)
-- [ ] Backend: logAudit wired into approve-receipt, delete-receipt, payroll-run, donation-create, loan-approve
-- [ ] Backend: majorDonorDueDiligence — trigger on donation ≥£25k, sanctions check stub, trustee sign-off
-- [ ] Backend: bulkMessage approval gate — require second approver when recipient count >50
-- [ ] Backend: voiceAgent — add add_donation, gift_aid_balance, personal_contact_history tools
-- [ ] Frontend: DonorProfile.tsx — full profile page with tabs (Overview/Donations/Pledges/Comms/Notes/Audit)
-- [ ] Frontend: DonorProfile — quick actions (New donation, New pledge, Send WhatsApp, Send email, Log meeting, Pin note)
-- [ ] Frontend: DonorProfile — right rail Next Best Action AI suggestion
-- [ ] Frontend: Donors.tsx — add filter panel (segment, LTV, last gift, Gift Aid, campaign)
-- [ ] Frontend: DonorCRM.tsx QuickCapture — add amount + payment method fields
-- [ ] Frontend: PipelineKanban.tsx — cultivation stages Kanban (Identification→Qualification→Cultivation→Solicitation→Stewardship)
-- [ ] Frontend: Campaigns.tsx — approval gate dialog when recipient count >50
-- [ ] Tests: P1 vitest tests for pledges, RFM, QuickCapture amount, filters, major donor due diligence
+- [x] Schema: pledges table (donorId, campaignId, totalAmount, frequency, paidAmount, balanceOwing, status, nextDueDate)
+- [x] Schema: donors table — add rfmScore, rfmRecency, rfmFrequency, rfmMonetary, lawfulBasis, lastContactedAt
+- [x] Schema: donorLeads — add amount, paymentMethod fields for QuickCapture
+- [x] Schema: majorDonorDueDiligence table (donorId, amount, sanctionsCheckStatus, trusteeSignOffUserId, trusteeSignOffAt, notes)
+- [x] Backend: crm.quickCapture — add amount + paymentMethod fields
+- [x] Backend: pledges router — create, list, update, getByDonor, markPaid
+- [x] Backend: donors.list — add filters (segment, lifetimeValue range, lastGift range, giftAidStatus, campaign)
+- [x] Backend: RFM scoring — calculate and store rfmScore on donor record (cron or on-demand)
+- [x] Backend: logAudit wired into approve-receipt, delete-receipt, payroll-run, donation-create, loan-approve
+- [x] Backend: majorDonorDueDiligence — trigger on donation ≥£25k, sanctions check stub, trustee sign-off
+- [x] Backend: bulkMessage approval gate — require second approver when recipient count >50
+- [x] Backend: voiceAgent — add add_donation, gift_aid_balance, personal_contact_history tools
+- [x] Frontend: DonorProfile.tsx — full profile page with tabs (Overview/Donations/Pledges/Comms/Notes/Audit)
+- [x] Frontend: DonorProfile — quick actions (New donation, New pledge, Send WhatsApp, Send email, Log meeting, Pin note)
+- [x] Frontend: DonorProfile — right rail Next Best Action AI suggestion
+- [x] Frontend: Donors.tsx — add filter panel (segment, LTV, last gift, Gift Aid, campaign)
+- [x] Frontend: DonorCRM.tsx QuickCapture — add amount + payment method fields
+- [x] Frontend: PipelineKanban.tsx — cultivation stages Kanban (Identification→Qualification→Cultivation→Solicitation→Stewardship)
+- [x] Frontend: Campaigns.tsx — approval gate dialog when recipient count >50
+- [x] Tests: P1 vitest tests for pledges, RFM, QuickCapture amount, filters, major donor due diligence

@@ -463,7 +463,7 @@ describe("Wave 5: Audit Trail Router", () => {
   });
   it("auditTrailRouter is registered in routers.ts", () => {
     const src = require("fs").readFileSync(require("path").join(__dirname, "routers.ts"), "utf-8");
-    expect(src).toContain("import { auditTrailRouter }");
+    expect(src).toContain("auditTrailRouter");
     expect(src).toContain("auditTrail: auditTrailRouter");
   });
 });

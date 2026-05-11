@@ -566,8 +566,65 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
             eq(giftAidClaims.submittedToHmrc, false)
           )
         );
-      return { submittedAt: now.toISOString() };
+       return { submittedAt: now.toISOString() };
+    }),
+
+  // ── RFM Scoring ─────────────────────────────────────────────────────────────
+  /** Compute RFM (Recency, Frequency, Monetary) scores for all donors */
+  computeRfmScores: protectedProcedure
+    .mutation(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      const allDonors = await db.select().from(donors).limit(1000);
+      const now = Date.now();
+      const results: Array<{ donorId: number; name: string; recency: number; frequency: number; monetary: number; rfmScore: number; segment: string }> = [];
+
+      for (const donor of allDonors) {
+        const lastGift = donor.lastGiftDate ? new Date(donor.lastGiftDate).getTime() : 0;
+        const daysSinceLastGift = lastGift ? Math.floor((now - lastGift) / 86400000) : 9999;
+        const totalGiven = parseFloat(donor.totalGiven ?? "0");
+
+        // Recency score 1-5 (5 = most recent)
+        const recency = daysSinceLastGift <= 30 ? 5 : daysSinceLastGift <= 90 ? 4 : daysSinceLastGift <= 180 ? 3 : daysSinceLastGift <= 365 ? 2 : 1;
+        // Frequency score 1-5 (placeholder — use totalGiven as proxy until donation count is tracked)
+        const frequency = totalGiven >= 1000 ? 5 : totalGiven >= 500 ? 4 : totalGiven >= 200 ? 3 : totalGiven >= 50 ? 2 : 1;
+        // Monetary score 1-5
+        const monetary = totalGiven >= 5000 ? 5 : totalGiven >= 2000 ? 4 : totalGiven >= 500 ? 3 : totalGiven >= 100 ? 2 : 1;
+
+        const rfmScore = recency + frequency + monetary;
+        const segment = rfmScore >= 13 ? "Champions" : rfmScore >= 10 ? "Loyal" : rfmScore >= 7 ? "Potential" : rfmScore >= 5 ? "At Risk" : "Lapsed";
+
+        results.push({ donorId: donor.id, name: donor.name, recency, frequency, monetary, rfmScore, segment });
+
+        // Persist RFM fields back to donors table
+        await db.update(donors).set({
+          rfmScore: String(rfmScore),
+          rfmSegment: segment,
+          rfmLastCalculated: new Date(),
+        } as any).where(eq(donors.id, donor.id));
+      }
+
+      return { processed: results.length, breakdown: { champions: results.filter(r => r.segment === "Champions").length, loyal: results.filter(r => r.segment === "Loyal").length, potential: results.filter(r => r.segment === "Potential").length, atRisk: results.filter(r => r.segment === "At Risk").length, lapsed: results.filter(r => r.segment === "Lapsed").length } };
+    }),
+
+  /** Get RFM summary for the donors list page */
+  getRfmSummary: protectedProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) return { champions: 0, loyal: 0, potential: 0, atRisk: 0, lapsed: 0, unscored: 0 };
+      const allDonors = await db.select({ rfmSegment: donors.rfmSegment }).from(donors).limit(2000);
+      const counts = { champions: 0, loyal: 0, potential: 0, atRisk: 0, lapsed: 0, unscored: 0 };
+      for (const d of allDonors) {
+        const seg = (d as any).rfmSegment as string | null;
+        if (seg === "Champions") counts.champions++;
+        else if (seg === "Loyal") counts.loyal++;
+        else if (seg === "Potential") counts.potential++;
+        else if (seg === "At Risk") counts.atRisk++;
+        else if (seg === "Lapsed") counts.lapsed++;
+        else counts.unscored++;
+      }
+      return counts;
     }),
 });
-
 export type DonorsV3Router = typeof donorsV3Router;

@@ -225,6 +225,54 @@ const agentTools: Tool[] = [
   {
     type: "function",
     function: {
+      name: "add_donation",
+      description: "Record a donation from a named donor to a campaign. Use when user says 'add donation', 'log gift', 'record donation from [name]'.",
+      parameters: {
+        type: "object",
+        properties: {
+          donorName: { type: "string", description: "Donor's full name." },
+          amount: { type: "string", description: "Donation amount as a string e.g. '50.00'." },
+          campaignId: { type: "number", description: "Campaign ID to attribute the donation to. Use 1 if unknown." },
+          paymentMethod: { type: "string", enum: ["cash", "card", "bank_transfer", "cheque", "standing_order", "other"], description: "Payment method." },
+          notes: { type: "string", description: "Optional notes." },
+        },
+        required: ["donorName", "amount", "campaignId"],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gift_aid_balance",
+      description: "Get the total Gift Aid reclaimable balance — sum of all eligible donations that haven't yet been claimed. Use when user asks 'how much Gift Aid can we claim', 'what's our Gift Aid balance'.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "personal_contact_history",
+      description: "Get the contact/donation history for a specific donor by name or ID. Use when user asks 'what's the history for [name]', 'show me [name]'s donations'.",
+      parameters: {
+        type: "object",
+        properties: {
+          donorName: { type: "string", description: "Donor's name to search for." },
+          donorId: { type: "number", description: "Donor ID if known." },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "navigate_to_form",
       description: "Navigate the user to a specific page and pre-fill a form. Use when the user wants to add something but hasn't provided all details, or wants to open a specific section.",
       parameters: {
@@ -445,6 +493,40 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
         updatedAt: new Date(),
       }).$returningId();
       return JSON.stringify({ success: true, id: record?.id, message: `Friday collection recorded: £${args.totalAmount} on ${args.collectionDate}.` });
+    }
+
+    case "add_donation": {
+      const [result] = await db.insert(schema.fundraisingDonations).values({
+        campaignId: (args.campaignId as number) ?? 1,
+        donorName: (args.donorName as string) ?? "Anonymous",
+        amount: (args.amount as string),
+        paymentMethod: ((args.paymentMethod as string) ?? "cash") as any,
+        notes: (args.notes as string) ?? null,
+      }).$returningId();
+      return JSON.stringify({ success: true, id: result?.id, message: `Donation of £${args.amount} from ${args.donorName} recorded.` });
+    }
+
+    case "gift_aid_balance": {
+      const claims = await db.select().from(schema.giftAidClaims).limit(200);
+      const unclaimed = claims.filter((c: any) => c.status === "draft" || c.status === "pending");
+      const total = unclaimed.reduce((s: number, c: any) => s + parseFloat(c.totalDonations ?? "0") * 0.25, 0);
+      return JSON.stringify({ unclaimedClaims: unclaimed.length, estimatedGiftAidBalance: `£${total.toFixed(2)}`, message: `You have ${unclaimed.length} unclaimed Gift Aid batch(es) worth approximately £${total.toFixed(2)}.` });
+    }
+
+    case "personal_contact_history": {
+      const donorId = args.donorId as number | undefined;
+      const donorName = args.donorName as string | undefined;
+      let donorRows: any[] = [];
+      if (donorId) {
+        donorRows = await db.select().from(schema.donors).where(eq(schema.donors.id, donorId)).limit(1);
+      } else if (donorName) {
+        donorRows = await db.select().from(schema.donors).where(like(schema.donors.name, `%${donorName}%`)).limit(1);
+      }
+      if (!donorRows.length) return JSON.stringify({ error: `No donor found matching '${donorName ?? donorId}'.` });
+      const donor = donorRows[0];
+      const donations = await db.select().from(schema.fundraisingDonations).where(like(schema.fundraisingDonations.donorName, `%${donor.name}%`)).orderBy(desc(schema.fundraisingDonations.donatedAt)).limit(20);
+      const total = donations.reduce((s: number, d: any) => s + parseFloat(d.amount ?? "0"), 0);
+      return JSON.stringify({ donor: { id: donor.id, name: donor.name, email: donor.email, phone: donor.phone }, totalDonations: donations.length, totalAmount: `£${total.toFixed(2)}`, recentDonations: donations.slice(0, 5).map((d: any) => ({ amount: d.amount, date: d.donatedAt, method: d.paymentMethod })) });
     }
 
     case "navigate_to_form": {

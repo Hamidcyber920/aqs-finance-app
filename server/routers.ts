@@ -21,7 +21,7 @@ import { payrollV3Router } from "./routers/payrollV3";
 import { commsV3Router } from "./routers/commsV3";
 import { meetingsV3Router } from "./routers/meetingsV3";
 import { commsInboxRouter } from "./routers/commsInbox";
-import { auditTrailRouter } from "./routers/auditTrail";
+import { auditTrailRouter, logAudit } from "./routers/auditTrail";
 import { systemHealthRouter } from "./routers/systemHealth";
 import { pledgesRouter } from "./routers/pledges";
 import { donorPipelineRouter } from "./routers/donorPipeline";
@@ -669,6 +669,7 @@ export const appRouter = router({
           secondApprovedAt: new Date(),
           status: "approved",
         } as any).where(eq(receiptsTable.id, input.id));
+        await logAudit({ userId: ctx.user.id, userName: ctx.user.name ?? ctx.user.email ?? undefined, action: "second_approve", entity: "receipt", entityId: input.id });
         return { success: true };
       }),
     listPendingSecondApproval: adminProcedure.query(async () => {
@@ -720,6 +721,7 @@ export const appRouter = router({
       if (!receipt) throw new TRPCError({ code: "NOT_FOUND" });
       assertCanDelete(ctx.user);
       await deleteReceipt(input.id);
+      await logAudit({ userId: ctx.user.id, userName: ctx.user.name ?? ctx.user.email ?? undefined, action: "delete", entity: "receipt", entityId: input.id, meta: { vendor: (receipt as any).vendor, amount: (receipt as any).amount } });
       return { success: true };
     }),
 
@@ -990,7 +992,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => createFundraisingCampaign({ name: input.name, description: input.description, targetAmount: input.targetAmount, startDate: input.startDate, endDate: input.endDate, imageUrl: input.imageUrl })),
     recordDonation: adminProcedure
       .input(z.object({ campaignId: z.number(), donorName: z.string().optional(), donorEmail: z.string().optional(), amount: z.string(), paymentMethod: z.string().default("cash"), isGiftAid: z.boolean().default(false), notes: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => { const d = await createDonation({ campaignId: input.campaignId, donorName: input.donorName ?? "Anonymous", donorEmail: input.donorEmail, amount: input.amount, paymentMethod: input.paymentMethod as any, notes: input.notes }); await updateCampaignAmount(input.campaignId, parseFloat(input.amount)); return d; }),
+      .mutation(async ({ ctx, input }) => { const d = await createDonation({ campaignId: input.campaignId, donorName: input.donorName ?? "Anonymous", donorEmail: input.donorEmail, amount: input.amount, paymentMethod: input.paymentMethod as any, notes: input.notes }); await updateCampaignAmount(input.campaignId, parseFloat(input.amount)); await logAudit({ userId: ctx.user.id, userName: ctx.user.name ?? ctx.user.email ?? undefined, action: "create", entity: "donation", entityId: (d as any)?.id, meta: { campaignId: input.campaignId, amount: input.amount, donorName: input.donorName } }); return d; }),
     listFridayCollections: protectedProcedure.query(() => getFridayCollections()),
     recordFridayCollection: adminProcedure
       .input(z.object({ collectionDate: z.date(), amount: z.string(), collectedById: z.number().optional(), notes: z.string().optional() }))
@@ -2904,7 +2906,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const totalDeductions = (parseFloat(input.incomeTax) + parseFloat(input.nationalInsurance) + parseFloat(input.pensionContribution) + parseFloat(input.otherDeductions)).toFixed(2);
         const { userId, employeeName, month, year, grossPay, incomeTax, nationalInsurance, pensionContribution, otherDeductions, netPay, paymentMethod, payslipUrl, notes } = input;
-        return createPayrollRecord({ userId: userId ?? 0, employeeName, month, year, grossPay, incomeTax: incomeTax ?? "0", nationalInsurance: nationalInsurance ?? "0", pensionContribution: pensionContribution ?? "0", otherDeductions: otherDeductions ?? "0", totalDeductions, netPay, paymentMethod: (paymentMethod as any) ?? "bank_transfer", payslipUrl, notes });
+        const payrollId = await createPayrollRecord({ userId: userId ?? 0, employeeName, month, year, grossPay, incomeTax: incomeTax ?? "0", nationalInsurance: nationalInsurance ?? "0", pensionContribution: pensionContribution ?? "0", otherDeductions: otherDeductions ?? "0", totalDeductions, netPay, paymentMethod: (paymentMethod as any) ?? "bank_transfer", payslipUrl, notes });
+        await logAudit({ userId: ctx.user.id, userName: ctx.user.name ?? ctx.user.email ?? undefined, action: "create", entity: "payroll", entityId: typeof payrollId === "number" ? payrollId : undefined, meta: { employeeName, month, year, netPay } });
+        return payrollId;
       }),
     update: adminProcedure
       .input(z.object({ id: z.number(), paymentStatus: z.string().optional(), chequeImageUrl: z.string().optional(), chequeNumber: z.string().optional(), chequeAmount: z.string().optional(), paidAt: z.date().optional(), notes: z.string().optional() }))

@@ -41,6 +41,8 @@ function QuickCapturePanel() {
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [campaignId, setCampaignId] = useState<number | undefined>();
+  const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("cash");
   const [result, setResult] = useState<{ whatsappLink: string; profileUrl: string } | null>(null);
 
   const { data: campaigns } = trpc.crm.listCampaignsWithProgress.useQuery();
@@ -58,7 +60,13 @@ function QuickCapturePanel() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !whatsapp.trim()) return;
-    capture.mutate({ name: name.trim(), whatsapp: whatsapp.trim(), campaignId });
+    capture.mutate({
+      name: name.trim(),
+      whatsapp: whatsapp.trim(),
+      campaignId,
+      amount: amount ? parseFloat(amount) : undefined,
+      paymentMethod: amount ? (paymentMethod as any) : undefined,
+    });
   }
 
   return (
@@ -107,6 +115,35 @@ function QuickCapturePanel() {
                 ))}
               </select>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Initial Donation Amount (optional)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="e.g. 50.00"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Payment Method</Label>
+                <select
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  disabled={!amount}
+                >
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="standing_order">Standing Order</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
             <Button type="submit" disabled={capture.isPending} className="w-full bg-emerald-600 hover:bg-emerald-700">
               {capture.isPending ? "Capturing..." : "⚡ Capture Donor Lead"}
             </Button>
@@ -135,7 +172,7 @@ function QuickCapturePanel() {
               >
                 <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Send via WhatsApp
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setResult(null); setName(""); setWhatsapp(""); }}>
+              <Button size="sm" variant="ghost" onClick={() => { setResult(null); setName(""); setWhatsapp(""); setAmount(""); }}>
                 Capture Another
               </Button>
             </div>
