@@ -976,3 +976,21 @@
 - [x] Frontend: R68 export page — show Stripe Transaction ID column in preview table
 - [x] Frontend: R68 export page — download button generates HMRC R68 CSV with all required fields
 - [x] Frontend: R68 export page — show compliance notice about Electronic Communications Act 2000
+
+## Payroll Page Fix — AI Extraction & Payment Evidence
+
+- [x] Fix AI extraction: payslip upload must call documents.extract with moduleType=payslip and return employeeName, niNumber, grossPay, deductions, netPay, taxCode, payPeriod, employer
+- [x] Batch extraction: when a multi-employee payroll PDF is uploaded, extract all employees as an array
+- [x] Per-employee checkbox: each extracted row has a checkbox; only checked rows are saved
+- [x] "Confirm All" bulk checkbox at top of verification table
+- [x] Payment method dropdown per employee: Bank Transfer | Cheque | Cash
+- [x] When Cheque selected: show cheque number field + evidence upload (photo/scan)
+- [x] Cheque evidence stored in S3, URL saved to payroll record
+- [x] payroll_records table: add paymentMethod, chequeNumber, chequeEvidenceUrl columns
+- [x] Backend: payroll.saveVerifiedEntries procedure — accepts array of verified records with payment method
+- [x] Backend: payroll.uploadChequeEvidence procedure — accepts file upload, stores in S3, returns URL
+- [x] Frontend: show payment method badge on each saved payroll row in the main table
+- [x] Frontend: expand row to show cheque evidence image when clicked
+- [x] Date and timestamp recorded on each payroll payment record (paidAt field)
+- [x] Authorising signatory field per payment: pre-filled with "Dr Abdul Hamid" (Manager & Trustee), editable
+- [x] Signatory shown on each saved payroll row and in monthly export
