@@ -292,3 +292,68 @@ describe("Wave 4 Round 3 — Email Priority, Gmail Sync, Email-Receipt Link", ()
     expect(src).toContain("Pub/Sub");
   });
 });
+
+// ─── Wave 4 Round 4: Priority Stats, Last Sync, Receipt Cross-Reference ────────
+describe("Wave 4 Round 4 — Priority Stats, Last Sync, Receipt Cross-Reference", () => {
+  it("commsInbox.getPriorityStats procedure exists in router source", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf-8");
+    expect(src).toContain("getPriorityStats");
+    expect(src).toContain("urgent");
+    expect(src).toContain("high");
+    expect(src).toContain("normal");
+    expect(src).toContain("low");
+  });
+  it("commsInbox.getLastSyncTime procedure exists in router source", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf-8");
+    expect(src).toContain("getLastSyncTime");
+    expect(src).toContain("gmailLastSyncedAt");
+  });
+  it("commsInbox.getLinkedEmailsForReceipt procedure exists in router source", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf-8");
+    expect(src).toContain("getLinkedEmailsForReceipt");
+    expect(src).toContain("receiptId");
+    expect(src).toContain("linkedReceiptId");
+  });
+  it("gmailLastSyncedAt is exported from commsInbox router", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf-8");
+    expect(src).toContain("export let gmailLastSyncedAt");
+    expect(src).toContain("export function setGmailLastSyncedAt");
+  });
+  it("scheduledJobs.ts calls setGmailLastSyncedAt after sync", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "scheduledJobs.ts"), "utf-8");
+    expect(src).toContain("setGmailLastSyncedAt");
+    expect(src).toContain("Date.now()");
+  });
+  it("CommsInbox.tsx queries getPriorityStats and getLastSyncTime", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/CommsInbox.tsx"), "utf-8");
+    expect(src).toContain("getPriorityStats");
+    expect(src).toContain("getLastSyncTime");
+    expect(src).toContain("priorityStats");
+    expect(src).toContain("syncTimeData");
+  });
+  it("CommsInbox.tsx renders priority stats bar with urgent/high/normal/low badges", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/CommsInbox.tsx"), "utf-8");
+    expect(src).toContain("priorityStats.urgent");
+    expect(src).toContain("priorityStats.high");
+    expect(src).toContain("priorityStats.normal");
+    expect(src).toContain("priorityStats.low");
+  });
+  it("CommsInbox.tsx renders last sync timestamp indicator", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/CommsInbox.tsx"), "utf-8");
+    expect(src).toContain("lastSyncedAt");
+    expect(src).toContain("Synced");
+    expect(src).toContain("min ago");
+  });
+  it("ReceiptDetail.tsx queries getLinkedEmailsForReceipt", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/ReceiptDetail.tsx"), "utf-8");
+    expect(src).toContain("getLinkedEmailsForReceipt");
+    expect(src).toContain("linkedEmails");
+  });
+  it("ReceiptDetail.tsx renders linked emails cross-reference panel", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/ReceiptDetail.tsx"), "utf-8");
+    expect(src).toContain("Linked Emails");
+    expect(src).toContain("linkedReceiptNote");
+    expect(src).toContain("email.subject");
+    expect(src).toContain("email.fromEmail");
+  });
+});

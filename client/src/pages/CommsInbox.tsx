@@ -83,6 +83,8 @@ export default function CommsInboxPage() {
   const { data: sections = [], refetch: refetchSections } = trpc.commsInbox.listSections.useQuery();
   const { data: stats } = trpc.commsInbox.getInboxStats.useQuery(undefined, { refetchInterval: 30000 });
   const { data: unreadCounts } = trpc.commsInbox.getSectionUnreadCounts.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: priorityStats } = (trpc as any).commsInbox.getPriorityStats.useQuery(undefined, { refetchInterval: 60000 });
+  const { data: syncTimeData } = (trpc as any).commsInbox.getLastSyncTime.useQuery(undefined, { refetchInterval: 60000 });
 
   const emailQueryInput = useMemo(() => ({
     sectionId: selectedSectionId,
@@ -323,12 +325,43 @@ export default function CommsInboxPage() {
               <Plus className="w-3 h-3" />
             </Button>
           </div>
-          {stats && (
-            <div className="flex gap-3 mt-2">
-              <span className="text-xs text-gray-400">
-                {unreadCounts?.total ?? stats.unread} unread
+          {/* Priority stats bar */}
+          {priorityStats && priorityStats.total > 0 && (
+            <div className="flex gap-1 mt-2 flex-wrap">
+              {priorityStats.urgent > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-semibold">
+                  {priorityStats.urgent} urgent
+                </span>
+              )}
+              {priorityStats.high > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                  {priorityStats.high} high
+                </span>
+              )}
+              {priorityStats.normal > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  {priorityStats.normal} normal
+                </span>
+              )}
+              {priorityStats.low > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-500/20 text-gray-400 border border-gray-500/30">
+                  {priorityStats.low} low
+                </span>
+              )}
+            </div>
+          )}
+          {/* Last sync indicator */}
+          {syncTimeData?.lastSyncedAt ? (
+            <div className="flex items-center gap-1 mt-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+              <span className="text-[10px] text-gray-500">
+                Synced {Math.round((Date.now() - syncTimeData.lastSyncedAt) / 60000)} min ago
               </span>
-              {stats.urgent > 0 && <span className="text-xs text-red-400 font-semibold">{stats.urgent} urgent</span>}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 mt-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-600 flex-shrink-0" />
+              <span className="text-[10px] text-gray-600">Not yet synced</span>
             </div>
           )}
         </div>

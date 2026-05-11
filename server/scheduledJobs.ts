@@ -14,6 +14,7 @@ import nodemailer from "nodemailer";
 import { getDb } from "./db";
 import { loanRepayments } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { setGmailLastSyncedAt } from "./routers/commsInbox";
 
 // ─── Email helper ─────────────────────────────────────────────────────────────
 
@@ -989,6 +990,7 @@ async function syncGmailInbox() {
       imported++;
     }
 
+    setGmailLastSyncedAt(Date.now());
     console.log(`[Scheduled] Gmail sync complete: ${imported} imported, ${skipped} skipped.`);
   } catch (e) {
     console.error("[Scheduled] Gmail sync failed:", e);

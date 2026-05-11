@@ -1355,3 +1355,14 @@
 - [x] Backend: commsInbox.linkToReceipt — link emailId to receiptId, store in email_activity_log with action="linked_receipt"
 - [x] Backend: commsInbox.searchReceiptsForLink — search receipts/expenses by keyword for the link picker dialog
 - [x] Frontend: CommsInbox.tsx — "Link to Receipt" button in email detail, opens search dialog, shows linked receipt badge
+
+## Wave 4 Round 4 — Priority Stats, Sync Indicator, Receipt Cross-Reference
+
+- [x] Backend: commsInbox.getPriorityStats — count emails by priority (urgent/high/normal/low) for current inbox
+- [x] Backend: commsInbox.getLastSyncTime — return lastSyncedAt timestamp from a settings/metadata table
+- [x] Backend: scheduledJobs.ts — update syncGmailInbox to write lastSyncedAt to DB after each sync
+- [x] Backend: commsInbox.getLinkedEmailsForReceipt — given receiptId, return all emails linked to it
+- [x] Frontend: CommsInbox.tsx — priority stats bar in inbox header (4 coloured chips with counts)
+- [x] Frontend: CommsInbox.tsx — "Last synced X min ago" indicator in inbox header, auto-refreshes every 60s
+- [x] Frontend: Receipts page or receipt detail — "Linked Emails" section showing emails linked to this receipt
+- [x] Tests: Wave 4 Round 4 vitest tests for all 4 new procedures and frontend components

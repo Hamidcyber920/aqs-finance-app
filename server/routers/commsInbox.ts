@@ -12,6 +12,9 @@ import { eq, desc, and, or, like, isNull, sql, gte, lte, inArray } from "drizzle
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 
+// ─── Module-level Gmail sync timestamp (updated by scheduledJobs.ts) ────────
+export let gmailLastSyncedAt: number | null = null;
+export function setGmailLastSyncedAt(ts: number) { gmailLastSyncedAt = ts; }
 // ─── Default system sections seeded on first use ─────────────────────────────
 const SYSTEM_SECTIONS = [
   { name: "Urgent", color: "#ef4444", icon: "AlertTriangle", sortOrder: 0, isSystem: true },
@@ -788,6 +791,51 @@ export const commsInboxRouter = router({
       return { priority: parsed.priority, reason: parsed.reason };
     }),
 
+  // ── Priority distribution stats ─────────────────────────────────────────
+  getPriorityStats: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { urgent: 0, high: 0, normal: 0, low: 0, total: 0 };
+    const rows = await db
+      .select({ priority: inboundEmails.priority, count: sql<number>`count(*)` })
+      .from(inboundEmails)
+      .where(eq(inboundEmails.status, "unread"))
+      .groupBy(inboundEmails.priority);
+    const stats = { urgent: 0, high: 0, normal: 0, low: 0, total: 0 };
+    for (const row of rows) {
+      const p = row.priority as keyof typeof stats;
+      if (p in stats) (stats as any)[p] = Number(row.count);
+      stats.total += Number(row.count);
+    }
+    return stats;
+  }),
+  // ── Last Gmail sync timestamp ─────────────────────────────────────────────
+  getLastSyncTime: protectedProcedure.query(() => {
+    return { lastSyncedAt: gmailLastSyncedAt };
+  }),
+  // ── Linked emails for a receipt (cross-reference panel) ───────────────────
+  getLinkedEmailsForReceipt: protectedProcedure
+    .input(z.object({ receiptId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select({
+          id: inboundEmails.id,
+          subject: inboundEmails.subject,
+          fromEmail: inboundEmails.fromEmail,
+          fromName: inboundEmails.fromName,
+          snippet: inboundEmails.snippet,
+          priority: inboundEmails.priority,
+          status: inboundEmails.status,
+          receivedAt: inboundEmails.receivedAt,
+          linkedReceiptNote: inboundEmails.linkedReceiptNote,
+        })
+        .from(inboundEmails)
+        .where(eq(inboundEmails.linkedReceiptId, input.receiptId))
+        .orderBy(desc(inboundEmails.receivedAt))
+        .limit(50);
+      return rows;
+    }),
   // ── Per-section unread counts (for sidebar badges) ───────────────────────
   getSectionUnreadCounts: protectedProcedure.query(async () => {
     const db = await getDb();

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   ArrowLeft, Edit2, Save, X, RefreshCw, Loader2, Receipt,
   Calendar, DollarSign, Tag, FileText, ExternalLink, Trash2,
+  Mail, Link2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,10 @@ export default function ReceiptDetailPage() {
 
   const { data: receipt, isLoading } = trpc.receipts.get.useQuery({ id }, { enabled: !!id });
   const { data: categories } = trpc.categories.list.useQuery();
+  const { data: linkedEmails = [] } = (trpc as any).commsInbox.getLinkedEmailsForReceipt.useQuery(
+    { receiptId: id },
+    { enabled: !!id }
+  );
 
   const [editing, setEditing] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -366,6 +371,46 @@ export default function ReceiptDetailPage() {
         </Card>
       )}
 
+      {/* Linked Emails cross-reference panel */}
+      {linkedEmails.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-indigo-500" /> Linked Emails
+              <span className="ml-auto text-xs font-normal text-muted-foreground">{linkedEmails.length} email{linkedEmails.length !== 1 ? "s" : ""}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {linkedEmails.map((email: any) => (
+              <div key={email.id} className="flex items-start gap-3 p-3 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors">
+                <Mail className="w-4 h-4 mt-0.5 text-indigo-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium truncate">{email.subject}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border flex-shrink-0 ${
+                      email.priority === "urgent" ? "bg-red-500/20 text-red-400 border-red-500/30" :
+                      email.priority === "high" ? "bg-orange-500/20 text-orange-400 border-orange-500/30" :
+                      email.priority === "normal" ? "bg-blue-500/20 text-blue-400 border-blue-500/30" :
+                      "bg-gray-500/20 text-gray-400 border-gray-500/30"
+                    }`}>{email.priority}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    From: {email.fromName ? `${email.fromName} <${email.fromEmail}>` : email.fromEmail}
+                    {" · "}
+                    {new Date(email.receivedAt).toLocaleDateString()}
+                  </div>
+                  {email.snippet && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{email.snippet}</p>
+                  )}
+                  {email.linkedReceiptNote && (
+                    <p className="text-xs text-indigo-400 mt-1 italic">Note: {email.linkedReceiptNote}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
       {/* Delete dialog */}
       <DeleteConfirmDialog
         open={showDelete}
