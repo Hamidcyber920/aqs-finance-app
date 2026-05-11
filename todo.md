@@ -1322,14 +1322,22 @@
 ## Wave 4 Next Steps (May 11, 2026)
 
 ### Gmail Push Webhook
-- [ ] Backend: register Gmail push subscription via Gmail API watch() on server startup — topic: projects/hibba/topics/gmail-inbox
-- [ ] Backend: POST /api/gmail/push-webhook endpoint — verify X-Goog-Resource-State, decode Pub/Sub message, call fetchFromGmail to pull new messages
-- [ ] Frontend: CommsInbox.tsx — "Register Push Notifications" button in settings panel, shows active/inactive status
+- [x] Backend: register Gmail push subscription via Gmail API watch() on server startup — topic: projects/hibba/topics/gmail-inbox
+- [x] Backend: POST /api/gmail/push-webhook endpoint — verify X-Goog-Resource-State, decode Pub/Sub message, call fetchFromGmail to pull new messages
+- [x] Frontend: CommsInbox.tsx — "Register Push Notifications" button in settings panel, shows active/inactive status
 
 ### Email Reply Threading
-- [ ] Backend: commsInbox.replyToEmail procedure — accept emailId + replyBody, send via Gmail API with In-Reply-To + References headers, log reply in email_activity_log
-- [ ] Frontend: CommsInbox.tsx — "Reply" button in email detail opens compose panel below original message, shows thread history
+- [x] Backend: commsInbox.replyToEmail procedure — accept emailId + replyBody, send via Gmail API with In-Reply-To + References headers, log reply in email_activity_log
+- [x] Frontend: CommsInbox.tsx — "Reply" button in email detail opens compose panel below original message, shows thread history
 
 ### Inbox Unread Badge
-- [ ] Backend: commsInbox.getInboxStats — already returns unreadCount; ensure it's exposed per-section too
-- [ ] Frontend: DashboardLayout.tsx — fetch unread count via commsInbox.getInboxStats, show red badge on "Master Inbox" nav item
+- [x] Backend: commsInbox.getInboxStats — already returns unreadCount; ensure it's exposed per-section too
+- [x] Frontend: DashboardLayout.tsx — fetch unread count via commsInbox.getInboxStats, show red badge on "Master Inbox" nav item
+
+## Wave 4 Next Steps Round 2 (May 11, 2026)
+
+- [ ] Backend: commsInbox.searchEmails — full-text search across sender/subject/body, filter by section/priority/read status/date range
+- [ ] Backend: commsInbox.bulkAction — accept array of emailIds + action (markRead, markUnread, archive, moveToSection), execute in batch
+- [ ] Frontend: CommsInbox.tsx — search bar at top of email list with debounce, filter chips (section, priority, unread, date)
+- [ ] Frontend: CommsInbox.tsx — checkbox column in email list, floating bulk action bar when items selected (Mark Read, Move, Archive)
+- [ ] Frontend: CommsInbox.tsx — "Use Template" dropdown in Reply tab, fetches commsV3 templates and pre-fills compose area

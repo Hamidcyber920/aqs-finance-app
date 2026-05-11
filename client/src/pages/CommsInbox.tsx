@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,11 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Mail, MailOpen, AlertTriangle, RefreshCw, Plus, Search, Zap, FileText,
   MoveRight, UserCheck, Archive, CheckCircle, ChevronRight, Inbox, Loader2,
-  Upload, Eye, Clock, Tag, X, Paperclip
+  Upload, Eye, Clock, Tag, X, Paperclip, Filter, CalendarDays, ChevronDown,
+  SquareCheck, Trash2
 } from "lucide-react";
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -30,8 +32,15 @@ const STATUS_ICONS: Record<string, any> = {
   archived: Archive,
 };
 
-export default function CommsInboxPage() {
+// Quick date range presets
+const DATE_PRESETS = [
+  { label: "Today", getValue: () => { const d = new Date(); d.setHours(0,0,0,0); return { from: d.getTime(), to: Date.now() }; } },
+  { label: "Last 7 days", getValue: () => ({ from: Date.now() - 7*24*60*60*1000, to: Date.now() }) },
+  { label: "Last 30 days", getValue: () => ({ from: Date.now() - 30*24*60*60*1000, to: Date.now() }) },
+  { label: "This month", getValue: () => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return { from: d.getTime(), to: Date.now() }; } },
+];
 
+export default function CommsInboxPage() {
   const utils = trpc.useUtils();
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -39,6 +48,18 @@ export default function CommsInboxPage() {
   const [selectedEmailId, setSelectedEmailId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<number | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<number | undefined>(undefined);
+  const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  // Bulk selection
+  const [selectedEmailIds, setSelectedEmailIds] = useState<Set<number>>(new Set());
+  const [showBulkMoveDialog, setShowBulkMoveDialog] = useState(false);
+  const [bulkMoveTargetSectionId, setBulkMoveTargetSectionId] = useState<string>("");
+
+  // Dialogs
   const [showPushDialog, setShowPushDialog] = useState(false);
   const [showSectionDialog, setShowSectionDialog] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
@@ -51,8 +72,8 @@ export default function CommsInboxPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reply state
-  const [showReplyPanel, setShowReplyPanel] = useState(false);
   const [replyBody, setReplyBody] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   // Gmail push webhook registration state
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
@@ -61,16 +82,30 @@ export default function CommsInboxPage() {
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: sections = [], refetch: refetchSections } = trpc.commsInbox.listSections.useQuery();
   const { data: stats } = trpc.commsInbox.getInboxStats.useQuery(undefined, { refetchInterval: 30000 });
-  const { data: emails = [], isLoading: emailsLoading, refetch: refetchEmails } = trpc.commsInbox.listEmails.useQuery({
+  const { data: unreadCounts } = trpc.commsInbox.getSectionUnreadCounts.useQuery(undefined, { refetchInterval: 30000 });
+
+  const emailQueryInput = useMemo(() => ({
     sectionId: selectedSectionId,
     status: statusFilter !== "all" ? statusFilter as any : undefined,
+    priority: priorityFilter !== "all" ? priorityFilter as any : undefined,
     search: search || undefined,
+    dateFrom,
+    dateTo,
     limit: 100,
-  }, { refetchInterval: 60000 });
+  }), [selectedSectionId, statusFilter, priorityFilter, search, dateFrom, dateTo]);
+
+  const { data: emails = [], isLoading: emailsLoading, refetch: refetchEmails } = trpc.commsInbox.listEmails.useQuery(
+    emailQueryInput,
+    { refetchInterval: 60000 }
+  );
+
   const { data: emailDetail, refetch: refetchDetail } = trpc.commsInbox.getEmail.useQuery(
     { id: selectedEmailId! },
     { enabled: !!selectedEmailId }
   );
+
+  // Templates for reply
+  const { data: templates = [] } = trpc.commsV3.listTemplates.useQuery({});
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const fetchGmail = trpc.commsInbox.fetchFromGmail.useMutation({
@@ -96,27 +131,29 @@ export default function CommsInboxPage() {
     onError: (e) => toast.error(`Update failed: ${e.message}`),
   });
 
-  const aiSummarise = trpc.commsInbox.aiSummariseEmail.useMutation({
+  const bulkAction = trpc.commsInbox.bulkAction.useMutation({
     onSuccess: (data) => {
-      toast.success(`AI summary ready`);
-      refetchDetail();
+      toast.success(`${data.updated} email(s) updated`);
+      setSelectedEmailIds(new Set());
+      setShowBulkMoveDialog(false);
+      setBulkMoveTargetSectionId("");
+      refetchEmails();
     },
+    onError: (e) => toast.error(`Bulk action failed: ${e.message}`),
+  });
+
+  const aiSummarise = trpc.commsInbox.aiSummariseEmail.useMutation({
+    onSuccess: () => { toast.success("AI summary ready"); refetchDetail(); },
     onError: (e) => toast.error(`AI summary failed: ${e.message}`),
   });
 
   const ocrAttachment = trpc.commsInbox.ocrAttachment.useMutation({
-    onSuccess: () => {
-      toast.success("OCR complete");
-      refetchDetail();
-    },
+    onSuccess: () => { toast.success("OCR complete"); refetchDetail(); },
     onError: (e) => toast.error(`OCR failed: ${e.message}`),
   });
 
   const uploadAttachment = trpc.commsInbox.uploadAttachment.useMutation({
-    onSuccess: () => {
-      toast.success("Attachment uploaded");
-      refetchDetail();
-    },
+    onSuccess: () => { toast.success("Attachment uploaded"); refetchDetail(); },
     onError: (e) => toast.error(`Upload failed: ${e.message}`),
   });
 
@@ -133,8 +170,8 @@ export default function CommsInboxPage() {
   const replyToEmail = trpc.commsInbox.replyToEmail.useMutation({
     onSuccess: (data) => {
       toast.success(`Reply sent to ${data.to}`);
-      setShowReplyPanel(false);
       setReplyBody("");
+      setSelectedTemplateId("");
       refetchDetail();
       refetchEmails();
     },
@@ -180,8 +217,60 @@ export default function CommsInboxPage() {
     reader.readAsDataURL(file);
   };
 
-  // Unread counts for sidebar badges
-  const { data: unreadCounts } = trpc.commsInbox.getSectionUnreadCounts.useQuery(undefined, { refetchInterval: 30000 });
+  const handleDatePreset = (preset: typeof DATE_PRESETS[0]) => {
+    if (activeDatePreset === preset.label) {
+      setActiveDatePreset(null);
+      setDateFrom(undefined);
+      setDateTo(undefined);
+    } else {
+      const { from, to } = preset.getValue();
+      setActiveDatePreset(preset.label);
+      setDateFrom(from);
+      setDateTo(to);
+    }
+  };
+
+  const clearFilters = () => {
+    setStatusFilter("all");
+    setPriorityFilter("all");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+    setActiveDatePreset(null);
+    setSearch("");
+  };
+
+  const hasActiveFilters = statusFilter !== "all" || priorityFilter !== "all" || dateFrom !== undefined || search !== "";
+
+  // Bulk selection helpers
+  const allEmailIds = emails.map((e: any) => e.id);
+  const allSelected = allEmailIds.length > 0 && allEmailIds.every((id: number) => selectedEmailIds.has(id));
+  const someSelected = selectedEmailIds.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedEmailIds(new Set());
+    } else {
+      setSelectedEmailIds(new Set(allEmailIds));
+    }
+  };
+
+  const toggleSelectEmail = (id: number) => {
+    setSelectedEmailIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Template apply in reply
+  const handleApplyTemplate = (templateId: string) => {
+    const t = templates.find((t: any) => String(t.id) === templateId);
+    if (t) {
+      setReplyBody((t as any).body || "");
+      setSelectedTemplateId(templateId);
+    }
+  };
 
   const selectedEmail = emailDetail?.email;
   const attachments = emailDetail?.attachments ?? [];
@@ -218,6 +307,11 @@ export default function CommsInboxPage() {
             className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 transition-colors ${selectedSectionId === undefined ? "bg-indigo-600/20 text-indigo-300" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
           >
             <Mail className="w-3.5 h-3.5" /> All Emails
+            {unreadCounts?.sections?.["unsorted"] ? (
+              <span className="ml-auto text-[10px] bg-indigo-500 text-white rounded-full px-1.5 py-0.5 font-bold">
+                {unreadCounts.sections["unsorted"]}
+              </span>
+            ) : null}
           </button>
           {/* Section list */}
           {sections.map((s: any) => (
@@ -234,7 +328,7 @@ export default function CommsInboxPage() {
                 </span>
               ) : null}
               {!s.isSystem && (
-                <button className="ml-auto text-gray-600 hover:text-red-400" onClick={(e) => { e.stopPropagation(); deleteSection.mutate({ id: s.id }); }}>
+                <button className="text-gray-600 hover:text-red-400" onClick={(e) => { e.stopPropagation(); deleteSection.mutate({ id: s.id }); }}>
                   <X className="w-3 h-3" />
                 </button>
               )}
@@ -260,33 +354,106 @@ export default function CommsInboxPage() {
       <div className="w-80 border-r border-white/10 flex flex-col bg-[#0a0f1e]">
         {/* Toolbar */}
         <div className="p-3 border-b border-white/10 space-y-2">
+          {/* Search row */}
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
               <Input value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search…" className="pl-7 h-7 text-xs bg-white/5 border-white/10 text-white" />
+                placeholder="Search sender, subject…" className="pl-7 h-7 text-xs bg-white/5 border-white/10 text-white" />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
+            <Button size="sm" className={`h-7 text-xs px-2 ${showFilterPanel ? "bg-indigo-600 text-white" : "bg-white/5 border-white/10 text-gray-300 hover:text-white hover:bg-white/10"}`}
+              onClick={() => setShowFilterPanel(p => !p)}>
+              <Filter className="w-3 h-3" />
+              {hasActiveFilters && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-orange-400" />}
+            </Button>
             <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 px-2"
               onClick={() => setShowPushDialog(true)}>
               <Plus className="w-3 h-3" />
             </Button>
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-7 text-xs bg-white/5 border-white/10 text-gray-300">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="unread">Unread</SelectItem>
-              <SelectItem value="read">Read</SelectItem>
-              <SelectItem value="actioned">Actioned</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
+
+          {/* Filter panel */}
+          {showFilterPanel && (
+            <div className="space-y-2 pt-1 border-t border-white/5">
+              {/* Status */}
+              <div className="flex flex-wrap gap-1">
+                {["all", "unread", "read", "actioned", "archived"].map(s => (
+                  <button key={s} onClick={() => setStatusFilter(s)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${statusFilter === s ? "bg-indigo-600 border-indigo-500 text-white" : "border-white/20 text-gray-400 hover:text-white hover:border-white/40"}`}>
+                    {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {/* Priority */}
+              <div className="flex flex-wrap gap-1">
+                {["all", "urgent", "high", "normal", "low"].map(p => (
+                  <button key={p} onClick={() => setPriorityFilter(p)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${priorityFilter === p ? "bg-orange-600 border-orange-500 text-white" : "border-white/20 text-gray-400 hover:text-white hover:border-white/40"}`}>
+                    {p === "all" ? "Any priority" : p.charAt(0).toUpperCase() + p.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {/* Date presets */}
+              <div className="flex flex-wrap gap-1">
+                {DATE_PRESETS.map(preset => (
+                  <button key={preset.label} onClick={() => handleDatePreset(preset)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1 ${activeDatePreset === preset.label ? "bg-emerald-700 border-emerald-600 text-white" : "border-white/20 text-gray-400 hover:text-white hover:border-white/40"}`}>
+                    <CalendarDays className="w-2.5 h-2.5" /> {preset.label}
+                  </button>
+                ))}
+              </div>
+              {hasActiveFilters && (
+                <button onClick={clearFilters} className="text-[10px] text-orange-400 hover:text-orange-300 flex items-center gap-1">
+                  <X className="w-2.5 h-2.5" /> Clear all filters
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Bulk action bar */}
+          {someSelected && (
+            <div className="flex items-center gap-1 p-1.5 bg-indigo-900/30 border border-indigo-500/30 rounded-lg">
+              <span className="text-[10px] text-indigo-300 font-semibold mr-1">{selectedEmailIds.size} selected</span>
+              <Button size="sm" className="h-6 text-[10px] px-2 bg-emerald-700 hover:bg-emerald-600 text-white"
+                onClick={() => bulkAction.mutate({ emailIds: Array.from(selectedEmailIds), action: "markRead" })}
+                disabled={bulkAction.isPending}>
+                <MailOpen className="w-2.5 h-2.5 mr-1" /> Read
+              </Button>
+              <Button size="sm" className="h-6 text-[10px] px-2 bg-gray-700 hover:bg-gray-600 text-white"
+                onClick={() => bulkAction.mutate({ emailIds: Array.from(selectedEmailIds), action: "archive" })}
+                disabled={bulkAction.isPending}>
+                <Archive className="w-2.5 h-2.5 mr-1" /> Archive
+              </Button>
+              <Button size="sm" className="h-6 text-[10px] px-2 bg-blue-700 hover:bg-blue-600 text-white"
+                onClick={() => setShowBulkMoveDialog(true)}>
+                <MoveRight className="w-2.5 h-2.5 mr-1" /> Move
+              </Button>
+              <button onClick={() => setSelectedEmailIds(new Set())} className="ml-auto text-gray-500 hover:text-white">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Email list */}
         <div className="flex-1 overflow-y-auto">
+          {/* Select all row */}
+          {emails.length > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/5 bg-white/2">
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={toggleSelectAll}
+                className="border-white/30 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 w-3.5 h-3.5"
+              />
+              <span className="text-[10px] text-gray-500">{allSelected ? "Deselect all" : "Select all"} ({emails.length})</span>
+            </div>
+          )}
+
           {emailsLoading ? (
             <div className="flex items-center justify-center h-32">
               <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
@@ -295,32 +462,40 @@ export default function CommsInboxPage() {
             <div className="flex flex-col items-center justify-center h-32 text-gray-500 text-sm">
               <Inbox className="w-8 h-8 mb-2 opacity-40" />
               <p>No emails</p>
+              {hasActiveFilters && <button onClick={clearFilters} className="text-xs text-indigo-400 mt-1 hover:underline">Clear filters</button>}
             </div>
           ) : (
             emails.map((email: any) => {
               const isSelected = selectedEmailId === email.id;
               const isUnread = email.status === "unread";
+              const isChecked = selectedEmailIds.has(email.id);
               return (
-                <button
-                  key={email.id}
-                  onClick={() => {
-                    setSelectedEmailId(email.id);
-                    if (isUnread) updateEmail.mutate({ id: email.id, status: "read" });
-                  }}
-                  className={`w-full text-left p-3 border-b border-white/5 transition-colors ${isSelected ? "bg-indigo-600/20" : "hover:bg-white/5"}`}
-                >
-                  <div className="flex items-start gap-2">
-                    {isUnread ? (
-                      <span className="w-2 h-2 rounded-full bg-indigo-400 mt-1.5 flex-shrink-0" />
-                    ) : (
-                      <span className="w-2 h-2 rounded-full bg-transparent mt-1.5 flex-shrink-0" />
-                    )}
-                    <div className="flex-1 min-w-0">
+                <div key={email.id} className={`border-b border-white/5 transition-colors ${isSelected ? "bg-indigo-600/20" : isChecked ? "bg-indigo-900/20" : "hover:bg-white/5"}`}>
+                  <div className="flex items-start gap-2 p-3">
+                    <div className="flex items-center gap-1.5 mt-1 flex-shrink-0">
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => toggleSelectEmail(email.id)}
+                        className="border-white/30 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600 w-3.5 h-3.5"
+                      />
+                      {isUnread ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
+                      ) : (
+                        <span className="w-1.5 h-1.5 rounded-full bg-transparent flex-shrink-0" />
+                      )}
+                    </div>
+                    <button
+                      className="flex-1 text-left min-w-0"
+                      onClick={() => {
+                        setSelectedEmailId(email.id);
+                        if (isUnread) updateEmail.mutate({ id: email.id, status: "read" });
+                      }}
+                    >
                       <div className="flex items-center justify-between gap-1">
                         <span className={`text-xs truncate ${isUnread ? "text-white font-semibold" : "text-gray-300"}`}>
                           {email.fromName || email.fromEmail}
                         </span>
-                        <Badge className={`text-[10px] px-1 py-0 border ${PRIORITY_COLORS[email.priority] ?? ""}`}>
+                        <Badge className={`text-[10px] px-1 py-0 border flex-shrink-0 ${PRIORITY_COLORS[email.priority] ?? ""}`}>
                           {email.priority}
                         </Badge>
                       </div>
@@ -331,9 +506,9 @@ export default function CommsInboxPage() {
                       <p className="text-[10px] text-gray-600 mt-1">
                         {new Date(email.receivedAt).toLocaleString()}
                       </p>
-                    </div>
+                    </button>
                   </div>
-                </button>
+                </div>
               );
             })
           )}
@@ -453,7 +628,7 @@ export default function CommsInboxPage() {
                       {(selectedEmail as any).aiActionRequired && (
                         <div className="flex items-center gap-2 p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
                           <AlertTriangle className="w-4 h-4 text-orange-400" />
-                          <span className="text-sm text-orange-300 font-medium">Action Required</span>
+                          <span className="text-sm text-orange-300">Action required</span>
                         </div>
                       )}
                       <Button size="sm" variant="outline" className="border-white/20 text-gray-400 hover:text-white"
@@ -527,6 +702,30 @@ export default function CommsInboxPage() {
                     <div><span className="text-gray-500">To:</span> <span className="text-gray-200">{(selectedEmail as any)?.fromName || (selectedEmail as any)?.fromEmail} &lt;{(selectedEmail as any)?.fromEmail}&gt;</span></div>
                     <div><span className="text-gray-500">Subject:</span> <span className="text-gray-200">{(selectedEmail as any)?.subject?.startsWith("Re:") ? (selectedEmail as any)?.subject : `Re: ${(selectedEmail as any)?.subject}`}</span></div>
                   </div>
+
+                  {/* Template picker */}
+                  {templates.length > 0 && (
+                    <div>
+                      <Label className="text-xs text-gray-400">Use Template</Label>
+                      <Select value={selectedTemplateId} onValueChange={handleApplyTemplate}>
+                        <SelectTrigger className="bg-white/5 border-white/10 text-gray-300 mt-1 h-8 text-xs">
+                          <SelectValue placeholder="Choose a template…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((t: any) => (
+                            <SelectItem key={t.id} value={String(t.id)}>
+                              <span className="flex items-center gap-2">
+                                <Tag className="w-3 h-3 text-gray-400" />
+                                <span>{t.name}</span>
+                                <span className="text-xs text-gray-500 capitalize">{t.category?.replace(/_/g, " ")}</span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   <Textarea
                     value={replyBody}
                     onChange={e => setReplyBody(e.target.value)}
@@ -534,7 +733,13 @@ export default function CommsInboxPage() {
                     className="bg-white/5 border-white/10 text-white min-h-[180px] text-sm"
                   />
                   <div className="text-xs text-gray-500 italic">Your reply will be prefixed with "Assalamu Alaikum," and signed "JazakAllah Khair" automatically.</div>
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    {replyBody && (
+                      <Button size="sm" variant="outline" className="border-white/20 text-gray-400 hover:text-white"
+                        onClick={() => { setReplyBody(""); setSelectedTemplateId(""); }}>
+                        <X className="w-3 h-3 mr-1" /> Clear
+                      </Button>
+                    )}
                     <Button
                       onClick={() => replyToEmail.mutate({ emailId: (selectedEmail as any).id, replyBody })}
                       disabled={replyToEmail.isPending || !replyBody.trim()}
@@ -661,7 +866,7 @@ export default function CommsInboxPage() {
                 className="bg-white/5 border-white/10 text-white mt-1" />
             </div>
             <div>
-              <Label className="text-xs text-gray-400">Colour</Label>
+              <Label className="text-xs text-gray-400">Color</Label>
               <div className="flex items-center gap-2 mt-1">
                 <input type="color" value={sectionForm.color} onChange={e => setSectionForm(p => ({ ...p, color: e.target.value }))}
                   className="w-8 h-8 rounded cursor-pointer border-0" />
@@ -748,6 +953,45 @@ export default function CommsInboxPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowMoveDialog(false)} className="border-white/20 text-gray-300">Cancel</Button>
             <Button onClick={handleMoveSection} disabled={!moveTargetSectionId} className="bg-indigo-600 hover:bg-indigo-700">
+              Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk Move to Section Dialog ────────────────────────────────────── */}
+      <Dialog open={showBulkMoveDialog} onOpenChange={setShowBulkMoveDialog}>
+        <DialogContent className="bg-[#0d1426] border-white/10 text-white max-w-sm">
+          <DialogHeader><DialogTitle>Move {selectedEmailIds.size} Email(s) to Section</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Label className="text-xs text-gray-400">Select Section</Label>
+            <Select value={bulkMoveTargetSectionId} onValueChange={setBulkMoveTargetSectionId}>
+              <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectValue placeholder="Choose section…" />
+              </SelectTrigger>
+              <SelectContent>
+                {sections.map((s: any) => (
+                  <SelectItem key={s.id} value={String(s.id)}>
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                      {s.name}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBulkMoveDialog(false)} className="border-white/20 text-gray-300">Cancel</Button>
+            <Button
+              onClick={() => bulkAction.mutate({
+                emailIds: Array.from(selectedEmailIds),
+                action: "moveToSection",
+                sectionId: parseInt(bulkMoveTargetSectionId),
+              })}
+              disabled={bulkAction.isPending || !bulkMoveTargetSectionId}
+              className="bg-indigo-600 hover:bg-indigo-700">
+              {bulkAction.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Move
             </Button>
           </DialogFooter>

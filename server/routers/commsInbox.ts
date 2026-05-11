@@ -8,7 +8,7 @@ import {
   emailAttachments,
   emailActivityLog,
 } from "../../drizzle/schema";
-import { eq, desc, and, or, like, isNull, sql } from "drizzle-orm";
+import { eq, desc, and, or, like, isNull, sql, gte, lte, inArray } from "drizzle-orm";
 import { invokeLLM } from "../_core/llm";
 import { storagePut } from "../storage";
 
@@ -101,6 +101,8 @@ export const commsInboxRouter = router({
       status: z.enum(["unread", "read", "actioned", "archived"]).optional(),
       priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
       search: z.string().optional(),
+      dateFrom: z.number().optional(), // UTC ms timestamp
+      dateTo: z.number().optional(),   // UTC ms timestamp
       limit: z.number().min(1).max(200).default(50),
       offset: z.number().default(0),
     }))
@@ -111,6 +113,8 @@ export const commsInboxRouter = router({
       if (input.sectionId !== undefined) conditions.push(eq(inboundEmails.sectionId, input.sectionId));
       if (input.status) conditions.push(eq(inboundEmails.status, input.status));
       if (input.priority) conditions.push(eq(inboundEmails.priority, input.priority));
+      if (input.dateFrom) conditions.push(gte(inboundEmails.receivedAt, new Date(input.dateFrom)));
+      if (input.dateTo) conditions.push(lte(inboundEmails.receivedAt, new Date(input.dateTo)));
       if (input.search) {
         conditions.push(or(
           like(inboundEmails.subject, `%${input.search}%`),
@@ -622,6 +626,43 @@ export const commsInboxRouter = router({
         webhookUrl: input.webhookUrl,
         topic,
       };
+    }),
+
+  // ── Bulk actions ─────────────────────────────────────────────────────────
+  bulkAction: protectedProcedure
+    .input(z.object({
+      emailIds: z.array(z.number()).min(1).max(200),
+      action: z.enum(["markRead", "markUnread", "archive", "moveToSection"]),
+      sectionId: z.number().optional(), // required when action === moveToSection
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const updates: any = {};
+      if (input.action === "markRead") updates.status = "read";
+      else if (input.action === "markUnread") updates.status = "unread";
+      else if (input.action === "archive") updates.status = "archived";
+      else if (input.action === "moveToSection") {
+        if (input.sectionId === undefined) throw new TRPCError({ code: "BAD_REQUEST", message: "sectionId required for moveToSection" });
+        updates.sectionId = input.sectionId;
+      }
+      await db.update(inboundEmails)
+        .set(updates)
+        .where(inArray(inboundEmails.id, input.emailIds));
+      // Log bulk action
+      const logAction = input.action === "moveToSection" ? "moved_section"
+        : input.action === "markRead" ? "read"
+        : input.action === "markUnread" ? "read"
+        : "archived";
+      await db.insert(emailActivityLog).values(
+        input.emailIds.map(emailId => ({
+          emailId,
+          userId: ctx.user.id,
+          action: logAction as any,
+          notes: input.action === "moveToSection" ? `Moved to section ${input.sectionId}` : undefined,
+        }))
+      );
+      return { updated: input.emailIds.length };
     }),
 
   // ── Per-section unread counts (for sidebar badges) ───────────────────────

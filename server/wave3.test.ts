@@ -206,3 +206,45 @@ describe("commsInbox — reply, push webhook, unread counts", () => {
     expect(src).toContain("export function registerGmailWebhook");
   });
 });
+
+// ── Wave 4 Round 2: Search/Filter, Bulk Actions, Template Reply ────────────
+describe("Wave 4 Round 2 — CommsInbox search/filter/bulk/template-reply", () => {
+  it("commsInbox router has bulkAction procedure", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf8");
+    expect(src).toContain("bulkAction:");
+  });
+
+  it("commsInbox listEmails supports dateFrom/dateTo filter", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf8");
+    expect(src).toContain("dateFrom");
+    expect(src).toContain("dateTo");
+  });
+
+  it("bulkAction supports markRead, archive, moveToSection actions", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "routers/commsInbox.ts"), "utf8");
+    expect(src).toContain("markRead");
+    expect(src).toContain("archive");
+    expect(src).toContain("moveToSection");
+  });
+
+  it("CommsInbox.tsx has bulk checkbox select-all and action bar", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/CommsInbox.tsx"), "utf8");
+    expect(src).toContain("toggleSelectAll");
+    expect(src).toContain("selectedEmailIds");
+    expect(src).toContain("bulkAction");
+  });
+
+  it("CommsInbox.tsx has template picker in reply tab", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/CommsInbox.tsx"), "utf8");
+    expect(src).toContain("handleApplyTemplate");
+    expect(src).toContain("selectedTemplateId");
+    expect(src).toContain("commsV3.listTemplates");
+  });
+
+  it("CommsInbox.tsx has date range filter chips with presets", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/pages/CommsInbox.tsx"), "utf8");
+    expect(src).toContain("DATE_PRESETS");
+    expect(src).toContain("activeDatePreset");
+    expect(src).toContain("clearFilters");
+  });
+});
