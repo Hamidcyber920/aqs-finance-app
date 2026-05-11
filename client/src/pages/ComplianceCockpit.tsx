@@ -348,10 +348,10 @@ export default function ComplianceCockpit() {
   const { data: policies = [], isLoading: policiesLoading, refetch: refetchPolicies } = trpc.compliance.listPolicies.useQuery();
 
   // Summary stats
-  const overdueActions = actions.filter(a => a.status === "overdue" || (a.dueDate && new Date(a.dueDate) < new Date() && a.status !== "completed")).length;
-  const criticalActions = actions.filter(a => a.priority === "critical" && a.status !== "completed").length;
-  const expiredTraining = training.filter(t => t.computedStatus === "expired" || t.computedStatus === "expiring_soon").length;
-  const overduePolices = policies.filter(p => p.status === "overdue" || p.status === "due_review").length;
+  const overdueActions = actions.filter((a: any) => a.status === "overdue" || (a.dueDate && new Date(a.dueDate) < new Date() && a.status !== "completed")).length;
+  const criticalActions = actions.filter((a: any) => a.priority === "critical" && a.status !== "completed").length;
+  const expiredTraining = training.filter((t: any) => t.computedStatus === "expired" || t.computedStatus === "expiring_soon").length;
+  const overduePolices = policies.filter((p: any) => p.status === "overdue" || p.status === "due_review").length;
 
   const isAdmin = ["superadmin", "trustee", "manager", "admin"].includes(user?.role ?? "");
 
@@ -468,7 +468,7 @@ export default function ComplianceCockpit() {
                         </tr>
                       </thead>
                       <tbody>
-                        {actions.map(a => {
+                        {actions.map((a: any) => {
                           const days = daysUntil(a.dueDate);
                           return (
                             <tr key={a.id}>
