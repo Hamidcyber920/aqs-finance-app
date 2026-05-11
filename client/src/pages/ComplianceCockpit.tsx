@@ -76,13 +76,13 @@ function ActionForm({ initial, onClose, onSaved }: ActionFormProps) {
     evidenceUrl: initial?.evidenceUrl ?? "",
   });
   const utils = trpc.useUtils();
-  const upsert = trpc.compliance.upsertAction.useMutation({
+  const upsert = (trpc as any).compliance.upsertAction.useMutation({
     onSuccess: () => {
       utils.compliance.listActions.invalidate();
       toast.success(initial ? "Action updated" : "Action created");
       onSaved();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   return (
@@ -172,13 +172,13 @@ function TrainingForm({ initial, onClose, onSaved }: TrainingFormProps) {
     notes: initial?.notes ?? "",
   });
   const utils = trpc.useUtils();
-  const upsert = trpc.compliance.upsertTraining.useMutation({
+  const upsert = (trpc as any).compliance.upsertTraining.useMutation({
     onSuccess: () => {
       utils.compliance.listTraining.invalidate();
       toast.success(initial ? "Record updated" : "Record created");
       onSaved();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   return (
@@ -256,13 +256,13 @@ function PolicyForm({ initial, onClose, onSaved }: PolicyFormProps) {
     notes: initial?.notes ?? "",
   });
   const utils = trpc.useUtils();
-  const upsert = trpc.compliance.upsertPolicy.useMutation({
+  const upsert = (trpc as any).compliance.upsertPolicy.useMutation({
     onSuccess: () => {
       utils.compliance.listPolicies.invalidate();
       toast.success(initial ? "Policy updated" : "Policy created");
       onSaved();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message),
   });
 
   return (
@@ -343,9 +343,9 @@ export default function ComplianceCockpit() {
   const [trainingDialog, setTrainingDialog] = useState<{ open: boolean; item?: any }>({ open: false });
   const [policyDialog, setPolicyDialog] = useState<{ open: boolean; item?: any }>({ open: false });
 
-  const { data: actions = [], isLoading: actionsLoading, refetch: refetchActions } = trpc.compliance.listActions.useQuery();
-  const { data: training = [], isLoading: trainingLoading, refetch: refetchTraining } = trpc.compliance.listTraining.useQuery();
-  const { data: policies = [], isLoading: policiesLoading, refetch: refetchPolicies } = trpc.compliance.listPolicies.useQuery();
+  const { data: actions = [], isLoading: actionsLoading, refetch: refetchActions } = (trpc as any).compliance.listActions.useQuery();
+  const { data: training = [], isLoading: trainingLoading, refetch: refetchTraining } = (trpc as any).compliance.listTraining.useQuery();
+  const { data: policies = [], isLoading: policiesLoading, refetch: refetchPolicies } = (trpc as any).compliance.listPolicies.useQuery();
 
   // Summary stats
   const overdueActions = actions.filter((a: any) => a.status === "overdue" || (a.dueDate && new Date(a.dueDate) < new Date() && a.status !== "completed")).length;
