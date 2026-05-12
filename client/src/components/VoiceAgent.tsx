@@ -50,13 +50,18 @@ class VoiceConnection {
     this.onStatusChange = onStatusChange;
   }
 
-  connect(screenContext: string, entityContext?: string, language?: string) {
+  async connect(screenContext: string, entityContext?: string, language?: string) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/api/voice`;
-
     this.onStatusChange("connecting");
-
     try {
+      // Fetch a short-lived auth token (needed because httpOnly cookies may not be sent on WS upgrade)
+      const tokenRes = await fetch("/api/voice/token", { credentials: "include" });
+      if (!tokenRes.ok) {
+        this.onStatusChange("error");
+        return;
+      }
+      const { token } = await tokenRes.json();
+      const wsUrl = `${protocol}//${window.location.host}/api/voice?token=${encodeURIComponent(token)}`;
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {

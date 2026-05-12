@@ -1,0 +1,35 @@
+{
+  "query": "SELECT toolName, enabledRoles, enabled FROM voice_feature_flags LIMIT 5",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT toolName, enabledRoles, enabled FROM voice_feature_flags LIMIT 5",
+  "rows": [
+    {
+      "toolName": "*",
+      "enabledRoles": "[\"superadmin\"]",
+      "enabled": "1"
+    },
+    {
+      "toolName": "get_current_user",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "enabled": "1"
+    },
+    {
+      "toolName": "get_screen_context",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "enabled": "1"
+    },
+    {
+      "toolName": "set_user_preference",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "enabled": "1"
+    },
+    {
+      "toolName": "get_staff_directory",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "enabled": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "toolName\tenabledRoles\tenabled\n*\t[\"superadmin\"]\t1\nget_current_user\t[\"superadmin\",\"trustee\",\"manager\"]\t1\nget_screen_context\t[\"superadmin\",\"trustee\",\"manager\"]\t1\nset_user_preference\t[\"superadmin\",\"trustee\",\"manager\"]\t1\nget_staff_directory\t[\"superadmin\",\"trustee\",\"manager\"]\t1\n",
+  "stderr": "",
+  "execution_time_ms": 267
+}

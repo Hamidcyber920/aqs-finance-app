@@ -89,6 +89,9 @@ async function startServer() {
   registerStripeWebhook(app);
   // Gmail push notification webhook (POST /api/gmail/push)
   registerGmailWebhook(app);
+  // Voice WebSocket auth token endpoint
+  const { registerVoiceTokenRoute } = await import("../voiceTokenRoute.ts");
+  registerVoiceTokenRoute(app);
   // tRPC API
   app.use(
     "/api/trpc",

@@ -110,20 +110,32 @@ STYLE:
 
 // ─── Helper: authenticate from WebSocket upgrade request headers ─────────────
 async function authenticateFromRequest(req: IncomingMessage): Promise<{ userId: number; role: string; name: string } | null> {
+  // First try query param token (for browsers that don't send cookies on WS upgrade)
+  try {
+    const url = new URL(req.url || "/", "http://localhost");
+    const queryToken = url.searchParams.get("token");
+    if (queryToken) {
+      const { verifyWsToken } = await import("./wsAuth");
+      const result = await verifyWsToken(queryToken);
+      if (result) return result;
+    }
+  } catch {}
+  // Fallback: try cookie-based auth
   try {
     // The SDK's authenticateRequest expects an Express-like Request with headers.cookie
     const fakeReq = { headers: { cookie: req.headers.cookie || "" } } as any;
     const user = await sdk.authenticateRequest(fakeReq);
     if (!user) return null;
     return { userId: user.id, role: user.role, name: user.name || "User" };
-  } catch {
+  } catch (err: any) {
+    console.error(`[VoiceGateway] Auth error:`, err?.message || err);
     return null;
   }
 }
 
 // ─── Helper: check daily token usage ─────────────────────────────────────────
 async function getDailyTokenUsage(userId: number): Promise<number> {
-  const db = getDb();
+  const db = await getDb();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().split("T")[0]!;
@@ -136,7 +148,7 @@ async function getDailyTokenUsage(userId: number): Promise<number> {
 
 // ─── Helper: log token usage ─────────────────────────────────────────────────
 async function logTokenUsage(userId: number, tokensUsed: number, estimatedCostPence: number) {
-  const db = getDb();
+  const db = await getDb();
   const todayStr = new Date().toISOString().split("T")[0]!;
   await db.insert(voiceCostTracking).values({
     userId,
@@ -149,7 +161,7 @@ async function logTokenUsage(userId: number, tokensUsed: number, estimatedCostPe
 
 // ─── Helper: check feature flag ──────────────────────────────────────────────
 async function isFeatureEnabled(flagName: string, userRole?: string): Promise<boolean> {
-  const db = getDb();
+  const db = await getDb();
   const flags = await db
     .select()
     .from(voiceFeatureFlags)
@@ -163,7 +175,8 @@ async function isFeatureEnabled(flagName: string, userRole?: string): Promise<bo
     try {
       const allowed = JSON.parse(flag.enabledRoles) as string[];
       if (allowed.length > 0 && !allowed.includes(userRole)) return false;
-    } catch {
+    } catch (err: any) {
+    console.error(`[VoiceGateway] Auth error:`, err?.message || err);
       // If JSON parse fails, allow all
     }
   }
@@ -176,13 +189,13 @@ async function executeToolCall(
   args: Record<string, unknown>,
   client: VoiceClient
 ): Promise<{ status: string; data: unknown; error?: string }> {
-  const db = getDb();
+  const db = await getDb();
   const startTime = Date.now();
   try {
     // Check if the specific tool is enabled
     const toolEnabled = await isFeatureEnabled(`tool_${toolName}`, client.userRole);
     if (!toolEnabled) {
-      const globalEnabled = await isFeatureEnabled("voice_agent_enabled", client.userRole);
+      const globalEnabled = await isFeatureEnabled("*", client.userRole);
       if (!globalEnabled) {
         return { status: "error", data: null, error: "Voice agent is currently disabled" };
       }
@@ -223,7 +236,7 @@ async function routeToolCall(
   args: Record<string, unknown>,
   client: VoiceClient
 ): Promise<unknown> {
-  const db = getDb();
+  const db = await getDb();
   switch (toolName) {
     case "get_current_user":
       return { userId: client.userId, role: client.userRole, name: client.userName, language: client.language };
@@ -410,7 +423,7 @@ async function routeToolCall(
 
 // ─── Process text input (text-only mode / fallback) ──────────────────────────
 async function processTextInput(client: VoiceClient, text: string): Promise<string> {
-  const db = getDb();
+  const db = await getDb();
   // Check daily token limit
   const dailyUsage = await getDailyTokenUsage(client.userId);
   if (dailyUsage >= DAILY_TOKEN_LIMIT) {
@@ -558,10 +571,12 @@ export function attachVoiceGateway(server: HttpServer) {
 
   wss.on("connection", async (ws, req) => {
     const connectionId = nanoid(12);
+    console.log(`[VoiceGateway] New connection ${connectionId}, cookie present: ${!!req.headers.cookie}, cookie length: ${(req.headers.cookie || "").length}`);
 
     // ─── Authenticate from HTTP upgrade request cookie ─────────────
     const auth = await authenticateFromRequest(req);
     if (!auth) {
+      console.log(`[VoiceGateway] Auth FAILED for ${connectionId}. Cookie header: ${req.headers.cookie?.substring(0, 50) || "NONE"}`);
       ws.send(JSON.stringify({ type: "error", error: "Authentication failed. Please log in again." }));
       ws.close();
       return;
@@ -576,7 +591,8 @@ export function attachVoiceGateway(server: HttpServer) {
       let msg: ClientMessage;
       try {
         msg = JSON.parse(raw.toString());
-      } catch {
+      } catch (err: any) {
+    console.error(`[VoiceGateway] Auth error:`, err?.message || err);
         ws.send(JSON.stringify({ type: "error", error: "Invalid JSON" }));
         return;
       }
@@ -584,7 +600,7 @@ export function attachVoiceGateway(server: HttpServer) {
       // ─── Start session ─────────────────────────────────────────────
       if (msg.type === "start_session") {
         // Check if voice agent is enabled for this role
-        const enabled = await isFeatureEnabled("voice_agent_enabled", auth.role);
+        const enabled = await isFeatureEnabled("*", auth.role);
         if (!enabled) {
           ws.send(JSON.stringify({ type: "error", error: "Voice agent is not enabled for your role" }));
           ws.close();
@@ -604,7 +620,7 @@ export function attachVoiceGateway(server: HttpServer) {
           }
         }
         const conversationId = `vs_${nanoid(16)}`;
-        const db = getDb();
+        const db = await getDb();
         // Create session record using correct schema columns
         const insertResult = await db.insert(voiceSessions).values({
           userId: auth.userId,
@@ -685,7 +701,7 @@ export function attachVoiceGateway(server: HttpServer) {
 
       // ─── Correct this ──────────────────────────────────────────────
       if (msg.type === "correct_this") {
-        const db = getDb();
+        const db = await getDb();
         // Insert into voiceReviewQueue instead of updating voiceTranscripts
         await db.insert(voiceReviewQueue).values({
           sessionId: client.dbSessionId,
@@ -704,7 +720,7 @@ export function attachVoiceGateway(server: HttpServer) {
 
       // ─── End session ───────────────────────────────────────────────
       if (msg.type === "end_session") {
-        const db = getDb();
+        const db = await getDb();
         await db
           .update(voiceSessions)
           .set({ endedAt: new Date(), status: "completed" })
@@ -719,7 +735,7 @@ export function attachVoiceGateway(server: HttpServer) {
     ws.on("close", async () => {
       const client = activeClients.get(connectionId);
       if (client) {
-        const db = getDb();
+        const db = await getDb();
         await db
           .update(voiceSessions)
           .set({ endedAt: new Date(), status: "completed" })

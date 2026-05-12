@@ -1795,3 +1795,13 @@
 - [x] Used voiceReviewQueue table for correct_this/flag_for_review instead of non-existent voiceTranscripts columns
 - [x] 314 tests passing, production build clean
 // checkpoint marker
+
+### Bug Fix: Voice Agent WebSocket Connection (May 12 2026)
+- [x] Fix "Connecting..." then "Reconnect" — WebSocket connects but auth fails on production
+- [x] Root cause 1: iOS Safari doesn't send httpOnly cookies on WebSocket upgrade requests
+- [x] Fix: Added /api/voice/token endpoint that generates short-lived JWT (30s) for WS auth
+- [x] Frontend fetches token via fetch() (which sends cookies), then passes as ?token= query param
+- [x] Root cause 2: getDb() is async but was called without await → "db.select is not a function"
+- [x] Root cause 3: Feature flag name mismatch — code looked for 'voice_agent_enabled' but DB uses '*'
+- [x] Full end-to-end test passing: token generation → WS connect → session_started → session_ended
+- [x] 314 tests passing, production build clean
