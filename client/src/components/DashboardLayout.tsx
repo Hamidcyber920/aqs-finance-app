@@ -30,7 +30,7 @@ import {
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
   Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity,
-  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark, Zap, GraduationCap,
+  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark, Zap, GraduationCap, MailSearch,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -64,7 +64,6 @@ const incomeItems = [
 ];
 const expenseItems = [
   { icon: Wallet, label: "Payroll", path: "/payroll" },
-  { icon: Wallet, label: "Payroll V3", path: "/payroll-v3" },
   { icon: ClipboardList, label: "Monthly Expenses", path: "/monthly-expenses" },
 ];
 const reconciliationItems = [{ icon: Scale, label: "Reconciliation", path: "/reconciliation" }];
@@ -72,7 +71,6 @@ const orgItems = [
   { icon: GitBranch, label: "Org Chart", path: "/org-chart" },
   { icon: MessageSquare, label: "Communications", path: "/communications" },
   { icon: Inbox, label: "Comms Hub", path: "/comms-hub" },
-  { icon: Send, label: "Comms Hub V3", path: "/comms-v3" },
   { icon: MailOpen, label: "Master Inbox", path: "/comms-inbox" },
   { icon: CalendarDays, label: "Meetings & Onboarding", path: "/meetings" },
   { icon: Users, label: "Donors", path: "/donors" },
@@ -88,6 +86,7 @@ const adminItems = [
   { icon: AlertTriangle, label: "Bulk Approvals", path: "/bulk-approvals" },
   { icon: Zap, label: "Bills & Utilities", path: "/bills-utilities" },
   { icon: GraduationCap, label: "Training Tracker", path: "/training-tracker" },
+  { icon: MailSearch, label: "LBMW Correspondence", path: "/lbmw-correspondence" },
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Shield, label: "Audit Trail", path: "/audit-trail" },

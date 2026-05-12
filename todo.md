@@ -1492,65 +1492,65 @@
 ## Full Spec Audit — Gap Implementation (May 12 2026)
 
 ### Voice AI Upgrade (Module 01)
-- [ ] Upgrade Voice AI to use Gemini Live / gemini-2.5-flash for voice agent query
-- [ ] Multi-language support: detect language from transcript (Arabic, Urdu, Bengali, English) and respond in same language
-- [ ] Expand voice agent tools: compliance actions, training records, accommodation, bills/utilities, donors, campaigns
-- [ ] Add Islamic context to system prompt: use Assalamu Alaikum, JazakAllah Khair appropriately
-- [ ] Add multi-turn conversation memory (session context array persisted in component state)
-- [ ] Add "navigate_to" voice commands for all major pages
-- [ ] Voice agent: never invent figures — if data not in DB, say so
-- [ ] Voice agent: flag regulated transactions (>£25k donation, related-party payments)
-- [ ] Keyboard shortcut: hold Spacebar to talk (web push-to-talk)
+- [x] Upgrade Voice AI to use Gemini Live / gemini-2.5-flash for voice agent query
+- [x] Multi-language support: detect language from transcript (Arabic, Urdu, Bengali, English) and respond in same language
+- [x] Expand voice agent tools: compliance actions, training records, accommodation, bills/utilities, donors, campaigns
+- [x] Add Islamic context to system prompt: use Assalamu Alaikum, JazakAllah Khair appropriately
+- [x] Add multi-turn conversation memory (session context array persisted in component state)
+- [x] Add "navigate_to" voice commands for all major pages
+- [x] Voice agent: never invent figures — if data not in DB, say so
+- [x] Voice agent: flag regulated transactions (>£25k donation, related-party payments)
+- [x] Keyboard shortcut: hold Spacebar to talk (web push-to-talk)
 
 ### Bills & Utilities Module (Module 06)
-- [ ] DB: utility_accounts table (building, supplier, accountNumber, tariff, contractEndDate, mpan, directDebitAmount, lastBillDate, lastBillAmount, category)
-- [ ] DB: utility_bills table (accountId, billDate, amount, consumptionUnits, billUrl, notes)
-- [ ] Backend: bills.list, bills.create, bills.update, bills.delete, bills.addBill procedures
-- [ ] Frontend: /bills page with per-building tabs, contract renewal alerts, anomaly detection display
-- [ ] Sidebar: add "Bills & Utilities" nav item under FINANCE
+- [x] DB: utility_accounts table (building, supplier, accountNumber, tariff, contractEndDate, mpan, directDebitAmount, lastBillDate, lastBillAmount, category)
+- [x] DB: utility_bills table (accountId, billDate, amount, consumptionUnits, billUrl, notes)
+- [x] Backend: bills.list, bills.create, bills.update, bills.delete, bills.addBill procedures
+- [x] Frontend: /bills page with per-building tabs, contract renewal alerts, anomaly detection display
+- [x] Sidebar: add "Bills & Utilities" nav item under FINANCE
 
 ### Training Tracker Module (Module 03)
-- [ ] DB: training_courses table (name, provider, requiredRoles, validityMonths, category)
-- [ ] DB: training_completions table (userId, courseId, completedAt, expiresAt, certificateUrl, notes)
-- [ ] Backend: training.listCourses, training.listCompletions, training.addCompletion, training.getMatrix procedures
-- [ ] Frontend: /training page with per-person matrix (green/amber/red), expiry dates, upload certificate
-- [ ] Sidebar: add "Training Tracker" nav item under ORGANISATION
+- [x] DB: training_courses table (name, provider, requiredRoles, validityMonths, category)
+- [x] DB: training_completions table (userId, courseId, completedAt, expiresAt, certificateUrl, notes)
+- [x] Backend: training.listCourses, training.listCompletions, training.addCompletion, training.getMatrix procedures
+- [x] Frontend: /training page with per-person matrix (green/amber/red), expiry dates, upload certificate
+- [x] Sidebar: add "Training Tracker" nav item under ORGANISATION
 
 ### Dashboard Cockpit Upgrade (Module 07)
-- [ ] Top strip: live bank balance display (all accounts), unrestricted vs restricted split
+- [x] Top strip: live bank balance display (all accounts), unrestricted vs restricted split
 - [ ] "Needs attention today" tile: compliance actions due, payments awaiting approval
 - [ ] This week tile: scheduled meetings, training due, renewals
-- [ ] Compliance heat map: green/amber/red per policy, training, certificate
-- [ ] Always-visible AI voice button on dashboard (floating, prominent)
-- [ ] Donation trends chart: rolling 30/90/365 days
+- [x] Compliance heat map: green/amber/red per policy, training, certificate
+- [x] Always-visible AI voice button on dashboard (floating, prominent)
+- [x] Donation trends chart: rolling 30/90/365 days
 - [ ] Cashflow 30-day projection tile
 
 ### Compliance Cockpit Enhancements (Module 03)
-- [ ] Serious Incident Reporting (SIR) workflow — voice or button initiated, walks through regulator framework
-- [ ] Policy tracker: each policy has owner, review date, version history, trustee approval evidence
-- [ ] Annual return pre-population from year's data with T-90/T-30/T-7 reminders
-- [ ] Trustee register: DOBs, declarations of interest, appointment dates, term expiry
-- [ ] Statutory inquiry actions: LBMW correspondence tracker (Khalid Sofi, Hannah Fingleton, Katie Kennell)
+- [x] Serious Incident Reporting (SIR) workflow — voice or button initiated, walks through regulator framework
+- [x] Policy tracker: each policy has owner, review date, version history, trustee approval evidence
+- [x] Annual return pre-population from year's data with T-90/T-30/T-7 reminders
+- [x] Trustee register: DOBs, declarations of interest, appointment dates, term expiry
+- [x] Statutory inquiry actions: LBMW correspondence tracker (Khalid Sofi, Hannah Fingleton, Katie Kennell)
 
 ### AI Assistant Enhancements
-- [ ] AI system prompt: add AQS knowledge graph context (buildings, funds, obligations)
-- [ ] AI tool: get_compliance_actions — query compliance cockpit actions
-- [ ] AI tool: get_training_status — check training matrix for a person or role
-- [ ] AI tool: get_accommodation_tenants — query student accommodation
-- [ ] AI tool: get_utility_bills — query bills & utilities
-- [ ] AI tool: get_campaigns — query fundraising campaigns with ROI
-- [ ] AI tool: send_notification — notify owner of urgent items
-- [ ] AI tool: get_reconciliation_status — current month reconciliation state
-- [ ] AI: respond in detected language (Arabic/Urdu/Bengali/English)
+- [x] AI system prompt: add AQS knowledge graph context (buildings, funds, obligations)
+- [x] AI tool: get_compliance_actions — query compliance cockpit actions
+- [x] AI tool: get_training_status — check training matrix for a person or role
+- [x] AI tool: get_accommodation_tenants — query student accommodation
+- [x] AI tool: get_utility_bills — query bills & utilities
+- [x] AI tool: get_campaigns — query fundraising campaigns with ROI
+- [x] AI tool: send_notification — notify owner of urgent items
+- [x] AI tool: get_reconciliation_status — current month reconciliation state
+- [x] AI: respond in detected language (Arabic/Urdu/Bengali/English)
 
 ### Missing/Incomplete Pages
-- [ ] Bills & Utilities page (/bills) — full CRUD with building tabs
-- [ ] Training Tracker page (/training) — matrix view with certificate upload
+- [x] Bills & Utilities page (/bills) — full CRUD with building tabs
+- [x] Training Tracker page (/training) — matrix view with certificate upload
 - [ ] Backups page — make real: show last backup time, retention, DR drill date
 - [ ] System Health page — expand with uptime, response times, job status
 
 ### Sidebar Cleanup
-- [ ] Remove duplicate "Payroll V3" sidebar item (keep only "Payroll")
-- [ ] Remove duplicate "Comms Hub V3" sidebar item (keep "Master Inbox" as primary)
-- [ ] Add "Bills & Utilities" to FINANCE section
-- [ ] Add "Training Tracker" to ORGANISATION section
+- [x] Remove duplicate "Payroll V3" sidebar item (keep only "Payroll")
+- [x] Remove duplicate "Comms Hub V3" sidebar item (keep "Master Inbox" as primary)
+- [x] Add "Bills & Utilities" to FINANCE section
+- [x] Add "Training Tracker" to ORGANISATION section

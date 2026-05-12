@@ -723,6 +723,10 @@ export const trustees = mysqlTable("trustees", {
   nokPhone: varchar("nokPhone", { length: 30 }),
   nokEmail: varchar("nokEmail", { length: 320 }),
   nokRelationship: varchar("nokRelationship", { length: 100 }),
+  appointmentDate: date("appointmentDate"),
+  termExpiryDate: date("termExpiryDate"),
+  declarationsOfInterest: text("declarationsOfInterest"),
+  dbs_check_date: date("dbs_check_date"),
   seniorityOrder: int("seniorityOrder").default(99).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -1963,3 +1967,43 @@ export const annualReturns = mysqlTable("annual_returns", {
 });
 export type AnnualReturn = typeof annualReturns.$inferSelect;
 export type InsertAnnualReturn = typeof annualReturns.$inferInsert;
+
+// ─── POLICY VERSION HISTORY ───────────────────────────────────────────────────
+export const policyVersions = mysqlTable("policy_versions", {
+  id: int("id").autoincrement().primaryKey(),
+  policyId: int("policyId").notNull(),
+  version: varchar("version", { length: 20 }).notNull(),
+  changedAt: timestamp("changedAt").defaultNow().notNull(),
+  changedByUserId: int("changedByUserId").notNull(),
+  changeSummary: text("changeSummary"),
+  fileUrl: text("fileUrl"),
+  trusteesApproved: boolean("trusteesApproved").default(false),
+  approvalDate: date("approvalDate"),
+  approvalMinutesRef: varchar("approvalMinutesRef", { length: 200 }),
+});
+export type PolicyVersion = typeof policyVersions.$inferSelect;
+export type InsertPolicyVersion = typeof policyVersions.$inferInsert;
+
+// ─── LBMW CORRESPONDENCE TRACKER ─────────────────────────────────────────────
+// Tracks statutory inquiry correspondence with Charity Commission contacts.
+export const lbmwCorrespondence = mysqlTable("lbmw_correspondence", {
+  id: int("id").autoincrement().primaryKey(),
+  contactName: varchar("contactName", { length: 200 }).notNull(),
+  contactRole: varchar("contactRole", { length: 200 }),
+  direction: mysqlEnum("direction", ["inbound", "outbound"]).notNull().default("inbound"),
+  channel: mysqlEnum("channel", ["email", "letter", "phone", "meeting", "portal"]).notNull().default("email"),
+  subject: varchar("subject", { length: 500 }).notNull(),
+  summary: text("summary"),
+  dateReceived: date("dateReceived").notNull(),
+  responseDeadline: date("responseDeadline"),
+  respondedAt: timestamp("respondedAt"),
+  status: mysqlEnum("status", ["pending", "responded", "awaiting_reply", "closed"]).notNull().default("pending"),
+  priority: mysqlEnum("priority", ["critical", "high", "medium", "low"]).notNull().default("medium"),
+  fileUrl: text("fileUrl"),
+  internalNotes: text("internalNotes"),
+  handledByUserId: int("handledByUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type LbmwCorrespondence = typeof lbmwCorrespondence.$inferSelect;
+export type InsertLbmwCorrespondence = typeof lbmwCorrespondence.$inferInsert;

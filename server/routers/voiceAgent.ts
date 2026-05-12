@@ -17,6 +17,9 @@ import { invokeLLM, type Tool } from "../_core/llm";
 import { transcribeAudio } from "../_core/voiceTranscription";
 import { ENV } from "../_core/env";
 import { storagePut } from "../storage";
+import { getDb } from "../db";
+import * as schema from "../../drizzle/schema";
+import { eq, and, gte, lte, like, desc, or } from "drizzle-orm";
 
 // ─── LLM Tools (function-calling definitions) ─────────────────────────────────
 const agentTools: Tool[] = [
@@ -406,12 +409,9 @@ const agentTools: Tool[] = [
 
 // ─── Tool execution ────────────────────────────────────────────────────────────
 async function executeTool(name: string, args: Record<string, unknown>, userId: number): Promise<string> {
-  const { getDb } = await import("../db");
   const db = await getDb();
   if (!db) return JSON.stringify({ error: "Database unavailable" });
 
-  const schema = await import("../../drizzle/schema");
-  const { eq, and, gte, lte, like, desc, or } = await import("drizzle-orm");
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;

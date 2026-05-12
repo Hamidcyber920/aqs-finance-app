@@ -878,6 +878,30 @@ export const appRouter = router({
       .input(z.object({ startDate: z.date().optional(), endDate: z.date().optional() }))
       .query(({ input }) => getDashboardStats(input.startDate, input.endDate)),
     receiptStats: adminProcedure.query(() => getAdminReceiptStats()),
+    bankBalance: adminProcedure.query(async () => {
+      const { reconciliationSessions } = await import('../drizzle/schema');
+      const db = await getDb();
+      if (!db) return null;
+      const sessions = await db.select().from(reconciliationSessions)
+        .orderBy(desc(reconciliationSessions.year), desc(reconciliationSessions.month))
+        .limit(1);
+      if (!sessions[0]) return null;
+      return { balance: sessions[0].bankBalance, month: sessions[0].month, year: sessions[0].year, status: sessions[0].status };
+    }),
+    donationTrends: adminProcedure.query(async () => {
+      const { fundraisingDonations } = await import('../drizzle/schema');
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db.select({
+        month: sql<string>`DATE_FORMAT(${fundraisingDonations.createdAt}, '%b')`,
+        year: sql<number>`YEAR(${fundraisingDonations.createdAt})`,
+        total: sql<number>`COALESCE(SUM(CAST(${fundraisingDonations.amount} AS DECIMAL(12,2))), 0)`,
+      }).from(fundraisingDonations)
+        .where(sql`${fundraisingDonations.createdAt} >= DATE_SUB(NOW(), INTERVAL 6 MONTH)`)
+        .groupBy(sql`YEAR(${fundraisingDonations.createdAt})`, sql`MONTH(${fundraisingDonations.createdAt})`, sql`DATE_FORMAT(${fundraisingDonations.createdAt}, '%b')`)
+        .orderBy(sql`YEAR(${fundraisingDonations.createdAt})`, sql`MONTH(${fundraisingDonations.createdAt})`);
+      return rows.map(r => ({ month: r.month, donations: Number(r.total) }));
+    }),
   }),
 
   // ─── USER MANAGEMENT ──────────────────────────────────────────────────────
@@ -6009,6 +6033,90 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         await db.insert(donorPortalTokens).values({ token, donorId: input.donorId, purpose: input.purpose ?? "donation_history", expiresAt });
         return { token, expiresAt };
       }),
+
+  }),
+  // ─── LBMW CORRESPONDENCE TRACKER ─────────────────────────────────────────────
+  lbmw: router({
+    list: adminProcedure
+      .input(z.object({ status: z.string().optional(), priority: z.string().optional() }))
+      .query(async ({ input }) => {
+        const { lbmwCorrespondence } = await import('../drizzle/schema');
+        const db = await getDb();
+        if (!db) return [];
+        let q = db.select().from(lbmwCorrespondence).orderBy(desc(lbmwCorrespondence.dateReceived)).$dynamic();
+        if (input.status) q = q.where(eq(lbmwCorrespondence.status, input.status as any));
+        return q.limit(200);
+      }),
+    create: adminProcedure
+      .input(z.object({
+        contactName: z.string().min(1),
+        contactRole: z.string().optional(),
+        direction: z.enum(["inbound", "outbound"]),
+        channel: z.enum(["email", "letter", "phone", "meeting", "portal"]),
+        subject: z.string().min(1),
+        summary: z.string().optional(),
+        dateReceived: z.string(),
+        responseDeadline: z.string().optional(),
+        status: z.enum(["pending", "responded", "awaiting_reply", "closed"]).default("pending"),
+        priority: z.enum(["critical", "high", "medium", "low"]).default("medium"),
+        internalNotes: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { lbmwCorrespondence } = await import('../drizzle/schema');
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const [result] = await db.insert(lbmwCorrespondence).values({
+          ...input,
+          dateReceived: new Date(input.dateReceived) as any,
+          responseDeadline: input.responseDeadline ? new Date(input.responseDeadline) as any : undefined,
+          handledByUserId: ctx.user.id,
+        });
+        const [row] = await db.select().from(lbmwCorrespondence).where(eq(lbmwCorrespondence.id, (result as any).insertId)).limit(1);
+        return row;
+      }),
+    update: adminProcedure
+      .input(z.object({
+        id: z.number().int(),
+        status: z.enum(["pending", "responded", "awaiting_reply", "closed"]).optional(),
+        priority: z.enum(["critical", "high", "medium", "low"]).optional(),
+        internalNotes: z.string().optional(),
+        responseDeadline: z.string().optional(),
+        summary: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { lbmwCorrespondence } = await import('../drizzle/schema');
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const { id, ...data } = input;
+        const updateData: any = { ...data };
+        if (data.responseDeadline) updateData.responseDeadline = new Date(data.responseDeadline);
+        if (data.status === "responded") updateData.respondedAt = new Date();
+        await db.update(lbmwCorrespondence).set(updateData).where(eq(lbmwCorrespondence.id, id));
+        return { success: true };
+      }),
+    delete: adminProcedure
+      .input(z.object({ id: z.number().int() }))
+      .mutation(async ({ input }) => {
+        const { lbmwCorrespondence } = await import('../drizzle/schema');
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        await db.delete(lbmwCorrespondence).where(eq(lbmwCorrespondence.id, input.id));
+        return { success: true };
+      }),
+    summary: adminProcedure.query(async () => {
+      const { lbmwCorrespondence } = await import('../drizzle/schema');
+      const { sql: sqlFn } = await import('drizzle-orm');
+      const db = await getDb();
+      if (!db) return { total: 0, pending: 0, overdue: 0 };
+      const rows = await db.select().from(lbmwCorrespondence);
+      const now = new Date();
+      const pending = rows.filter(r => r.status === "pending" || r.status === "awaiting_reply").length;
+      const overdue = rows.filter(r => {
+        if (!r.responseDeadline) return false;
+        return new Date(r.responseDeadline) < now && r.status !== "responded" && r.status !== "closed";
+      }).length;
+      return { total: rows.length, pending, overdue };
+    }),
   }),
 });
 export type AppRouter = typeof appRouter;

@@ -146,6 +146,8 @@ export default function DashboardPage() {
   const { data: users } = trpc.users.list.useQuery({}, { enabled: isAdmin });
   const { data: billsSummary } = (trpc as any).bills?.summary?.useQuery(undefined, { enabled: isAdmin });
   const { data: trainingSummary } = (trpc as any).training?.summary?.useQuery(undefined, { enabled: isAdmin });
+  const { data: bankBalance } = trpc.dashboard.bankBalance.useQuery(undefined, { enabled: isAdmin });
+  const { data: donationTrends = [] } = trpc.dashboard.donationTrends.useQuery(undefined, { enabled: isAdmin });
   const { data: complianceActions = [] } = (trpc as any).compliance.listActions.useQuery(undefined, { enabled: isAdmin });
   const { data: trainingData = [] } = (trpc as any).compliance.listTraining.useQuery(undefined, { enabled: isAdmin });
   const { data: policies = [] } = (trpc as any).compliance.listPolicies.useQuery(undefined, { enabled: isAdmin });
@@ -162,15 +164,17 @@ export default function DashboardPage() {
   const pendingReceipts = (receipts?.rows ?? []).filter((r: any) => r.status === 'pending').length;
   const pendingLoans = (loans as any[] ?? []).filter((l: any) => l.status === 'pending').length;
 
-  /* Mock chart data — replaced by real data when queries land */
-  const chartData = [
-    { month: "Jan", income: 12400, expenses: 8200 },
-    { month: "Feb", income: 15800, expenses: 9100 },
-    { month: "Mar", income: 11200, expenses: 7800 },
-    { month: "Apr", income: 18600, expenses: 11200 },
-    { month: "May", income: 14300, expenses: 8900 },
-    { month: "Jun", income: 21000, expenses: 13400 },
-  ];
+  /* Chart data — real donation trends from DB, fallback to mock */
+  const chartData = (donationTrends as any[]).length > 0
+    ? (donationTrends as any[]).map((d: any) => ({ month: d.month, income: d.donations, expenses: 0 }))
+    : [
+        { month: "Jan", income: 12400, expenses: 8200 },
+        { month: "Feb", income: 15800, expenses: 9100 },
+        { month: "Mar", income: 11200, expenses: 7800 },
+        { month: "Apr", income: 18600, expenses: 11200 },
+        { month: "May", income: 14300, expenses: 8900 },
+        { month: "Jun", income: 21000, expenses: 13400 },
+      ];
 
   const pieData = [
     { name: "Fundraising", value: 38, color: T.purple },
@@ -521,6 +525,33 @@ export default function DashboardPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* ── Bank Balance strip (admin only) ── */}
+        {isAdmin && bankBalance && (
+          <Link href="/reconciliation">
+            <div style={{ background: 'linear-gradient(135deg, rgba(0,255,194,0.08) 0%, rgba(13,34,64,0.8) 100%)', backdropFilter: 'blur(20px)', border: `1px solid ${T.mint}44`, borderRadius: 14, padding: '14px 20px', marginBottom: 20, cursor: 'pointer', animation: 'fadeUp 0.5s ease 320ms both', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: `${T.mint}22`, border: `1px solid ${T.mint}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Wallet size={20} style={{ color: T.mint }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, color: T.muted, margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>Bank Balance</p>
+                  <p style={{ fontSize: 26, fontWeight: 800, color: T.mint, margin: 0, lineHeight: 1.1 }}>£{parseFloat(bankBalance.balance || '0').toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: T.muted, margin: 0 }}>{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(bankBalance.month ?? 1) - 1]} {bankBalance.year}</p>
+                  <p style={{ fontSize: 10, color: T.muted, margin: 0 }}>Reconciliation Period</p>
+                </div>
+                <div style={{ padding: '3px 10px', borderRadius: 999, background: bankBalance.status === 'reconciled' ? `${T.mint}22` : 'rgba(251,191,36,0.15)', border: `1px solid ${bankBalance.status === 'reconciled' ? T.mint : '#fbbf24'}44` }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: bankBalance.status === 'reconciled' ? T.mint : '#fbbf24', margin: 0, textTransform: 'capitalize' }}>{bankBalance.status}</p>
+                </div>
+              </div>
+              <span style={{ fontSize: 11, color: T.muted, marginLeft: 'auto' }}>View Reconciliation →</span>
+            </div>
+          </Link>
         )}
 
         {/* ── Bills & Utilities strip (admin only) ── */}
