@@ -1779,3 +1779,10 @@
 - [x] Feature flag admin panel for phased rollout control
 - [x] Morning briefing scheduler (compose_briefing at user-preferred time)
 - [x] Audit logging for all voice sessions and tool calls
+
+### Deployment & Database (May 12 2026)
+- [x] Fix build error: VoiceAgent.tsx import path corrected (@/contexts/AuthContext → @/_core/hooks/useAuth)
+- [x] Gemini API key validated and configured
+- [x] Database tables created (voice_sessions, voice_tool_calls, voice_transcripts, voice_cost_tracking, voice_feature_flags, voice_review_queue)
+- [x] Feature flags seeded for 24 tools across 4 rollout phases
+- [x] 314 tests passing (3 pre-existing credential failures only)

@@ -1,0 +1,178 @@
+{
+  "query": "SELECT id, toolName, enabledRoles, phase, enabled FROM voice_feature_flags ORDER BY phase, toolName;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, toolName, enabledRoles, phase, enabled FROM voice_feature_flags ORDER BY phase, toolName;",
+  "rows": [
+    {
+      "id": "1",
+      "toolName": "*",
+      "enabledRoles": "[\"superadmin\"]",
+      "phase": "1",
+      "enabled": "1"
+    },
+    {
+      "id": "24",
+      "toolName": "flag_for_review",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\",\"deputy\",\"reception\"]",
+      "phase": "1",
+      "enabled": "1"
+    },
+    {
+      "id": "2",
+      "toolName": "get_current_user",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "1",
+      "enabled": "1"
+    },
+    {
+      "id": "3",
+      "toolName": "get_screen_context",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "1",
+      "enabled": "1"
+    },
+    {
+      "id": "4",
+      "toolName": "set_user_preference",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "1",
+      "enabled": "1"
+    },
+    {
+      "id": "22",
+      "toolName": "compose_briefing",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "10",
+      "toolName": "get_campaign_status",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "7",
+      "toolName": "get_donor",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "9",
+      "toolName": "get_fund_balance",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "11",
+      "toolName": "get_gift_aid_status",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "13",
+      "toolName": "get_priorities",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "5",
+      "toolName": "get_staff_directory",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "6",
+      "toolName": "get_trustees",
+      "enabledRoles": "[\"superadmin\",\"trustee\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "17",
+      "toolName": "log_communication",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "8",
+      "toolName": "search_transactions",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1"
+    },
+    {
+      "id": "23",
+      "toolName": "compose_report",
+      "enabledRoles": "[\"superadmin\",\"trustee\"]",
+      "phase": "3",
+      "enabled": "1"
+    },
+    {
+      "id": "14",
+      "toolName": "create_donation",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "3",
+      "enabled": "1"
+    },
+    {
+      "id": "15",
+      "toolName": "create_expense",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "3",
+      "enabled": "1"
+    },
+    {
+      "id": "18",
+      "toolName": "create_payment_link",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "3",
+      "enabled": "1"
+    },
+    {
+      "id": "20",
+      "toolName": "draft_email",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]",
+      "phase": "3",
+      "enabled": "1"
+    },
+    {
+      "id": "19",
+      "toolName": "draft_whatsapp",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]",
+      "phase": "3",
+      "enabled": "1"
+    },
+    {
+      "id": "12",
+      "toolName": "get_qarde_hasan_register",
+      "enabledRoles": "[\"superadmin\",\"trustee\"]",
+      "phase": "3",
+      "enabled": "1"
+    },
+    {
+      "id": "16",
+      "toolName": "update_donor_profile",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "3",
+      "enabled": "1"
+    },
+    {
+      "id": "21",
+      "toolName": "send_single_message",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "4",
+      "enabled": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttoolName\tenabledRoles\tphase\tenabled\n1\t*\t[\"superadmin\"]\t1\t1\n24\tflag_for_review\t[\"superadmin\",\"trustee\",\"manager\",\"deputy\",\"reception\"]\t1\t1\n2\tget_current_user\t[\"superadmin\",\"trustee\",\"manager\"]\t1\t1\n3\tget_screen_context\t[\"superadmin\",\"trustee\",\"manager\"]\t1\t1\n4\tset_user_preference\t[\"superadmin\",\"trustee\",\"manager\"]\t1\t1\n22\tcompose_briefing\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\n10\tget_campaign_status\t[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]\t2\t1\n7\tget_donor\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\n9\tget_fund_balance\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\n11\tget_gift_aid_status\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\n13\tget_priorities\t[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]\t2\t1\n5\tget_staff_directory\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\n6\tget_trustees\t[\"superadmin\",\"trustee\"]\t2\t1\n17\tlog_communication\t[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]\t2\t1\n8\tsearch_transactions\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\n23\tcompose_report\t[\"superadmin\",\"trustee\"]\t3\t1\n14\tcreate_donation\t[\"superadmin\",\"trustee\",\"manager\"]\t3\t1\n15\tcreate_expense\t[\"superadmin\",\"trustee\",\"manager\"]\t3\t1\n18\tcreate_payment_link\t[\"superadmin\",\"trustee\",\"manager\"]\t3\t1\n20\tdraft_email\t[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]\t3\t1\n19\tdraft_whatsapp\t[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]\t3\t1\n12\tget_qarde_hasan_register\t[\"superadmin\",\"trustee\"]\t3\t1\n16\tupdate_donor_profile\t[\"superadmin\",\"trustee\",\"manager\"]\t3\t1\n21\tsend_single_message\t[\"superadmin\",\"trustee\",\"manager\"]\t4\t1\n",
+  "stderr": "",
+  "execution_time_ms": 272
+}

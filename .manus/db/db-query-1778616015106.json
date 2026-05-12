@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS `voice_sessions` (`id` int AUTO_INCREMENT NOT NULL, `userId` int NOT NULL, `conversationId` varchar(100) NOT NULL, `language` varchar(10) NOT NULL DEFAULT 'en', `device` varchar(50), `screenContext` varchar(200), `tokenCount` int NOT NULL DEFAULT 0, `status` enum('active','completed','error','timeout') NOT NULL DEFAULT 'active', `startedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `endedAt` timestamp, CONSTRAINT `voice_sessions_id` PRIMARY KEY(`id`));",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE IF NOT EXISTS `voice_sessions` (`id` int AUTO_INCREMENT NOT NULL, `userId` int NOT NULL, `conversationId` varchar(100) NOT NULL, `language` varchar(10) NOT NULL DEFAULT 'en', `device` varchar(50), `screenContext` varchar(200), `tokenCount` int NOT NULL DEFAULT 0, `status` enum('active','completed','error','timeout') NOT NULL DEFAULT 'active', `startedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `endedAt` timestamp, CONSTRAINT `voice_sessions_id` PRIMARY KEY(`id`));",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 341
+}

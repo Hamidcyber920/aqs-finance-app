@@ -16,7 +16,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
