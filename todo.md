@@ -1634,3 +1634,6 @@
 - [x] Monthly Close Report — auto-generate PDF summary (income, expenses, bills, cash flow) downloadable and emailable to trustees
 - [x] Cash Flow Planner — running balance column showing projected cash position after each payment
 - [x] Monthly Expenses — "Awaiting Approval" badge on unapproved entries visible to managers/trustees
+
+## Round 18 — Mobile Layout Fixes (May 12, 2026)
+- [x] Remove duplicate DashboardLayout wrappers from all pages that have them (causes double top bar + bottom nav on mobile): ComplianceCockpit, Decisions, BulkApprovals, ConflictsRegister, DonorPipeline, DonorProfile, MajorDonor, Pledges, QRCodes, RecognitionTiers, SavedViews, BillsUtilities, TrainingTracker, LbmwCorrespondence, TrusteeDashboard

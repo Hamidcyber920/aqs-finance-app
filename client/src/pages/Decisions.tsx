@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -111,7 +110,6 @@ export default function Decisions() {
   };
 
   return (
-    <DashboardLayout>
       <div className="page-enter space-y-6 p-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -356,6 +354,5 @@ export default function Decisions() {
           onExtracted={handleOcrExtracted}
         />
       )}
-    </DashboardLayout>
   );
 }

@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import DashboardLayout from "@/components/DashboardLayout";
 
 const T = { navy: "#0A192F", purple: "#635BFF", mint: "#00FFC2", white: "#FFFFFF", muted: "rgba(255,255,255,0.5)", border: "rgba(255,255,255,0.08)", glass: "rgba(255,255,255,0.04)", card: "rgba(13,34,64,0.8)" };
 
@@ -88,7 +87,6 @@ export default function MajorDonorPage() {
   );
 
   return (
-    <DashboardLayout>
       <div className="min-h-screen p-6" style={{ background: "linear-gradient(135deg, #0A192F 0%, #0f2040 100%)" }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -297,6 +295,5 @@ export default function MajorDonorPage() {
           </DialogContent>
         </Dialog>
       </div>
-    </DashboardLayout>
   );
 }

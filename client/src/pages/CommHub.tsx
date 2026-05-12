@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
@@ -711,6 +712,9 @@ export default function CommHub() {
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [showCompose, setShowCompose] = useState(false);
   const [showAddSection, setShowAddSection] = useState(false);
+  // Mobile: which panel is visible — "sections" | "messages" | "detail"
+  const [mobilePanel, setMobilePanel] = useState<"sections" | "messages" | "detail">("sections");
+  const isMobile = useIsMobile();
   const utils = trpc.useUtils();
 
   const { data: stats = [], isLoading: statsLoading } = trpc.commsHub.getStats.useQuery(undefined, {
@@ -742,10 +746,24 @@ export default function CommHub() {
     );
   }
 
+  // Mobile helpers
+  const handleSelectSection = (id?: number) => {
+    setActiveSectionId(id);
+    if (isMobile) setMobilePanel("messages");
+  };
+  const handleSelectMessage = (id: number) => {
+    setSelectedMessageId(id);
+    if (isMobile) setMobilePanel("detail");
+  };
+  const handleCloseDetail = () => {
+    setSelectedMessageId(null);
+    if (isMobile) setMobilePanel("messages");
+  };
+
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-[#0A192F]">
       {/* ── Left Sidebar: Sections ── */}
-      <div className="w-64 shrink-0 border-r border-white/10 flex flex-col bg-[#0d1f3c]">
+      <div className={`${isMobile ? (mobilePanel === "sections" ? "flex" : "hidden") : "flex"} w-full md:w-64 md:shrink-0 border-r border-white/10 flex-col bg-[#0d1f3c]`}>
         {/* Header */}
         <div className="p-4 border-b border-white/10">
           <div className="flex items-center justify-between mb-3">
@@ -802,7 +820,7 @@ export default function CommHub() {
           <div className="p-2 space-y-0.5">
             {/* All Messages */}
             <button
-              onClick={() => { setActiveSectionId(undefined); setSelectedMessageId(null); }}
+              onClick={() => { handleSelectSection(undefined); setSelectedMessageId(null); }}
               className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${
                 activeSectionId === undefined
                   ? "bg-[#635BFF]/20 text-white"
@@ -826,7 +844,7 @@ export default function CommHub() {
                 const isActive = activeSectionId === s.id;
                 return (
                   <button key={s.id}
-                    onClick={() => { setActiveSectionId(s.id); setSelectedMessageId(null); }}
+                    onClick={() => { handleSelectSection(s.id); setSelectedMessageId(null); }}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all ${
                       isActive ? "bg-white/10 text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
                     }`}>
@@ -868,7 +886,16 @@ export default function CommHub() {
       </div>
 
       {/* ── Middle: Message List ── */}
-      <div className={`flex flex-col border-r border-white/10 ${selectedMessageId ? "w-80 shrink-0" : "flex-1"}`}>
+      <div className={`${isMobile ? (mobilePanel === "messages" ? "flex" : "hidden") : "flex"} flex-col border-r border-white/10 ${!isMobile && selectedMessageId ? "w-80 shrink-0" : "flex-1"} w-full`}>
+        {/* Mobile back button */}
+        {isMobile && (
+          <div className="flex items-center gap-2 p-3 border-b border-white/10">
+            <Button variant="ghost" size="sm" className="text-white/60 hover:text-white h-8 px-2"
+              onClick={() => setMobilePanel("sections")}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> Sections
+            </Button>
+          </div>
+        )}
         {/* Search bar */}
         <div className="p-3 border-b border-white/10">
           <div className="relative">
@@ -913,7 +940,7 @@ export default function CommHub() {
               messages.map((msg: Message) => (
                 <MessageItem key={msg.id} msg={msg}
                   isSelected={selectedMessageId === msg.id}
-                  onClick={() => setSelectedMessageId(msg.id)} />
+                  onClick={() => handleSelectMessage(msg.id)} />
               ))
             )}
           </div>
@@ -922,16 +949,16 @@ export default function CommHub() {
 
       {/* ── Right: Message Detail ── */}
       {selectedMessageId ? (
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className={`${isMobile ? (mobilePanel === "detail" ? "flex" : "hidden") : "flex"} flex-1 flex-col overflow-hidden w-full`}>
           <MessageDetailPanel
             messageId={selectedMessageId}
             sections={sections}
-            onClose={() => setSelectedMessageId(null)}
-            onMoved={() => { setSelectedMessageId(null); refetchMessages(); utils.commsHub.getStats.invalidate(); }}
+            onClose={handleCloseDetail}
+            onMoved={() => { handleCloseDetail(); refetchMessages(); utils.commsHub.getStats.invalidate(); }}
           />
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center">
+        <div className={`${isMobile ? "hidden" : "flex"} flex-1 items-center justify-center`}>
           <div className="text-center space-y-3">
             <div className="w-16 h-16 rounded-2xl bg-[#635BFF]/10 border border-[#635BFF]/20 flex items-center justify-center mx-auto">
               <MessageSquare className="h-8 w-8 text-[#635BFF]/60" />

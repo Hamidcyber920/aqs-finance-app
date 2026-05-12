@@ -1,5 +1,4 @@
 import { useState } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -481,7 +480,6 @@ export default function ComplianceCockpit() {
   const isAdmin = ["superadmin", "trustee", "manager", "admin"].includes(user?.role ?? "");
 
   return (
-    <DashboardLayout>
       <div className="space-y-5">
         {/* Header */}
         <div className="page-header">
@@ -933,6 +931,5 @@ export default function ComplianceCockpit() {
           />
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
   );
 }
