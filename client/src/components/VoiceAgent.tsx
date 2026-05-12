@@ -120,6 +120,11 @@ class VoiceConnection {
       this.ws.send(JSON.stringify({ type: "correct_this", transcriptId, correctionNote: note }));
     }
   }
+  sendAudio(base64Audio: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "audio_chunk", audio: base64Audio }));
+    }
+  }
 
   disconnect() {
     if (this.ws?.readyState === WebSocket.OPEN) {
@@ -172,6 +177,9 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const [isTextMode, setIsTextMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const connectionRef = useRef<VoiceConnection | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -251,6 +259,14 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         toast.warning(msg.costWarning);
         break;
 
+      case "transcript":
+        if (msg.speaker === "user") {
+          setTranscript((prev) => [
+            ...prev,
+            { id: `user-${Date.now()}`, speaker: "user", text: msg.text, timestamp: new Date() },
+          ]);
+        }
+        break;
       case "error":
         toast.error(msg.error || "Voice agent error");
         setIsProcessing(false);
@@ -313,6 +329,49 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     toast.success("Flagged for Dr. Hamid's review");
   }, []);
 
+  // Start voice recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+      audioChunksRef.current = [];
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        if (audioBlob.size < 1000) {
+          toast.error("Recording too short. Please try again.");
+          return;
+        }
+        if (audioBlob.size > 16 * 1024 * 1024) {
+          toast.error("Recording too long (max 16MB). Please try a shorter message.");
+          return;
+        }
+        setIsProcessing(true);
+        // Convert to base64 and send
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = (reader.result as string).split(",")[1];
+          connectionRef.current?.sendAudio(base64);
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      toast.error("Microphone access denied. Please allow microphone permission.");
+    }
+  }, []);
+  // Stop voice recording
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  }, []);
   // Toggle open/close
   const toggleOpen = useCallback(() => {
     if (!isOpen) {
@@ -509,30 +568,57 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
           <div className="px-4 py-3 border-t border-zinc-800">
             {status === "connected" || status === "processing" ? (
               <div className="flex items-center gap-2">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendText();
-                    }
-                  }}
-                  placeholder={isProcessing ? "Thinking..." : "Type a message..."}
-                  disabled={isProcessing}
-                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:opacity-50"
-                  style={{ fontSize: "16px" }} // Prevent iOS zoom
-                />
-                <Button
-                  size="sm"
-                  onClick={sendText}
-                  disabled={!textInput.trim() || isProcessing}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500 h-10 w-10 p-0"
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
+                {isTextMode ? (
+                  <>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={textInput}
+                      onChange={(e) => setTextInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendText();
+                        }
+                      }}
+                      placeholder={isProcessing ? "Thinking..." : "Type a message..."}
+                      disabled={isProcessing}
+                      className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:opacity-50"
+                      style={{ fontSize: "16px" }}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={sendText}
+                      disabled={!textInput.trim() || isProcessing}
+                      className="rounded-xl bg-emerald-600 hover:bg-emerald-500 h-10 w-10 p-0"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center gap-2">
+                    <button
+                      onTouchStart={startRecording}
+                      onTouchEnd={stopRecording}
+                      onMouseDown={startRecording}
+                      onMouseUp={stopRecording}
+                      onMouseLeave={() => { if (isRecording) stopRecording(); }}
+                      disabled={isProcessing}
+                      className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                        isRecording
+                          ? "bg-red-500 scale-110 shadow-lg shadow-red-500/30 animate-pulse"
+                          : isProcessing
+                          ? "bg-zinc-700 opacity-50 cursor-not-allowed"
+                          : "bg-emerald-600 hover:bg-emerald-500 hover:scale-105"
+                      }`}
+                    >
+                      {isRecording ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
+                    </button>
+                    <p className="text-[11px] text-zinc-500">
+                      {isRecording ? "Release to send" : isProcessing ? "Processing..." : "Hold to speak"}
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center py-2">
@@ -546,12 +632,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
               </div>
             )}
 
-            {/* Voice mode indicator */}
-            {!isTextMode && status === "connected" && (
-              <p className="text-[10px] text-zinc-600 text-center mt-2">
-                Voice input available when Gemini API key is configured. Using text mode.
-              </p>
-            )}
+
           </div>
         </div>
       )}

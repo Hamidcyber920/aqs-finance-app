@@ -25,6 +25,8 @@ import {
 } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
 import { sdk } from "./_core/sdk";
+import { transcribeAudio } from "./_core/voiceTranscription";
+import { storagePut } from "./storage";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface VoiceClient {
@@ -692,10 +694,30 @@ export function attachVoiceGateway(server: HttpServer) {
 
       // ─── Audio chunk (placeholder for Gemini Live API) ─────────────
       if (msg.type === "audio_chunk" && msg.audio) {
-        sendToClient(client, {
-          type: "agent_response",
-          text: "Voice input will be available once the Gemini Live API is fully integrated. Please use text input for now.",
-        });
+        // Transcribe audio via Whisper then process as text
+        try {
+          sendToClient(client, { type: "transcript", text: "Listening...", speaker: "system" });
+          const audioBuffer = Buffer.from(msg.audio, "base64");
+          const audioKey = `voice-audio/${client.userId}/${Date.now()}-${nanoid(6)}.webm`;
+          const { url: audioUrl } = await storagePut(audioKey, audioBuffer, "audio/webm");
+          const result = await transcribeAudio({ audioUrl, language: client.language || "en" });
+          if ("error" in result) {
+            sendToClient(client, { type: "error", error: "Could not transcribe audio: " + (result as any).error });
+            return;
+          }
+          const userText = (result as any).text;
+          if (!userText || !userText.trim()) {
+            sendToClient(client, { type: "error", error: "Could not understand audio. Please try again." });
+            return;
+          }
+          // Show transcription to user
+          sendToClient(client, { type: "transcript", text: userText, speaker: "user" });
+          // Process as text input
+          await processTextInput(client, userText);
+        } catch (err: any) {
+          console.error("[VoiceGateway] Audio transcription error:", err.message);
+          sendToClient(client, { type: "error", error: "Voice processing failed. Please try text input." });
+        }
         return;
       }
 

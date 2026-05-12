@@ -1805,3 +1805,9 @@
 - [x] Root cause 3: Feature flag name mismatch — code looked for 'voice_agent_enabled' but DB uses '*'
 - [x] Full end-to-end test passing: token generation → WS connect → session_started → session_ended
 - [x] 314 tests passing, production build clean
+
+### Bug Fix: Voice Input Mode Disabled (May 12 2026)
+- [x] Fix "Voice input available when Gemini API key is configured. Using text mode." — enable microphone/voice input
+- [x] Added MediaRecorder audio capture with hold-to-speak UI
+- [x] Server-side audio transcription via Whisper API (upload to S3 → transcribe → process as text)
+- [x] Voice mode is default; keyboard icon toggles to text mode
