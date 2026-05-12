@@ -1700,7 +1700,7 @@
 ### Phase 2 — Gaps to fix
 - [x] Quiet hours enforcement: block sends 22:00-07:00 UK, shift Friday 12:00-14:00 Jumu'ah window
 - [x] Frequency cap: block second campaign contact within 14 days per donor
-- [ ] WhatsApp fallback to SMS on delivery failure (currently no fallback)
+- [x] WhatsApp fallback to SMS — N/A: app uses manual WhatsApp Web links (wa.me), not automated API sends; no fallback needed
 
 ### Phase 3 — Finance & Gift Aid (PASS items)
 - [x] Restricted fund isRestricted + restrictedPurpose fields in schema
@@ -1710,16 +1710,16 @@
 
 ### Phase 3 — Gaps to fix
 - [x] Gift Aid: block toggle ON if international address (no UK postcode)
-- [ ] Refund flow: original row preserved, refund as separate row, Gift Aid reversal, net LTV updated
+- [x] Refund flow: original row preserved, refund as separate negative-amount row, Gift Aid reversal option, refundDonation procedure in crm.ts, Refund button in DonorProfile donations tab
 
 ### Phase 4 — Failure Modes (Gaps to fix)
 - [x] Stripe webhook idempotency (kill-network test: record once, not twice)
-- [ ] OCR confidence threshold: blank paper or low-confidence → no invented rows, flag for manual review
-- [ ] Session expiry mid-form: form state persists in localStorage, prompts re-login, restores on return
+- [x] OCR confidence threshold (40%): low-confidence scans flagged as failed with manual review note, no invented rows returned
+- [x] Session expiry mid-form: useFormPersist hook saves form to localStorage, session-expired toast shown before redirect, return path saved in sessionStorage
 
 ### Phase 5 — Performance & UX (Gaps to fix)
 - [x] Input font-size >= 16px on all forms (prevent iOS Safari auto-zoom) — already in index.css
-- [ ] PWA manifest with icons for "add to home screen"
+- [x] PWA manifest.json created with name, icons, theme-color, display:standalone; manifest link + apple-touch-icon added to index.html
 - [x] Human-readable error messages (replace raw tRPC error codes with user-friendly messages) — global sonner toast in main.tsx
 
 ### Phase 6 — Security (Gaps to fix)
