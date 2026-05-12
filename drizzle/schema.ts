@@ -1901,6 +1901,7 @@ export const utilityAccounts = mysqlTable("utility_accounts", {
   notes: text("notes"),
   supplierContactId: int("supplierContactId"),   // FK to supplier_contacts.id (nullable)
   monthlyBudget: decimal("monthlyBudget", { precision: 10, scale: 2 }),  // optional monthly budget for this account
+  supplierNotes: text("supplierNotes"),   // free-text notes about the supplier (contact tips, escalation path, etc.)
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

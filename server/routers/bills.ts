@@ -88,6 +88,7 @@ export const billsRouter = router({
       notes: z.string().optional(),
       supplierContactId: z.number().optional().nullable(),
       monthlyBudget: z.string().optional(),
+      supplierNotes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -106,6 +107,7 @@ export const billsRouter = router({
         notes: input.notes ?? null,
         supplierContactId: input.supplierContactId ?? null,
         monthlyBudget: input.monthlyBudget ?? null,
+        supplierNotes: input.supplierNotes ?? null,
       }).$returningId();
       return { id: result.id };
     }),
@@ -126,6 +128,7 @@ export const billsRouter = router({
       notes: z.string().optional(),
       supplierContactId: z.number().optional().nullable(),
       monthlyBudget: z.string().optional().nullable(),
+      supplierNotes: z.string().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -646,5 +649,32 @@ export const billsRouter = router({
         note: input.note ?? null,
       }).$returningId();
       return { id: r.id };
+    }),
+  // Export all bills for an account as CSV
+  exportAccountBillsCSV: protectedProcedure
+    .input(z.object({ accountId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const account = await db.select().from(utilityAccounts).where(eq(utilityAccounts.id, input.accountId)).limit(1);
+      if (!account.length) throw new TRPCError({ code: "NOT_FOUND" });
+      const bills = await db.select().from(utilityBills)
+        .where(eq(utilityBills.accountId, input.accountId))
+        .orderBy(utilityBills.billDate);
+      const rows = [
+        ["Date", "Amount (£)", "Period Start", "Period End", "Consumption", "Unit", "Notes"],
+        ...bills.map(b => [
+          b.billDate ? new Date(b.billDate as any).toLocaleDateString("en-GB") : "",
+          b.amount ?? "",
+          b.periodStart ? new Date(b.periodStart as any).toLocaleDateString("en-GB") : "",
+          b.periodEnd ? new Date(b.periodEnd as any).toLocaleDateString("en-GB") : "",
+          b.consumptionUnits ?? "",
+          b.unitType ?? "",
+          (b.notes ?? "").replace(/,/g, ";"),
+        ]),
+      ];
+      const csv = rows.map(r => r.join(",")).join("\n");
+      const filename = `${account[0].supplier.replace(/[^a-z0-9]/gi, "_")}_bills.csv`;
+      return { csv, filename };
     }),
 });

@@ -62,6 +62,8 @@ function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWith
                     <StatusBadge status={item.status||item.paymentStatus}/>
                     {item.expenseSource==="auto_bill" && <span style={{fontSize:10,fontWeight:700,background:"rgba(0,255,194,0.15)",color:"#00FFC2",padding:"2px 7px",borderRadius:999}}>AUTO • BILL</span>}
                     {item.expenseSource==="auto_lbmw" && <span style={{fontSize:10,fontWeight:700,background:"rgba(99,91,255,0.15)",color:"#a78bfa",padding:"2px 7px",borderRadius:999}}>AUTO • LBMW</span>}
+                    {(item.status==="pending"||item.status==="processing") && !item.authorisedAt && <span style={{fontSize:10,fontWeight:700,background:"rgba(251,191,36,0.15)",color:"#fbbf24",padding:"2px 7px",borderRadius:999,border:"1px solid rgba(251,191,36,0.3)"}}>⏳ AWAITING APPROVAL</span>}
+                    {item.secondApproverRequired && !item.secondApprovedAt && item.authorisedAt && <span style={{fontSize:10,fontWeight:700,background:"rgba(251,191,36,0.15)",color:"#fbbf24",padding:"2px 7px",borderRadius:999,border:"1px solid rgba(251,191,36,0.3)"}}>⏳ 2ND APPROVAL NEEDED</span>}
                   </div>
                   <div style={{ display:"flex",gap:16,flexWrap:"wrap" }}>
                     {item.receiptDate && <span style={{ fontSize:12,color:T.muted }}>{new Date(item.receiptDate).toLocaleDateString("en-GB")}</span>}
@@ -103,6 +105,7 @@ function CashFlowPlanner() {
   const [heldReason, setHeldReason] = useState("");
   const [addManualOpen, setAddManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState({ description: "", supplier: "", building: "", dueDate: "", amount: "", note: "" });
+  const [openingBalance, setOpeningBalance] = useState<string>("");
 
   const { data: payments = [], isLoading, refetch } = trpc.bills.listScheduled.useQuery({
     from: fromDate, to: toDate, status: "all",
@@ -170,6 +173,15 @@ function CashFlowPlanner() {
     const key = new Date(p.dueDate).toLocaleString("en-GB", { month: "long", year: "numeric" });
     if (!groupedByMonth[key]) groupedByMonth[key] = [];
     groupedByMonth[key].push(p);
+  }
+  // Running balance: start from opening balance, subtract each payment in date order
+  const openingBal = parseFloat(openingBalance) || 0;
+  const sortedByDate = [...payments].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+  const runningBalanceMap: Record<number, number> = {};
+  let runBal = openingBal;
+  for (const p of sortedByDate) {
+    runBal -= parseFloat(p.amount);
+    runningBalanceMap[p.id] = runBal;
   }
 
   return (
@@ -302,7 +314,14 @@ function CashFlowPlanner() {
                       )}
                     </div>
                     <div style={{ display:"flex",alignItems:"center",gap:10,flexShrink:0 }}>
-                      <span style={{ fontSize:16,fontWeight:800,color:T.white }}>£{parseFloat(p.amount).toFixed(2)}</span>
+                      <div style={{ textAlign:"right" }}>
+                        <span style={{ fontSize:16,fontWeight:800,color:T.white }}>£{parseFloat(p.amount).toFixed(2)}</span>
+                        {openingBalance !== "" && (
+                          <div style={{ fontSize:10,color:runningBalanceMap[p.id] >= 0 ? "#00FFC2" : "#f43f5e",fontWeight:700,marginTop:1 }}>
+                            Bal: £{runningBalanceMap[p.id]?.toFixed(2)}
+                          </div>
+                        )}
+                      </div>
                       <div style={{ display:"flex",gap:4 }}>
                         {p.status !== "paid" && (
                           <button onClick={() => markPaidMutation.mutate({ id: p.id })} title="Mark Paid"

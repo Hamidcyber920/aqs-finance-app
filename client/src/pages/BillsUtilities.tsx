@@ -583,6 +583,7 @@ export default function BillsUtilities() {
     notes: "",
     supplierContactId: null as number | null,
     monthlyBudget: "",
+    supplierNotes: "",
   });
 
   const [billForm, setBillForm] = useState({
@@ -622,7 +623,7 @@ export default function BillsUtilities() {
       utils.bills.listAccounts.invalidate();
       utils.bills.summary.invalidate();
       setShowAddAccount(false);
-      setAccountForm({ building: "QLH", supplier: "", accountNumber: "", category: "electricity", tariff: "", contractStartDate: "", contractEndDate: "", mpan: "", directDebitAmount: "", billingDay: "", notes: "", supplierContactId: null, monthlyBudget: "" });
+      setAccountForm({ building: "QLH", supplier: "", accountNumber: "", category: "electricity", tariff: "", contractStartDate: "", contractEndDate: "", mpan: "", directDebitAmount: "", billingDay: "", notes: "", supplierContactId: null, monthlyBudget: "", supplierNotes: "" });
       toast.success("Account added successfully.");
     },
     onError: (e) => toast.error(e.message),
@@ -842,6 +843,7 @@ export default function BillsUtilities() {
                         {accountDetail.account.contractEndDate && <div><span className="text-muted-foreground">Contract End:</span> <span className={`font-medium ${new Date(accountDetail.account.contractEndDate) < new Date() ? "text-red-600" : ""}`}>{new Date(accountDetail.account.contractEndDate).toLocaleDateString()}</span></div>}
                         {accountDetail.avg3m !== null && <div><span className="text-muted-foreground">3-Month Avg:</span> <span className="font-medium">£{parseFloat(accountDetail.avg3m!.toString()).toFixed(2)}</span></div>}
                         {accountDetail.account.monthlyBudget && <div><span className="text-muted-foreground">Monthly Budget:</span> <span className="font-medium text-blue-600">£{parseFloat(accountDetail.account.monthlyBudget).toFixed(2)}</span></div>}
+                        {accountDetail.account.supplierNotes && <div className="col-span-2"><span className="text-muted-foreground">Supplier Notes:</span> <span className="font-medium">{accountDetail.account.supplierNotes}</span></div>}
                       </div>
                       {accountDetail.account.notes && <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">{accountDetail.account.notes}</p>}
 
@@ -990,6 +992,7 @@ export default function BillsUtilities() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Monthly Budget (£)</Label><Input type="number" step="0.01" value={accountForm.monthlyBudget} onChange={e => setAccountForm(f => ({ ...f, monthlyBudget: e.target.value }))} placeholder="0.00" /></div>
+              <div><Label>Supplier Notes</Label><Textarea value={accountForm.supplierNotes} onChange={e => setAccountForm(f => ({ ...f, supplierNotes: e.target.value }))} placeholder="Contact tips, escalation path, account manager name…" rows={3} /></div>
             </div>
             <div><Label>Notes</Label><Textarea value={accountForm.notes} onChange={e => setAccountForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
             <div>
@@ -1049,6 +1052,7 @@ export default function BillsUtilities() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Monthly Budget (£)</Label><Input type="number" step="0.01" value={editAccount.monthlyBudget ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, monthlyBudget: e.target.value }))} placeholder="0.00" /></div>
+                <div><Label>Supplier Notes</Label><Textarea value={editAccount.supplierNotes ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, supplierNotes: e.target.value }))} placeholder="Contact tips, escalation path, account manager name…" rows={3} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Contract Start</Label><Input type="date" value={editAccount.contractStartDate ? new Date(editAccount.contractStartDate).toISOString().split("T")[0] : ""} onChange={e => setEditAccount((a: any) => ({ ...a, contractStartDate: e.target.value }))} /></div>
