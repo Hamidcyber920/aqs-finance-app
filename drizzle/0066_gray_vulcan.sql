@@ -1,0 +1,1 @@
+ALTER TABLE `lbmw_correspondence` ADD `linkedComplianceActionId` int;

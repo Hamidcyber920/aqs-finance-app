@@ -73,6 +73,7 @@ export const billsRouter = router({
       contractEndDate: z.string().optional(),
       mpan: z.string().optional(),
       directDebitAmount: z.string().optional(),
+      billingDay: z.number().int().min(1).max(31).optional(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
@@ -88,6 +89,7 @@ export const billsRouter = router({
         contractEndDate: input.contractEndDate ? new Date(input.contractEndDate) : null,
         mpan: input.mpan ?? null,
         directDebitAmount: input.directDebitAmount ?? null,
+        billingDay: input.billingDay ?? null,
         notes: input.notes ?? null,
       }).$returningId();
       return { id: result.id };
@@ -105,6 +107,7 @@ export const billsRouter = router({
       contractEndDate: z.string().optional().nullable(),
       mpan: z.string().optional(),
       directDebitAmount: z.string().optional(),
+      billingDay: z.number().int().min(1).max(31).optional().nullable(),
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {

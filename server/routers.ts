@@ -6161,6 +6161,69 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
       }).length;
       return { total: rows.length, pending, overdue };
     }),
+    // ── Link correspondence to a compliance action ──────────────────────────
+    linkToAction: adminProcedure
+      .input(z.object({
+        correspondenceId: z.number().int(),
+        complianceActionId: z.number().int().nullable(),
+      }))
+      .mutation(async ({ input }) => {
+        const { lbmwCorrespondence } = await import('../drizzle/schema');
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        await db.update(lbmwCorrespondence)
+          .set({ linkedComplianceActionId: input.complianceActionId })
+          .where(eq(lbmwCorrespondence.id, input.correspondenceId));
+        return { success: true };
+      }),
+    // ── Auto-create a compliance action from a correspondence item ──────────
+    autoCreateAction: adminProcedure
+      .input(z.object({
+        correspondenceId: z.number().int(),
+        title: z.string().min(1),
+        owner: z.string().optional(),
+        dueDate: z.string().optional(),
+        priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { lbmwCorrespondence, complianceActions } = await import('../drizzle/schema');
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        // Create the compliance action
+        const [result] = await db.insert(complianceActions).values({
+          title: input.title,
+          source: "LBMW Correspondence",
+          owner: input.owner ?? null,
+          dueDate: input.dueDate ? new Date(input.dueDate) : null,
+          priority: input.priority ?? "medium",
+          notes: input.notes ?? null,
+          status: "open",
+          createdByUserId: ctx.user.id,
+        });
+        const newActionId = (result as any).insertId as number;
+        // Link the correspondence to the new action
+        await db.update(lbmwCorrespondence)
+          .set({ linkedComplianceActionId: newActionId })
+          .where(eq(lbmwCorrespondence.id, input.correspondenceId));
+        return { success: true, complianceActionId: newActionId };
+      }),
+    // ── List compliance actions (for linking dropdown) ──────────────────────
+    listComplianceActions: adminProcedure.query(async () => {
+      const { complianceActions } = await import('../drizzle/schema');
+      const db = await getDb();
+      if (!db) return [];
+      return db.select({
+        id: complianceActions.id,
+        title: complianceActions.title,
+        status: complianceActions.status,
+        priority: complianceActions.priority,
+        dueDate: complianceActions.dueDate,
+        owner: complianceActions.owner,
+      }).from(complianceActions)
+        .orderBy(desc(complianceActions.createdAt))
+        .limit(100);
+    }),
   }),
 });
 export type AppRouter = typeof appRouter;

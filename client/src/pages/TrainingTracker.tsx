@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, CheckCircle, AlertTriangle, XCircle, Clock, Search, Trash2, Edit2, Award, Users, BookOpen, Grid3X3 } from "lucide-react";
+import { Plus, CheckCircle, AlertTriangle, XCircle, Clock, Search, Trash2, Edit2, Award, Users, BookOpen, Grid3X3, UserPlus } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   valid: "bg-green-100 text-green-800",
@@ -32,10 +33,25 @@ const STATUS_ICON: Record<string, ReactElement> = {
   missing: <span className="w-3 h-3 inline-block" />,
 };
 
+// Predefined staff list for bulk enrol (can be extended)
+const STAFF_LIST = [
+  "Dr. Abdul Hamid",
+  "Galib Khan",
+  "Farid Ahmed",
+  "Mumin Khan",
+  "Ibrahim Ali",
+  "Yusuf Hassan",
+  "Aisha Begum",
+  "Fatima Malik",
+  "Omar Sheikh",
+  "Zainab Ahmed",
+];
+
 export default function TrainingTracker() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
+  const [showBulkEnrol, setShowBulkEnrol] = useState(false);
   const [editRecord, setEditRecord] = useState<any>(null);
 
   const [form, setForm] = useState({
@@ -47,6 +63,17 @@ export default function TrainingTracker() {
     certificateUrl: "",
     notes: "",
   });
+
+  // Bulk enrol form state
+  const [bulkForm, setBulkForm] = useState({
+    module: "",
+    provider: "",
+    completedAt: new Date().toISOString().split("T")[0],
+    expiresAt: "",
+    notes: "",
+    customStaff: "", // comma-separated custom names
+  });
+  const [selectedStaff, setSelectedStaff] = useState<string[]>([]);
 
   const utils = trpc.useUtils();
   const { data: summary } = trpc.training.summary.useQuery();
@@ -63,6 +90,18 @@ export default function TrainingTracker() {
       setShowAdd(false);
       setForm({ userName: "", module: "", provider: "", completedAt: new Date().toISOString().split("T")[0], expiresAt: "", certificateUrl: "", notes: "" });
       toast.success("Training recorded — record added successfully.");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const bulkEnrol = trpc.training.bulkEnrol.useMutation({
+    onSuccess: (data) => {
+      utils.training.list.invalidate();
+      utils.training.summary.invalidate();
+      setShowBulkEnrol(false);
+      setBulkForm({ module: "", provider: "", completedAt: new Date().toISOString().split("T")[0], expiresAt: "", notes: "", customStaff: "" });
+      setSelectedStaff([]);
+      toast.success(`Bulk enrolment complete — ${data.inserted} staff enrolled on "${bulkForm.module}".`);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -85,6 +124,37 @@ export default function TrainingTracker() {
     },
   });
 
+  const toggleStaff = (name: string) => {
+    setSelectedStaff(prev =>
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    );
+  };
+
+  const handleBulkEnrol = () => {
+    // Combine selected from list + custom comma-separated names
+    const customNames = bulkForm.customStaff
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+    const allStaff = [...new Set([...selectedStaff, ...customNames])];
+    if (allStaff.length === 0) {
+      toast.error("Please select at least one staff member.");
+      return;
+    }
+    if (!bulkForm.module) {
+      toast.error("Please enter a training module name.");
+      return;
+    }
+    bulkEnrol.mutate({
+      module: bulkForm.module,
+      provider: bulkForm.provider || undefined,
+      completedAt: bulkForm.completedAt,
+      expiresAt: bulkForm.expiresAt || null,
+      notes: bulkForm.notes || undefined,
+      staff: allStaff.map(name => ({ userName: name })),
+    });
+  };
+
   return (
     <DashboardLayout>
       <div className="p-6 space-y-6">
@@ -94,9 +164,14 @@ export default function TrainingTracker() {
             <h1 className="text-2xl font-bold text-foreground">Training Tracker</h1>
             <p className="text-muted-foreground text-sm mt-1">Track mandatory and optional training completions for all staff, volunteers, and trustees</p>
           </div>
-          <Button onClick={() => setShowAdd(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> Log Training
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowBulkEnrol(true)} className="gap-2">
+              <UserPlus className="w-4 h-4" /> Bulk Enrol
+            </Button>
+            <Button onClick={() => setShowAdd(true)} className="gap-2">
+              <Plus className="w-4 h-4" /> Log Training
+            </Button>
+          </div>
         </div>
 
         {/* Summary cards */}
@@ -312,6 +387,105 @@ export default function TrainingTracker() {
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={() => addRecord.mutate(form)} disabled={!form.userName || !form.module || !form.completedAt || addRecord.isPending}>
               {addRecord.isPending ? "Saving..." : "Log Training"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Enrol Dialog */}
+      <Dialog open={showBulkEnrol} onOpenChange={setShowBulkEnrol}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5" /> Bulk Enrol Staff
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Course details */}
+            <div className="space-y-3 p-3 bg-muted/30 rounded-lg">
+              <h3 className="text-sm font-semibold text-foreground">Course Details</h3>
+              <div>
+                <Label>Training Module *</Label>
+                <Input
+                  value={bulkForm.module}
+                  onChange={e => setBulkForm(f => ({ ...f, module: e.target.value }))}
+                  placeholder="e.g. Safeguarding Level 2"
+                />
+              </div>
+              <div>
+                <Label>Provider / Organisation</Label>
+                <Input
+                  value={bulkForm.provider}
+                  onChange={e => setBulkForm(f => ({ ...f, provider: e.target.value }))}
+                  placeholder="e.g. NSPCC"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Completed Date *</Label>
+                  <Input type="date" value={bulkForm.completedAt} onChange={e => setBulkForm(f => ({ ...f, completedAt: e.target.value }))} />
+                </div>
+                <div>
+                  <Label>Expiry Date</Label>
+                  <Input type="date" value={bulkForm.expiresAt} onChange={e => setBulkForm(f => ({ ...f, expiresAt: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label>Notes</Label>
+                <Textarea value={bulkForm.notes} onChange={e => setBulkForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
+              </div>
+            </div>
+
+            {/* Staff selection */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-foreground">Select Staff Members</h3>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedStaff([...STAFF_LIST])}>Select All</Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedStaff([])}>Clear</Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
+                {STAFF_LIST.map(name => (
+                  <div key={name} className="flex items-center gap-2 p-2 rounded hover:bg-muted/50 cursor-pointer" onClick={() => toggleStaff(name)}>
+                    <Checkbox
+                      checked={selectedStaff.includes(name)}
+                      onCheckedChange={() => toggleStaff(name)}
+                    />
+                    <span className="text-sm">{name}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Additional staff (comma-separated names)</Label>
+                <Input
+                  value={bulkForm.customStaff}
+                  onChange={e => setBulkForm(f => ({ ...f, customStaff: e.target.value }))}
+                  placeholder="e.g. Ahmed Khan, Sara Patel"
+                  className="text-sm"
+                />
+              </div>
+              {/* Selection summary */}
+              {(selectedStaff.length > 0 || bulkForm.customStaff.trim()) && (
+                <p className="text-xs text-muted-foreground">
+                  {selectedStaff.length + bulkForm.customStaff.split(",").filter(s => s.trim()).length} staff member(s) selected
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowBulkEnrol(false); setSelectedStaff([]); }}>Cancel</Button>
+            <Button
+              onClick={handleBulkEnrol}
+              disabled={!bulkForm.module || bulkEnrol.isPending}
+              className="gap-2"
+            >
+              {bulkEnrol.isPending ? "Enrolling..." : (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  Enrol {selectedStaff.length + bulkForm.customStaff.split(",").filter(s => s.trim()).length || ""} Staff
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

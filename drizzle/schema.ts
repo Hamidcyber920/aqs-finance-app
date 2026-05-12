@@ -1893,6 +1893,7 @@ export const utilityAccounts = mysqlTable("utility_accounts", {
   contractEndDate: date("contractEndDate"),
   mpan: varchar("mpan", { length: 50 }),
   directDebitAmount: decimal("directDebitAmount", { precision: 10, scale: 2 }),
+  billingDay: int("billingDay"),              // day of month DD is taken (1-31)
   lastBillDate: date("lastBillDate"),
   lastBillAmount: decimal("lastBillAmount", { precision: 10, scale: 2 }),
   notes: text("notes"),
@@ -2002,6 +2003,7 @@ export const lbmwCorrespondence = mysqlTable("lbmw_correspondence", {
   fileUrl: text("fileUrl"),
   internalNotes: text("internalNotes"),
   handledByUserId: int("handledByUserId"),
+  linkedComplianceActionId: int("linkedComplianceActionId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

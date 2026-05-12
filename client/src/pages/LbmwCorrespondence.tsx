@@ -10,7 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Mail, Phone, Building, FileText, AlertTriangle, CheckCircle2, Clock, XCircle } from "lucide-react";
+import {
+  Plus, RefreshCw, Mail, Phone, Building, FileText, AlertTriangle,
+  CheckCircle2, Clock, XCircle, Link2, Unlink, Zap,
+} from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -24,6 +27,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   medium: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
   low: "bg-slate-500/20 text-slate-400 border-slate-500/30",
+};
+
+const ACTION_STATUS_COLORS: Record<string, string> = {
+  open: "bg-blue-100 text-blue-800",
+  in_progress: "bg-amber-100 text-amber-800",
+  completed: "bg-green-100 text-green-800",
+  overdue: "bg-red-100 text-red-800",
 };
 
 const CHANNEL_ICONS: Record<string, React.ReactNode> = {
@@ -66,8 +76,22 @@ export default function LbmwCorrespondence() {
   const [updateDialog, setUpdateDialog] = useState<{ open: boolean; item?: any }>({ open: false });
   const [updateForm, setUpdateForm] = useState({ status: "pending" as any, priority: "medium" as any, internalNotes: "", responseDeadline: "", summary: "" });
 
+  // Link-to-action dialog state
+  const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: any }>({ open: false });
+  const [linkMode, setLinkMode] = useState<"existing" | "create">("existing");
+  const [selectedActionId, setSelectedActionId] = useState<string>("");
+  const [createActionForm, setCreateActionForm] = useState({
+    title: "",
+    owner: "",
+    dueDate: "",
+    priority: "medium" as "low" | "medium" | "high" | "critical",
+    notes: "",
+  });
+
+  const utils = trpc.useUtils();
   const { data: items = [], isLoading, refetch } = trpc.lbmw.list.useQuery({ status: statusFilter || undefined });
   const { data: summary } = trpc.lbmw.summary.useQuery();
+  const { data: complianceActions = [] } = trpc.lbmw.listComplianceActions.useQuery();
 
   const createMut = trpc.lbmw.create.useMutation({
     onSuccess: () => { toast.success("Correspondence record created"); setDialog({ open: false }); refetch(); },
@@ -79,6 +103,19 @@ export default function LbmwCorrespondence() {
   });
   const deleteMut = trpc.lbmw.delete.useMutation({
     onSuccess: () => { toast.success("Record deleted"); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const linkToActionMut = trpc.lbmw.linkToAction.useMutation({
+    onSuccess: () => { toast.success("Correspondence linked to compliance action"); setLinkDialog({ open: false }); refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const autoCreateActionMut = trpc.lbmw.autoCreateAction.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Compliance action created (ID: ${data.complianceActionId}) and linked`);
+      setLinkDialog({ open: false });
+      refetch();
+      utils.lbmw.listComplianceActions.invalidate();
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -97,6 +134,38 @@ export default function LbmwCorrespondence() {
     });
     setUpdateDialog({ open: true, item });
   }
+
+  function openLinkDialog(item: any) {
+    setLinkDialog({ open: true, item });
+    setLinkMode("existing");
+    setSelectedActionId(item.linkedComplianceActionId?.toString() ?? "");
+    setCreateActionForm({
+      title: `Action: ${item.subject}`,
+      owner: "",
+      dueDate: item.responseDeadline ? new Date(item.responseDeadline).toISOString().split("T")[0] : "",
+      priority: item.priority ?? "medium",
+      notes: `Auto-created from LBMW correspondence: ${item.subject}`,
+    });
+  }
+
+  function handleLinkSubmit() {
+    if (!linkDialog.item) return;
+    if (linkMode === "existing") {
+      linkToActionMut.mutate({
+        correspondenceId: linkDialog.item.id,
+        complianceActionId: selectedActionId ? parseInt(selectedActionId) : null,
+      });
+    } else {
+      autoCreateActionMut.mutate({
+        correspondenceId: linkDialog.item.id,
+        ...createActionForm,
+        dueDate: createActionForm.dueDate || undefined,
+      });
+    }
+  }
+
+  // Build a map of complianceActionId → action for display
+  const actionMap = Object.fromEntries(complianceActions.map(a => [a.id, a]));
 
   return (
     <DashboardLayout>
@@ -186,6 +255,7 @@ export default function LbmwCorrespondence() {
                       <th className="text-left p-3 font-medium text-muted-foreground">Deadline</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Priority</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Action</th>
                       <th className="p-3"></th>
                     </tr>
                   </thead>
@@ -193,6 +263,7 @@ export default function LbmwCorrespondence() {
                     {items.map((item: any) => {
                       const days = daysUntil(item.responseDeadline);
                       const isOverdue = days !== null && days < 0 && item.status !== "responded" && item.status !== "closed";
+                      const linkedAction = item.linkedComplianceActionId ? actionMap[item.linkedComplianceActionId] : null;
                       return (
                         <tr key={item.id} className="border-b border-border/50 hover:bg-muted/20">
                           <td className="p-3">
@@ -231,9 +302,40 @@ export default function LbmwCorrespondence() {
                             </Badge>
                           </td>
                           <td className="p-3">
-                            <Badge variant="outline" className={`text-xs ${STATUS_COLORS[item.status]}`}>
+                            <Badge variant="outline" className={`text-xs capitalize ${STATUS_COLORS[item.status]}`}>
                               {item.status.replace("_", " ")}
                             </Badge>
+                          </td>
+                          {/* Linked compliance action column */}
+                          <td className="p-3 min-w-[140px]">
+                            {linkedAction ? (
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1">
+                                  <Link2 className="h-3 w-3 text-green-500 flex-shrink-0" />
+                                  <span className="text-xs font-medium text-green-600 truncate max-w-[110px]" title={linkedAction.title}>
+                                    {linkedAction.title}
+                                  </span>
+                                </div>
+                                <Badge className={`text-[10px] px-1 py-0 ${ACTION_STATUS_COLORS[linkedAction.status] ?? "bg-gray-100 text-gray-700"}`}>
+                                  {linkedAction.status}
+                                </Badge>
+                                <button
+                                  className="text-[10px] text-muted-foreground hover:text-red-500 flex items-center gap-0.5"
+                                  onClick={() => linkToActionMut.mutate({ correspondenceId: item.id, complianceActionId: null })}
+                                >
+                                  <Unlink className="h-2.5 w-2.5" /> Unlink
+                                </button>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs gap-1 text-muted-foreground hover:text-primary"
+                                onClick={() => openLinkDialog(item)}
+                              >
+                                <Zap className="h-3 w-3" /> Link Action
+                              </Button>
+                            )}
                           </td>
                           <td className="p-3">
                             <div className="flex gap-1">
@@ -388,6 +490,121 @@ export default function LbmwCorrespondence() {
             <Button disabled={updateMut.isPending}
               onClick={() => updateMut.mutate({ id: updateDialog.item.id, ...updateForm, responseDeadline: updateForm.responseDeadline || undefined })}>
               {updateMut.isPending ? "Saving…" : "Update"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link to Compliance Action Dialog */}
+      <Dialog open={linkDialog.open} onOpenChange={o => setLinkDialog({ open: o })}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" /> Link to Compliance Action
+            </DialogTitle>
+            {linkDialog.item && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Correspondence: <span className="font-medium">{linkDialog.item.subject}</span>
+              </p>
+            )}
+          </DialogHeader>
+
+          {/* Mode toggle */}
+          <div className="flex gap-2 mt-1">
+            <Button
+              variant={linkMode === "existing" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setLinkMode("existing")}
+            >
+              Link Existing Action
+            </Button>
+            <Button
+              variant={linkMode === "create" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setLinkMode("create")}
+            >
+              <Zap className="h-3.5 w-3.5 mr-1" /> Auto-Create Action
+            </Button>
+          </div>
+
+          {linkMode === "existing" ? (
+            <div className="space-y-3 py-2">
+              <div>
+                <Label className="text-xs">Select Compliance Action</Label>
+                <Select value={selectedActionId} onValueChange={setSelectedActionId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an existing compliance action…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— No link (unlink) —</SelectItem>
+                    {complianceActions.map(a => (
+                      <SelectItem key={a.id} value={a.id.toString()}>
+                        <span className="font-medium">{a.title}</span>
+                        <span className="ml-2 text-muted-foreground text-xs">({a.status})</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedActionId && actionMap[parseInt(selectedActionId)] && (
+                <div className="p-3 bg-muted/30 rounded text-sm space-y-1">
+                  <p className="font-medium">{actionMap[parseInt(selectedActionId)].title}</p>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <span>Status: <Badge className={`text-[10px] px-1 ${ACTION_STATUS_COLORS[actionMap[parseInt(selectedActionId)].status] ?? ""}`}>{actionMap[parseInt(selectedActionId)].status}</Badge></span>
+                    {actionMap[parseInt(selectedActionId)].owner && <span>Owner: {actionMap[parseInt(selectedActionId)].owner}</span>}
+                    {actionMap[parseInt(selectedActionId)].dueDate && <span>Due: {fmtDate(actionMap[parseInt(selectedActionId)].dueDate)}</span>}
+                  </div>
+                </div>
+              )}
+              {complianceActions.length === 0 && (
+                <p className="text-xs text-muted-foreground">No compliance actions found. Use "Auto-Create Action" to create one from this correspondence.</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3 py-2">
+              <p className="text-xs text-muted-foreground">A new compliance action will be created and automatically linked to this correspondence.</p>
+              <div>
+                <Label className="text-xs">Action Title *</Label>
+                <Input value={createActionForm.title} onChange={e => setCreateActionForm(f => ({ ...f, title: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Responsible Owner</Label>
+                  <Input value={createActionForm.owner} onChange={e => setCreateActionForm(f => ({ ...f, owner: e.target.value }))} placeholder="e.g. Dr. Abdul Hamid" />
+                </div>
+                <div>
+                  <Label className="text-xs">Due Date</Label>
+                  <Input type="date" value={createActionForm.dueDate} onChange={e => setCreateActionForm(f => ({ ...f, dueDate: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Priority</Label>
+                <Select value={createActionForm.priority} onValueChange={v => setCreateActionForm(f => ({ ...f, priority: v as any }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Notes</Label>
+                <Textarea value={createActionForm.notes} onChange={e => setCreateActionForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkDialog({ open: false })}>Cancel</Button>
+            <Button
+              disabled={linkToActionMut.isPending || autoCreateActionMut.isPending || (linkMode === "create" && !createActionForm.title)}
+              onClick={handleLinkSubmit}
+              className="gap-2"
+            >
+              <Link2 className="h-4 w-4" />
+              {linkMode === "existing" ? "Save Link" : "Create & Link"}
             </Button>
           </DialogFooter>
         </DialogContent>

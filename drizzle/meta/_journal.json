@@ -456,6 +456,20 @@
       "when": 1778571179846,
       "tag": "0064_cultured_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "5",
+      "when": 1778572612605,
+      "tag": "0065_sticky_electro",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "5",
+      "when": 1778572972966,
+      "tag": "0066_gray_vulcan",
+      "breakpoints": true
     }
   ]
 }

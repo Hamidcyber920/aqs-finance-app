@@ -1,0 +1,1 @@
+ALTER TABLE `utility_accounts` ADD `billingDay` int;

@@ -115,6 +115,54 @@ export const trainingRouter = router({
       return { id: result.id, status };
     }),
 
+  // ── Bulk enrol multiple staff onto a course ──────────────────────────────────
+  bulkEnrol: protectedProcedure
+    .input(z.object({
+      module: z.string().min(1),
+      provider: z.string().optional(),
+      completedAt: z.string(),
+      expiresAt: z.string().optional().nullable(),
+      notes: z.string().optional(),
+      // Each staff member: name (required), userId optional
+      staff: z.array(z.object({
+        userName: z.string().min(1),
+        userId: z.number().optional(),
+      })).min(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      const now = new Date();
+      const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+      let status: "pending" | "completed" | "expired" | "expiring_soon" = "completed";
+      if (expiresAt) {
+        const in30Days = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        if (expiresAt < now) status = "expired";
+        else if (expiresAt <= in30Days) status = "expiring_soon";
+      }
+
+      const completedAt = new Date(input.completedAt);
+      const inserted: number[] = [];
+
+      for (const member of input.staff) {
+        const [result] = await db.insert(trainingRecords).values({
+          userId: member.userId ?? null,
+          userName: member.userName,
+          module: input.module,
+          provider: input.provider ?? null,
+          completedAt,
+          expiresAt,
+          certificateUrl: null,
+          status,
+          notes: input.notes ?? null,
+        }).$returningId();
+        inserted.push(result.id);
+      }
+
+      return { inserted: inserted.length, ids: inserted };
+    }),
+
   // ── Update a training record ─────────────────────────────────────────────────
   update: protectedProcedure
     .input(z.object({

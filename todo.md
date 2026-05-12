@@ -1554,3 +1554,9 @@
 - [x] Remove duplicate "Comms Hub V3" sidebar item (keep "Master Inbox" as primary)
 - [x] Add "Bills & Utilities" to FINANCE section
 - [x] Add "Training Tracker" to ORGANISATION section
+
+## Round 9 Next Steps (May 12, 2026)
+
+- [x] Bills & Utilities — monthly direct debit calendar view showing all upcoming DD dates colour-coded by utility type
+- [x] Training Tracker — bulk enrol dialog to assign multiple staff to a course in one action
+- [x] LBMW Correspondence — auto-link to compliance actions: one-click option to create a linked Compliance Action with response deadline pre-filled
