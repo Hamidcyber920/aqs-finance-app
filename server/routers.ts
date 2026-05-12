@@ -6245,6 +6245,103 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           .where(inArray(lbmwCorrespondence.id, input.ids));
         return { updated: input.ids.length, status: input.status };
       }),
+
+    exportPdf: adminProcedure
+      .input(z.object({
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        status: z.string().optional(),
+        priority: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { lbmwCorrespondence } = await import('../drizzle/schema');
+        const { and: andOp, gte: gteOp, lte: lteOp } = await import('drizzle-orm');
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        let q = db.select().from(lbmwCorrespondence).orderBy(desc(lbmwCorrespondence.dateReceived)).$dynamic();
+        const conditions: any[] = [];
+        if (input.status) conditions.push(eq(lbmwCorrespondence.status, input.status as any));
+        if (input.priority) conditions.push(eq(lbmwCorrespondence.priority, input.priority as any));
+        if (input.dateFrom) conditions.push(gteOp(lbmwCorrespondence.dateReceived, new Date(input.dateFrom) as any));
+        if (input.dateTo) conditions.push(lteOp(lbmwCorrespondence.dateReceived, new Date(input.dateTo) as any));
+        if (conditions.length > 0) q = q.where(andOp(...conditions));
+        const rows = await q.limit(500);
+
+        const PDFDocument = (await import('pdfkit')).default;
+        const doc = new PDFDocument({ size: 'A4', margin: 50, layout: 'landscape' });
+        const buffers: Buffer[] = [];
+        await new Promise<void>((resolve, reject) => {
+          doc.on('data', (chunk: Buffer) => buffers.push(chunk));
+          doc.on('end', resolve);
+          doc.on('error', reject);
+          const GREEN = '#1a4731';
+          const GOLD = '#c9a84c';
+          const pageW = doc.page.width - 100;
+          // Header
+          doc.rect(50, 40, pageW, 70).fill(GREEN);
+          doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
+            .text('ABDULLAH QUILLIAM SOCIETY', 70, 52, { width: pageW - 40 });
+          doc.fontSize(10).font('Helvetica')
+            .text('LBMW Correspondence Register', 70, 76, { width: pageW - 40 });
+          doc.rect(50, 110, pageW, 2).fill(GOLD);
+          const dateRange = (input.dateFrom || input.dateTo)
+            ? `${input.dateFrom ? new Date(input.dateFrom).toLocaleDateString('en-GB') : 'Start'} \u2014 ${input.dateTo ? new Date(input.dateTo).toLocaleDateString('en-GB') : 'Today'}`
+            : 'All dates';
+          doc.moveDown(1.2);
+          doc.fillColor('#444').fontSize(9).font('Helvetica')
+            .text(`Generated: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}   |   Period: ${dateRange}   |   Records: ${rows.length}`, { align: 'right' });
+          doc.moveDown(0.5);
+          const cols = [
+            { label: 'Date', w: 65 }, { label: 'Contact', w: 110 }, { label: 'Subject', w: 185 },
+            { label: 'Channel', w: 65 }, { label: 'Priority', w: 60 }, { label: 'Status', w: 70 },
+            { label: 'Deadline', w: 65 }, { label: 'Linked Action', w: 90 },
+          ];
+          let hx = 50;
+          const headerY = doc.y;
+          doc.rect(50, headerY, pageW, 18).fill('#f0fdf4');
+          cols.forEach(col => {
+            doc.fillColor(GREEN).fontSize(8).font('Helvetica-Bold')
+              .text(col.label, hx + 3, headerY + 4, { width: col.w - 6, ellipsis: true });
+            hx += col.w;
+          });
+          doc.y = headerY + 20;
+          rows.forEach((row: any, i: number) => {
+            if (doc.y > doc.page.height - 80) {
+              doc.addPage({ size: 'A4', margin: 50, layout: 'landscape' } as any);
+            }
+            const rowY = doc.y + 1;
+            if (i % 2 === 0) doc.rect(50, rowY, pageW, 16).fill('#fafafa');
+            const priorityColor: Record<string, string> = { critical: '#dc2626', high: '#d97706', medium: '#2563eb', low: '#6b7280' };
+            const statusColor: Record<string, string> = { pending: '#d97706', responded: '#16a34a', awaiting_reply: '#2563eb', closed: '#6b7280' };
+            let cx = 50;
+            const cells = [
+              { val: row.dateReceived ? new Date(row.dateReceived).toLocaleDateString('en-GB') : '\u2014', color: '#333', w: cols[0].w },
+              { val: `${row.contactName || '\u2014'}${row.contactRole ? ` (${row.contactRole})` : ''}`, color: '#333', w: cols[1].w },
+              { val: row.subject || '\u2014', color: '#111', w: cols[2].w },
+              { val: row.channel || '\u2014', color: '#555', w: cols[3].w },
+              { val: (row.priority || '\u2014').toUpperCase(), color: priorityColor[row.priority] || '#333', w: cols[4].w },
+              { val: (row.status || '\u2014').replace('_', ' ').toUpperCase(), color: statusColor[row.status] || '#333', w: cols[5].w },
+              { val: row.responseDeadline ? new Date(row.responseDeadline).toLocaleDateString('en-GB') : '\u2014', color: '#333', w: cols[6].w },
+              { val: row.linkedComplianceActionId ? `Action #${row.linkedComplianceActionId}` : '\u2014', color: '#555', w: cols[7].w },
+            ];
+            cells.forEach(cell => {
+              doc.fillColor(cell.color).fontSize(7.5).font('Helvetica')
+                .text(cell.val, cx + 3, rowY + 3, { width: cell.w - 6, ellipsis: true });
+              cx += cell.w;
+            });
+            doc.rect(50, rowY + 16, pageW, 0.5).fill('#e5e7eb');
+            doc.y = rowY + 18;
+          });
+          doc.rect(50, doc.page.height - 40, pageW, 1).fill(GOLD);
+          doc.fillColor('#888').fontSize(8).font('Helvetica')
+            .text('AQ Society \u2014 LBMW Correspondence Register \u2014 Confidential', 50, doc.page.height - 30, { align: 'center', width: pageW });
+          doc.end();
+        });
+        const pdfBuffer = Buffer.concat(buffers);
+        const fileKey = `lbmw/correspondence-report-${Date.now()}.pdf`;
+        const { url } = await storagePut(fileKey, pdfBuffer, 'application/pdf');
+        return { url };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

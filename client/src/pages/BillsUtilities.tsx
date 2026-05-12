@@ -675,6 +675,17 @@ export default function BillsUtilities() {
                         </div>
                       </div>
                       {acc.accountNumber && <p className="text-xs text-muted-foreground mt-1">Acc: {acc.accountNumber}</p>}
+                      {acc.contractEndDate && (
+                        <p className={`text-xs mt-0.5 font-medium ${
+                          acc.contractExpired ? 'text-red-600' :
+                          acc.contractExpiringSoon ? 'text-amber-600' :
+                          'text-muted-foreground'
+                        }`}>
+                          Contract ends: {new Date(acc.contractEndDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {acc.contractExpired && ' — EXPIRED'}
+                          {acc.contractExpiringSoon && !acc.contractExpired && ` — ${Math.ceil((new Date(acc.contractEndDate).getTime() - Date.now()) / 86400000)}d left`}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 ))}

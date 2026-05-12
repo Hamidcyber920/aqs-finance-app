@@ -217,6 +217,12 @@ function DashboardLayoutContent({
     refetchInterval: 30000,
     enabled: !!user,
   });
+  // Fetch bills expiry count for sidebar badge
+  const { data: billsSummary } = trpc.bills.summary.useQuery(undefined, {
+    refetchInterval: 60000,
+    enabled: !!user && showAdmin,
+  });
+  const billsExpiryBadge = (billsSummary?.expiringSoon ?? 0) + (billsSummary?.expired ?? 0);
 
   const NavItem = ({ icon: Icon, label, path, badge }: { icon: React.ElementType; label: string; path: string; badge?: number }) => {
     const isActive = location === path || (path !== "/" && location.startsWith(path));
@@ -352,7 +358,11 @@ function DashboardLayoutContent({
                 )}
                 <ul className="flex flex-col gap-0.5">
                   {adminItems.map((item) => (
-                    <NavItem key={item.path} {...item} />
+                    <NavItem
+                      key={item.path}
+                      {...item}
+                      badge={item.path === "/bills-utilities" && billsExpiryBadge > 0 ? billsExpiryBadge : undefined}
+                    />
                   ))}
                 </ul>
               </div>

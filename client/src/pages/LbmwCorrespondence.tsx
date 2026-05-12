@@ -95,6 +95,11 @@ export default function LbmwCorrespondence() {
   const [updateDialog, setUpdateDialog] = useState<{ open: boolean; item?: any }>({ open: false });
   const [updateForm, setUpdateForm] = useState({ status: "pending" as any, priority: "medium" as any, internalNotes: "", responseDeadline: "", summary: "" });
 
+  // Export PDF dialog state
+  const [exportDialog, setExportDialog] = useState(false);
+  const [exportFilters, setExportFilters] = useState({ dateFrom: "", dateTo: "", status: "", priority: "" });
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
+
   // Link-to-action dialog state
   const [scannerOpen, setScannerOpen] = useState(false);
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: any }>({ open: false });
@@ -106,6 +111,11 @@ export default function LbmwCorrespondence() {
     dueDate: "",
     priority: "medium" as "low" | "medium" | "high" | "critical",
     notes: "",
+  });
+
+  const exportPdfMut = trpc.lbmw.exportPdf.useMutation({
+    onSuccess: (data) => { setExportUrl(data.url); toast.success("PDF report generated — click Download to save."); },
+    onError: (e) => toast.error(e.message),
   });
 
   const utils = trpc.useUtils();
@@ -255,6 +265,9 @@ export default function LbmwCorrespondence() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => { setScannerOpen(true); }}>
               <ScanLine className="h-4 w-4 mr-1" /> Scan Document
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setExportDialog(true); setExportUrl(null); }}>
+              <Download className="h-4 w-4 mr-1" /> Export PDF
             </Button>
             <Button size="sm" onClick={openCreate}>
               <Plus className="h-4 w-4 mr-1" /> Log Correspondence
@@ -964,6 +977,79 @@ export default function LbmwCorrespondence() {
               onClick={() => markInvoicePaidMut.mutate({ correspondenceId: invoicePayDialog.item.id, ...invoicePayForm })}
             >
               {markInvoicePaidMut.isPending ? "Processing…" : "Mark as Paid & Create Expense"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Export PDF Dialog */}
+      <Dialog open={exportDialog} onOpenChange={setExportDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileText className="h-5 w-5" /> Export Correspondence Report</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Date From</Label>
+                <Input type="date" className="mt-1" value={exportFilters.dateFrom} onChange={e => setExportFilters(f => ({ ...f, dateFrom: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Date To</Label>
+                <Input type="date" className="mt-1" value={exportFilters.dateTo} onChange={e => setExportFilters(f => ({ ...f, dateTo: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Status Filter</Label>
+                <Select value={exportFilters.status} onValueChange={v => setExportFilters(f => ({ ...f, status: v === 'all' ? '' : v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="All statuses" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="responded">Responded</SelectItem>
+                    <SelectItem value="awaiting_reply">Awaiting Reply</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Priority Filter</Label>
+                <Select value={exportFilters.priority} onValueChange={v => setExportFilters(f => ({ ...f, priority: v === 'all' ? '' : v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue placeholder="All priorities" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All priorities</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {exportUrl && (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between">
+                <span className="text-sm text-emerald-700 font-medium">PDF ready</span>
+                <a href={exportUrl} target="_blank" rel="noopener noreferrer">
+                  <Button size="sm" variant="outline" className="gap-1.5">
+                    <ExternalLink className="h-4 w-4" /> Download PDF
+                  </Button>
+                </a>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportDialog(false)}>Close</Button>
+            <Button
+              disabled={exportPdfMut.isPending}
+              onClick={() => exportPdfMut.mutate({
+                dateFrom: exportFilters.dateFrom || undefined,
+                dateTo: exportFilters.dateTo || undefined,
+                status: exportFilters.status || undefined,
+                priority: exportFilters.priority || undefined,
+              })}
+            >
+              {exportPdfMut.isPending ? "Generating…" : "Generate PDF Report"}
             </Button>
           </DialogFooter>
         </DialogContent>

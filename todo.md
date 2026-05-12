@@ -1590,3 +1590,9 @@
 - [x] LBMW Correspondence — bulk status update: checkbox select multiple rows, bulk toolbar to set status (Responded/Closed/Pending) in one action
 - [x] Bills & Utilities — contract renewal reminder emails: auto-email admin when a contract is within 60 days of expiry, including supplier name, account number, and linked supplier contact details
 - [x] Receipt Capture (ScanReceipt) — AI scanner integration: confirmed already built into the main Capture page (Camera + Gallery + AI OCR + auto-fill + submit flow)
+
+## Round 14 Next Steps (May 12, 2026)
+
+- [x] LBMW Correspondence — Export to PDF: date range filter + formatted report table (subject, sender, date, status, priority, linked action) downloadable as PDF
+- [x] Bills & Utilities — Contract end date column: show contractEndDate in the accounts table with colour-coded expiry indicator (red <30 days, amber <60 days, green OK)
+- [x] Bills & Utilities — In-app expiry badge: show count of contracts expiring within 60 days as a red badge on the Bills & Utilities sidebar nav item
