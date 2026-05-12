@@ -117,6 +117,10 @@ export default function LbmwCorrespondence() {
     onSuccess: (data) => { setExportUrl(data.url); toast.success("PDF report generated — click Download to save."); },
     onError: (e) => toast.error(e.message),
   });
+  const sendTrusteesMut = trpc.lbmw.sendPdfToTrustees.useMutation({
+    onSuccess: (data) => toast.success(`Report emailed to ${data.sent} of ${data.total} trustees.`),
+    onError: (e) => toast.error(e.message),
+  });
 
   const utils = trpc.useUtils();
   const { data: items = [], isLoading, refetch } = trpc.lbmw.list.useQuery({ status: statusFilter || undefined });
@@ -1028,13 +1032,28 @@ export default function LbmwCorrespondence() {
               </div>
             </div>
             {exportUrl && (
-              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between">
-                <span className="text-sm text-emerald-700 font-medium">PDF ready</span>
-                <a href={exportUrl} target="_blank" rel="noopener noreferrer">
-                  <Button size="sm" variant="outline" className="gap-1.5">
-                    <ExternalLink className="h-4 w-4" /> Download PDF
-                  </Button>
-                </a>
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-emerald-700 font-medium">PDF ready</span>
+                  <a href={exportUrl} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <ExternalLink className="h-4 w-4" /> Download PDF
+                    </Button>
+                  </a>
+                </div>
+                <Button
+                  size="sm" className="w-full gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white"
+                  disabled={sendTrusteesMut.isPending}
+                  onClick={() => sendTrusteesMut.mutate({
+                    pdfUrl: exportUrl,
+                    dateRange: (exportFilters.dateFrom || exportFilters.dateTo)
+                      ? `${exportFilters.dateFrom || 'Start'} — ${exportFilters.dateTo || 'Today'}`
+                      : undefined,
+                  })}
+                >
+                  <Mail className="h-4 w-4" />
+                  {sendTrusteesMut.isPending ? "Sending…" : "Send to All Trustees by Email"}
+                </Button>
               </div>
             )}
           </div>

@@ -1,5 +1,6 @@
 import {
   int,
+  bigint,
   mysqlEnum,
   mysqlTable,
   text,
@@ -2063,3 +2064,38 @@ export const supplierContacts = mysqlTable("supplier_contacts", {
 });
 export type SupplierContact = typeof supplierContacts.$inferSelect;
 export type InsertSupplierContact = typeof supplierContacts.$inferInsert;
+
+// ─── SCHEDULED PAYMENTS (Cash Flow Planner) ───────────────────────────────────
+// Future payment obligations pulled from DD accounts and one-off bills.
+// Status: pending → paid | held
+export const scheduledPayments = mysqlTable("scheduled_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  // Source reference
+  source: varchar("source", { length: 20 }).notNull().default("dd"),  // 'dd' | 'bill' | 'manual'
+  accountId: int("accountId"),          // FK → utility_accounts
+  billId: int("billId"),                // FK → utility_bills (for one-off future bills)
+  description: varchar("description", { length: 300 }).notNull(),
+  supplier: varchar("supplier", { length: 200 }),
+  building: varchar("building", { length: 200 }),
+  utilityType: varchar("utilityType", { length: 100 }),
+  // Payment details
+  dueDate: date("dueDate").notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  // Status
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending | paid | held
+  // Paid stamp
+  paidAt: bigint("paidAt", { mode: "number" }),
+  paidByUserId: int("paidByUserId"),
+  paidByName: varchar("paidByName", { length: 200 }),
+  // Held stamp
+  heldAt: bigint("heldAt", { mode: "number" }),
+  heldByUserId: int("heldByUserId"),
+  heldByName: varchar("heldByName", { length: 200 }),
+  // Note (required when held, optional otherwise)
+  note: text("note"),
+  // Audit
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type ScheduledPayment = typeof scheduledPayments.$inferSelect;
+export type InsertScheduledPayment = typeof scheduledPayments.$inferInsert;

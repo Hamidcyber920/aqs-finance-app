@@ -6342,6 +6342,24 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         const { url } = await storagePut(fileKey, pdfBuffer, 'application/pdf');
         return { url };
       }),
+
+    sendPdfToTrustees: adminProcedure
+      .input(z.object({ pdfUrl: z.string(), dateRange: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const { trustees } = await import('../drizzle/schema');
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
+        const emailTrustees = (allTrustees as any[]).filter((t: any) => t.email);
+        if (emailTrustees.length === 0) throw new TRPCError({ code: 'BAD_REQUEST', message: 'No trustees with email addresses found' });
+        const subject = `LBMW Correspondence Register${input.dateRange ? ` \u2014 ${input.dateRange}` : ''}`;
+        const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto"><div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">LBMW Correspondence Register</p></div><div style="padding:24px;background:#fff"><p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh,</p><p>Please find the LBMW Correspondence Register${input.dateRange ? ` for the period <strong>${input.dateRange}</strong>` : ''} for your review.</p><p><a href="${input.pdfUrl}" style="display:inline-block;background:#1a4731;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold">Download PDF Report</a></p><p style="margin-top:16px;font-size:12px;color:#666">Generated: ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</p><p>JazakAllahu Khayran,<br><strong>AQ Society Administration</strong></p></div><div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">AQ Society \u2014 LBMW Correspondence Register \u2014 Confidential</div></div>`;
+        let sent = 0;
+        for (const trustee of emailTrustees) {
+          try { await sendGmail(trustee.email, trustee.fullName || 'Trustee', subject, html); sent++; } catch (e) { console.error(`[LBMW] Email failed for ${trustee.fullName}:`, e); }
+        }
+        return { sent, total: emailTrustees.length };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

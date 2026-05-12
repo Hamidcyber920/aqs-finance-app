@@ -1,0 +1,23 @@
+CREATE TABLE `scheduled_payments` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`source` varchar(20) NOT NULL DEFAULT 'dd',
+	`accountId` int,
+	`billId` int,
+	`description` varchar(300) NOT NULL,
+	`supplier` varchar(200),
+	`building` varchar(200),
+	`utilityType` varchar(100),
+	`dueDate` date NOT NULL,
+	`amount` decimal(10,2) NOT NULL,
+	`status` varchar(20) NOT NULL DEFAULT 'pending',
+	`paidAt` bigint,
+	`paidByUserId` int,
+	`paidByName` varchar(200),
+	`heldAt` bigint,
+	`heldByUserId` int,
+	`heldByName` varchar(200),
+	`note` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `scheduled_payments_id` PRIMARY KEY(`id`)
+);

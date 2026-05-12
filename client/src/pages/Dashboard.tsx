@@ -625,13 +625,19 @@ export default function DashboardPage() {
                   <p style={{ fontSize: 22, fontWeight: 800, color: T.white, margin: 0, lineHeight: 1.1 }}>£{parseFloat(billsSummary.totalMonthlyDD || '0').toLocaleString()}<span style={{ fontSize: 13, fontWeight: 500, color: T.muted }}>/mo DD</span></p>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                {[{ label: 'Accounts', value: billsSummary.totalAccounts, color: T.mint }, { label: 'Expiring Soon', value: billsSummary.expiringSoon, color: '#f59e0b' }, { label: 'Expired', value: billsSummary.expired, color: '#f87171' }].map(s => (
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+                {[{ label: 'Accounts', value: billsSummary.totalAccounts, color: T.mint }, { label: 'Expiring Soon', value: billsSummary.expiringSoon, color: '#f59e0b' }, { label: 'Expired', value: billsSummary.expired, color: '#f87171' }, { label: 'Cash Flow', value: billsSummary.upcomingPaymentsCount ?? 0, color: '#60a5fa' }].map(s => (
                   <div key={s.label} style={{ textAlign: 'center' }}>
                     <p style={{ fontSize: 18, fontWeight: 800, color: s.value > 0 && s.label !== 'Accounts' ? s.color : T.muted, margin: 0 }}>{s.value}</p>
                     <p style={{ fontSize: 10, color: T.muted, margin: 0, whiteSpace: 'nowrap' }}>{s.label}</p>
                   </div>
                 ))}
+                {billsSummary.nextDue && (
+                  <div style={{ textAlign: 'center', borderLeft: `1px solid ${T.border}`, paddingLeft: 16 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#f59e0b', margin: 0 }}>Next DD: {billsSummary.nextDue.supplier}</p>
+                    <p style={{ fontSize: 10, color: T.muted, margin: 0 }}>£{parseFloat(billsSummary.nextDue.amount).toFixed(2)} · {billsSummary.nextDue.daysAway === 0 ? 'Today' : `in ${billsSummary.nextDue.daysAway}d`}</p>
+                  </div>
+                )}
               </div>
               <span style={{ fontSize: 11, color: T.muted, marginLeft: 'auto' }}>Manage Bills →</span>
             </div>

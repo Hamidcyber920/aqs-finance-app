@@ -10,7 +10,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { utilityAccounts, utilityBills, utilityBuildings, utilityCategories, supplierContacts } from "../../drizzle/schema";
+import { utilityAccounts, utilityBills, utilityBuildings, utilityCategories, supplierContacts, scheduledPayments } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 
 const BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"] as const;
@@ -276,13 +276,31 @@ export const billsRouter = router({
 
       // Get all unique buildings (static + dynamic)
       const allBuildings = Array.from(new Set(accounts.map(a => a.building)));
-
+      // Next upcoming DD date
+      const todayDay = now.getDate();
+      const accountsWithDD = accounts.filter(a => a.billingDay && a.directDebitAmount);
+      let nextDue: { supplier: string; amount: string; daysAway: number } | null = null;
+      if (accountsWithDD.length > 0) {
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const withDays = accountsWithDD.map(a => {
+          const day = a.billingDay as number;
+          const daysAway = day >= todayDay ? day - todayDay : (daysInMonth - todayDay + day);
+          return { supplier: a.supplier, amount: a.directDebitAmount ?? '0', daysAway };
+        });
+        withDays.sort((a, b) => a.daysAway - b.daysAway);
+        nextDue = withDays[0];
+      }
+      // Upcoming scheduled payments count
+      const upcomingPmts = await db.select().from(scheduledPayments)
+        .where(and(gte(scheduledPayments.dueDate, now), eq(scheduledPayments.status, 'pending')));
       return {
         totalAccounts: accounts.length,
         expiringSoon: expiringSoon.length,
         expired: expired.length,
         totalMonthlyDD: totalDD.toFixed(2),
         totalBillsThisMonth: totalBillsThisMonth.toFixed(2),
+        nextDue,
+        upcomingPaymentsCount: upcomingPmts.length,
         byBuilding: allBuildings.map(b => ({
           building: b,
           count: accounts.filter(a => a.building === b).length,
@@ -388,5 +406,190 @@ export const billsRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       await db.delete(utilityCategories).where(eq(utilityCategories.id, input.id));
       return { success: true };
+    }),
+
+  // ── Cash Flow: Generate upcoming scheduled payments ───────────────────────────
+  // Generates DD payments for the next 3 months from utility accounts with billingDay set.
+  // Also returns any existing scheduled_payments records in the window.
+  generateUpcoming: adminProcedure
+    .input(z.object({
+      months: z.number().int().min(1).max(6).default(3),
+    }).optional())
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      const months = input?.months ?? 3;
+      const now = new Date();
+      const cutoff = new Date(now.getFullYear(), now.getMonth() + months, now.getDate());
+
+      // Get all accounts with a billingDay and directDebitAmount
+      const accounts = await db.select().from(utilityAccounts);
+      const ddAccounts = accounts.filter(a => a.billingDay && a.directDebitAmount && parseFloat(a.directDebitAmount) > 0);
+
+      let created = 0;
+      for (const account of ddAccounts) {
+        const day = account.billingDay!;
+        // Generate one entry per month for the next `months` months
+        for (let m = 0; m < months; m++) {
+          const dueDate = new Date(now.getFullYear(), now.getMonth() + m, day);
+          if (dueDate < now) continue; // skip past dates
+          if (dueDate > cutoff) break;
+
+          const dueDateStr = dueDate.toISOString().slice(0, 10);
+          const description = `${account.supplier} — ${account.category} DD (${account.building})`;
+
+          // Check if already exists (same accountId + dueDate + source=dd)
+          const existing = await db.select().from(scheduledPayments)
+            .where(and(
+              eq(scheduledPayments.accountId, account.id),
+              eq(scheduledPayments.source, "dd"),
+              eq(scheduledPayments.dueDate, new Date(dueDateStr))
+            ))
+            .limit(1);
+
+          if (existing.length === 0) {
+            await db.insert(scheduledPayments).values({
+              source: "dd",
+              accountId: account.id,
+              description,
+              supplier: account.supplier,
+              building: account.building,
+              utilityType: account.category,
+              dueDate: new Date(dueDateStr),
+              amount: account.directDebitAmount!,
+              status: "pending",
+            });
+            created++;
+          }
+        }
+      }
+
+      return { created, message: `Generated ${created} new upcoming DD payments` };
+    }),
+
+  // List all scheduled payments (pending, paid, held) in a date window
+  listScheduled: protectedProcedure
+    .input(z.object({
+      from: z.string().optional(),
+      to: z.string().optional(),
+      status: z.enum(["pending", "paid", "held", "all"]).default("all"),
+      building: z.string().optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      const now = new Date();
+      const defaultFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+      const defaultTo = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+
+      const fromDate = input?.from ? new Date(input.from) : defaultFrom;
+      const toDate = input?.to ? new Date(input.to) : defaultTo;
+
+      let rows = await db.select().from(scheduledPayments)
+        .where(and(
+          gte(scheduledPayments.dueDate, fromDate),
+          lte(scheduledPayments.dueDate, toDate)
+        ))
+        .orderBy(scheduledPayments.dueDate);
+
+      if (input?.status && input.status !== "all") {
+        rows = rows.filter(r => r.status === input.status);
+      }
+      if (input?.building) {
+        rows = rows.filter(r => r.building === input.building);
+      }
+
+      return rows;
+    }),
+
+  // Mark a scheduled payment as paid
+  markScheduledPaid: protectedProcedure
+    .input(z.object({ id: z.number(), note: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(scheduledPayments).set({
+        status: "paid",
+        paidAt: Date.now(),
+        paidByUserId: ctx.user.id,
+        paidByName: ctx.user.name ?? ctx.user.email ?? "Unknown",
+        note: input.note ?? null,
+      }).where(eq(scheduledPayments.id, input.id));
+      return { success: true };
+    }),
+
+  // Mark a scheduled payment as held (requires a note explaining why)
+  markScheduledHeld: protectedProcedure
+    .input(z.object({ id: z.number(), note: z.string().min(1, "A reason is required when holding a payment") }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(scheduledPayments).set({
+        status: "held",
+        heldAt: Date.now(),
+        heldByUserId: ctx.user.id,
+        heldByName: ctx.user.name ?? ctx.user.email ?? "Unknown",
+        note: input.note,
+      }).where(eq(scheduledPayments.id, input.id));
+      return { success: true };
+    }),
+
+  // Reset a held/paid payment back to pending
+  resetScheduled: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(scheduledPayments).set({
+        status: "pending",
+        paidAt: null,
+        paidByUserId: null,
+        paidByName: null,
+        heldAt: null,
+        heldByUserId: null,
+        heldByName: null,
+        note: null,
+      }).where(eq(scheduledPayments.id, input.id));
+      return { success: true };
+    }),
+
+  // Update note on a scheduled payment
+  updateScheduledNote: protectedProcedure
+    .input(z.object({ id: z.number(), note: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(scheduledPayments).set({ note: input.note }).where(eq(scheduledPayments.id, input.id));
+      return { success: true };
+    }),
+
+  // Add a manual one-off future payment
+  addManualScheduled: protectedProcedure
+    .input(z.object({
+      description: z.string().min(1),
+      supplier: z.string().optional(),
+      building: z.string().optional(),
+      utilityType: z.string().optional(),
+      dueDate: z.string(),
+      amount: z.string(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [r] = await db.insert(scheduledPayments).values({
+        source: "manual",
+        description: input.description,
+        supplier: input.supplier ?? null,
+        building: input.building ?? null,
+        utilityType: input.utilityType ?? null,
+        dueDate: new Date(input.dueDate),
+        amount: input.amount,
+        status: "pending",
+        note: input.note ?? null,
+      }).$returningId();
+      return { id: r.id };
     }),
 });

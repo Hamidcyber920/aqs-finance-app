@@ -1596,3 +1596,24 @@
 - [x] LBMW Correspondence — Export to PDF: date range filter + formatted report table (subject, sender, date, status, priority, linked action) downloadable as PDF
 - [x] Bills & Utilities — Contract end date column: show contractEndDate in the accounts table with colour-coded expiry indicator (red <30 days, amber <60 days, green OK)
 - [x] Bills & Utilities — In-app expiry badge: show count of contracts expiring within 60 days as a red badge on the Bills & Utilities sidebar nav item
+
+## Round 15 — Cash Flow Planner (May 12, 2026)
+
+- [x] Schema: add scheduled_payments table (accountId, description, dueDate, amount, status: pending/paid/held, paidAt, paidByUserId, heldAt, heldByUserId, note, source: dd/manual/bill)
+- [x] Schema: add futureDate + expectedAmount fields to utility_bills for one-off upcoming bills
+- [x] Bills router: generate upcoming DD payments from billingDay on utility accounts (next 3 months rolling)
+- [x] Bills router: list upcoming one-off bills with futureDate set
+- [x] Expenses router: cashflow.list — merge DD schedule + one-off bills into a unified upcoming payments list
+- [x] Expenses router: cashflow.markPaid — tick-box → paid with date-time-user stamp
+- [x] Expenses router: cashflow.markHeld — toggle held with date-time-user stamp + required note
+- [x] Expenses router: cashflow.addNote — add/edit note on any scheduled payment
+- [x] Monthly Expenses: new "Cash Flow" tab showing upcoming payments table with tick-box, paid/held toggle, notes, date-time-user stamps
+- [x] Cash Flow tab: summary bar — total upcoming (30/60/90 days), total held, total paid this month, projected shortfall vs current income balance
+- [x] Cash Flow tab: colour coding — red=overdue, amber=due within 7 days, green=OK, grey=held
+- [x] Cash Flow tab: filter by building, utility type, date range
+
+## Round 14 Next Steps (May 12, 2026)
+
+- [x] LBMW Correspondence — Send to Trustees: button on PDF export dialog that emails the generated PDF to all trustees in one click
+- [x] Bills & Utilities — Renew Contract button on expired/expiring account cards (pre-fills new start date, opens edit dialog)
+- [x] Dashboard — Bills & Utilities summary widget: total monthly DD, expiring contracts count, next upcoming DD date

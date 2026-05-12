@@ -712,11 +712,22 @@ export default function BillsUtilities() {
                           </CardTitle>
                           <p className="text-sm text-muted-foreground">{accountDetail.account.building} · {accountDetail.account.category}</p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap justify-end">
                           <Button size="sm" variant="outline" onClick={() => setEditAccount(accountDetail.account)}><Edit2 className="w-3 h-3" /></Button>
                           <Button size="sm" variant="outline" onClick={() => { setBillForm(f => ({ ...f, accountId: selectedAccountId })); setShowAddBill(true); }}>
                             <Plus className="w-3 h-3 mr-1" /> Bill
                           </Button>
+                          {accountDetail.account.contractEndDate && new Date(accountDetail.account.contractEndDate) < new Date(Date.now() + 60 * 86400000) && (
+                            <Button size="sm" variant="outline" className="border-amber-400 text-amber-700 hover:bg-amber-50"
+                              onClick={() => {
+                                const today = new Date().toISOString().split('T')[0];
+                                const newEnd = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
+                                setEditAccount({ ...accountDetail.account, contractStartDate: today, contractEndDate: newEnd });
+                              }}
+                            >
+                              ↺ Renew
+                            </Button>
+                          )}
                           <Button size="sm" variant="destructive" onClick={() => { if (confirm("Delete this account and all its bills?")) deleteAccount.mutate({ id: selectedAccountId }); }}>
                             <Trash2 className="w-3 h-3" />
                           </Button>
