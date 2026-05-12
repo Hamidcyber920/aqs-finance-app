@@ -66,6 +66,8 @@ function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWith
                     </span>
                     <PaymentBadge status={item.status ?? (item.authorisedById?"authorised":"pending")}/>
                     {item.carriedFrom && <span style={{ fontSize:10,fontWeight:600,padding:"1px 7px",borderRadius:999,background:"rgba(148,163,184,0.15)",color:"#94a3b8" }}>PREV MONTH</span>}
+                    {item.expenseSource === "auto_bill" && <span style={{ fontSize:10,fontWeight:600,padding:"1px 7px",borderRadius:999,background:"rgba(59,130,246,0.15)",color:"#60a5fa",border:"1px solid rgba(59,130,246,0.3)" }}>AUTO • BILL</span>}
+                    {item.expenseSource === "auto_lbmw_invoice" && <span style={{ fontSize:10,fontWeight:600,padding:"1px 7px",borderRadius:999,background:"rgba(168,85,247,0.15)",color:"#c084fc",border:"1px solid rgba(168,85,247,0.3)" }}>AUTO • LBMW</span>}
                   </div>
                   <div style={{ display:"flex",gap:16,flexWrap:"wrap" }}>
                     <span style={{ fontSize:12,color:T.muted }}>{item.category ?? item.paymentMethod ?? item.purpose ?? "—"}</span>

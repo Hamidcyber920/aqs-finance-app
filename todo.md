@@ -1570,3 +1570,11 @@
 - [x] Bills & Utilities — Auto-fill bills into monthly expenses on bill record creation/update
 - [x] Bills & Utilities — Editable categories (utility types) in a settings panel
 - [x] Bills & Utilities — Editable buildings list in a settings panel
+
+## Round 11 Next Steps (May 12, 2026)
+
+- [x] Scheduled daily Gmail pull for LBMW (cron job, configurable label + time)
+- [x] Supplier contacts sub-section in Bills & Utilities Settings tab (name, phone, email, role per supplier)
+- [x] Monthly Expenses: source badges to distinguish auto-bill, auto-LBMW-invoice, and manual entries
+- [x] LBMW Correspondence: AI-automated file/image/photo/PDF scanner — upload → AI OCR extracts all fields → auto-fills create form → user confirms before saving
+- [x] Bills & Utilities: AI-automated file/image/photo/PDF scanner — upload → AI OCR extracts supplier, amount, date, account → auto-fills bill form → user confirms before saving

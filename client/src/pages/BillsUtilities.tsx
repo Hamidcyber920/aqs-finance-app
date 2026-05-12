@@ -16,8 +16,9 @@ import {
   Plus, Zap, Droplets, Flame, Wifi, Phone, Shield, MoreHorizontal,
   AlertTriangle, CheckCircle, Clock, Trash2, Edit2, FileText,
   ChevronLeft, ChevronRight, CalendarDays, Settings, Building2, Tag,
-  Receipt,
+  Receipt, ScanLine, Users,
 } from "lucide-react";
+import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 
 const FALLBACK_BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"];
 const FALLBACK_CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"];
@@ -221,11 +222,15 @@ function SettingsPanel() {
   const utils = trpc.useUtils();
   const { data: buildings = [] } = trpc.bills.listBuildings.useQuery();
   const { data: categories = [] } = trpc.bills.listCategories.useQuery();
+  const { data: contacts = [] } = trpc.supplierContacts.list.useQuery({});
 
   const [newBuilding, setNewBuilding] = useState({ name: "", address: "" });
   const [newCategory, setNewCategory] = useState({ name: "", colour: "#6b7280" });
   const [editBuilding, setEditBuilding] = useState<any>(null);
   const [editCategory, setEditCategory] = useState<any>(null);
+  const [newContact, setNewContact] = useState({ supplierName: "", contactName: "", role: "", phone: "", email: "", notes: "" });
+  const [editContact, setEditContact] = useState<any>(null);
+  const [contactSearch, setContactSearch] = useState("");
 
   const addBuilding = trpc.bills.addBuilding.useMutation({
     onSuccess: () => { utils.bills.listBuildings.invalidate(); setNewBuilding({ name: "", address: "" }); toast.success("Building added"); },
@@ -251,6 +256,25 @@ function SettingsPanel() {
     onSuccess: () => { utils.bills.listCategories.invalidate(); toast.success("Category removed"); },
     onError: (e) => toast.error(e.message),
   });
+
+  const addContact = trpc.supplierContacts.create.useMutation({
+    onSuccess: () => { utils.supplierContacts.list.invalidate(); setNewContact({ supplierName: "", contactName: "", role: "", phone: "", email: "", notes: "" }); toast.success("Contact added"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateContact = trpc.supplierContacts.update.useMutation({
+    onSuccess: () => { utils.supplierContacts.list.invalidate(); setEditContact(null); toast.success("Contact updated"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteContact = trpc.supplierContacts.delete.useMutation({
+    onSuccess: () => { utils.supplierContacts.list.invalidate(); toast.success("Contact removed"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const filteredContacts = contacts.filter((c: any) =>
+    !contactSearch ||
+    c.supplierName?.toLowerCase().includes(contactSearch.toLowerCase()) ||
+    c.contactName?.toLowerCase().includes(contactSearch.toLowerCase())
+  );
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -350,6 +374,79 @@ function SettingsPanel() {
         </CardContent>
       </Card>
 
+      {/* Supplier Contacts */}
+      <Card className="md:col-span-2">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2"><Users className="w-4 h-4" /> Supplier Contacts</CardTitle>
+          <p className="text-xs text-muted-foreground">Store account manager names, phone numbers, and emails per supplier for quick reference.</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input value={contactSearch} onChange={e => setContactSearch(e.target.value)} placeholder="Search by supplier or contact name..." className="h-8 text-sm" />
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {filteredContacts.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No supplier contacts yet.</p>}
+            {filteredContacts.map((c: any) => (
+              <div key={c.id} className="p-3 bg-muted/30 rounded text-sm">
+                {editContact?.id === c.id ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input value={editContact.supplierName ?? ""} onChange={e => setEditContact((x: any) => ({ ...x, supplierName: e.target.value }))} placeholder="Supplier *" className="h-7 text-xs" />
+                      <Input value={editContact.contactName ?? ""} onChange={e => setEditContact((x: any) => ({ ...x, contactName: e.target.value }))} placeholder="Contact Name" className="h-7 text-xs" />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input value={editContact.role ?? ""} onChange={e => setEditContact((x: any) => ({ ...x, role: e.target.value }))} placeholder="Role" className="h-7 text-xs" />
+                      <Input value={editContact.phone ?? ""} onChange={e => setEditContact((x: any) => ({ ...x, phone: e.target.value }))} placeholder="Phone" className="h-7 text-xs" />
+                      <Input value={editContact.email ?? ""} onChange={e => setEditContact((x: any) => ({ ...x, email: e.target.value }))} placeholder="Email" className="h-7 text-xs" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="h-6 px-2 text-xs" onClick={() => updateContact.mutate({ id: c.id, ...editContact })}>Save</Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditContact(null)}>Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{c.supplierName}</span>
+                        {c.contactName && <span className="text-muted-foreground">— {c.contactName}</span>}
+                        {c.role && <Badge variant="secondary" className="text-[10px]">{c.role}</Badge>}
+                      </div>
+                      <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                        {c.phone && <a href={`tel:${c.phone}`} className="hover:text-primary">📞 {c.phone}</a>}
+                        {c.email && <a href={`mailto:${c.email}`} className="hover:text-primary">✉️ {c.email}</a>}
+                      </div>
+                      {c.notes && <p className="text-xs text-muted-foreground mt-1 italic">{c.notes}</p>}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditContact(c)}><Edit2 className="w-3 h-3" /></Button>
+                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { if (confirm(`Remove contact for "${c.supplierName}"?`)) deleteContact.mutate({ id: c.id }); }}><Trash2 className="w-3 h-3 text-red-500" /></Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {/* Add new contact */}
+          <div className="border-t pt-3 space-y-2">
+            <p className="text-xs font-medium text-muted-foreground">Add New Contact</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={newContact.supplierName} onChange={e => setNewContact(f => ({ ...f, supplierName: e.target.value }))} placeholder="Supplier name *" className="h-8 text-sm" />
+              <Input value={newContact.contactName} onChange={e => setNewContact(f => ({ ...f, contactName: e.target.value }))} placeholder="Contact name" className="h-8 text-sm" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Input value={newContact.role} onChange={e => setNewContact(f => ({ ...f, role: e.target.value }))} placeholder="Role / Title" className="h-8 text-sm" />
+              <Input value={newContact.phone} onChange={e => setNewContact(f => ({ ...f, phone: e.target.value }))} placeholder="Phone" className="h-8 text-sm" />
+              <Input value={newContact.email} onChange={e => setNewContact(f => ({ ...f, email: e.target.value }))} placeholder="Email" className="h-8 text-sm" />
+            </div>
+            <div className="flex gap-2">
+              <Input value={newContact.notes} onChange={e => setNewContact(f => ({ ...f, notes: e.target.value }))} placeholder="Notes (optional)" className="h-8 text-sm flex-1" />
+              <Button size="sm" className="h-8 shrink-0" onClick={() => addContact.mutate(newContact)} disabled={!newContact.supplierName || addContact.isPending}>
+                <Plus className="w-3 h-3 mr-1" /> Add
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Auto-expense info */}
       <Card className="md:col-span-2">
         <CardHeader className="pb-2">
@@ -374,6 +471,7 @@ export default function BillsUtilities() {
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [editAccount, setEditAccount] = useState<any>(null);
   const [autoFillExpense, setAutoFillExpense] = useState(true);
+  const [billScannerOpen, setBillScannerOpen] = useState(false);
 
   const [accountForm, setAccountForm] = useState({
     building: "QLH",
@@ -483,9 +581,14 @@ export default function BillsUtilities() {
             <h1 className="text-2xl font-bold text-foreground">Bills & Utilities</h1>
             <p className="text-muted-foreground text-sm mt-1">Track utility accounts and bills across all AQS buildings</p>
           </div>
-          <Button onClick={() => setShowAddAccount(true)} className="gap-2">
-            <Plus className="w-4 h-4" /> Add Account
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setBillScannerOpen(true)} className="gap-2">
+              <ScanLine className="w-4 h-4" /> Scan Bill
+            </Button>
+            <Button onClick={() => setShowAddAccount(true)} className="gap-2">
+              <Plus className="w-4 h-4" /> Add Account
+            </Button>
+          </div>
         </div>
 
         {/* Summary cards */}
@@ -657,6 +760,35 @@ export default function BillsUtilities() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* AI Bill Scanner Dialog */}
+      <Dialog open={billScannerOpen} onOpenChange={setBillScannerOpen}>
+        <DialogContent className="max-w-xl">
+          <AiDocumentScanner
+            mode="bill"
+            onClose={() => setBillScannerOpen(false)}
+            onExtracted={(fields, fileUrl) => {
+              setBillScannerOpen(false);
+              setBillForm(f => ({
+                ...f,
+                billDate: fields.billDate || f.billDate,
+                periodStart: fields.periodStart || f.periodStart,
+                periodEnd: fields.periodEnd || f.periodEnd,
+                amount: fields.amount ? String(fields.amount) : f.amount,
+                consumptionUnits: fields.consumptionUnits ? String(fields.consumptionUnits) : f.consumptionUnits,
+                unitType: fields.unitType || f.unitType,
+                notes: fields.notes ? `[Scanned] ${fields.notes}` : f.notes,
+              }));
+              // If an account is selected, open the bill dialog; otherwise prompt to select one
+              if (selectedAccountId) {
+                setShowAddBill(true);
+              } else {
+                toast.info("Bill fields extracted — select an account then click \"+ Bill\" to record it.");
+              }
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Add Account Dialog */}
       <Dialog open={showAddAccount} onOpenChange={setShowAddAccount}>

@@ -32,6 +32,8 @@ import { savedViewsRouter } from "./routers/savedViews";
 import { billsRouter } from "./routers/bills";
 import { trainingRouter } from "./routers/training";
 import { lbmwGmailRouter } from "./routers/lbmwGmail";
+import { supplierContactsRouter } from "./routers/supplierContacts";
+import { aiScannerRouter } from "./routers/aiScanner";
 import { qrCodesRouter } from "./routers/qrCodes";
 import { recognitionTiersRouter } from "./routers/recognitionTiers";
 import {
@@ -395,8 +397,9 @@ export const appRouter = router({
   bills: billsRouter,
   training: trainingRouter,
   lbmwGmail: lbmwGmailRouter,
-
-  // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
+  supplierContacts: supplierContactsRouter,
+  aiScanner: aiScannerRouter,
+  // ─── SUCCESSIONN & DELEGATION ──────────────────────────────────────────────────
   succession: router({
     /** Get current succession status: who is the delegate, last owner activity, inactivity days */
     getStatus: ownerProcedure.query(async () => {

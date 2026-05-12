@@ -12,8 +12,9 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Plus, RefreshCw, Mail, Phone, Building, FileText, AlertTriangle,
-  CheckCircle2, Clock, XCircle, Link2, Unlink, Zap, Download, Receipt,
+  CheckCircle2, Clock, XCircle, Link2, Unlink, Zap, Download, Receipt, ScanLine,
 } from "lucide-react";
+import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 
@@ -91,6 +92,7 @@ export default function LbmwCorrespondence() {
   const [updateForm, setUpdateForm] = useState({ status: "pending" as any, priority: "medium" as any, internalNotes: "", responseDeadline: "", summary: "" });
 
   // Link-to-action dialog state
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; item?: any }>({ open: false });
   const [linkMode, setLinkMode] = useState<"existing" | "create">("existing");
   const [selectedActionId, setSelectedActionId] = useState<string>("");
@@ -217,6 +219,9 @@ export default function LbmwCorrespondence() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => { setGmailDialog(true); setPullResult(null); }}>
               <Download className="h-4 w-4 mr-1" /> Pull from Gmail
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setScannerOpen(true); }}>
+              <ScanLine className="h-4 w-4 mr-1" /> Scan Document
             </Button>
             <Button size="sm" onClick={openCreate}>
               <Plus className="h-4 w-4 mr-1" /> Log Correspondence
@@ -415,6 +420,33 @@ export default function LbmwCorrespondence() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Document Scanner Dialog */}
+      <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>
+        <DialogContent className="max-w-xl">
+          <AiDocumentScanner
+            mode="lbmw"
+            onClose={() => setScannerOpen(false)}
+            onExtracted={(fields, fileUrl) => {
+              setScannerOpen(false);
+              setForm(f => ({
+                ...f,
+                contactName: fields.contactName || f.contactName,
+                contactRole: fields.contactRole || f.contactRole,
+                subject: fields.subject || f.subject,
+                summary: fields.summary || f.summary,
+                dateReceived: fields.dateReceived || f.dateReceived,
+                responseDeadline: fields.responseDeadline || f.responseDeadline,
+                priority: fields.priority || f.priority,
+                direction: fields.direction || f.direction,
+                channel: fields.channel || f.channel,
+                internalNotes: fields.internalNotes ? `[Scanned] ${fields.internalNotes}` : f.internalNotes,
+              }));
+              setDialog({ open: true });
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Create Dialog */}
       <Dialog open={dialog.open} onOpenChange={o => setDialog({ open: o })}>

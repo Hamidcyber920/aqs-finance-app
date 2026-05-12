@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `supplier_contacts` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`supplierName` varchar(200) NOT NULL,\n\t`contactName` varchar(200),\n\t`role` varchar(100),\n\t`phone` varchar(50),\n\t`email` varchar(320),\n\t`notes` text,\n\t`isActive` boolean NOT NULL DEFAULT true,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `supplier_contacts_id` PRIMARY KEY(`id`)\n);\nALTER TABLE `receipts` ADD `expenseSource` enum('manual','auto_bill','auto_lbmw_invoice','auto_payroll') DEFAULT 'manual';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE `supplier_contacts` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`supplierName` varchar(200) NOT NULL,\n\t`contactName` varchar(200),\n\t`role` varchar(100),\n\t`phone` varchar(50),\n\t`email` varchar(320),\n\t`notes` text,\n\t`isActive` boolean NOT NULL DEFAULT true,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `supplier_contacts_id` PRIMARY KEY(`id`)\n);\nALTER TABLE `receipts` ADD `expenseSource` enum('manual','auto_bill','auto_lbmw_invoice','auto_payroll') DEFAULT 'manual';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 681
+}

@@ -477,6 +477,13 @@
       "when": 1778573514977,
       "tag": "0067_bizarre_weapon_omega",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "5",
+      "when": 1778574923249,
+      "tag": "0068_goofy_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

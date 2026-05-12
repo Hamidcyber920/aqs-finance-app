@@ -396,7 +396,11 @@ export function registerScheduledJobs() {
   cron.schedule("30 9 * * *", () => {
     sendPledgeReminders().catch(console.error);
   }, { timezone: "Europe/London" });
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30)");
+  // Daily at 08:15 UK time — LBMW Gmail label pull with AI analysis
+  cron.schedule("15 8 * * *", () => {
+    runDailyLbmwGmailPull().catch(console.error);
+  }, { timezone: "Europe/London" });
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
@@ -1170,5 +1174,86 @@ async function syncGmailInbox() {
     console.log(`[Scheduled] Gmail sync complete: ${imported} imported, ${skipped} skipped.`);
   } catch (e) {
     console.error("[Scheduled] Gmail sync failed:", e);
+  }
+}
+
+// ─── Daily LBMW Gmail Pull ────────────────────────────────────────────────────
+/**
+ * Runs daily at 08:15 UK time.
+ * Pulls emails from the configured LBMW Gmail label (env: LBMW_GMAIL_LABEL, default "LBMW")
+ * and creates LBMW correspondence records with AI analysis.
+ */
+export async function runDailyLbmwGmailPull() {
+  console.log("[Scheduled] Running daily LBMW Gmail pull...");
+  try {
+    const db = await getDb();
+    if (!db) { console.log("[Scheduled] LBMW pull: DB unavailable, skipping."); return; }
+    const clientId = process.env.GMAIL_CLIENT_ID;
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET;
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+    if (!clientId || !clientSecret || !refreshToken) {
+      console.log("[Scheduled] LBMW pull: Gmail credentials not configured, skipping.");
+      return;
+    }
+    const labelName = process.env.LBMW_GMAIL_LABEL || "LBMW";
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
+    });
+    const tokenData = await tokenRes.json() as { access_token?: string };
+    if (!tokenData.access_token) { console.log("[Scheduled] LBMW pull: failed to get access token."); return; }
+    const accessToken = tokenData.access_token;
+    const labelsRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", { headers: { Authorization: `Bearer ${accessToken}` } });
+    const labelsData = await labelsRes.json() as { labels?: { id: string; name: string }[] };
+    const label = (labelsData.labels ?? []).find(l => l.name.toLowerCase() === labelName.toLowerCase());
+    if (!label) { console.log(`[Scheduled] LBMW pull: label "${labelName}" not found.`); return; }
+    const listRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=20&labelIds=${label.id}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const listData = await listRes.json() as { messages?: { id: string }[] };
+    const messages = listData.messages ?? [];
+    if (messages.length === 0) { console.log("[Scheduled] LBMW pull: no messages found."); return; }
+    const { lbmwCorrespondence, complianceActions } = await import("../drizzle/schema");
+    const { invokeLLM } = await import("./_core/llm");
+    const { eq } = await import("drizzle-orm");
+    const { notifyOwner } = await import("./_core/notification");
+    let created = 0, skipped = 0, actionsCreated = 0, invoices = 0;
+    for (const msg of messages) {
+      const existing = await db.select({ id: lbmwCorrespondence.id }).from(lbmwCorrespondence).where(eq(lbmwCorrespondence.gmailMessageId, msg.id)).limit(1);
+      if (existing.length > 0) { skipped++; continue; }
+      const msgRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const msgData = await msgRes.json() as any;
+      const headers = (msgData.payload?.headers ?? []) as { name: string; value: string }[];
+      const getHeader = (n: string) => headers.find((h: any) => h.name.toLowerCase() === n.toLowerCase())?.value ?? "";
+      const subject = getHeader("subject") || "(no subject)";
+      const from = getHeader("from");
+      const date = new Date(getHeader("date") || Date.now());
+      const extractText = (part: any): string => {
+        if (part.mimeType === "text/plain" && part.body?.data) return Buffer.from(part.body.data, "base64").toString("utf-8");
+        if (part.parts) return part.parts.map(extractText).join("\n");
+        return "";
+      };
+      const bodyText = extractText(msgData.payload) || msgData.snippet || "";
+      let analysis: any = { contactName: from.split("<")[0].trim() || from, contactRole: "", summary: bodyText.slice(0, 300), priority: "medium", actionRequired: false, actionTitle: null, actionDeadline: null, actionPriority: "medium", isInvoice: false, invoiceAmount: null };
+      try {
+        const aiRes = await invokeLLM({ messages: [{ role: "user", content: `Analyse this email for a UK charity. Return JSON with: contactName, contactRole, summary (2-3 sentences), priority (critical/high/medium/low), actionRequired (bool), actionTitle, actionDeadline (YYYY-MM-DD or null), actionPriority, isInvoice (bool), invoiceAmount (number or null).\nSubject: ${subject}\nFrom: ${from}\nBody: ${bodyText.slice(0, 1500)}` }], response_format: { type: "json_object" } as any });
+        const raw = aiRes.choices[0].message.content;
+        analysis = JSON.parse(typeof raw === "string" ? raw : JSON.stringify(raw));
+      } catch { /* use defaults */ }
+      let actionTaskId: number | null = null;
+      if (analysis.actionRequired && analysis.actionTitle) {
+        const [ar] = await db.insert(complianceActions).values({ title: analysis.actionTitle, source: "LBMW Gmail Auto", owner: null, dueDate: analysis.actionDeadline ? new Date(analysis.actionDeadline) : null, priority: analysis.actionPriority ?? "medium", notes: `Auto-created from scheduled LBMW Gmail pull.\nEmail: ${subject}\nSummary: ${analysis.summary}`, status: "open", createdByUserId: null as any } as any);
+        actionTaskId = (ar as any).insertId as number;
+        actionsCreated++;
+      }
+      await db.insert(lbmwCorrespondence).values({ contactName: analysis.contactName || from, contactRole: analysis.contactRole || "", direction: "inbound", channel: "email", subject, summary: analysis.summary, aiSummary: analysis.summary, dateReceived: new Date(date.toISOString().split("T")[0]) as any, responseDeadline: analysis.actionDeadline ? new Date(analysis.actionDeadline) as any : null, status: "pending", priority: analysis.priority ?? "medium", gmailMessageId: msg.id, gmailThreadId: msgData.threadId, gmailFrom: from, gmailLabel: labelName, actionRequired: analysis.actionRequired, actionTaskId, isInvoice: analysis.isInvoice, invoiceAmount: analysis.invoiceAmount ? String(analysis.invoiceAmount) as any : null, handledByUserId: null as any } as any);
+      created++;
+      if (analysis.isInvoice) invoices++;
+    }
+    if (created > 0) {
+      await notifyOwner({ title: `LBMW Daily Pull: ${created} new email(s)`, content: `Daily scheduled pull from Gmail label "${labelName}" complete.\n${created} new record(s) created, ${skipped} skipped.\n${actionsCreated} action task(s) created, ${invoices} invoice(s) detected.` }).catch(() => {});
+    }
+    console.log(`[Scheduled] LBMW pull complete: ${created} created, ${skipped} skipped, ${actionsCreated} actions, ${invoices} invoices.`);
+  } catch (e) {
+    console.error("[Scheduled] LBMW Gmail pull failed:", e);
   }
 }

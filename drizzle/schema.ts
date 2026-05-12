@@ -177,6 +177,8 @@ export const receipts = mysqlTable("receipts", {
   // Expense cross-reference
   linkedExpenseId: int("linkedExpenseId"),
   linkedExpenseNote: text("linkedExpenseNote"),
+  // Source tracking for badges in Monthly Expenses
+  expenseSource: mysqlEnum("expenseSource", ["manual", "auto_bill", "auto_lbmw_invoice", "auto_payroll"]).default("manual"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -2044,3 +2046,19 @@ export const utilityCategories = mysqlTable("utility_categories", {
 });
 export type UtilityCategory = typeof utilityCategories.$inferSelect;
 export type InsertUtilityCategory = typeof utilityCategories.$inferInsert;
+
+// ─── SUPPLIER CONTACTS ────────────────────────────────────────────────────────
+export const supplierContacts = mysqlTable("supplier_contacts", {
+  id: int("id").autoincrement().primaryKey(),
+  supplierName: varchar("supplierName", { length: 200 }).notNull(),
+  contactName: varchar("contactName", { length: 200 }),
+  role: varchar("role", { length: 100 }),       // e.g. Account Manager, Engineer
+  phone: varchar("phone", { length: 50 }),
+  email: varchar("email", { length: 320 }),
+  notes: text("notes"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type SupplierContact = typeof supplierContacts.$inferSelect;
+export type InsertSupplierContact = typeof supplierContacts.$inferInsert;
