@@ -10,7 +10,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { utilityAccounts, utilityBills, utilityBuildings, utilityCategories } from "../../drizzle/schema";
+import { utilityAccounts, utilityBills, utilityBuildings, utilityCategories, supplierContacts } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 
 const BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"] as const;
@@ -30,6 +30,17 @@ export const billsRouter = router({
       if (input?.building) rows = rows.filter(r => r.building === input.building);
       if (input?.category) rows = rows.filter(r => r.category === input.category);
 
+      // Attach supplier contact details
+      const contactIds = Array.from(new Set(rows.map(r => r.supplierContactId).filter(Boolean))) as number[];
+      let contactMap: Record<number, any> = {};
+      if (contactIds.length > 0) {
+        const contacts = await db.select().from(supplierContacts)
+          .where(eq(supplierContacts.id, contactIds[0])); // fetch all by iterating
+        // Fetch all contacts in one query using IN-like approach
+        const allContacts = await db.select().from(supplierContacts);
+        contactMap = Object.fromEntries(allContacts.map(c => [c.id, c]));
+      }
+
       // Attach contract expiry warning
       const now = new Date();
       const in60Days = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000);
@@ -37,6 +48,7 @@ export const billsRouter = router({
         ...r,
         contractExpiringSoon: r.contractEndDate ? new Date(r.contractEndDate) <= in60Days : false,
         contractExpired: r.contractEndDate ? new Date(r.contractEndDate) < now : false,
+        supplierContact: r.supplierContactId ? (contactMap[r.supplierContactId] ?? null) : null,
       }));
     }),
 
@@ -74,6 +86,7 @@ export const billsRouter = router({
       directDebitAmount: z.string().optional(),
       billingDay: z.number().int().min(1).max(31).optional(),
       notes: z.string().optional(),
+      supplierContactId: z.number().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -90,6 +103,7 @@ export const billsRouter = router({
         directDebitAmount: input.directDebitAmount ?? null,
         billingDay: input.billingDay ?? null,
         notes: input.notes ?? null,
+        supplierContactId: input.supplierContactId ?? null,
       }).$returningId();
       return { id: result.id };
     }),
@@ -108,6 +122,7 @@ export const billsRouter = router({
       directDebitAmount: z.string().optional(),
       billingDay: z.number().int().min(1).max(31).optional().nullable(),
       notes: z.string().optional(),
+      supplierContactId: z.number().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

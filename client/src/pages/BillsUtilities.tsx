@@ -485,6 +485,7 @@ export default function BillsUtilities() {
     directDebitAmount: "",
     billingDay: "",
     notes: "",
+    supplierContactId: null as number | null,
   });
 
   const [billForm, setBillForm] = useState({
@@ -502,6 +503,7 @@ export default function BillsUtilities() {
   const { data: summary } = trpc.bills.summary.useQuery();
   const { data: allBuildings = [] } = trpc.bills.listBuildings.useQuery();
   const { data: allCategories = [] } = trpc.bills.listCategories.useQuery();
+  const { data: allSupplierContacts = [] } = trpc.supplierContacts.list.useQuery();
 
   const buildingNames = useMemo(() => allBuildings.map((b: any) => b.name), [allBuildings]);
   const categoryNames = useMemo(() => allCategories.map((c: any) => c.name), [allCategories]);
@@ -523,7 +525,7 @@ export default function BillsUtilities() {
       utils.bills.listAccounts.invalidate();
       utils.bills.summary.invalidate();
       setShowAddAccount(false);
-      setAccountForm({ building: "QLH", supplier: "", accountNumber: "", category: "electricity", tariff: "", contractStartDate: "", contractEndDate: "", mpan: "", directDebitAmount: "", billingDay: "", notes: "" });
+      setAccountForm({ building: "QLH", supplier: "", accountNumber: "", category: "electricity", tariff: "", contractStartDate: "", contractEndDate: "", mpan: "", directDebitAmount: "", billingDay: "", notes: "", supplierContactId: null });
       toast.success("Account added successfully.");
     },
     onError: (e) => toast.error(e.message),
@@ -723,6 +725,27 @@ export default function BillsUtilities() {
                       </div>
                       {accountDetail.account.notes && <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">{accountDetail.account.notes}</p>}
 
+                      {/* Supplier Contact inline card */}
+                      {(accountDetail.account as any).supplierContact && (
+                        <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-1.5">Supplier Contact</p>
+                          <div className="grid grid-cols-2 gap-1 text-sm">
+                            {(accountDetail.account as any).supplierContact.contactName && (
+                              <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{(accountDetail.account as any).supplierContact.contactName}</span></div>
+                            )}
+                            {(accountDetail.account as any).supplierContact.role && (
+                              <div><span className="text-muted-foreground">Role:</span> <span className="font-medium">{(accountDetail.account as any).supplierContact.role}</span></div>
+                            )}
+                            {(accountDetail.account as any).supplierContact.phone && (
+                              <div><span className="text-muted-foreground">Phone:</span> <a href={`tel:${(accountDetail.account as any).supplierContact.phone}`} className="font-medium text-blue-600 hover:underline">{(accountDetail.account as any).supplierContact.phone}</a></div>
+                            )}
+                            {(accountDetail.account as any).supplierContact.email && (
+                              <div><span className="text-muted-foreground">Email:</span> <a href={`mailto:${(accountDetail.account as any).supplierContact.email}`} className="font-medium text-blue-600 hover:underline">{(accountDetail.account as any).supplierContact.email}</a></div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <div>
                         <h3 className="font-medium text-sm mb-2">Bill History</h3>
                         {accountDetail.bills.length === 0 && <p className="text-sm text-muted-foreground">No bills recorded yet.</p>}
@@ -829,6 +852,20 @@ export default function BillsUtilities() {
               <div><Label>DD Day of Month (1–31)</Label><Input type="number" min="1" max="31" value={accountForm.billingDay} onChange={e => setAccountForm(f => ({ ...f, billingDay: e.target.value }))} placeholder="e.g. 15" /></div>
             </div>
             <div><Label>Notes</Label><Textarea value={accountForm.notes} onChange={e => setAccountForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+            <div>
+              <Label>Supplier Contact (optional)</Label>
+              <Select value={accountForm.supplierContactId ? String(accountForm.supplierContactId) : "none"} onValueChange={v => setAccountForm(f => ({ ...f, supplierContactId: v === "none" ? null : parseInt(v) }))}>
+                <SelectTrigger><SelectValue placeholder="Link a supplier contact" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {(allSupplierContacts as any[]).map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.supplierName}{c.contactName ? ` — ${c.contactName}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddAccount(false)}>Cancel</Button>
@@ -875,6 +912,20 @@ export default function BillsUtilities() {
                 <div><Label>Contract End</Label><Input type="date" value={editAccount.contractEndDate ? new Date(editAccount.contractEndDate).toISOString().split("T")[0] : ""} onChange={e => setEditAccount((a: any) => ({ ...a, contractEndDate: e.target.value }))} /></div>
               </div>
               <div><Label>Notes</Label><Textarea value={editAccount.notes ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, notes: e.target.value }))} rows={2} /></div>
+              <div>
+                <Label>Supplier Contact (optional)</Label>
+                <Select value={editAccount.supplierContactId ? String(editAccount.supplierContactId) : "none"} onValueChange={v => setEditAccount((a: any) => ({ ...a, supplierContactId: v === "none" ? null : parseInt(v) }))}>
+                  <SelectTrigger><SelectValue placeholder="Link a supplier contact" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {(allSupplierContacts as any[]).map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.supplierName}{c.contactName ? ` — ${c.contactName}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditAccount(null)}>Cancel</Button>

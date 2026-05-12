@@ -1578,3 +1578,9 @@
 - [x] Monthly Expenses: source badges to distinguish auto-bill, auto-LBMW-invoice, and manual entries
 - [x] LBMW Correspondence: AI-automated file/image/photo/PDF scanner — upload → AI OCR extracts all fields → auto-fills create form → user confirms before saving
 - [x] Bills & Utilities: AI-automated file/image/photo/PDF scanner — upload → AI OCR extracts supplier, amount, date, account → auto-fills bill form → user confirms before saving
+
+## Round 12 Next Steps (May 12, 2026)
+
+- [x] LBMW Correspondence: show "View File" link on each row that has an attached document, with a preview dialog (image/PDF)
+- [x] AiDocumentScanner: add camera capture button (mobile-friendly, uses device camera directly)
+- [x] Bills & Utilities: link supplier contacts to utility accounts — store supplierContactId on accounts, show contact card inline on account row

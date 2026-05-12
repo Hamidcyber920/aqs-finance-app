@@ -1899,6 +1899,7 @@ export const utilityAccounts = mysqlTable("utility_accounts", {
   lastBillDate: date("lastBillDate"),
   lastBillAmount: decimal("lastBillAmount", { precision: 10, scale: 2 }),
   notes: text("notes"),
+  supplierContactId: int("supplierContactId"),   // FK to supplier_contacts.id (nullable)
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

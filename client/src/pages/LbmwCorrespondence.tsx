@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import {
   Plus, RefreshCw, Mail, Phone, Building, FileText, AlertTriangle,
   CheckCircle2, Clock, XCircle, Link2, Unlink, Zap, Download, Receipt, ScanLine,
+  Paperclip, ExternalLink,
 } from "lucide-react";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 import { Separator } from "@/components/ui/separator";
@@ -74,6 +75,7 @@ const emptyForm = {
 
 export default function LbmwCorrespondence() {
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null);
 
   // Gmail pull dialog state
   const [gmailDialog, setGmailDialog] = useState(false);
@@ -403,7 +405,17 @@ export default function LbmwCorrespondence() {
                             )}
                           </td>
                           <td className="p-3">
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 flex-wrap">
+                              {item.fileUrl && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-xs gap-1 text-blue-400 hover:text-blue-300"
+                                  onClick={() => setPreviewFile({ url: item.fileUrl, name: item.subject || "Attachment" })}
+                                >
+                                  <Paperclip className="h-3 w-3" /> File
+                                </Button>
+                              )}
                               <Button variant="ghost" size="sm" onClick={() => openUpdate(item)}>Edit</Button>
                               <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300" onClick={() => {
                                 if (confirm("Delete this record?")) deleteMut.mutate({ id: item.id });
@@ -420,6 +432,50 @@ export default function LbmwCorrespondence() {
           </CardContent>
         </Card>
       </div>
+
+      {/* File Preview Dialog */}
+      {previewFile && (
+        <Dialog open={!!previewFile} onOpenChange={() => setPreviewFile(null)}>
+          <DialogContent className="max-w-3xl max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4" />
+                {previewFile.name}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-3">
+              {/* Detect if PDF or image */}
+              {previewFile.url.match(/\.(pdf)$/i) ? (
+                <iframe
+                  src={previewFile.url}
+                  className="w-full rounded border"
+                  style={{ height: "60vh" }}
+                  title={previewFile.name}
+                />
+              ) : previewFile.url.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i) ? (
+                <img
+                  src={previewFile.url}
+                  alt={previewFile.name}
+                  className="max-w-full max-h-[60vh] rounded border object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-4 py-8 text-muted-foreground">
+                  <FileText className="h-16 w-16" />
+                  <p className="text-sm">Preview not available for this file type.</p>
+                </div>
+              )}
+              <a
+                href={previewFile.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-blue-500 hover:text-blue-400"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Open in new tab
+              </a>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* AI Document Scanner Dialog */}
       <Dialog open={scannerOpen} onOpenChange={setScannerOpen}>

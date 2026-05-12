@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
   Upload, FileText, Image, Loader2, CheckCircle2, AlertCircle,
-  X, ScanLine, Eye, RotateCcw
+  X, ScanLine, Eye, RotateCcw, Camera
 } from "lucide-react";
 
 interface AiDocumentScannerProps {
@@ -60,6 +60,7 @@ export function AiDocumentScanner({ mode, onExtracted, onClose }: AiDocumentScan
   const [result, setResult] = useState<{ fileUrl: string; extracted: any; error: string | null } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   const scanLbmw = trpc.aiScanner.scanLbmwDocument.useMutation();
   const scanBill = trpc.aiScanner.scanBillDocument.useMutation();
@@ -176,24 +177,45 @@ export function AiDocumentScanner({ mode, onExtracted, onClose }: AiDocumentScan
 
       {/* Drop zone */}
       {!file && (
-        <div
-          className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}`}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-        >
-          <div className="p-3 rounded-full bg-primary/10">
-            <Upload className="h-7 w-7 text-primary" />
+        <div className="flex flex-col gap-3">
+          <div
+            className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+          >
+            <div className="p-3 rounded-full bg-primary/10">
+              <Upload className="h-7 w-7 text-primary" />
+            </div>
+            <div className="text-center">
+              <p className="font-medium text-sm">Drop a photo, image, or PDF here</p>
+              <p className="text-xs text-muted-foreground mt-1">JPEG, PNG, WebP, or PDF — max {MAX_MB}MB</p>
+            </div>
+            <Button variant="outline" size="sm" className="mt-1" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
+              <Image className="h-3.5 w-3.5 mr-1.5" />Browse Files
+            </Button>
+            <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={handleInputChange} />
           </div>
-          <div className="text-center">
-            <p className="font-medium text-sm">Drop a photo, image, or PDF here</p>
-            <p className="text-xs text-muted-foreground mt-1">JPEG, PNG, WebP, or PDF — max {MAX_MB}MB</p>
-          </div>
-          <Button variant="outline" size="sm" className="mt-1">
-            <Image className="h-3.5 w-3.5 mr-1.5" />Browse Files
+          {/* Camera capture button — uses device camera on mobile */}
+          <Button
+            variant="outline"
+            className="w-full gap-2 border-dashed"
+            onClick={() => cameraRef.current?.click()}
+          >
+            <Camera className="h-4 w-4 text-primary" />
+            Take Photo with Camera
+            <span className="ml-auto text-xs text-muted-foreground">Mobile</span>
           </Button>
-          <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={handleInputChange} />
+          {/* Hidden camera input — capture="environment" opens rear camera on mobile */}
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleInputChange}
+          />
         </div>
       )}
 
