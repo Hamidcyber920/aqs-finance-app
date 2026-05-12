@@ -1811,3 +1811,15 @@
 - [x] Added MediaRecorder audio capture with hold-to-speak UI
 - [x] Server-side audio transcription via Whisper API (upload to S3 → transcribe → process as text)
 - [x] Voice mode is default; keyboard icon toggles to text mode
+
+### Feature: Live Voice Agent with Instant Natural Speech (May 12 2026)
+- [x] Replace record-transcribe-respond flow with real-time bidirectional audio streaming
+- [x] Implement Gemini Live API (multimodal live) server-side relay
+- [x] Frontend real-time audio capture via Web Audio API (continuous streaming, not record-and-send)
+- [x] Real-time audio playback of AI responses (instant speech, not TTS after text)
+- [x] Natural conversation flow — speak and hear responses like a phone call
+- [x] Fix Gemini Live API setup message: use `setup` key with `generationConfig` wrapper (not `config`)
+- [x] Fix Gemini model: use `gemini-3.1-flash-live-preview` (not deprecated `gemini-2.0-flash-live-001`)
+- [x] Fix audio input format: use `realtimeInput.audio.data` (not deprecated `mediaChunks`)
+- [x] Add null-safety for getDb() calls in voiceGateway.ts helper functions
+- [x] End-to-end test: direct Gemini Live API connection + gateway relay both verified working

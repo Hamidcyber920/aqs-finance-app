@@ -1,26 +1,20 @@
 /**
- * VoiceAgent — Floating microphone button with transcript pane
+ * VoiceAgent — Real-time bidirectional voice assistant using Gemini Live API
  *
- * Features:
- * - Floating mic button (bottom-right, configurable position)
- * - Press-and-hold to talk, release to send
- * - Tap-to-toggle for hands-free mode
- * - Waveform animation while processing
- * - Streaming text transcription for accessibility
- * - Collapsible history pane (last few turns)
- * - "Correct this" button on any agent statement
- * - Keyboard equivalent (Ctrl+Shift+V to toggle)
- * - Text input fallback when mic not available
+ * Architecture:
+ * - AudioWorklet captures 16kHz PCM audio continuously while mic is active
+ * - PCM chunks are sent as base64 via WebSocket to server
+ * - Server relays to Gemini Live API for real-time speech understanding + response
+ * - Gemini's audio response (24kHz PCM) streams back and plays immediately
+ * - Result: natural, real-time conversation like a phone call
  */
-
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Volume2 } from "lucide-react";
+import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
 interface TranscriptEntry {
   id: string;
   speaker: "user" | "agent";
@@ -35,13 +29,109 @@ interface VoiceAgentProps {
   entityContext?: string;
 }
 
-// ─── WebSocket connection manager ────────────────────────────────────────────
+// ─── Audio Worklet Processor (inline) ────────────────────────────────────────
+const AUDIO_WORKLET_CODE = `
+class PCMCaptureProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 2048;
+    this.buffer = new Float32Array(this.bufferSize);
+    this.bufferIndex = 0;
+  }
+  process(inputs) {
+    const input = inputs[0];
+    if (!input || !input[0]) return true;
+    const channelData = input[0];
+    for (let i = 0; i < channelData.length; i++) {
+      this.buffer[this.bufferIndex++] = channelData[i];
+      if (this.bufferIndex >= this.bufferSize) {
+        const int16 = new Int16Array(this.bufferSize);
+        for (let j = 0; j < this.bufferSize; j++) {
+          const s = Math.max(-1, Math.min(1, this.buffer[j]));
+          int16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        this.port.postMessage({ pcm: int16.buffer }, [int16.buffer]);
+        this.buffer = new Float32Array(this.bufferSize);
+        this.bufferIndex = 0;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-capture-processor', PCMCaptureProcessor);
+`;
 
+// ─── Audio Playback Queue ────────────────────────────────────────────────────
+class AudioPlaybackQueue {
+  private audioContext: AudioContext | null = null;
+  private queue: Float32Array[] = [];
+  private isPlaying = false;
+  private nextStartTime = 0;
+  private sampleRate = 24000;
+
+  init() {
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext({ sampleRate: this.sampleRate });
+    }
+    if (this.audioContext.state === "suspended") {
+      this.audioContext.resume();
+    }
+  }
+
+  enqueue(pcmBase64: string) {
+    if (!this.audioContext) this.init();
+    const binaryStr = atob(pcmBase64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    const int16 = new Int16Array(bytes.buffer);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) {
+      float32[i] = int16[i] / 32768;
+    }
+    this.queue.push(float32);
+    if (!this.isPlaying) {
+      this.playNext();
+    }
+  }
+
+  private playNext() {
+    if (!this.audioContext || this.queue.length === 0) {
+      this.isPlaying = false;
+      return;
+    }
+    this.isPlaying = true;
+    const samples = this.queue.shift()!;
+    const buffer = this.audioContext.createBuffer(1, samples.length, this.sampleRate);
+    buffer.getChannelData(0).set(samples);
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.audioContext.destination);
+    const currentTime = this.audioContext.currentTime;
+    const startTime = Math.max(currentTime, this.nextStartTime);
+    source.start(startTime);
+    this.nextStartTime = startTime + buffer.duration;
+    source.onended = () => this.playNext();
+  }
+
+  stop() {
+    this.queue = [];
+    this.isPlaying = false;
+    this.nextStartTime = 0;
+  }
+
+  destroy() {
+    this.stop();
+    this.audioContext?.close();
+    this.audioContext = null;
+  }
+}
+
+// ─── WebSocket connection manager ────────────────────────────────────────────
 class VoiceConnection {
   private ws: WebSocket | null = null;
   private sessionId: string | null = null;
-  private reconnectAttempts = 0;
-  private maxReconnectAttempts = 3;
   private onMessage: (msg: any) => void;
   private onStatusChange: (status: string) => void;
 
@@ -54,29 +144,18 @@ class VoiceConnection {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     this.onStatusChange("connecting");
     try {
-      // Fetch a short-lived auth token (needed because httpOnly cookies may not be sent on WS upgrade)
       const tokenRes = await fetch("/api/voice/token", { credentials: "include" });
       if (!tokenRes.ok) {
         this.onStatusChange("error");
+        toast.error("Authentication failed. Please log in again.");
         return;
       }
       const { token } = await tokenRes.json();
       const wsUrl = `${protocol}//${window.location.host}/api/voice?token=${encodeURIComponent(token)}`;
       this.ws = new WebSocket(wsUrl);
-
       this.ws.onopen = () => {
-        this.reconnectAttempts = 0;
-        this.ws?.send(
-          JSON.stringify({
-            type: "start_session",
-            
-            screenContext,
-            entityContext,
-            language: language || "en-GB",
-          })
-        );
+        this.ws?.send(JSON.stringify({ type: "start_session", screenContext, entityContext, language: language || "en-GB" }));
       };
-
       this.ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -85,21 +164,18 @@ class VoiceConnection {
             this.onStatusChange("connected");
           }
           this.onMessage(msg);
-        } catch {
-          console.error("[VoiceAgent] Failed to parse message");
-        }
+        } catch {}
       };
-
-      this.ws.onclose = () => {
-        this.onStatusChange("disconnected");
-        this.sessionId = null;
-      };
-
-      this.ws.onerror = () => {
-        this.onStatusChange("error");
-      };
+      this.ws.onclose = () => { this.onStatusChange("disconnected"); this.sessionId = null; };
+      this.ws.onerror = () => { this.onStatusChange("error"); };
     } catch {
       this.onStatusChange("error");
+    }
+  }
+
+  sendAudioChunk(pcmBase64: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "audio_chunk", audio: pcmBase64 }));
     }
   }
 
@@ -120,11 +196,6 @@ class VoiceConnection {
       this.ws.send(JSON.stringify({ type: "correct_this", transcriptId, correctionNote: note }));
     }
   }
-  sendAudio(base64Audio: string) {
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "audio_chunk", audio: base64Audio }));
-    }
-  }
 
   disconnect() {
     if (this.ws?.readyState === WebSocket.OPEN) {
@@ -135,53 +206,45 @@ class VoiceConnection {
     this.sessionId = null;
   }
 
-  get isConnected() {
-    return this.ws?.readyState === WebSocket.OPEN;
-  }
-
-  get currentSessionId() {
-    return this.sessionId;
-  }
+  get isConnected() { return this.ws?.readyState === WebSocket.OPEN; }
+  get currentSessionId() { return this.sessionId; }
 }
 
-// ─── Waveform animation component ───────────────────────────────────────────
-
+// ─── Waveform animation ─────────────────────────────────────────────────────
 function WaveformAnimation({ isActive }: { isActive: boolean }) {
   return (
     <div className="flex items-center gap-0.5 h-6">
       {[...Array(5)].map((_, i) => (
         <div
           key={i}
-          className={`w-1 rounded-full transition-all duration-150 ${
-            isActive ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"
-          }`}
-          style={{
-            height: isActive ? `${12 + Math.sin(Date.now() / 200 + i) * 8}px` : "4px",
-            animationDelay: `${i * 100}ms`,
-          }}
+          className={`w-1 rounded-full transition-all duration-150 ${isActive ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"}`}
+          style={{ height: isActive ? `${12 + Math.sin(Date.now() / 200 + i) * 8}px` : "4px", animationDelay: `${i * 100}ms` }}
         />
       ))}
     </div>
   );
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
-
+// ─── Main Component ──────────────────────────────────────────────────────────
 export default function VoiceAgent({ screenContext = "dashboard", entityContext }: VoiceAgentProps) {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [status, setStatus] = useState<string>("idle"); // idle, connecting, connected, processing, error, disconnected
-  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
-  const [textInput, setTextInput] = useState("");
+  const [status, setStatus] = useState<string>("idle");
+  const [isLive, setIsLive] = useState(false);
+  const [isGeminiReady, setIsGeminiReady] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isTextMode, setIsTextMode] = useState(false);
+  const [textInput, setTextInput] = useState("");
+  const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
 
   const connectionRef = useRef<VoiceConnection | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const playbackRef = useRef<AudioPlaybackQueue>(new AudioPlaybackQueue());
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -202,177 +265,164 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Update screen context when it changes
+  // Update screen context
   useEffect(() => {
     if (connectionRef.current?.isConnected) {
       connectionRef.current.sendScreenContext(screenContext, entityContext);
     }
   }, [screenContext, entityContext]);
 
-  // Handle incoming messages
+  // Handle incoming messages from server
   const handleMessage = useCallback((msg: any) => {
     switch (msg.type) {
       case "session_started":
-        setTranscript((prev) => [
-          ...prev,
-          {
-            id: `welcome-${Date.now()}`,
-            speaker: "agent",
-            text: msg.text || "Hello! How can I help you today?",
-            timestamp: new Date(),
-          },
-        ]);
+        setTranscript((prev) => [...prev, { id: `welcome-${Date.now()}`, speaker: "agent", text: msg.text || "Hello! How can I help you today?", timestamp: new Date() }]);
         setIsProcessing(false);
         break;
-
+      case "gemini_ready":
+        setIsGeminiReady(true);
+        break;
+      case "audio_response":
+        setIsSpeaking(true);
+        playbackRef.current.enqueue(msg.audio);
+        break;
+      case "turn_complete":
+        setIsSpeaking(false);
+        setIsProcessing(false);
+        break;
+      case "transcript":
+        setTranscript((prev) => [...prev, { id: `${msg.speaker}-${Date.now()}`, speaker: msg.speaker === "assistant" ? "agent" : msg.speaker, text: msg.text, timestamp: new Date() }]);
+        break;
       case "agent_response":
-        setTranscript((prev) => [
-          ...prev,
-          {
-            id: `agent-${Date.now()}`,
-            speaker: "agent",
-            text: msg.text,
-            timestamp: new Date(),
-          },
-        ]);
+        setTranscript((prev) => [...prev, { id: `agent-${Date.now()}`, speaker: "agent", text: msg.text, timestamp: new Date() }]);
         setIsProcessing(false);
         break;
-
       case "tool_call":
         if (msg.toolResult?.status === "executing") {
-          // Show tool execution indicator
-          setTranscript((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.speaker === "agent" && last.toolCalls) {
-              return [
-                ...prev.slice(0, -1),
-                { ...last, toolCalls: [...last.toolCalls, { name: msg.toolName, status: "executing" }] },
-              ];
-            }
-            return prev;
-          });
+          setIsProcessing(true);
         }
         break;
-
       case "cost_warning":
         setTokensRemaining(msg.tokensRemaining);
         toast.warning(msg.costWarning);
-        break;
-
-      case "transcript":
-        if (msg.speaker === "user") {
-          setTranscript((prev) => [
-            ...prev,
-            { id: `user-${Date.now()}`, speaker: "user", text: msg.text, timestamp: new Date() },
-          ]);
-        }
         break;
       case "error":
         toast.error(msg.error || "Voice agent error");
         setIsProcessing(false);
         break;
-
       case "session_ended":
         setStatus("disconnected");
         setIsProcessing(false);
+        setIsLive(false);
+        setIsGeminiReady(false);
         break;
     }
   }, []);
 
   // Connect to voice gateway
   const connect = useCallback(() => {
-    if (!user) {
-      toast.error("Please log in to use the voice assistant");
-      return;
-    }
-
-    // Auth is handled server-side via the httpOnly cookie in the WebSocket upgrade request
+    if (!user) { toast.error("Please log in to use the voice assistant"); return; }
     const conn = new VoiceConnection(handleMessage, setStatus);
     conn.connect(screenContext, entityContext);
     connectionRef.current = conn;
+    playbackRef.current.init();
   }, [user, screenContext, entityContext, handleMessage]);
 
   // Disconnect
   const disconnect = useCallback(() => {
+    stopMic();
     connectionRef.current?.disconnect();
     connectionRef.current = null;
+    playbackRef.current.stop();
     setStatus("idle");
+    setIsGeminiReady(false);
+    setIsLive(false);
   }, []);
+
+  // Start streaming mic audio via AudioWorklet
+  const startMic = useCallback(async () => {
+    if (!connectionRef.current?.isConnected || !isGeminiReady) {
+      toast.error("Voice service not ready yet. Please wait a moment.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+      });
+      streamRef.current = stream;
+
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
+
+      // Create AudioWorklet for low-latency PCM capture
+      const workletBlob = new Blob([AUDIO_WORKLET_CODE], { type: "application/javascript" });
+      const workletUrl = URL.createObjectURL(workletBlob);
+      await audioContext.audioWorklet.addModule(workletUrl);
+      URL.revokeObjectURL(workletUrl);
+
+      const source = audioContext.createMediaStreamSource(stream);
+      const workletNode = new AudioWorkletNode(audioContext, "pcm-capture-processor");
+      workletNodeRef.current = workletNode;
+
+      // Send PCM chunks to server as base64
+      workletNode.port.onmessage = (event) => {
+        if (event.data.pcm) {
+          const pcmBuffer = new Uint8Array(event.data.pcm);
+          let binary = "";
+          for (let i = 0; i < pcmBuffer.length; i++) {
+            binary += String.fromCharCode(pcmBuffer[i]);
+          }
+          const base64 = btoa(binary);
+          connectionRef.current?.sendAudioChunk(base64);
+        }
+      };
+
+      source.connect(workletNode);
+      workletNode.connect(audioContext.destination);
+      setIsLive(true);
+    } catch (err) {
+      toast.error("Microphone access denied. Please allow microphone permission.");
+    }
+  }, [isGeminiReady]);
+
+  // Stop streaming mic
+  const stopMic = useCallback(() => {
+    workletNodeRef.current?.disconnect();
+    workletNodeRef.current = null;
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    setIsLive(false);
+  }, []);
+
+  // Toggle mic on/off
+  const toggleMic = useCallback(() => {
+    if (isLive) {
+      stopMic();
+    } else {
+      startMic();
+    }
+  }, [isLive, startMic, stopMic]);
 
   // Send text message
   const sendText = useCallback(() => {
     if (!textInput.trim() || !connectionRef.current?.isConnected) return;
-
     const text = textInput.trim();
     setTextInput("");
     setIsProcessing(true);
-
-    setTranscript((prev) => [
-      ...prev,
-      {
-        id: `user-${Date.now()}`,
-        speaker: "user",
-        text,
-        timestamp: new Date(),
-      },
-    ]);
-
+    setTranscript((prev) => [...prev, { id: `user-${Date.now()}`, speaker: "user", text, timestamp: new Date() }]);
     connectionRef.current.sendText(text);
   }, [textInput]);
 
-  // Flag a response for review
+  // Flag response
   const flagResponse = useCallback((entryId: string) => {
     connectionRef.current?.sendCorrection(entryId, "User flagged this response as incorrect");
-    setTranscript((prev) =>
-      prev.map((t) => (t.id === entryId ? { ...t, flagged: true } : t))
-    );
+    setTranscript((prev) => prev.map((t) => (t.id === entryId ? { ...t, flagged: true } : t)));
     toast.success("Flagged for Dr. Hamid's review");
   }, []);
 
-  // Start voice recording
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
-      audioChunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        if (audioBlob.size < 1000) {
-          toast.error("Recording too short. Please try again.");
-          return;
-        }
-        if (audioBlob.size > 16 * 1024 * 1024) {
-          toast.error("Recording too long (max 16MB). Please try a shorter message.");
-          return;
-        }
-        setIsProcessing(true);
-        // Convert to base64 and send
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = (reader.result as string).split(",")[1];
-          connectionRef.current?.sendAudio(base64);
-        };
-        reader.readAsDataURL(audioBlob);
-      };
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (err) {
-      toast.error("Microphone access denied. Please allow microphone permission.");
-    }
-  }, []);
-  // Stop voice recording
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
-    setIsRecording(false);
-  }, []);
-  // Toggle open/close
+  // Toggle panel
   const toggleOpen = useCallback(() => {
     if (!isOpen) {
       setIsOpen(true);
@@ -387,7 +437,9 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      stopMic();
       connectionRef.current?.disconnect();
+      playbackRef.current.destroy();
     };
   }, []);
 
@@ -406,10 +458,8 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
             : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700"
         }`}
         title={isOpen ? "Close voice assistant" : "Open voice assistant (Ctrl+Shift+V)"}
-        aria-label={isOpen ? "Close voice assistant" : "Open voice assistant"}
       >
         {isOpen ? <X className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-        {/* Pulse ring when connected */}
         {status === "connected" && !isOpen && (
           <span className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-30" />
         )}
@@ -417,34 +467,24 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
 
       {/* Chat panel */}
       {isOpen && (
-        <div
-          className={`fixed bottom-24 right-6 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl flex flex-col transition-all duration-300 ${
-            isExpanded ? "w-[420px] h-[600px]" : "w-[360px] h-[480px]"
-          }`}
-        >
+        <div className={`fixed bottom-24 right-6 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl flex flex-col transition-all duration-300 ${
+          isExpanded ? "w-[420px] h-[600px]" : "w-[360px] h-[480px]"
+        }`}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
             <div className="flex items-center gap-2">
-              <div
-                className={`w-2.5 h-2.5 rounded-full ${
-                  status === "connected"
-                    ? "bg-emerald-400"
-                    : status === "connecting"
-                    ? "bg-amber-400 animate-pulse"
-                    : status === "processing"
-                    ? "bg-blue-400 animate-pulse"
-                    : "bg-zinc-500"
-                }`}
-              />
+              <div className={`w-2.5 h-2.5 rounded-full ${
+                status === "connected" ? (isLive ? "bg-emerald-400 animate-pulse" : "bg-emerald-400")
+                : status === "connecting" ? "bg-amber-400 animate-pulse"
+                : "bg-zinc-500"
+              }`} />
               <span className="text-sm font-medium text-zinc-200">Hibba Voice Assistant</span>
-              {isProcessing && <WaveformAnimation isActive={true} />}
+              {isSpeaking && <WaveformAnimation isActive={true} />}
             </div>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setIsTextMode(!isTextMode)}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  isTextMode ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"
-                }`}
+                className={`p-1.5 rounded-lg transition-colors ${isTextMode ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
                 title={isTextMode ? "Switch to voice mode" : "Switch to text mode"}
               >
                 <Keyboard className="w-4 h-4" />
@@ -452,7 +492,6 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 transition-colors"
-                title={isExpanded ? "Collapse" : "Expand"}
               >
                 {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
               </button>
@@ -467,10 +506,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                 <span>{tokensRemaining.toLocaleString()}</span>
               </div>
               <div className="mt-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-amber-400 rounded-full transition-all"
-                  style={{ width: `${Math.max(0, (tokensRemaining / 200000) * 100)}%` }}
-                />
+                <div className="h-full bg-amber-400 rounded-full transition-all" style={{ width: `${Math.max(0, (tokensRemaining / 200000) * 100)}%` }} />
               </div>
             </div>
           )}
@@ -492,28 +528,17 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                 <p className="text-sm text-zinc-400 text-center">
                   Could not connect to voice service.
                   <br />
-                  <button onClick={connect} className="text-emerald-400 hover:underline mt-1">
-                    Try again
-                  </button>
+                  <button onClick={connect} className="text-emerald-400 hover:underline mt-1">Try again</button>
                 </p>
               </div>
             )}
 
             {transcript.map((entry) => (
-              <div
-                key={entry.id}
-                className={`flex ${entry.speaker === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                    entry.speaker === "user"
-                      ? "bg-emerald-600/80 text-white rounded-br-md"
-                      : "bg-zinc-800 text-zinc-200 rounded-bl-md"
-                  }`}
-                >
+              <div key={entry.id} className={`flex ${entry.speaker === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                  entry.speaker === "user" ? "bg-emerald-600/80 text-white rounded-br-md" : "bg-zinc-800 text-zinc-200 rounded-bl-md"
+                }`}>
                   <p className="whitespace-pre-wrap">{entry.text}</p>
-
-                  {/* Tool call indicators */}
                   {entry.toolCalls && entry.toolCalls.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {entry.toolCalls.map((tc, i) => (
@@ -524,25 +549,15 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                       ))}
                     </div>
                   )}
-
-                  {/* Timestamp + flag button for agent messages */}
                   <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-[10px] text-zinc-500">
-                      {entry.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </span>
+                    <span className="text-[10px] text-zinc-500">{entry.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                     {entry.speaker === "agent" && !entry.flagged && (
-                      <button
-                        onClick={() => flagResponse(entry.id)}
-                        className="text-zinc-600 hover:text-amber-400 transition-colors p-0.5"
-                        title="Flag this response for review"
-                      >
+                      <button onClick={() => flagResponse(entry.id)} className="text-zinc-600 hover:text-amber-400 transition-colors p-0.5" title="Flag for review">
                         <Flag className="w-3 h-3" />
                       </button>
                     )}
                     {entry.flagged && (
-                      <span className="text-[10px] text-amber-400 flex items-center gap-0.5">
-                        <Flag className="w-3 h-3" /> Flagged
-                      </span>
+                      <span className="text-[10px] text-amber-400 flex items-center gap-0.5"><Flag className="w-3 h-3" /> Flagged</span>
                     )}
                   </div>
                 </div>
@@ -560,13 +575,12 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                 </div>
               </div>
             )}
-
             <div ref={transcriptEndRef} />
           </div>
 
           {/* Input area */}
           <div className="px-4 py-3 border-t border-zinc-800">
-            {status === "connected" || status === "processing" ? (
+            {status === "connected" ? (
               <div className="flex items-center gap-2">
                 {isTextMode ? (
                   <>
@@ -575,64 +589,50 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                       type="text"
                       value={textInput}
                       onChange={(e) => setTextInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          sendText();
-                        }
-                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendText(); } }}
                       placeholder={isProcessing ? "Thinking..." : "Type a message..."}
                       disabled={isProcessing}
                       className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:opacity-50"
                       style={{ fontSize: "16px" }}
                     />
-                    <Button
-                      size="sm"
-                      onClick={sendText}
-                      disabled={!textInput.trim() || isProcessing}
-                      className="rounded-xl bg-emerald-600 hover:bg-emerald-500 h-10 w-10 p-0"
-                    >
+                    <Button size="sm" onClick={sendText} disabled={!textInput.trim() || isProcessing} className="rounded-xl bg-emerald-600 hover:bg-emerald-500 h-10 w-10 p-0">
                       <Send className="w-4 h-4" />
                     </Button>
                   </>
                 ) : (
                   <div className="flex-1 flex flex-col items-center gap-2">
-                    <button
-                      onTouchStart={startRecording}
-                      onTouchEnd={stopRecording}
-                      onMouseDown={startRecording}
-                      onMouseUp={stopRecording}
-                      onMouseLeave={() => { if (isRecording) stopRecording(); }}
-                      disabled={isProcessing}
-                      className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-                        isRecording
-                          ? "bg-red-500 scale-110 shadow-lg shadow-red-500/30 animate-pulse"
-                          : isProcessing
-                          ? "bg-zinc-700 opacity-50 cursor-not-allowed"
-                          : "bg-emerald-600 hover:bg-emerald-500 hover:scale-105"
-                      }`}
-                    >
-                      {isRecording ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
-                    </button>
-                    <p className="text-[11px] text-zinc-500">
-                      {isRecording ? "Release to send" : isProcessing ? "Processing..." : "Hold to speak"}
-                    </p>
+                    {!isGeminiReady ? (
+                      <div className="flex items-center gap-2 text-zinc-400 text-sm py-4">
+                        <div className="w-4 h-4 border-2 border-zinc-500 border-t-zinc-300 rounded-full animate-spin" />
+                        Connecting to voice service...
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={toggleMic}
+                          className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                            isLive
+                              ? "bg-red-500 scale-110 shadow-lg shadow-red-500/30"
+                              : "bg-emerald-600 hover:bg-emerald-500 hover:scale-105"
+                          }`}
+                        >
+                          {isLive ? <PhoneOff className="w-6 h-6 text-white" /> : <Phone className="w-6 h-6 text-white" />}
+                        </button>
+                        <p className="text-[11px] text-zinc-500">
+                          {isLive ? (isSpeaking ? "Hibba is speaking..." : "Listening... tap to mute") : "Tap to start speaking"}
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
             ) : (
               <div className="flex items-center justify-center py-2">
-                <Button
-                  size="sm"
-                  onClick={connect}
-                  className="rounded-xl bg-emerald-600 hover:bg-emerald-500"
-                >
-                  {status === "disconnected" ? "Reconnect" : "Start Session"}
+                <Button size="sm" onClick={connect} className="rounded-xl bg-emerald-600 hover:bg-emerald-500">
+                  {status === "connecting" ? "Connecting..." : status === "disconnected" ? "Reconnect" : "Start Session"}
                 </Button>
               </div>
             )}
-
-
           </div>
         </div>
       )}
