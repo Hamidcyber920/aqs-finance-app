@@ -1794,3 +1794,4 @@
 - [x] Fixed all schema column mismatches (speaker→role, text→content, flagName→toolName, etc.)
 - [x] Used voiceReviewQueue table for correct_this/flag_for_review instead of non-existent voiceTranscripts columns
 - [x] 314 tests passing, production build clean
+// checkpoint marker
