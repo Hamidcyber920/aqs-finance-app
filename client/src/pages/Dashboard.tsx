@@ -148,6 +148,8 @@ export default function DashboardPage() {
   const { data: trainingSummary } = (trpc as any).training?.summary?.useQuery(undefined, { enabled: isAdmin });
   const { data: bankBalance } = trpc.dashboard.bankBalance.useQuery(undefined, { enabled: isAdmin });
   const { data: donationTrends = [] } = trpc.dashboard.donationTrends.useQuery(undefined, { enabled: isAdmin });
+  const { data: cashflow } = trpc.dashboard.cashflowProjection.useQuery(undefined, { enabled: isAdmin });
+  const { data: thisWeek } = trpc.dashboard.thisWeek.useQuery(undefined, { enabled: isAdmin });
   const { data: complianceActions = [] } = (trpc as any).compliance.listActions.useQuery(undefined, { enabled: isAdmin });
   const { data: trainingData = [] } = (trpc as any).compliance.listTraining.useQuery(undefined, { enabled: isAdmin });
   const { data: policies = [] } = (trpc as any).compliance.listPolicies.useQuery(undefined, { enabled: isAdmin });
@@ -245,6 +247,62 @@ export default function DashboardPage() {
           <StatCard label="Available Balance" value="£14,460" sub="Reconciled" icon={DollarSign} trend="up" color={T.purple} delay={160} />
           <StatCard label="Pending Approvals" value="7" sub="Requires action" icon={AlertCircle} trend="neutral" color="#f87171" delay={240} />
         </div>
+
+        {/* ── Needs Attention Today + This Week + Cashflow (admin only) ── */}
+        {isAdmin && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(260px,1fr))', gap: 12, marginBottom: 20, animation: 'fadeUp 0.5s ease 260ms both' }}>
+            {/* Needs Attention Today */}
+            <div style={{ background: T.card, backdropFilter: 'blur(20px)', border: `1px solid ${(criticalItems + overdueItems) > 0 ? '#f87171' : T.border}44`, borderRadius: 14, padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <AlertCircle size={16} style={{ color: '#f87171' }} />
+                <p style={{ fontSize: 12, fontWeight: 700, color: T.white, margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Needs Attention Today</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[{ label: 'Critical Compliance Actions', value: criticalItems, path: '/compliance', color: '#f87171' }, { label: 'Overdue Compliance Items', value: overdueItems, path: '/compliance', color: '#f59e0b' }, { label: 'Payments Awaiting Approval', value: pendingReceipts, path: '/expenses', color: '#a78bfa' }, { label: 'Loan Applications Pending', value: pendingLoans, path: '/loans', color: T.purple }].map(item => (
+                  <Link key={item.label} href={item.path}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', borderRadius: 8, background: item.value > 0 ? `${item.color}11` : T.glass, border: `1px solid ${item.value > 0 ? item.color + '33' : T.border}`, cursor: 'pointer' }}>
+                      <p style={{ fontSize: 11, color: item.value > 0 ? T.white : T.muted, margin: 0 }}>{item.label}</p>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: item.value > 0 ? item.color : T.muted, minWidth: 20, textAlign: 'right' }}>{item.value}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+            {/* This Week */}
+            <div style={{ background: T.card, backdropFilter: 'blur(20px)', border: `1px solid ${T.border}`, borderRadius: 14, padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Clock size={16} style={{ color: T.mint }} />
+                <p style={{ fontSize: 12, fontWeight: 700, color: T.white, margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em' }}>This Week</p>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {[{ label: 'Compliance Actions Due', value: thisWeek?.dueActions ?? 0, path: '/compliance', color: '#f59e0b' }, { label: 'Training Certificates Expiring', value: thisWeek?.trainingDue ?? 0, path: '/training-tracker', color: '#a78bfa' }, { label: 'Rent Payments Due', value: thisWeek?.rentDue ?? 0, path: '/accommodation', color: T.mint }, { label: 'Policy Reviews Due', value: overduePolicies, path: '/compliance', color: '#60a5fa' }].map(item => (
+                  <Link key={item.label} href={item.path}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', borderRadius: 8, background: item.value > 0 ? `${item.color}11` : T.glass, border: `1px solid ${item.value > 0 ? item.color + '33' : T.border}`, cursor: 'pointer' }}>
+                      <p style={{ fontSize: 11, color: item.value > 0 ? T.white : T.muted, margin: 0 }}>{item.label}</p>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: item.value > 0 ? item.color : T.muted, minWidth: 20, textAlign: 'right' }}>{item.value}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+            {/* Cashflow 30-day Projection */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(99,91,255,0.1) 0%, rgba(13,34,64,0.8) 100%)', backdropFilter: 'blur(20px)', border: `1px solid ${(cashflow?.netCashflow ?? 0) >= 0 ? T.mint : '#f87171'}44`, borderRadius: 14, padding: '16px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <TrendingUp size={16} style={{ color: (cashflow?.netCashflow ?? 0) >= 0 ? T.mint : '#f87171' }} />
+                <p style={{ fontSize: 12, fontWeight: 700, color: T.white, margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em' }}>30-Day Cashflow Projection</p>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: T.muted, background: T.glass, padding: '2px 8px', borderRadius: 999 }}>{cashflow?.confidence ?? 'low'} confidence</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                {[{ label: 'Projected Income', value: cashflow?.projectedIncome ?? 0, color: T.mint }, { label: 'Projected Expenses', value: cashflow?.projectedExpenses ?? 0, color: '#f87171' }, { label: 'Net Cashflow', value: cashflow?.netCashflow ?? 0, color: (cashflow?.netCashflow ?? 0) >= 0 ? T.mint : '#f87171' }].map(m => (
+                  <div key={m.label} style={{ textAlign: 'center', padding: '8px', background: T.glass, borderRadius: 8 }}>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: m.color, margin: 0 }}>{m.value < 0 ? '-' : ''}£{Math.abs(m.value).toLocaleString()}</p>
+                    <p style={{ fontSize: 9, color: T.muted, margin: '3px 0 0', lineHeight: 1.2 }}>{m.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Today's action tiles ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10, marginBottom: 20, animation: 'fadeUp 0.5s ease 280ms both' }}>

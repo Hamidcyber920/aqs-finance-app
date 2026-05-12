@@ -51,48 +51,60 @@ export default function SystemHealthPage() {
         <div style={{ textAlign: "center", padding: 60, color: T.muted }}>Loading health data…</div>
       ) : (
         <>
-          {/* Top status cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 24 }}>
+          {/* Top status cards — 5 cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginBottom: 24 }}>
             {/* DB status */}
-            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
+            <div style={{ background: T.card, border: `1px solid ${data?.dbOk ? T.border : '#f87171'}`, borderRadius: 14, padding: "18px 20px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <Database size={16} style={{ color: data?.dbOk ? T.mint : "#f87171" }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: T.white }}>Database</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                {data?.dbOk
-                  ? <CheckCircle2 size={14} style={{ color: T.mint }} />
-                  : <XCircle size={14} style={{ color: "#f87171" }} />}
-                <span style={{ fontSize: 12, color: data?.dbOk ? T.mint : "#f87171", fontWeight: 600 }}>
-                  {data?.dbOk ? "Connected" : "Disconnected"}
-                </span>
+                {data?.dbOk ? <CheckCircle2 size={14} style={{ color: T.mint }} /> : <XCircle size={14} style={{ color: "#f87171" }} />}
+                <span style={{ fontSize: 12, color: data?.dbOk ? T.mint : "#f87171", fontWeight: 600 }}>{data?.dbOk ? "Connected" : "Disconnected"}</span>
               </div>
-              {pingData && (
-                <p style={{ fontSize: 11, color: T.muted, margin: "6px 0 0" }}>
-                  Latency: {pingData.latencyMs}ms
-                </p>
-              )}
+              {pingData && <p style={{ fontSize: 11, color: T.muted, margin: "6px 0 0" }}>Latency: {pingData.latencyMs}ms</p>}
             </div>
 
-            {/* Server time */}
+            {/* Server uptime */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                 <Server size={16} style={{ color: T.purple }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.white }}>Server</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.white }}>Uptime</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <CheckCircle2 size={14} style={{ color: T.mint }} />
-                <span style={{ fontSize: 12, color: T.mint, fontWeight: 600 }}>Running</span>
+                <span style={{ fontSize: 16, fontWeight: 800, color: T.mint }}>{data?.uptimeStr ?? "—"}</span>
               </div>
-              <p style={{ fontSize: 11, color: T.muted, margin: "6px 0 0" }}>
-                {data?.serverTime ? new Date(data.serverTime).toLocaleString() : "—"}
-              </p>
+              <p style={{ fontSize: 11, color: T.muted, margin: "6px 0 0" }}>Node {data?.nodeVersion ?? "—"}</p>
+            </div>
+
+            {/* API Response Time */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <Activity size={16} style={{ color: data?.apiResponseMs != null && data.apiResponseMs < 100 ? T.mint : data?.apiResponseMs != null && data.apiResponseMs < 300 ? '#f59e0b' : '#f87171' }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.white }}>API Response</span>
+              </div>
+              <span style={{ fontSize: 22, fontWeight: 800, color: data?.apiResponseMs != null && data.apiResponseMs < 100 ? T.mint : data?.apiResponseMs != null && data.apiResponseMs < 300 ? '#f59e0b' : '#f87171' }}>
+                {data?.apiResponseMs != null ? `${data.apiResponseMs}ms` : "—"}
+              </span>
+              <p style={{ fontSize: 11, color: T.muted, margin: "6px 0 0" }}>{data?.apiResponseMs != null ? (data.apiResponseMs < 100 ? "Excellent" : data.apiResponseMs < 300 ? "Good" : "Slow") : "Measuring…"}</p>
+            </div>
+
+            {/* Memory */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <Zap size={16} style={{ color: "#f59e0b" }} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: T.white }}>Memory</span>
+              </div>
+              <span style={{ fontSize: 22, fontWeight: 800, color: "#f59e0b" }}>{data?.memoryMB ?? "—"} MB</span>
+              <p style={{ fontSize: 11, color: T.muted, margin: "6px 0 0" }}>Heap used</p>
             </div>
 
             {/* Gmail sync */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <Zap size={16} style={{ color: "#f59e0b" }} />
+                <RefreshCw size={16} style={{ color: "#60a5fa" }} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: T.white }}>Gmail Sync</span>
               </div>
               {data?.gmailLastSyncedAt ? (
@@ -101,14 +113,12 @@ export default function SystemHealthPage() {
                     <CheckCircle2 size={14} style={{ color: T.mint }} />
                     <span style={{ fontSize: 12, color: T.mint, fontWeight: 600 }}>Synced</span>
                   </div>
-                  <p style={{ fontSize: 11, color: T.muted, margin: "6px 0 0" }}>
-                    {new Date(data.gmailLastSyncedAt).toLocaleString()}
-                  </p>
+                  <p style={{ fontSize: 11, color: T.muted, margin: "6px 0 0" }}>{new Date(data.gmailLastSyncedAt).toLocaleString()}</p>
                 </>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Clock size={14} style={{ color: T.muted }} />
-                  <span style={{ fontSize: 12, color: T.muted }}>Not yet synced this session</span>
+                  <span style={{ fontSize: 12, color: T.muted }}>Not yet synced</span>
                 </div>
               )}
             </div>

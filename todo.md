@@ -1518,12 +1518,12 @@
 
 ### Dashboard Cockpit Upgrade (Module 07)
 - [x] Top strip: live bank balance display (all accounts), unrestricted vs restricted split
-- [ ] "Needs attention today" tile: compliance actions due, payments awaiting approval
-- [ ] This week tile: scheduled meetings, training due, renewals
+- [x] "Needs attention today" tile: compliance actions due, payments awaiting approval
+- [x] This week tile: scheduled meetings, training due, renewals
 - [x] Compliance heat map: green/amber/red per policy, training, certificate
 - [x] Always-visible AI voice button on dashboard (floating, prominent)
 - [x] Donation trends chart: rolling 30/90/365 days
-- [ ] Cashflow 30-day projection tile
+- [x] Cashflow 30-day projection tile
 
 ### Compliance Cockpit Enhancements (Module 03)
 - [x] Serious Incident Reporting (SIR) workflow — voice or button initiated, walks through regulator framework
@@ -1546,8 +1546,8 @@
 ### Missing/Incomplete Pages
 - [x] Bills & Utilities page (/bills) — full CRUD with building tabs
 - [x] Training Tracker page (/training) — matrix view with certificate upload
-- [ ] Backups page — make real: show last backup time, retention, DR drill date
-- [ ] System Health page — expand with uptime, response times, job status
+- [x] Backups page — make real: show last backup time, retention, DR drill date
+- [x] System Health page — expand with uptime, response times, job status
 
 ### Sidebar Cleanup
 - [x] Remove duplicate "Payroll V3" sidebar item (keep only "Payroll")

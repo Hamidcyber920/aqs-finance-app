@@ -1,7 +1,7 @@
 /**
  * Wave 5 – System Health Router
  * Returns live metrics about the application's health: DB connectivity,
- * scheduled job status, table row counts, and recent error counts.
+ * scheduled job status, table row counts, uptime, and response times.
  */
 import { sql } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -19,15 +19,39 @@ export const systemHealthRouter = router({
     const db = await getDb();
     const dbOk = !!db;
 
+    // Server uptime
+    const uptimeSeconds = Math.floor(process.uptime());
+    const uptimeDays = Math.floor(uptimeSeconds / 86400);
+    const uptimeHours = Math.floor((uptimeSeconds % 86400) / 3600);
+    const uptimeMins = Math.floor((uptimeSeconds % 3600) / 60);
+    const uptimeStr = uptimeDays > 0
+      ? `${uptimeDays}d ${uptimeHours}h ${uptimeMins}m`
+      : uptimeHours > 0
+      ? `${uptimeHours}h ${uptimeMins}m`
+      : `${uptimeMins}m`;
+
+    const memoryMB = Math.round(process.memoryUsage().heapUsed / 1048576);
+    const nodeVersion = process.version;
+
     if (!db) {
       return {
         dbOk: false,
+        uptimeStr,
+        uptimeSeconds,
+        apiResponseMs: null,
+        memoryMB,
+        nodeVersion,
         tables: {},
         scheduledJobs: [],
         gmailLastSyncedAt: null,
         serverTime: Date.now(),
       };
     }
+
+    // Measure API response time (simple DB query)
+    const t0 = Date.now();
+    await db.select({ one: sql<number>`1` }).from(users).limit(1);
+    const apiResponseMs = Date.now() - t0;
 
     // Row counts for key tables
     const countQuery = (table: any) =>
@@ -55,26 +79,32 @@ export const systemHealthRouter = router({
 
     // Scheduled jobs status (static metadata — actual cron state is in-process)
     const scheduledJobs = [
-      { name: "Weekly Repayment Alert",   schedule: "Mon 08:00",   status: "active" },
-      { name: "Monthly Trustee Report",   schedule: "1st 08:00",   status: "active" },
-      { name: "Birthday Alerts",          schedule: "Daily 09:00", status: "active" },
-      { name: "Rent Reminders",           schedule: "Daily 08:30", status: "active" },
-      { name: "Compliance Digest",        schedule: "Mon 07:30",   status: "active" },
-      { name: "Gmail Sync",               schedule: "Hourly 06-22",status: "active" },
-      { name: "Unread Email Digest",      schedule: "Daily 08:00", status: "active" },
+      { name: "Weekly Repayment Alert",   schedule: "Mon 08:00",    status: "active" },
+      { name: "Monthly Trustee Report",   schedule: "1st 08:00",    status: "active" },
+      { name: "Birthday Alerts",          schedule: "Daily 09:00",  status: "active" },
+      { name: "Rent Reminders",           schedule: "Daily 08:30",  status: "active" },
+      { name: "Compliance Digest",        schedule: "Mon 07:30",    status: "active" },
+      { name: "Gmail Sync",               schedule: "Hourly 06-22", status: "active" },
+      { name: "Unread Email Digest",      schedule: "Daily 08:00",  status: "active" },
+      { name: "Annual Statement Batch",   schedule: "On demand",    status: "active" },
     ];
 
     return {
       dbOk,
+      uptimeStr,
+      uptimeSeconds,
+      apiResponseMs,
+      memoryMB,
+      nodeVersion,
       tables: {
-        receipts:         receiptCount,
-        inboundEmails:    emailCount,
-        users:            userCount,
-        loans:            loanCount,
-        payroll:          payrollCount,
-        auditLog:         auditCount,
-        emailSections:    sectionCount,
-        replyTemplates:   templateCount,
+        receipts:       receiptCount,
+        inboundEmails:  emailCount,
+        users:          userCount,
+        loans:          loanCount,
+        payroll:        payrollCount,
+        auditLog:       auditCount,
+        emailSections:  sectionCount,
+        replyTemplates: templateCount,
       },
       scheduledJobs,
       gmailLastSyncedAt: gmailLastSyncedAt ?? null,

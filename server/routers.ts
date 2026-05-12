@@ -902,6 +902,50 @@ export const appRouter = router({
         .orderBy(sql`YEAR(${fundraisingDonations.createdAt})`, sql`MONTH(${fundraisingDonations.createdAt})`);
       return rows.map(r => ({ month: r.month, donations: Number(r.total) }));
     }),
+    cashflowProjection: adminProcedure.query(async () => {
+      const { incomeRecords, receipts: receiptsTable } = await import('../drizzle/schema');
+      const db = await getDb();
+      if (!db) return { projectedIncome: 0, projectedExpenses: 0, netCashflow: 0, confidence: 'low' };
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+      const [incomeRows, expenseRows] = await Promise.all([
+        db.select({ total: sql<number>`COALESCE(SUM(CAST(${incomeRecords.amount} AS DECIMAL(12,2))), 0)` })
+          .from(incomeRecords).where(sql`${incomeRecords.date} >= ${thirtyDaysAgo.toISOString().split('T')[0]}`),
+        db.select({ total: sql<number>`COALESCE(SUM(CAST(${receiptsTable.amount} AS DECIMAL(12,2))), 0)` })
+          .from(receiptsTable).where(sql`${receiptsTable.createdAt} >= ${sixtyDaysAgo} AND ${receiptsTable.status} = 'approved'`),
+      ]);
+      const avgIncome = Number(incomeRows[0]?.total ?? 0);
+      const avgExpenses = Number(expenseRows[0]?.total ?? 0) / 2;
+      return {
+        projectedIncome: Math.round(avgIncome),
+        projectedExpenses: Math.round(avgExpenses),
+        netCashflow: Math.round(avgIncome - avgExpenses),
+        confidence: avgIncome > 0 ? 'medium' : 'low',
+      };
+    }),
+    thisWeek: adminProcedure.query(async () => {
+      const { complianceActions, trainingRecords, accommodationTenants } = await import('../drizzle/schema');
+      const db = await getDb();
+      if (!db) return { dueActions: 0, trainingDue: 0, rentDue: 0, upcomingRenewals: 0 };
+      const today = new Date();
+      const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const todayStr = today.toISOString().split('T')[0];
+      const nextWeekStr = nextWeek.toISOString().split('T')[0];
+      const [actionRows, trainingRows, rentRows] = await Promise.all([
+        db.select({ n: sql<number>`count(*)` }).from(complianceActions)
+          .where(sql`${complianceActions.dueDate} BETWEEN ${todayStr} AND ${nextWeekStr} AND ${complianceActions.status} != 'completed'`),
+        db.select({ n: sql<number>`count(*)` }).from(trainingRecords)
+          .where(sql`${trainingRecords.expiryDate} BETWEEN ${todayStr} AND ${nextWeekStr}`),
+        db.select({ n: sql<number>`count(*)` }).from(accommodationTenants)
+          .where(sql`DAY(CURDATE()) BETWEEN 1 AND 7 AND ${accommodationTenants.status} = 'active'`),
+      ]);
+      return {
+        dueActions: Number(actionRows[0]?.n ?? 0),
+        trainingDue: Number(trainingRows[0]?.n ?? 0),
+        rentDue: Number(rentRows[0]?.n ?? 0),
+        upcomingRenewals: 0,
+      };
+    }),
   }),
 
   // ─── USER MANAGEMENT ──────────────────────────────────────────────────────
