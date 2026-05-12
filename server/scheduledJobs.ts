@@ -13,8 +13,8 @@ import cron from "node-cron";
 import nodemailer from "nodemailer";
 import Stripe from "stripe";
 import { getDb } from "./db";
-import { loanRepayments, pledges, donors } from "../drizzle/schema";
-import { eq, and, lte, or } from "drizzle-orm";
+import { loanRepayments, pledges, donors, fundraisingDonations, voiceSessions, accommodationTenants, invoices } from "../drizzle/schema";
+import { eq, and, lte, gte, or, sql } from "drizzle-orm";
 import { setGmailLastSyncedAt } from "./routers/commsInbox";
 
 const stripeScheduler = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-04-22.dahlia" as any });
@@ -408,7 +408,11 @@ export function registerScheduledJobs() {
   cron.schedule("0 7 * * 1", () => {
     sendWeeklyCashFlowDigest().catch(console.error);
   }, { timezone: "Europe/London" });
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15) + contract renewal reminders (daily 07:00) + weekly cashflow digest (Mon 07:00)");
+  // Morning briefing for voice agent (daily 07:30)
+  cron.schedule("30 7 * * *", () => {
+    generateMorningBriefing().catch(console.error);
+  }, { timezone: "Europe/London" });
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15) + contract renewal reminders (daily 07:00) + weekly cashflow digest (Mon 07:00) + morning briefing (daily 07:30)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
@@ -1503,5 +1507,99 @@ async function sendWeeklyCashFlowDigest() {
     console.log(`[Scheduled] Weekly cash flow digest sent for ${upcoming.length} upcoming payment(s).`);
   } catch (e) {
     console.error("[Scheduled] Weekly cash flow digest failed:", e);
+  }
+}
+
+
+// ─── Morning Briefing for Voice Agent ────────────────────────────────────────
+/**
+ * Daily morning briefing (07:30 UK time):
+ * Generates a structured summary for the voice agent to read aloud when the user
+ * first opens the app each morning. Covers:
+ * - Unread email count
+ * - Overdue rents / upcoming payments
+ * - New donations since yesterday
+ * - Pending approvals
+ * - Cash flow alerts
+ */
+export async function generateMorningBriefing() {
+  console.log("[Scheduled] Generating morning briefing...");
+  try {
+    const db = await getDb();
+    if (!db) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // Count new donations since yesterday
+    const newDonations = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(fundraisingDonations)
+      .where(gte(fundraisingDonations.createdAt, yesterday));
+    const donationCount = newDonations[0]?.count ?? 0;
+
+    // Count overdue rents (tenants with unpaid rent past due date)
+    let overdueRentCount = 0;
+    try {
+      const overdueRents = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(accommodationTenants)
+        .where(
+          eq(accommodationTenants.status, "active")
+        );
+      overdueRentCount = overdueRents[0]?.count ?? 0;
+    } catch {
+      // tenants table may not have rentDueDate
+    }
+
+    // Count pending approvals (invoices needing sign-off)
+    let pendingApprovalCount = 0;
+    try {
+      const pendingApprovals = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(invoices)
+        .where(eq(invoices.status, "pending"));
+      pendingApprovalCount = pendingApprovals[0]?.count ?? 0;
+    } catch {
+      // expenses may not have status field
+    }
+
+    // Build briefing text
+    const parts: string[] = [];
+    parts.push(`Good morning. Here is your briefing for ${today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}.`);
+
+    if (donationCount > 0) {
+      parts.push(`${donationCount} new donation${donationCount > 1 ? "s" : ""} received since yesterday.`);
+    }
+    if (overdueRentCount > 0) {
+      parts.push(`${overdueRentCount} overdue rent payment${overdueRentCount > 1 ? "s" : ""} require attention.`);
+    }
+    if (pendingApprovalCount > 0) {
+      parts.push(`${pendingApprovalCount} expense${pendingApprovalCount > 1 ? "s" : ""} pending approval.`);
+    }
+    if (donationCount === 0 && overdueRentCount === 0 && pendingApprovalCount === 0) {
+      parts.push("No urgent items requiring your attention. Have a productive day.");
+    }
+
+    const briefingText = parts.join(" ");
+
+    // Store the briefing in the voice_sessions table as a system-generated briefing
+    await db.insert(voiceSessions).values({
+      userId: 1, // System-generated briefing for the primary admin
+      startedAt: new Date(),
+      endedAt: new Date(),
+      sessionType: "morning_briefing",
+      screenContext: "dashboard",
+      totalTokensUsed: 0,
+      totalCostUsd: "0",
+      turnCount: 1,
+      summary: briefingText,
+    });
+
+    console.log(`[Scheduled] Morning briefing generated: ${briefingText.substring(0, 100)}...`);
+  } catch (e) {
+    console.error("[Scheduled] Morning briefing generation failed:", e);
   }
 }

@@ -1725,3 +1725,57 @@
 ### Phase 6 — Security (Gaps to fix)
 - [x] Helmet security headers (X-Frame-Options, CSP, X-Content-Type-Options, HSTS)
 - [x] Rate limiting on /api/trpc and /api/stripe/webhook
+
+## Voice Agent Integration (Spec: HibbaVoiceAgentDoc2Manus.docx)
+
+### DB Schema
+- [x] voiceSessions table (id, userId, startedAt, endedAt, language, device, conversationId, tokenCount, status)
+- [x] voiceToolCalls table (id, sessionId, toolName, params, resultSummary, latencyMs, createdAt)
+- [x] voiceTranscripts table (id, sessionId, role, content, createdAt)
+- [x] voiceCostTracking table (id, userId, date, tokenCount, estimatedCost)
+- [x] voiceFeatureFlags table (id, toolName, enabledRoles JSON, phase, enabled, updatedAt)
+
+### Voice Tool Endpoints (POST /internal/voice-tools/{tool})
+- [x] get_current_user — returns user profile, role, permissions
+- [x] get_screen_context — returns current page/entity from client context
+- [x] set_user_preference — updates user preferences (language, briefing time)
+- [x] get_staff_directory — excludes payroll unless superadmin
+- [x] get_trustees — returns trustee list
+- [x] get_donor — filtered by role permissions (reception can't see lifetime value)
+- [x] search_transactions — paginated, date-filtered
+- [x] get_fund_balance — live computation from income/expense tables
+- [x] get_campaign_status — campaign progress + milestones
+- [x] get_gift_aid_status — Gift Aid declarations and ChR1 status
+- [x] get_qarde_hasan_register — loan register with repayment status
+- [x] get_priorities — tasks + approvals + flagged items + follow-ups
+- [x] create_donation — triggers receipt + thank-you + reconciliation pipeline
+- [x] create_expense — with fund ring-fencing check
+- [x] update_donor_profile — field-level permissions enforced
+- [x] log_communication — writes to comms log
+- [x] create_payment_link — generates Stripe Checkout session URL
+- [x] draft_whatsapp / draft_email — writes to drafts table
+- [x] send_single_message — validates draft confirmed, routes via email
+- [x] compose_briefing — priorities + calendar + recent transactions + open items
+- [x] compose_report — structured summary data
+- [x] flag_for_review — writes to review queue, notifies Dr. Hamid
+
+### Voice Gateway
+- [x] WebSocket service with session management and auth verification
+- [x] Gemini API integration (ready for API key handover)
+- [x] Tool-call interception and routing layer
+- [x] TTS streaming integration (placeholder for Google Cloud TTS / ElevenLabs)
+- [x] Per-user rate limiting and cost caps (200k tokens/day, £500/month ceiling)
+
+### UI Components
+- [x] Microphone button component (press-and-hold, tap-to-toggle, bottom-right)
+- [x] Waveform animation while processing
+- [x] Streaming text transcript pane
+- [x] Collapsible conversation history
+- [x] "Correct this" button on agent statements → flag_for_review
+- [x] Form-fill mode (push screen_context when form opens)
+- [x] Wire VoiceAgent into DashboardLayout with feature flag check
+
+### Admin & Scheduling
+- [x] Feature flag admin panel for phased rollout control
+- [x] Morning briefing scheduler (compose_briefing at user-preferred time)
+- [x] Audit logging for all voice sessions and tool calls

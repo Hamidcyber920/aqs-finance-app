@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { createServer } from "http";
+import { attachVoiceGateway } from "../voiceGateway";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
@@ -112,6 +113,9 @@ async function startServer() {
 
   // Register scheduled cron jobs (weekly repayment alert + monthly trustee report)
   registerScheduledJobs();
+
+  // Attach Voice Agent WebSocket gateway
+  attachVoiceGateway(server);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

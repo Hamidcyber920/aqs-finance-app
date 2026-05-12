@@ -23,6 +23,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
+import VoiceAgent from "@/components/VoiceAgent";
 import {
   BarChart3, BookOpen, Building2, Camera, ClipboardList, Scale,
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
@@ -505,6 +506,7 @@ function DashboardLayoutContent({
           </nav>
         )}
       </SidebarInset>
+      <VoiceAgent screenContext={location.split("?")[0]} />
     </>
   );
 }

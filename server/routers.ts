@@ -38,6 +38,7 @@ import { qrCodesRouter } from "./routers/qrCodes";
 import { recognitionTiersRouter } from "./routers/recognitionTiers";
 import { facilitiesRouter } from "./routers/facilities";
 import { bistroRouter } from "./routers/bistro";
+import { voiceAgentRouter } from "./routers/voiceAgent";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -403,6 +404,7 @@ export const appRouter = router({
   trusteeFinance: trusteeFinanceRouter,
   facilities: facilitiesRouter,
   bistro: bistroRouter,
+  voiceAgent: voiceAgentRouter,
   // --- SUCCESSIONN & DELEGATION ──────────────────────────────────────────────────
   succession: router({
     /** Get current succession status: who is the delegate, last owner activity, inactivity days */

@@ -2315,3 +2315,84 @@ export const processedStripeEvents = mysqlTable("processed_stripe_events", {
 });
 export type ProcessedStripeEvent = typeof processedStripeEvents.$inferSelect;
 export type InsertProcessedStripeEvent = typeof processedStripeEvents.$inferInsert;
+
+// ─── VOICE AGENT ────────────────────────────────────────────────────────────
+
+export const voiceSessions = mysqlTable("voice_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  conversationId: varchar("conversationId", { length: 100 }).notNull(), // UUID per conversation
+  language: varchar("language", { length: 10 }).notNull().default("en"),
+  device: varchar("device", { length: 50 }), // mobile, desktop, tablet
+  screenContext: varchar("screenContext", { length: 200 }), // page/entity at session start
+  tokenCount: int("tokenCount").notNull().default(0),
+  status: mysqlEnum("status", ["active", "completed", "error", "timeout"]).notNull().default("active"),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  endedAt: timestamp("endedAt"),
+});
+export type VoiceSession = typeof voiceSessions.$inferSelect;
+export type InsertVoiceSession = typeof voiceSessions.$inferInsert;
+
+export const voiceToolCalls = mysqlTable("voice_tool_calls", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull(),
+  toolName: varchar("toolName", { length: 100 }).notNull(),
+  params: text("params"), // JSON stringified input params
+  resultSummary: text("resultSummary"), // truncated result for audit
+  success: boolean("success").notNull().default(true),
+  errorMessage: text("errorMessage"),
+  latencyMs: int("latencyMs"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type VoiceToolCall = typeof voiceToolCalls.$inferSelect;
+export type InsertVoiceToolCall = typeof voiceToolCalls.$inferInsert;
+
+export const voiceTranscripts = mysqlTable("voice_transcripts", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId").notNull(),
+  role: mysqlEnum("role", ["user", "assistant", "system", "tool"]).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type VoiceTranscript = typeof voiceTranscripts.$inferSelect;
+export type InsertVoiceTranscript = typeof voiceTranscripts.$inferInsert;
+
+export const voiceCostTracking = mysqlTable("voice_cost_tracking", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  date: date("date").notNull(),
+  tokenCount: int("tokenCount").notNull().default(0),
+  estimatedCostPence: int("estimatedCostPence").notNull().default(0), // cost in pence to avoid decimals
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type VoiceCostTracking = typeof voiceCostTracking.$inferSelect;
+export type InsertVoiceCostTracking = typeof voiceCostTracking.$inferInsert;
+
+export const voiceFeatureFlags = mysqlTable("voice_feature_flags", {
+  id: int("id").autoincrement().primaryKey(),
+  toolName: varchar("toolName", { length: 100 }).notNull(), // tool name or "*" for global
+  enabledRoles: text("enabledRoles").notNull().default("[]"), // JSON array of roles e.g. ["superadmin","trustee"]
+  phase: int("phase").notNull().default(1), // rollout phase 1-5
+  enabled: boolean("enabled").notNull().default(false),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type VoiceFeatureFlag = typeof voiceFeatureFlags.$inferSelect;
+export type InsertVoiceFeatureFlag = typeof voiceFeatureFlags.$inferInsert;
+
+// ─── VOICE REVIEW QUEUE ─────────────────────────────────────────────────────
+// "Correct this" button on agent statements creates entries here
+export const voiceReviewQueue = mysqlTable("voice_review_queue", {
+  id: int("id").autoincrement().primaryKey(),
+  sessionId: int("sessionId"),
+  transcriptId: int("transcriptId"),
+  flaggedByUserId: int("flaggedByUserId").notNull(),
+  agentStatement: text("agentStatement").notNull(),
+  userCorrection: text("userCorrection"),
+  status: mysqlEnum("status", ["pending", "reviewed", "dismissed"]).notNull().default("pending"),
+  reviewedByUserId: int("reviewedByUserId"),
+  reviewNotes: text("reviewNotes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  reviewedAt: timestamp("reviewedAt"),
+});
+export type VoiceReviewQueueItem = typeof voiceReviewQueue.$inferSelect;
+export type InsertVoiceReviewQueueItem = typeof voiceReviewQueue.$inferInsert;
