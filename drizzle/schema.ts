@@ -2160,3 +2160,72 @@ export const facilityBookings = mysqlTable("facility_bookings", {
 });
 export type FacilityBooking = typeof facilityBookings.$inferSelect;
 export type InsertFacilityBooking = typeof facilityBookings.$inferInsert;
+
+// --- BISTRO 87 ---
+export const bistroMenuItems = mysqlTable("bistro_menu_items", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  category: varchar("category", { length: 100 }).notNull().default("Main"),
+  description: text("description"),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  costPrice: decimal("costPrice", { precision: 10, scale: 2 }),
+  isAvailable: boolean("isAvailable").notNull().default(true),
+  isHalal: boolean("isHalal").notNull().default(true),
+  allergens: text("allergens"),
+  imageUrl: text("imageUrl"),
+  sortOrder: int("sortOrder").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BistroMenuItem = typeof bistroMenuItems.$inferSelect;
+export type InsertBistroMenuItem = typeof bistroMenuItems.$inferInsert;
+
+export const bistroOrders = mysqlTable("bistro_orders", {
+  id: int("id").autoincrement().primaryKey(),
+  orderRef: varchar("orderRef", { length: 20 }).notNull(),
+  tableNumber: varchar("tableNumber", { length: 20 }),
+  customerName: varchar("customerName", { length: 200 }),
+  orderType: mysqlEnum("orderType", ["dine_in", "takeaway", "delivery", "event_catering"]).notNull().default("dine_in"),
+  status: mysqlEnum("status", ["pending", "preparing", "ready", "served", "cancelled"]).notNull().default("pending"),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),
+  tax: decimal("tax", { precision: 10, scale: 2 }).notNull().default("0"),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull().default("0"),
+  paymentMethod: mysqlEnum("paymentMethod", ["cash", "card", "online", "account"]),
+  paymentStatus: mysqlEnum("paymentStatus", ["unpaid", "paid", "refunded"]).notNull().default("unpaid"),
+  notes: text("notes"),
+  staffId: int("staffId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BistroOrder = typeof bistroOrders.$inferSelect;
+export type InsertBistroOrder = typeof bistroOrders.$inferInsert;
+
+export const bistroOrderItems = mysqlTable("bistro_order_items", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("orderId").notNull(),
+  menuItemId: int("menuItemId").notNull(),
+  itemName: varchar("itemName", { length: 200 }).notNull(),
+  quantity: int("quantity").notNull().default(1),
+  unitPrice: decimal("unitPrice", { precision: 10, scale: 2 }).notNull(),
+  lineTotal: decimal("lineTotal", { precision: 10, scale: 2 }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BistroOrderItem = typeof bistroOrderItems.$inferSelect;
+export type InsertBistroOrderItem = typeof bistroOrderItems.$inferInsert;
+
+export const bistroDailyTotals = mysqlTable("bistro_daily_totals", {
+  id: int("id").autoincrement().primaryKey(),
+  date: date("date").notNull(),
+  totalOrders: int("totalOrders").notNull().default(0),
+  totalRevenue: decimal("totalRevenue", { precision: 10, scale: 2 }).notNull().default("0"),
+  cashRevenue: decimal("cashRevenue", { precision: 10, scale: 2 }).notNull().default("0"),
+  cardRevenue: decimal("cardRevenue", { precision: 10, scale: 2 }).notNull().default("0"),
+  dineInOrders: int("dineInOrders").notNull().default(0),
+  takeawayOrders: int("takeawayOrders").notNull().default(0),
+  cateringOrders: int("cateringOrders").notNull().default(0),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BistroDailyTotal = typeof bistroDailyTotals.$inferSelect;
+export type InsertBistroDailyTotal = typeof bistroDailyTotals.$inferInsert;

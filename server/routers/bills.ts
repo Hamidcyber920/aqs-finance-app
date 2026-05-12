@@ -677,4 +677,52 @@ export const billsRouter = router({
       const filename = `${account[0].supplier.replace(/[^a-z0-9]/gi, "_")}_bills.csv`;
       return { csv, filename };
     }),
+
+  /** AI-powered anomaly detection across all utility bills */
+  detectAnomalies: protectedProcedure
+    .input(z.object({ buildingFilter: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      if (!db) return { anomalies: [] };
+      const bills = await db.select().from(utilityBills).orderBy(desc(utilityBills.billDate)).limit(500);
+      const accounts = await db.select().from(utilityAccounts);
+      const accountMap = Object.fromEntries(accounts.map((a: any) => [a.id, a]));
+      const groups: Record<number, number[]> = {};
+      for (const b of bills) {
+        if (!groups[b.accountId]) groups[b.accountId] = [];
+        groups[b.accountId].push(Number(b.amount));
+      }
+      const stats: Record<number, { mean: number; std: number }> = {};
+      for (const [id, amounts] of Object.entries(groups)) {
+        const mean = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+        const std = Math.sqrt(amounts.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / amounts.length);
+        stats[Number(id)] = { mean, std };
+      }
+      const anomalies = bills
+        .filter((b: any) => {
+          const s = stats[b.accountId];
+          if (!s || s.std === 0) return false;
+          const zScore = Math.abs(Number(b.amount) - s.mean) / s.std;
+          return zScore > 2;
+        })
+        .map((b: any) => {
+          const s = stats[b.accountId];
+          const acc = accountMap[b.accountId];
+          const zScore = ((Number(b.amount) - s.mean) / s.std).toFixed(2);
+          return {
+            billId: b.id,
+            accountId: b.accountId,
+            supplier: acc?.supplier ?? "Unknown",
+            building: acc?.building ?? "",
+            billDate: b.billDate,
+            amount: Number(b.amount),
+            meanAmount: Math.round(s.mean * 100) / 100,
+            zScore: Number(zScore),
+            direction: Number(b.amount) > s.mean ? "spike" : "drop",
+          };
+        })
+        .sort((a: any, b: any) => Math.abs(b.zScore) - Math.abs(a.zScore))
+        .slice(0, 20);
+      return { anomalies };
+    }),
 });

@@ -38,6 +38,7 @@ import { trusteeFinanceRouter } from "./routers/trusteeFinance";
 import { qrCodesRouter } from "./routers/qrCodes";
 import { recognitionTiersRouter } from "./routers/recognitionTiers";
 import { facilitiesRouter } from "./routers/facilities";
+import { bistroRouter } from "./routers/bistro";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -403,7 +404,8 @@ export const appRouter = router({
   aiScanner: aiScannerRouter,
   trusteeFinance: trusteeFinanceRouter,
   facilities: facilitiesRouter,
-  // ─── SUCCESSIONN & DELEGATION ──────────────────────────────────────────────────
+  bistro: bistroRouter,
+  // --- SUCCESSIONN & DELEGATION ──────────────────────────────────────────────────
   succession: router({
     /** Get current succession status: who is the delegate, last owner activity, inactivity days */
     getStatus: ownerProcedure.query(async () => {

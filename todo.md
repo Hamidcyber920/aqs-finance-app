@@ -1644,13 +1644,13 @@
 - [x] Facilities & Room Booking module — schema (facility_rooms, facility_bookings), router, frontend page, sidebar nav
 - [x] isRestricted + restrictedFundName fields added to incomeRecords schema and income.create procedure
 - [x] JSX multiple-root fragment fix across 12 pages (QRCodes, RecognitionTiers, SavedViews, BulkApprovals, ConflictsRegister, DonorPipeline, DonorProfile, MajorDonor, Pledges, BillsUtilities, TrusteeDashboard, TrainingTracker)
-- [ ] Bistro 87 restaurant/cafe management module (spec Section 8) — not yet built (requires external POS/menu data)
+- [x] Bistro 87 restaurant/cafe management module — schema, router, frontend page, sidebar nav
 - [ ] Open Banking / TrueLayer live bank balance feed — not yet built (requires API key)
 - [ ] GoCardless direct debit integration — not yet built (requires API key)
-- [ ] Gift Aid claim builder with HMRC CSV export — not yet built
-- [ ] Lapsed donor AI re-engagement campaign — not yet built
-- [ ] 13-week cashflow stress-test scenarios — not yet built
+- [x] Gift Aid claim builder with HMRC CSV export — already built in DonorCRM.tsx (confirmed in audit)
+- [x] Lapsed donor AI re-engagement campaign — already built in donorsV3.ts (confirmed in audit)
+- [x] 13-week cashflow stress-test scenarios (base/best/worst) — added to trusteeFinance router
 - [ ] WebAuthn / TOTP / magic link auth — not yet built (requires auth provider upgrade)
 - [ ] Sentry / PostHog / BetterStack observability — not yet built (requires API keys)
 - [ ] Calendar sync (Google/Microsoft 365) — not yet built (requires OAuth scopes)
-- [ ] Anomaly detection on expenses — not yet built
+- [x] Anomaly detection on expenses — AI-powered flagging added to bills.ts router

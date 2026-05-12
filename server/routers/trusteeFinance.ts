@@ -9,6 +9,7 @@ import {
   utilityAccounts,
   utilityBills,
   users,
+  incomeRecords,
 } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 import nodemailer from "nodemailer";
@@ -554,5 +555,86 @@ export const trusteeFinanceRouter = router({
       const key = `payment-history-exports/account-${input.accountId}-${Date.now()}.csv`;
       const { url } = await storagePut(key, Buffer.from(csv, "utf-8"), "text/csv");
       return { url };
+    }),
+
+  /** 13-week cashflow forecast with base/optimistic/pessimistic scenarios */
+  thirteenWeekForecast: protectedProcedure
+    .input(z.object({
+      openingBalance: z.number().default(0),
+      incomeVariance: z.number().default(0.1),  // +/- 10% for optimistic/pessimistic
+      expenseVariance: z.number().default(0.1),
+    }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      if (!db) return { weeks: [] };
+      const now = new Date();
+      // Pull scheduled payments for next 13 weeks
+      const endDate = new Date(now.getTime() + 13 * 7 * 24 * 60 * 60 * 1000);
+      const scheduled = await db.select().from(scheduledPayments)
+        .where(and(
+          gte(scheduledPayments.dueDate, now.toISOString().split("T")[0]),
+          lte(scheduledPayments.dueDate, endDate.toISOString().split("T")[0])
+        ));
+      // Pull income records for last 3 months to estimate weekly income
+      const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const incomeRows = await db.select().from(incomeRecords)
+        .where(gte(incomeRecords.createdAt, threeMonthsAgo));
+      const totalIncome3m = incomeRows.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+      const weeklyIncome = totalIncome3m / 13;
+
+      // Build 13 weekly buckets
+      const weeks = Array.from({ length: 13 }, (_, i) => {
+        const weekStart = new Date(now.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const weekLabel = `W${i + 1} ${weekStart.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`;
+        const weekPayments = scheduled.filter((s: any) => {
+          const d = new Date(s.dueDate);
+          return d >= weekStart && d < weekEnd;
+        });
+        const baseExpenses = weekPayments.reduce((s: number, p: any) => s + Number(p.amount ?? 0), 0);
+        return {
+          week: i + 1,
+          label: weekLabel,
+          income: {
+            base: Math.round(weeklyIncome * 100) / 100,
+            optimistic: Math.round(weeklyIncome * (1 + input.incomeVariance) * 100) / 100,
+            pessimistic: Math.round(weeklyIncome * (1 - input.incomeVariance) * 100) / 100,
+          },
+          expenses: {
+            base: Math.round(baseExpenses * 100) / 100,
+            optimistic: Math.round(baseExpenses * (1 - input.expenseVariance) * 100) / 100,
+            pessimistic: Math.round(baseExpenses * (1 + input.expenseVariance) * 100) / 100,
+          },
+          netBase: Math.round((weeklyIncome - baseExpenses) * 100) / 100,
+          netOptimistic: Math.round((weeklyIncome * (1 + input.incomeVariance) - baseExpenses * (1 - input.expenseVariance)) * 100) / 100,
+          netPessimistic: Math.round((weeklyIncome * (1 - input.incomeVariance) - baseExpenses * (1 + input.expenseVariance)) * 100) / 100,
+          scheduledPayments: weekPayments.map((p: any) => ({
+            id: p.id,
+            description: p.description,
+            amount: Number(p.amount ?? 0),
+            dueDate: p.dueDate,
+            status: p.status,
+          })),
+        };
+      });
+
+      // Compute running balances
+      let baseBalance = input.openingBalance;
+      let optimisticBalance = input.openingBalance;
+      let pessimisticBalance = input.openingBalance;
+      const weeksWithBalance = weeks.map(w => {
+        baseBalance += w.netBase;
+        optimisticBalance += w.netOptimistic;
+        pessimisticBalance += w.netPessimistic;
+        return {
+          ...w,
+          runningBalance: {
+            base: Math.round(baseBalance * 100) / 100,
+            optimistic: Math.round(optimisticBalance * 100) / 100,
+            pessimistic: Math.round(pessimisticBalance * 100) / 100,
+          },
+        };
+      });
+      return { weeks: weeksWithBalance, openingBalance: input.openingBalance };
     }),
 });

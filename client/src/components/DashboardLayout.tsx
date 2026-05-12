@@ -30,7 +30,7 @@ import {
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
   Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity,
-  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark, Zap, GraduationCap, MailSearch,
+  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark, Zap, GraduationCap, MailSearch, UtensilsCrossed,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -89,6 +89,7 @@ const adminItems = [
   { icon: MailSearch, label: "LBMW Correspondence", path: "/lbmw-correspondence" },
   { icon: ShieldCheck, label: "Trustee Dashboard", path: "/trustee-dashboard" },
   { icon: Building2, label: "Facilities & Bookings", path: "/facilities" },
+  { icon: UtensilsCrossed, label: "Bistro 87", path: "/bistro87" },
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Shield, label: "Audit Trail", path: "/audit-trail" },
