@@ -123,7 +123,7 @@ export default function TrusteeDashboard() {
 
   return (
       <div className="p-6 space-y-6">
-        {/* ── Header ─────────────────────────────────────────────────────── */}
+        {/* - Header - */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-[#1a4731] flex items-center justify-center">
@@ -164,7 +164,7 @@ export default function TrusteeDashboard() {
 
         {data && (
           <>
-            {/* ── Summary Cards ───────────────────────────────────────────── */}
+            {/* - Summary Cards - */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
               <SummaryCard
                 label="Total Income"
@@ -205,7 +205,7 @@ export default function TrusteeDashboard() {
               />
             </div>
 
-            {/* ── Charts Row ──────────────────────────────────────────────── */}
+            {/* - Charts Row - */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Category breakdown */}
               {data.categoryBreakdown.length > 0 && (
@@ -265,7 +265,7 @@ export default function TrusteeDashboard() {
               )}
             </div>
 
-            {/* ── Budget vs Actuals ────────────────────────────────────────── */}
+            {/* - Budget vs Actuals - */}
             {data.budgetVsActuals.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
@@ -315,7 +315,7 @@ export default function TrusteeDashboard() {
               </Card>
             )}
 
-            {/* ── Pending Approvals ────────────────────────────────────────── */}
+            {/* - Pending Approvals - */}
             <Card>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
@@ -439,7 +439,7 @@ export default function TrusteeDashboard() {
         )}
       </div>
 
-      {/* ── Approve with note dialog ──────────────────────────────────────────── */}
+      {/* - Approve with note dialog - */}
       <Dialog open={approveNoteId !== null} onOpenChange={open => { if (!open) setApproveNoteId(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -468,7 +468,7 @@ export default function TrusteeDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Reject dialog ─────────────────────────────────────────────────────── */}
+      {/* - Reject dialog - */}
       <Dialog open={rejectId !== null} onOpenChange={open => { if (!open) setRejectId(null); }}>
         <DialogContent>
           <DialogHeader>
@@ -497,7 +497,7 @@ export default function TrusteeDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Monthly Close Report dialog ───────────────────────────────────────── */}
+      {/* - Monthly Close Report dialog - */}
       <Dialog open={closeReportOpen} onOpenChange={setCloseReportOpen}>
         <DialogContent>
           <DialogHeader>
@@ -568,7 +568,7 @@ export default function TrusteeDashboard() {
   );
 }
 
-// ── Summary Card component ────────────────────────────────────────────────────
+// - Summary Card component -
 function SummaryCard({
   label, value, icon, color, highlight,
 }: {
