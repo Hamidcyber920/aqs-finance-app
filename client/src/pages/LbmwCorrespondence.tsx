@@ -12,8 +12,10 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Plus, RefreshCw, Mail, Phone, Building, FileText, AlertTriangle,
-  CheckCircle2, Clock, XCircle, Link2, Unlink, Zap,
+  CheckCircle2, Clock, XCircle, Link2, Unlink, Zap, Download, Receipt,
 } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -71,6 +73,18 @@ const emptyForm = {
 
 export default function LbmwCorrespondence() {
   const [statusFilter, setStatusFilter] = useState<string>("");
+
+  // Gmail pull dialog state
+  const [gmailDialog, setGmailDialog] = useState(false);
+  const [selectedLabelId, setSelectedLabelId] = useState("");
+  const [selectedLabelName, setSelectedLabelName] = useState("");
+  const [maxResults, setMaxResults] = useState(20);
+  const [notifyTrustees, setNotifyTrustees] = useState(true);
+  const [pullResult, setPullResult] = useState<{ created: number; skipped: number; invoices: number; actionsCreated: number; details: any[] } | null>(null);
+
+  // Invoice pay dialog state
+  const [invoicePayDialog, setInvoicePayDialog] = useState<{ open: boolean; item?: any }>({ open: false });
+  const [invoicePayForm, setInvoicePayForm] = useState({ departmentName: "General", categoryName: "LBMW Invoice", notes: "" });
   const [dialog, setDialog] = useState<{ open: boolean; item?: any }>({ open: false });
   const [form, setForm] = useState(emptyForm);
   const [updateDialog, setUpdateDialog] = useState<{ open: boolean; item?: any }>({ open: false });
@@ -90,6 +104,27 @@ export default function LbmwCorrespondence() {
 
   const utils = trpc.useUtils();
   const { data: items = [], isLoading, refetch } = trpc.lbmw.list.useQuery({ status: statusFilter || undefined });
+
+  // Gmail procedures
+  const { data: gmailLabels = [], isLoading: labelsLoading } = trpc.lbmwGmail.listLabels.useQuery(undefined, { enabled: gmailDialog, retry: false });
+  const pullFromLabelMut = trpc.lbmwGmail.pullFromLabel.useMutation({
+    onSuccess: (data) => {
+      setPullResult(data);
+      refetch();
+      utils.lbmw.summary.invalidate();
+      const msg = `Pulled ${data.created} new email(s). ${data.skipped} skipped (already imported). ${data.invoices} invoice(s) detected. ${data.actionsCreated} action task(s) created.`;
+      toast.success(msg);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const markInvoicePaidMut = trpc.lbmwGmail.markInvoicePaid.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Invoice marked as paid. Expense record #${data.expenseId} created in Monthly Expenses.`);
+      setInvoicePayDialog({ open: false });
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const { data: summary } = trpc.lbmw.summary.useQuery();
   const { data: complianceActions = [] } = trpc.lbmw.listComplianceActions.useQuery();
 
@@ -176,9 +211,12 @@ export default function LbmwCorrespondence() {
             <h1 className="text-2xl font-bold">LBMW Correspondence Tracker</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Statutory inquiry correspondence with Charity Commission and regulatory contacts</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setGmailDialog(true); setPullResult(null); }}>
+              <Download className="h-4 w-4 mr-1" /> Pull from Gmail
             </Button>
             <Button size="sm" onClick={openCreate}>
               <Plus className="h-4 w-4 mr-1" /> Log Correspondence
@@ -255,6 +293,7 @@ export default function LbmwCorrespondence() {
                       <th className="text-left p-3 font-medium text-muted-foreground">Deadline</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Priority</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">Invoice</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Action</th>
                       <th className="p-3"></th>
                     </tr>
@@ -306,6 +345,27 @@ export default function LbmwCorrespondence() {
                               {item.status.replace("_", " ")}
                             </Badge>
                           </td>
+                          {/* Invoice badge */}
+                          {(item as any).isInvoice && (
+                            <td className="p-3">
+                              <div className="space-y-1">
+                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-300">
+                                  <Receipt className="h-2.5 w-2.5 mr-1" /> Invoice
+                                  {(item as any).invoiceAmount && ` £${parseFloat((item as any).invoiceAmount).toFixed(2)}`}
+                                </Badge>
+                                {!(item as any).invoiceLinkedExpenseId ? (
+                                  <button
+                                    className="text-[10px] text-blue-500 hover:text-blue-700 block"
+                                    onClick={() => { setInvoicePayDialog({ open: true, item }); setInvoicePayForm({ departmentName: "General", categoryName: "LBMW Invoice", notes: "" }); }}
+                                  >
+                                    Mark as Paid →
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-green-600">✓ Expense #{(item as any).invoiceLinkedExpenseId}</span>
+                                )}
+                              </div>
+                            </td>
+                          )}
                           {/* Linked compliance action column */}
                           <td className="p-3 min-w-[140px]">
                             {linkedAction ? (
@@ -605,6 +665,141 @@ export default function LbmwCorrespondence() {
             >
               <Link2 className="h-4 w-4" />
               {linkMode === "existing" ? "Save Link" : "Create & Link"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Gmail Pull Dialog */}
+      <Dialog open={gmailDialog} onOpenChange={o => { setGmailDialog(o); if (!o) setPullResult(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" /> Pull Emails from Gmail
+            </DialogTitle>
+          </DialogHeader>
+
+          {pullResult ? (
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <Card><CardContent className="pt-3 pb-3 text-center"><p className="text-2xl font-bold text-green-600">{pullResult.created}</p><p className="text-xs text-muted-foreground">New records created</p></CardContent></Card>
+                <Card><CardContent className="pt-3 pb-3 text-center"><p className="text-2xl font-bold">{pullResult.skipped}</p><p className="text-xs text-muted-foreground">Already imported</p></CardContent></Card>
+                <Card><CardContent className="pt-3 pb-3 text-center"><p className="text-2xl font-bold text-amber-600">{pullResult.invoices}</p><p className="text-xs text-muted-foreground">Invoices detected</p></CardContent></Card>
+                <Card><CardContent className="pt-3 pb-3 text-center"><p className="text-2xl font-bold text-blue-600">{pullResult.actionsCreated}</p><p className="text-xs text-muted-foreground">Action tasks created</p></CardContent></Card>
+              </div>
+              {pullResult.details.length > 0 && (
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {pullResult.details.map((d, i) => (
+                    <div key={i} className="flex items-start gap-2 p-2 bg-muted/30 rounded text-xs">
+                      <div className="flex-1">
+                        <p className="font-medium truncate">{d.subject}</p>
+                        <p className="text-muted-foreground truncate">{d.from}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        {d.isInvoice && <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-300">Invoice</Badge>}
+                        {d.actionRequired && <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-300">Action</Badge>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <DialogFooter>
+                <Button onClick={() => { setGmailDialog(false); setPullResult(null); }}>Close</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div>
+                <Label className="text-xs">Gmail Label / Folder *</Label>
+                {labelsLoading ? (
+                  <p className="text-xs text-muted-foreground mt-1">Loading labels…</p>
+                ) : gmailLabels.length === 0 ? (
+                  <p className="text-xs text-red-500 mt-1">No Gmail labels found. Check Gmail credentials in Settings.</p>
+                ) : (
+                  <Select value={selectedLabelId} onValueChange={v => {
+                    setSelectedLabelId(v);
+                    setSelectedLabelName(gmailLabels.find((l: any) => l.id === v)?.name ?? v);
+                  }}>
+                    <SelectTrigger className="mt-1"><SelectValue placeholder="Select a label…" /></SelectTrigger>
+                    <SelectContent>
+                      {gmailLabels.map((l: any) => (
+                        <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+              <div>
+                <Label className="text-xs">Max emails to pull (1–50)</Label>
+                <Input type="number" min={1} max={50} value={maxResults} onChange={e => setMaxResults(parseInt(e.target.value) || 20)} className="mt-1" />
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">Notify trustees</p>
+                  <p className="text-xs text-muted-foreground">Send owner notification if action-required emails or invoices are found</p>
+                </div>
+                <Switch checked={notifyTrustees} onCheckedChange={setNotifyTrustees} />
+              </div>
+              <div className="bg-muted/30 rounded p-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">What happens when you pull:</p>
+                <p>• Each email is analysed by AI to extract contact, summary, priority, and deadlines</p>
+                <p>• Duplicate emails (already imported) are automatically skipped</p>
+                <p>• Emails requiring action get a compliance task created automatically</p>
+                <p>• Invoice emails are tagged and can be marked as paid to create expense records</p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setGmailDialog(false)}>Cancel</Button>
+                <Button
+                  disabled={!selectedLabelId || pullFromLabelMut.isPending}
+                  onClick={() => pullFromLabelMut.mutate({ labelId: selectedLabelId, labelName: selectedLabelName, maxResults, notifyTrustees })}
+                  className="gap-2"
+                >
+                  {pullFromLabelMut.isPending ? (
+                    <><RefreshCw className="h-4 w-4 animate-spin" /> Pulling & Analysing…</>
+                  ) : (
+                    <><Download className="h-4 w-4" /> Pull Emails</>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Mark Invoice as Paid Dialog */}
+      <Dialog open={invoicePayDialog.open} onOpenChange={o => setInvoicePayDialog({ open: o })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Mark Invoice as Paid</DialogTitle>
+          </DialogHeader>
+          {invoicePayDialog.item && (
+            <div className="space-y-3 py-2">
+              <div className="p-3 bg-muted/30 rounded text-sm">
+                <p className="font-medium">{invoicePayDialog.item.subject}</p>
+                <p className="text-muted-foreground text-xs">{invoicePayDialog.item.contactName}</p>
+                {invoicePayDialog.item.invoiceAmount && <p className="font-bold text-green-600 mt-1">£{parseFloat(invoicePayDialog.item.invoiceAmount).toFixed(2)}</p>}
+              </div>
+              <div>
+                <Label className="text-xs">Department / Building</Label>
+                <Input value={invoicePayForm.departmentName} onChange={e => setInvoicePayForm(f => ({ ...f, departmentName: e.target.value }))} className="mt-1" placeholder="e.g. QLH, Bistro" />
+              </div>
+              <div>
+                <Label className="text-xs">Expense Category</Label>
+                <Input value={invoicePayForm.categoryName} onChange={e => setInvoicePayForm(f => ({ ...f, categoryName: e.target.value }))} className="mt-1" placeholder="e.g. LBMW Invoice" />
+              </div>
+              <div>
+                <Label className="text-xs">Notes</Label>
+                <Textarea value={invoicePayForm.notes} onChange={e => setInvoicePayForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="mt-1" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInvoicePayDialog({ open: false })}>Cancel</Button>
+            <Button
+              disabled={markInvoicePaidMut.isPending}
+              onClick={() => markInvoicePaidMut.mutate({ correspondenceId: invoicePayDialog.item.id, ...invoicePayForm })}
+            >
+              {markInvoicePaidMut.isPending ? "Processing…" : "Mark as Paid & Create Expense"}
             </Button>
           </DialogFooter>
         </DialogContent>

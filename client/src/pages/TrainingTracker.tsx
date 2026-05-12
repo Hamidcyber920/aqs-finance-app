@@ -136,7 +136,7 @@ export default function TrainingTracker() {
       .split(",")
       .map(s => s.trim())
       .filter(Boolean);
-    const allStaff = [...new Set([...selectedStaff, ...customNames])];
+    const allStaff = Array.from(new Set([...selectedStaff, ...customNames]));
     if (allStaff.length === 0) {
       toast.error("Please select at least one staff member.");
       return;

@@ -1915,6 +1915,7 @@ export const utilityBills = mysqlTable("utility_bills", {
   billUrl: varchar("billUrl", { length: 500 }),
   notes: text("notes"),
   uploadedById: int("uploadedById"),
+  autoExpenseLinkedId: int("autoExpenseLinkedId"),  // FK to receipts.id when auto-filled into expenses
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type UtilityBill = typeof utilityBills.$inferSelect;
@@ -2004,8 +2005,42 @@ export const lbmwCorrespondence = mysqlTable("lbmw_correspondence", {
   internalNotes: text("internalNotes"),
   handledByUserId: int("handledByUserId"),
   linkedComplianceActionId: int("linkedComplianceActionId"),
+  // Gmail pull fields
+  gmailMessageId: varchar("gmailMessageId", { length: 200 }),   // dedup key
+  gmailThreadId: varchar("gmailThreadId", { length: 200 }),
+  gmailFrom: varchar("gmailFrom", { length: 500 }),
+  gmailLabel: varchar("gmailLabel", { length: 200 }),
+  aiSummary: text("aiSummary"),                                  // LLM-generated summary
+  actionRequired: boolean("actionRequired").default(false),
+  actionTaskId: int("actionTaskId"),                             // FK to compliance_actions
+  isInvoice: boolean("isInvoice").default(false),
+  invoiceAmount: decimal("invoiceAmount", { precision: 10, scale: 2 }),
+  invoiceLinkedExpenseId: int("invoiceLinkedExpenseId"),         // FK to receipts.id
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 export type LbmwCorrespondence = typeof lbmwCorrespondence.$inferSelect;
 export type InsertLbmwCorrespondence = typeof lbmwCorrespondence.$inferInsert;
+
+// ─── UTILITY BUILDINGS (editable list) ───────────────────────────────────────
+export const utilityBuildings = mysqlTable("utility_buildings", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 150 }).notNull(),
+  address: varchar("address", { length: 300 }),
+  notes: text("notes"),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type UtilityBuilding = typeof utilityBuildings.$inferSelect;
+export type InsertUtilityBuilding = typeof utilityBuildings.$inferInsert;
+
+// ─── UTILITY CATEGORIES (editable list) ──────────────────────────────────────
+export const utilityCategories = mysqlTable("utility_categories", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  colour: varchar("colour", { length: 30 }).default("#6b7280").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type UtilityCategory = typeof utilityCategories.$inferSelect;
+export type InsertUtilityCategory = typeof utilityCategories.$inferInsert;

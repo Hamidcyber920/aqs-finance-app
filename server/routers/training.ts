@@ -147,12 +147,12 @@ export const trainingRouter = router({
 
       for (const member of input.staff) {
         const [result] = await db.insert(trainingRecords).values({
-          userId: member.userId ?? null,
+          userId: (member.userId ?? 0) as any,
           userName: member.userName,
           module: input.module,
           provider: input.provider ?? null,
-          completedAt,
-          expiresAt,
+          completedAt: completedAt as any,
+          expiresAt: expiresAt as any,
           certificateUrl: null,
           status,
           notes: input.notes ?? null,

@@ -10,15 +10,27 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   Plus, Zap, Droplets, Flame, Wifi, Phone, Shield, MoreHorizontal,
   AlertTriangle, CheckCircle, Clock, Trash2, Edit2, FileText,
-  ChevronLeft, ChevronRight, CalendarDays,
+  ChevronLeft, ChevronRight, CalendarDays, Settings, Building2, Tag,
+  Receipt,
 } from "lucide-react";
 
-const BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"] as const;
-const CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"] as const;
+const FALLBACK_BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"];
+const FALLBACK_CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"];
+
+const CATEGORY_COLOURS: Record<string, string> = {
+  electricity: "#f59e0b",
+  gas: "#f97316",
+  water: "#3b82f6",
+  broadband: "#8b5cf6",
+  telephone: "#06b6d4",
+  insurance: "#10b981",
+  other: "#6b7280",
+};
 
 const categoryIcon = (cat: string) => {
   switch (cat) {
@@ -26,7 +38,7 @@ const categoryIcon = (cat: string) => {
     case "gas": return <Flame className="w-4 h-4 text-orange-500" />;
     case "water": return <Droplets className="w-4 h-4 text-blue-500" />;
     case "broadband": return <Wifi className="w-4 h-4 text-purple-500" />;
-    case "telephone": return <Phone className="w-4 h-4 text-green-500" />;
+    case "telephone": return <Phone className="w-4 h-4 text-cyan-500" />;
     case "insurance": return <Shield className="w-4 h-4 text-indigo-500" />;
     default: return <MoreHorizontal className="w-4 h-4 text-gray-500" />;
   }
@@ -38,7 +50,7 @@ const categoryBg = (cat: string) => {
     gas: "bg-orange-100 text-orange-800 border-orange-300",
     water: "bg-blue-100 text-blue-800 border-blue-300",
     broadband: "bg-purple-100 text-purple-800 border-purple-300",
-    telephone: "bg-green-100 text-green-800 border-green-300",
+    telephone: "bg-cyan-100 text-cyan-800 border-cyan-300",
     insurance: "bg-indigo-100 text-indigo-800 border-indigo-300",
     other: "bg-gray-100 text-gray-800 border-gray-300",
   };
@@ -46,17 +58,16 @@ const categoryBg = (cat: string) => {
 };
 
 // ── DD Calendar Component ─────────────────────────────────────────────────────
-function DDCalendar({ accounts }: { accounts: any[] }) {
+function DDCalendar({ accounts, categories }: { accounts: any[]; categories: any[] }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth()); // 0-indexed
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
 
   const accountsWithDD = useMemo(
     () => accounts.filter(a => a.billingDay && a.directDebitAmount),
     [accounts]
   );
 
-  // Build a map: day → list of accounts
   const ddByDay = useMemo(() => {
     const map: Record<number, typeof accountsWithDD> = {};
     for (const acc of accountsWithDD) {
@@ -68,24 +79,15 @@ function DDCalendar({ accounts }: { accounts: any[] }) {
   }, [accountsWithDD]);
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
-  // Adjust to Mon-first (UK)
+  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
   const startOffset = (firstDayOfWeek + 6) % 7;
-
   const monthName = new Date(viewYear, viewMonth, 1).toLocaleString("default", { month: "long", year: "numeric" });
 
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
-  };
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
 
   const totalDDThisMonth = accountsWithDD.reduce((s, a) => s + parseFloat(a.directDebitAmount ?? "0"), 0);
 
-  // Compute upcoming DDs (next 7 days from today)
   const upcoming = useMemo(() => {
     const results: { acc: any; date: Date }[] = [];
     for (let offset = 0; offset <= 7; offset++) {
@@ -101,9 +103,11 @@ function DDCalendar({ accounts }: { accounts: any[] }) {
     return results.sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [ddByDay]);
 
+  // Build legend from dynamic categories
+  const legendCats = categories.length > 0 ? categories : FALLBACK_CATEGORIES.map(c => ({ name: c, colour: CATEGORY_COLOURS[c] ?? "#6b7280" }));
+
   return (
     <div className="space-y-4">
-      {/* Summary strip */}
       <div className="flex flex-wrap gap-3">
         <Card className="flex-1 min-w-[180px]">
           <CardContent className="pt-4 pb-3">
@@ -121,16 +125,13 @@ function DDCalendar({ accounts }: { accounts: any[] }) {
           <Card className="flex-1 min-w-[220px] border-amber-300">
             <CardContent className="pt-4 pb-3">
               <p className="text-xs text-muted-foreground">Next DD due</p>
-              <p className="text-sm font-semibold text-amber-700">
-                {upcoming[0].acc.supplier} — {upcoming[0].date.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-              </p>
+              <p className="text-sm font-semibold text-amber-700">{upcoming[0].acc.supplier} — {upcoming[0].date.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</p>
               <p className="text-xs text-muted-foreground">£{parseFloat(upcoming[0].acc.directDebitAmount).toFixed(2)}</p>
             </CardContent>
           </Card>
         )}
       </div>
 
-      {/* Calendar grid */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -148,38 +149,23 @@ function DDCalendar({ accounts }: { accounts: any[] }) {
             </div>
           ) : (
             <>
-              {/* Day-of-week headers (Mon–Sun) */}
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
                   <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
                 ))}
               </div>
-              {/* Calendar cells */}
               <div className="grid grid-cols-7 gap-1">
-                {/* Empty cells before month start */}
-                {Array.from({ length: startOffset }).map((_, i) => (
-                  <div key={`empty-${i}`} className="min-h-[72px]" />
-                ))}
-                {/* Day cells */}
+                {Array.from({ length: startOffset }).map((_, i) => <div key={`empty-${i}`} className="min-h-[72px]" />)}
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                   const day = i + 1;
                   const isToday = day === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear();
                   const ddAccounts = ddByDay[day] ?? [];
                   return (
-                    <div
-                      key={day}
-                      className={`min-h-[72px] rounded-lg border p-1 text-xs transition-colors ${
-                        isToday ? "border-primary bg-primary/5" : "border-border"
-                      } ${ddAccounts.length > 0 ? "bg-muted/30" : ""}`}
-                    >
+                    <div key={day} className={`min-h-[72px] rounded-lg border p-1 text-xs transition-colors ${isToday ? "border-primary bg-primary/5" : "border-border"} ${ddAccounts.length > 0 ? "bg-muted/30" : ""}`}>
                       <div className={`font-semibold mb-1 ${isToday ? "text-primary" : "text-foreground"}`}>{day}</div>
                       <div className="space-y-0.5">
                         {ddAccounts.map(acc => (
-                          <div
-                            key={acc.id}
-                            title={`${acc.supplier} — £${parseFloat(acc.directDebitAmount).toFixed(2)}/mo`}
-                            className={`rounded px-1 py-0.5 text-[10px] leading-tight border truncate ${categoryBg(acc.category)}`}
-                          >
+                          <div key={acc.id} title={`${acc.supplier} — £${parseFloat(acc.directDebitAmount).toFixed(2)}/mo`} className={`rounded px-1 py-0.5 text-[10px] leading-tight border truncate ${categoryBg(acc.category)}`}>
                             <span className="font-medium">{acc.supplier}</span>
                             <span className="ml-1 opacity-75">£{parseFloat(acc.directDebitAmount).toFixed(0)}</span>
                           </div>
@@ -194,12 +180,9 @@ function DDCalendar({ accounts }: { accounts: any[] }) {
         </CardContent>
       </Card>
 
-      {/* Upcoming DDs list */}
       {upcoming.length > 0 && (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Upcoming Direct Debits (Next 7 Days)</CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Upcoming Direct Debits (Next 7 Days)</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {upcoming.map(({ acc, date }) => (
@@ -222,14 +205,162 @@ function DDCalendar({ accounts }: { accounts: any[] }) {
         </Card>
       )}
 
-      {/* Legend */}
       <div className="flex flex-wrap gap-2 text-xs">
-        {CATEGORIES.map(cat => (
-          <span key={cat} className={`px-2 py-1 rounded border ${categoryBg(cat)} flex items-center gap-1`}>
-            {categoryIcon(cat)} {cat.charAt(0).toUpperCase() + cat.slice(1)}
+        {legendCats.map((cat: any) => (
+          <span key={cat.name} className={`px-2 py-1 rounded border flex items-center gap-1 ${categoryBg(cat.name)}`}>
+            {categoryIcon(cat.name)} {cat.name.charAt(0).toUpperCase() + cat.name.slice(1)}
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Settings Panel ────────────────────────────────────────────────────────────
+function SettingsPanel() {
+  const utils = trpc.useUtils();
+  const { data: buildings = [] } = trpc.bills.listBuildings.useQuery();
+  const { data: categories = [] } = trpc.bills.listCategories.useQuery();
+
+  const [newBuilding, setNewBuilding] = useState({ name: "", address: "" });
+  const [newCategory, setNewCategory] = useState({ name: "", colour: "#6b7280" });
+  const [editBuilding, setEditBuilding] = useState<any>(null);
+  const [editCategory, setEditCategory] = useState<any>(null);
+
+  const addBuilding = trpc.bills.addBuilding.useMutation({
+    onSuccess: () => { utils.bills.listBuildings.invalidate(); setNewBuilding({ name: "", address: "" }); toast.success("Building added"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateBuilding = trpc.bills.updateBuilding.useMutation({
+    onSuccess: () => { utils.bills.listBuildings.invalidate(); setEditBuilding(null); toast.success("Building updated"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteBuilding = trpc.bills.deleteBuilding.useMutation({
+    onSuccess: () => { utils.bills.listBuildings.invalidate(); toast.success("Building removed"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const addCategory = trpc.bills.addCategory.useMutation({
+    onSuccess: () => { utils.bills.listCategories.invalidate(); setNewCategory({ name: "", colour: "#6b7280" }); toast.success("Category added"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateCategory = trpc.bills.updateCategory.useMutation({
+    onSuccess: () => { utils.bills.listCategories.invalidate(); setEditCategory(null); toast.success("Category updated"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteCategory = trpc.bills.deleteCategory.useMutation({
+    onSuccess: () => { utils.bills.listCategories.invalidate(); toast.success("Category removed"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Buildings */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2"><Building2 className="w-4 h-4" /> Buildings</CardTitle>
+          <p className="text-xs text-muted-foreground">Manage the list of buildings used across utility accounts.</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {buildings.map((b: any) => (
+              <div key={b.id} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
+                {editBuilding?.id === b.id ? (
+                  <div className="flex gap-2 flex-1 mr-2">
+                    <Input value={editBuilding.name} onChange={e => setEditBuilding((x: any) => ({ ...x, name: e.target.value }))} className="h-7 text-xs" />
+                    <Input value={editBuilding.address ?? ""} onChange={e => setEditBuilding((x: any) => ({ ...x, address: e.target.value }))} placeholder="Address (optional)" className="h-7 text-xs" />
+                  </div>
+                ) : (
+                  <div className="flex-1">
+                    <span className="font-medium">{b.name}</span>
+                    {b.address && <span className="text-xs text-muted-foreground ml-2">{b.address}</span>}
+                    {b.id < 0 && <Badge variant="secondary" className="ml-2 text-[10px]">Default</Badge>}
+                  </div>
+                )}
+                <div className="flex gap-1">
+                  {editBuilding?.id === b.id ? (
+                    <>
+                      <Button size="sm" className="h-6 px-2 text-xs" onClick={() => updateBuilding.mutate({ id: b.id, name: editBuilding.name, address: editBuilding.address })}>Save</Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditBuilding(null)}>Cancel</Button>
+                    </>
+                  ) : (
+                    <>
+                      {b.id > 0 && <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditBuilding(b)}><Edit2 className="w-3 h-3" /></Button>}
+                      {b.id > 0 && <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { if (confirm(`Remove building "${b.name}"?`)) deleteBuilding.mutate({ id: b.id }); }}><Trash2 className="w-3 h-3 text-red-500" /></Button>}
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2 border-t">
+            <Input value={newBuilding.name} onChange={e => setNewBuilding(f => ({ ...f, name: e.target.value }))} placeholder="Building name *" className="h-8 text-sm" />
+            <Input value={newBuilding.address} onChange={e => setNewBuilding(f => ({ ...f, address: e.target.value }))} placeholder="Address (optional)" className="h-8 text-sm" />
+            <Button size="sm" className="h-8 shrink-0" onClick={() => addBuilding.mutate(newBuilding)} disabled={!newBuilding.name || addBuilding.isPending}>
+              <Plus className="w-3 h-3" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Categories */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2"><Tag className="w-4 h-4" /> Utility Categories</CardTitle>
+          <p className="text-xs text-muted-foreground">Manage utility types and their calendar colours.</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {categories.map((c: any) => (
+              <div key={c.id} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
+                {editCategory?.id === c.id ? (
+                  <div className="flex gap-2 flex-1 mr-2 items-center">
+                    <Input value={editCategory.name} onChange={e => setEditCategory((x: any) => ({ ...x, name: e.target.value }))} className="h-7 text-xs" />
+                    <input type="color" value={editCategory.colour} onChange={e => setEditCategory((x: any) => ({ ...x, colour: e.target.value }))} className="w-8 h-7 rounded cursor-pointer border" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="w-3 h-3 rounded-full inline-block shrink-0" style={{ background: c.colour }} />
+                    <span className="font-medium capitalize">{c.name}</span>
+                    {c.id < 0 && <Badge variant="secondary" className="text-[10px]">Default</Badge>}
+                  </div>
+                )}
+                <div className="flex gap-1">
+                  {editCategory?.id === c.id ? (
+                    <>
+                      <Button size="sm" className="h-6 px-2 text-xs" onClick={() => updateCategory.mutate({ id: c.id, name: editCategory.name, colour: editCategory.colour })}>Save</Button>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setEditCategory(null)}>Cancel</Button>
+                    </>
+                  ) : (
+                    <>
+                      {c.id > 0 && <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditCategory(c)}><Edit2 className="w-3 h-3" /></Button>}
+                      {c.id > 0 && <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => { if (confirm(`Remove category "${c.name}"?`)) deleteCategory.mutate({ id: c.id }); }}><Trash2 className="w-3 h-3 text-red-500" /></Button>}
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2 border-t items-center">
+            <Input value={newCategory.name} onChange={e => setNewCategory(f => ({ ...f, name: e.target.value }))} placeholder="Category name *" className="h-8 text-sm" />
+            <input type="color" value={newCategory.colour} onChange={e => setNewCategory(f => ({ ...f, colour: e.target.value }))} className="w-8 h-8 rounded cursor-pointer border shrink-0" title="Pick colour" />
+            <Button size="sm" className="h-8 shrink-0" onClick={() => addCategory.mutate(newCategory)} disabled={!newCategory.name || addCategory.isPending}>
+              <Plus className="w-3 h-3" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Auto-expense info */}
+      <Card className="md:col-span-2">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2"><Receipt className="w-4 h-4" /> Auto-Fill into Monthly Expenses</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            When you record a bill for a utility account, the system automatically creates a corresponding entry in the Monthly Expenses section (under <strong>Bills &amp; Utilities — [Category]</strong>). This keeps your monthly expense reconciliation up to date without manual re-entry. You can disable this per-bill using the toggle in the "Record Bill" dialog.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -242,13 +373,13 @@ export default function BillsUtilities() {
   const [showAddBill, setShowAddBill] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
   const [editAccount, setEditAccount] = useState<any>(null);
+  const [autoFillExpense, setAutoFillExpense] = useState(true);
 
-  // Form state for new account
   const [accountForm, setAccountForm] = useState({
-    building: "QLH" as typeof BUILDINGS[number],
+    building: "QLH",
     supplier: "",
     accountNumber: "",
-    category: "electricity" as typeof CATEGORIES[number],
+    category: "electricity",
     tariff: "",
     contractStartDate: "",
     contractEndDate: "",
@@ -258,7 +389,6 @@ export default function BillsUtilities() {
     notes: "",
   });
 
-  // Form state for new bill
   const [billForm, setBillForm] = useState({
     accountId: 0,
     billDate: new Date().toISOString().split("T")[0],
@@ -272,12 +402,17 @@ export default function BillsUtilities() {
 
   const utils = trpc.useUtils();
   const { data: summary } = trpc.bills.summary.useQuery();
+  const { data: allBuildings = [] } = trpc.bills.listBuildings.useQuery();
+  const { data: allCategories = [] } = trpc.bills.listCategories.useQuery();
+
+  const buildingNames = useMemo(() => allBuildings.map((b: any) => b.name), [allBuildings]);
+  const categoryNames = useMemo(() => allCategories.map((c: any) => c.name), [allCategories]);
+
   const { data: accounts = [], isLoading } = trpc.bills.listAccounts.useQuery(
     buildingFilter !== "all" || categoryFilter !== "all"
       ? { building: buildingFilter !== "all" ? buildingFilter : undefined, category: categoryFilter !== "all" ? categoryFilter : undefined }
       : undefined
   );
-  // For calendar we always need all accounts (unfiltered)
   const { data: allAccounts = [] } = trpc.bills.listAccounts.useQuery(undefined);
 
   const { data: accountDetail } = trpc.bills.getAccount.useQuery(
@@ -291,7 +426,7 @@ export default function BillsUtilities() {
       utils.bills.summary.invalidate();
       setShowAddAccount(false);
       setAccountForm({ building: "QLH", supplier: "", accountNumber: "", category: "electricity", tariff: "", contractStartDate: "", contractEndDate: "", mpan: "", directDebitAmount: "", billingDay: "", notes: "" });
-      toast.success("Account added — utility account created successfully.");
+      toast.success("Account added successfully.");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -325,7 +460,8 @@ export default function BillsUtilities() {
       if (data.isAnomaly) {
         toast.warning(`⚠️ Anomaly Detected — This bill (£${parseFloat(billForm.amount).toFixed(2)}) is 50%+ above the 3-month average (£${data.avg3m}).`);
       } else {
-        toast.success("Bill recorded — utility bill added successfully.");
+        const expMsg = data.autoExpenseId ? " Auto-filled into Monthly Expenses." : "";
+        toast.success(`Bill recorded.${expMsg}`);
       }
     },
     onError: (e) => toast.error(e.message),
@@ -355,35 +491,15 @@ export default function BillsUtilities() {
         {/* Summary cards */}
         {summary && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-4">
-                <p className="text-xs text-muted-foreground">Total Accounts</p>
-                <p className="text-2xl font-bold">{summary.totalAccounts}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <p className="text-xs text-muted-foreground">Monthly Direct Debits</p>
-                <p className="text-2xl font-bold text-green-600">£{parseFloat(summary.totalMonthlyDD).toLocaleString()}</p>
-              </CardContent>
-            </Card>
-            <Card className={summary.expiringSoon > 0 ? "border-amber-400" : ""}>
-              <CardContent className="pt-4">
-                <p className="text-xs text-muted-foreground">Contracts Expiring Soon</p>
-                <p className={`text-2xl font-bold ${summary.expiringSoon > 0 ? "text-amber-600" : ""}`}>{summary.expiringSoon}</p>
-              </CardContent>
-            </Card>
-            <Card className={summary.expired > 0 ? "border-red-400" : ""}>
-              <CardContent className="pt-4">
-                <p className="text-xs text-muted-foreground">Contracts Expired</p>
-                <p className={`text-2xl font-bold ${summary.expired > 0 ? "text-red-600" : ""}`}>{summary.expired}</p>
-              </CardContent>
-            </Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Total Accounts</p><p className="text-2xl font-bold">{summary.totalAccounts}</p></CardContent></Card>
+            <Card><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Monthly Direct Debits</p><p className="text-2xl font-bold text-green-600">£{parseFloat(summary.totalMonthlyDD).toLocaleString()}</p></CardContent></Card>
+            <Card className={summary.expiringSoon > 0 ? "border-amber-400" : ""}><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Contracts Expiring Soon</p><p className={`text-2xl font-bold ${summary.expiringSoon > 0 ? "text-amber-600" : ""}`}>{summary.expiringSoon}</p></CardContent></Card>
+            <Card className={summary.expired > 0 ? "border-red-400" : ""}><CardContent className="pt-4"><p className="text-xs text-muted-foreground">Contracts Expired</p><p className={`text-2xl font-bold ${summary.expired > 0 ? "text-red-600" : ""}`}>{summary.expired}</p></CardContent></Card>
           </div>
         )}
 
         {/* Building breakdown */}
-        {summary && (
+        {summary && summary.byBuilding.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {summary.byBuilding.map(b => (
               <Card key={b.building} className="cursor-pointer hover:border-primary transition-colors" onClick={() => setBuildingFilter(buildingFilter === b.building ? "all" : b.building)}>
@@ -402,43 +518,34 @@ export default function BillsUtilities() {
           <TabsList>
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
             <TabsTrigger value="calendar">DD Calendar</TabsTrigger>
+            <TabsTrigger value="settings" className="gap-1"><Settings className="w-3 h-3" /> Settings</TabsTrigger>
           </TabsList>
 
           {/* ── Accounts Tab ── */}
           <TabsContent value="accounts" className="mt-4 space-y-4">
-            {/* Filters */}
             <div className="flex gap-3 flex-wrap">
               <Select value={buildingFilter} onValueChange={setBuildingFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="All Buildings" />
-                </SelectTrigger>
+                <SelectTrigger className="w-40"><SelectValue placeholder="All Buildings" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Buildings</SelectItem>
-                  {BUILDINGS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  {buildingNames.map((b: string) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
+                <SelectTrigger className="w-44"><SelectValue placeholder="All Categories" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}
+                  {categoryNames.map((c: string) => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Accounts list + detail panel */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Accounts list */}
               <div className="lg:col-span-1 space-y-2">
                 {isLoading && <p className="text-muted-foreground text-sm">Loading accounts...</p>}
                 {accounts.length === 0 && !isLoading && (
-                  <Card>
-                    <CardContent className="pt-6 text-center text-muted-foreground text-sm">
-                      No utility accounts yet. Click "Add Account" to get started.
-                    </CardContent>
-                  </Card>
+                  <Card><CardContent className="pt-6 text-center text-muted-foreground text-sm">No utility accounts yet. Click "Add Account" to get started.</CardContent></Card>
                 )}
                 {accounts.map(acc => (
                   <Card
@@ -490,25 +597,17 @@ export default function BillsUtilities() {
                           <p className="text-sm text-muted-foreground">{accountDetail.account.building} · {accountDetail.account.category}</p>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => { setEditAccount(accountDetail.account); }}>
-                            <Edit2 className="w-3 h-3" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => {
-                            setBillForm(f => ({ ...f, accountId: selectedAccountId }));
-                            setShowAddBill(true);
-                          }}>
+                          <Button size="sm" variant="outline" onClick={() => setEditAccount(accountDetail.account)}><Edit2 className="w-3 h-3" /></Button>
+                          <Button size="sm" variant="outline" onClick={() => { setBillForm(f => ({ ...f, accountId: selectedAccountId })); setShowAddBill(true); }}>
                             <Plus className="w-3 h-3 mr-1" /> Bill
                           </Button>
-                          <Button size="sm" variant="destructive" onClick={() => {
-                            if (confirm("Delete this account and all its bills?")) deleteAccount.mutate({ id: selectedAccountId });
-                          }}>
+                          <Button size="sm" variant="destructive" onClick={() => { if (confirm("Delete this account and all its bills?")) deleteAccount.mutate({ id: selectedAccountId }); }}>
                             <Trash2 className="w-3 h-3" />
                           </Button>
                         </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {/* Account details */}
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         {accountDetail.account.accountNumber && <div><span className="text-muted-foreground">Account No:</span> <span className="font-medium">{accountDetail.account.accountNumber}</span></div>}
                         {accountDetail.account.mpan && <div><span className="text-muted-foreground">MPAN:</span> <span className="font-medium">{accountDetail.account.mpan}</span></div>}
@@ -521,7 +620,6 @@ export default function BillsUtilities() {
                       </div>
                       {accountDetail.account.notes && <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">{accountDetail.account.notes}</p>}
 
-                      {/* Bills history */}
                       <div>
                         <h3 className="font-medium text-sm mb-2">Bill History</h3>
                         {accountDetail.bills.length === 0 && <p className="text-sm text-muted-foreground">No bills recorded yet.</p>}
@@ -532,6 +630,7 @@ export default function BillsUtilities() {
                                 <span className="font-medium">£{parseFloat(bill.amount).toFixed(2)}</span>
                                 <span className="text-muted-foreground ml-2">{new Date(bill.billDate).toLocaleDateString()}</span>
                                 {bill.consumptionUnits && <span className="text-muted-foreground ml-2">{bill.consumptionUnits} {bill.unitType}</span>}
+                                {bill.autoExpenseLinkedId && <Badge variant="secondary" className="ml-2 text-[10px]">→ Expense #{bill.autoExpenseLinkedId}</Badge>}
                               </div>
                               <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => deleteBill.mutate({ id: bill.id })}>
                                 <Trash2 className="w-3 h-3 text-red-500" />
@@ -549,7 +648,12 @@ export default function BillsUtilities() {
 
           {/* ── DD Calendar Tab ── */}
           <TabsContent value="calendar" className="mt-4">
-            <DDCalendar accounts={allAccounts} />
+            <DDCalendar accounts={allAccounts} categories={allCategories} />
+          </TabsContent>
+
+          {/* ── Settings Tab ── */}
+          <TabsContent value="settings" className="mt-4">
+            <SettingsPanel />
           </TabsContent>
         </Tabs>
       </div>
@@ -562,16 +666,16 @@ export default function BillsUtilities() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Building *</Label>
-                <Select value={accountForm.building} onValueChange={v => setAccountForm(f => ({ ...f, building: v as any }))}>
+                <Select value={accountForm.building} onValueChange={v => setAccountForm(f => ({ ...f, building: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{BUILDINGS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                  <SelectContent>{buildingNames.map((b: string) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Category *</Label>
-                <Select value={accountForm.category} onValueChange={v => setAccountForm(f => ({ ...f, category: v as any }))}>
+                <Select value={accountForm.category} onValueChange={v => setAccountForm(f => ({ ...f, category: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
+                  <SelectContent>{categoryNames.map((c: string) => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -580,53 +684,23 @@ export default function BillsUtilities() {
               <Input value={accountForm.supplier} onChange={e => setAccountForm(f => ({ ...f, supplier: e.target.value }))} placeholder="e.g. British Gas" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Account Number</Label>
-                <Input value={accountForm.accountNumber} onChange={e => setAccountForm(f => ({ ...f, accountNumber: e.target.value }))} />
-              </div>
-              <div>
-                <Label>MPAN / Meter Ref</Label>
-                <Input value={accountForm.mpan} onChange={e => setAccountForm(f => ({ ...f, mpan: e.target.value }))} />
-              </div>
+              <div><Label>Account Number</Label><Input value={accountForm.accountNumber} onChange={e => setAccountForm(f => ({ ...f, accountNumber: e.target.value }))} /></div>
+              <div><Label>MPAN / Meter Ref</Label><Input value={accountForm.mpan} onChange={e => setAccountForm(f => ({ ...f, mpan: e.target.value }))} /></div>
             </div>
-            <div>
-              <Label>Tariff / Plan</Label>
-              <Input value={accountForm.tariff} onChange={e => setAccountForm(f => ({ ...f, tariff: e.target.value }))} placeholder="e.g. Standard Variable" />
+            <div><Label>Tariff / Plan</Label><Input value={accountForm.tariff} onChange={e => setAccountForm(f => ({ ...f, tariff: e.target.value }))} placeholder="e.g. Standard Variable" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Contract Start</Label><Input type="date" value={accountForm.contractStartDate} onChange={e => setAccountForm(f => ({ ...f, contractStartDate: e.target.value }))} /></div>
+              <div><Label>Contract End</Label><Input type="date" value={accountForm.contractEndDate} onChange={e => setAccountForm(f => ({ ...f, contractEndDate: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Contract Start</Label>
-                <Input type="date" value={accountForm.contractStartDate} onChange={e => setAccountForm(f => ({ ...f, contractStartDate: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Contract End</Label>
-                <Input type="date" value={accountForm.contractEndDate} onChange={e => setAccountForm(f => ({ ...f, contractEndDate: e.target.value }))} />
-              </div>
+              <div><Label>Monthly Direct Debit (£)</Label><Input type="number" step="0.01" value={accountForm.directDebitAmount} onChange={e => setAccountForm(f => ({ ...f, directDebitAmount: e.target.value }))} placeholder="0.00" /></div>
+              <div><Label>DD Day of Month (1–31)</Label><Input type="number" min="1" max="31" value={accountForm.billingDay} onChange={e => setAccountForm(f => ({ ...f, billingDay: e.target.value }))} placeholder="e.g. 15" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Monthly Direct Debit (£)</Label>
-                <Input type="number" step="0.01" value={accountForm.directDebitAmount} onChange={e => setAccountForm(f => ({ ...f, directDebitAmount: e.target.value }))} placeholder="0.00" />
-              </div>
-              <div>
-                <Label>DD Day of Month (1–31)</Label>
-                <Input type="number" min="1" max="31" value={accountForm.billingDay} onChange={e => setAccountForm(f => ({ ...f, billingDay: e.target.value }))} placeholder="e.g. 15" />
-              </div>
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Textarea value={accountForm.notes} onChange={e => setAccountForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
-            </div>
+            <div><Label>Notes</Label><Textarea value={accountForm.notes} onChange={e => setAccountForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddAccount(false)}>Cancel</Button>
-            <Button
-              onClick={() => createAccount.mutate({
-                ...accountForm,
-                billingDay: accountForm.billingDay ? parseInt(accountForm.billingDay) : undefined,
-              })}
-              disabled={!accountForm.supplier || createAccount.isPending}
-            >
+            <Button onClick={() => createAccount.mutate({ ...accountForm, billingDay: accountForm.billingDay ? parseInt(accountForm.billingDay) : undefined })} disabled={!accountForm.supplier || createAccount.isPending}>
               {createAccount.isPending ? "Adding..." : "Add Account"}
             </Button>
           </DialogFooter>
@@ -644,68 +718,35 @@ export default function BillsUtilities() {
                   <Label>Building</Label>
                   <Select value={editAccount.building} onValueChange={v => setEditAccount((a: any) => ({ ...a, building: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{BUILDINGS.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
+                    <SelectContent>{buildingNames.map((b: string) => <SelectItem key={b} value={b}>{b}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label>Category</Label>
                   <Select value={editAccount.category} onValueChange={v => setEditAccount((a: any) => ({ ...a, category: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{CATEGORIES.map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
+                    <SelectContent>{categoryNames.map((c: string) => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
-              <div>
-                <Label>Supplier</Label>
-                <Input value={editAccount.supplier} onChange={e => setEditAccount((a: any) => ({ ...a, supplier: e.target.value }))} />
+              <div><Label>Supplier</Label><Input value={editAccount.supplier} onChange={e => setEditAccount((a: any) => ({ ...a, supplier: e.target.value }))} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Account Number</Label><Input value={editAccount.accountNumber ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, accountNumber: e.target.value }))} /></div>
+                <div><Label>Direct Debit (£/mo)</Label><Input type="number" step="0.01" value={editAccount.directDebitAmount ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, directDebitAmount: e.target.value }))} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Account Number</Label>
-                  <Input value={editAccount.accountNumber ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, accountNumber: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Direct Debit (£/mo)</Label>
-                  <Input type="number" step="0.01" value={editAccount.directDebitAmount ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, directDebitAmount: e.target.value }))} />
-                </div>
+                <div><Label>DD Day of Month (1–31)</Label><Input type="number" min="1" max="31" value={editAccount.billingDay ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, billingDay: e.target.value ? parseInt(e.target.value) : null }))} placeholder="e.g. 15" /></div>
+                <div><Label>MPAN / Meter Ref</Label><Input value={editAccount.mpan ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, mpan: e.target.value }))} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>DD Day of Month (1–31)</Label>
-                  <Input type="number" min="1" max="31" value={editAccount.billingDay ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, billingDay: e.target.value ? parseInt(e.target.value) : null }))} placeholder="e.g. 15" />
-                </div>
-                <div>
-                  <Label>MPAN / Meter Ref</Label>
-                  <Input value={editAccount.mpan ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, mpan: e.target.value }))} />
-                </div>
+                <div><Label>Contract Start</Label><Input type="date" value={editAccount.contractStartDate ? new Date(editAccount.contractStartDate).toISOString().split("T")[0] : ""} onChange={e => setEditAccount((a: any) => ({ ...a, contractStartDate: e.target.value }))} /></div>
+                <div><Label>Contract End</Label><Input type="date" value={editAccount.contractEndDate ? new Date(editAccount.contractEndDate).toISOString().split("T")[0] : ""} onChange={e => setEditAccount((a: any) => ({ ...a, contractEndDate: e.target.value }))} /></div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Contract Start</Label>
-                  <Input type="date" value={editAccount.contractStartDate ? new Date(editAccount.contractStartDate).toISOString().split("T")[0] : ""} onChange={e => setEditAccount((a: any) => ({ ...a, contractStartDate: e.target.value }))} />
-                </div>
-                <div>
-                  <Label>Contract End</Label>
-                  <Input type="date" value={editAccount.contractEndDate ? new Date(editAccount.contractEndDate).toISOString().split("T")[0] : ""} onChange={e => setEditAccount((a: any) => ({ ...a, contractEndDate: e.target.value }))} />
-                </div>
-              </div>
-              <div>
-                <Label>Notes</Label>
-                <Textarea value={editAccount.notes ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, notes: e.target.value }))} rows={2} />
-              </div>
+              <div><Label>Notes</Label><Textarea value={editAccount.notes ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, notes: e.target.value }))} rows={2} /></div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditAccount(null)}>Cancel</Button>
-              <Button
-                onClick={() => updateAccount.mutate({
-                  id: editAccount.id,
-                  ...editAccount,
-                  contractStartDate: editAccount.contractStartDate ? new Date(editAccount.contractStartDate).toISOString().split("T")[0] : null,
-                  contractEndDate: editAccount.contractEndDate ? new Date(editAccount.contractEndDate).toISOString().split("T")[0] : null,
-                  billingDay: editAccount.billingDay ?? null,
-                })}
-                disabled={updateAccount.isPending}
-              >
+              <Button onClick={() => updateAccount.mutate({ id: editAccount.id, ...editAccount, contractStartDate: editAccount.contractStartDate ? new Date(editAccount.contractStartDate).toISOString().split("T")[0] : null, contractEndDate: editAccount.contractEndDate ? new Date(editAccount.contractEndDate).toISOString().split("T")[0] : null, billingDay: editAccount.billingDay ?? null })} disabled={updateAccount.isPending}>
                 {updateAccount.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
@@ -718,42 +759,28 @@ export default function BillsUtilities() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Record Bill</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Bill Date *</Label>
-              <Input type="date" value={billForm.billDate} onChange={e => setBillForm(f => ({ ...f, billDate: e.target.value }))} />
-            </div>
-            <div>
-              <Label>Amount (£) *</Label>
-              <Input type="number" step="0.01" value={billForm.amount} onChange={e => setBillForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
+            <div><Label>Bill Date *</Label><Input type="date" value={billForm.billDate} onChange={e => setBillForm(f => ({ ...f, billDate: e.target.value }))} /></div>
+            <div><Label>Amount (£) *</Label><Input type="number" step="0.01" value={billForm.amount} onChange={e => setBillForm(f => ({ ...f, amount: e.target.value }))} placeholder="0.00" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Period Start</Label><Input type="date" value={billForm.periodStart} onChange={e => setBillForm(f => ({ ...f, periodStart: e.target.value }))} /></div>
+              <div><Label>Period End</Label><Input type="date" value={billForm.periodEnd} onChange={e => setBillForm(f => ({ ...f, periodEnd: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Period Start</Label>
-                <Input type="date" value={billForm.periodStart} onChange={e => setBillForm(f => ({ ...f, periodStart: e.target.value }))} />
-              </div>
-              <div>
-                <Label>Period End</Label>
-                <Input type="date" value={billForm.periodEnd} onChange={e => setBillForm(f => ({ ...f, periodEnd: e.target.value }))} />
-              </div>
+              <div><Label>Consumption</Label><Input type="number" step="0.001" value={billForm.consumptionUnits} onChange={e => setBillForm(f => ({ ...f, consumptionUnits: e.target.value }))} placeholder="e.g. 450" /></div>
+              <div><Label>Unit</Label><Input value={billForm.unitType} onChange={e => setBillForm(f => ({ ...f, unitType: e.target.value }))} placeholder="kWh / m³" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div><Label>Notes</Label><Textarea value={billForm.notes} onChange={e => setBillForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
+            <div className="flex items-center justify-between p-3 bg-muted/30 rounded">
               <div>
-                <Label>Consumption</Label>
-                <Input type="number" step="0.001" value={billForm.consumptionUnits} onChange={e => setBillForm(f => ({ ...f, consumptionUnits: e.target.value }))} placeholder="e.g. 450" />
+                <p className="text-sm font-medium">Auto-fill into Monthly Expenses</p>
+                <p className="text-xs text-muted-foreground">Creates a matching expense entry automatically</p>
               </div>
-              <div>
-                <Label>Unit</Label>
-                <Input value={billForm.unitType} onChange={e => setBillForm(f => ({ ...f, unitType: e.target.value }))} placeholder="kWh / m³" />
-              </div>
-            </div>
-            <div>
-              <Label>Notes</Label>
-              <Textarea value={billForm.notes} onChange={e => setBillForm(f => ({ ...f, notes: e.target.value }))} rows={2} />
+              <Switch checked={autoFillExpense} onCheckedChange={setAutoFillExpense} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddBill(false)}>Cancel</Button>
-            <Button onClick={() => addBill.mutate({ ...billForm, accountId: selectedAccountId! })} disabled={!billForm.amount || !billForm.billDate || addBill.isPending}>
+            <Button onClick={() => addBill.mutate({ ...billForm, accountId: selectedAccountId!, autoFillExpense })} disabled={!billForm.amount || !billForm.billDate || addBill.isPending}>
               {addBill.isPending ? "Saving..." : "Record Bill"}
             </Button>
           </DialogFooter>

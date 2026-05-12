@@ -2,15 +2,16 @@
  * Bills & Utilities Router
  *
  * Manages utility accounts (electricity, gas, water, broadband, etc.) and
- * individual bill records for AQS buildings. Supports anomaly detection
- * (comparing current bill to 3-month average) and contract renewal alerts.
+ * individual bill records for AQS buildings. Supports anomaly detection,
+ * contract renewal alerts, auto-fill into monthly expenses, and editable
+ * buildings/categories lists.
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { utilityAccounts, utilityBills } from "../../drizzle/schema";
-import { eq, desc, and, gte, lte, avg, sql } from "drizzle-orm";
+import { utilityAccounts, utilityBills, utilityBuildings, utilityCategories } from "../../drizzle/schema";
+import { eq, desc, and, gte, lte } from "drizzle-orm";
 
 const BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"] as const;
 const CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"] as const;
@@ -47,13 +48,11 @@ export const billsRouter = router({
       const [account] = await db.select().from(utilityAccounts).where(eq(utilityAccounts.id, input.id));
       if (!account) throw new Error("Account not found");
 
-      // Get bills for this account
       const bills = await db.select().from(utilityBills)
         .where(eq(utilityBills.accountId, input.id))
         .orderBy(desc(utilityBills.billDate))
         .limit(24);
 
-      // Calculate 3-month average for anomaly detection
       const recentBills = bills.slice(0, 3);
       const avg3m = recentBills.length > 0
         ? recentBills.reduce((s, b) => s + parseFloat(b.amount), 0) / recentBills.length
@@ -64,10 +63,10 @@ export const billsRouter = router({
 
   createAccount: protectedProcedure
     .input(z.object({
-      building: z.enum(BUILDINGS),
+      building: z.string().min(1),
       supplier: z.string().min(1),
       accountNumber: z.string().optional(),
-      category: z.enum(CATEGORIES),
+      category: z.string().min(1),
       tariff: z.string().optional(),
       contractStartDate: z.string().optional(),
       contractEndDate: z.string().optional(),
@@ -83,7 +82,7 @@ export const billsRouter = router({
         building: input.building,
         supplier: input.supplier,
         accountNumber: input.accountNumber ?? null,
-        category: input.category,
+        category: input.category as any,
         tariff: input.tariff ?? null,
         contractStartDate: input.contractStartDate ? new Date(input.contractStartDate) : null,
         contractEndDate: input.contractEndDate ? new Date(input.contractEndDate) : null,
@@ -98,10 +97,10 @@ export const billsRouter = router({
   updateAccount: protectedProcedure
     .input(z.object({
       id: z.number(),
-      building: z.enum(BUILDINGS).optional(),
+      building: z.string().optional(),
       supplier: z.string().min(1).optional(),
       accountNumber: z.string().optional(),
-      category: z.enum(CATEGORIES).optional(),
+      category: z.string().optional(),
       tariff: z.string().optional(),
       contractStartDate: z.string().optional().nullable(),
       contractEndDate: z.string().optional().nullable(),
@@ -114,11 +113,12 @@ export const billsRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       const { id, contractStartDate, contractEndDate, ...rest } = input;
-      await db.update(utilityAccounts).set({
+      const updateData: any = {
         ...rest,
         contractStartDate: contractStartDate ? new Date(contractStartDate) : contractStartDate === null ? null : undefined,
         contractEndDate: contractEndDate ? new Date(contractEndDate) : contractEndDate === null ? null : undefined,
-      }).where(eq(utilityAccounts.id, id));
+      };
+      await db.update(utilityAccounts).set(updateData).where(eq(utilityAccounts.id, id));
       return { success: true };
     }),
 
@@ -161,6 +161,7 @@ export const billsRouter = router({
       unitType: z.string().optional(),
       billUrl: z.string().optional(),
       notes: z.string().optional(),
+      autoFillExpense: z.boolean().default(true),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
@@ -177,6 +178,9 @@ export const billsRouter = router({
       const currentAmount = parseFloat(input.amount);
       const isAnomaly = avg3m !== null && currentAmount > avg3m * 1.5;
 
+      // Fetch the account for context
+      const [account] = await db.select().from(utilityAccounts).where(eq(utilityAccounts.id, input.accountId)).limit(1);
+
       const [result] = await db.insert(utilityBills).values({
         accountId: input.accountId,
         billDate: new Date(input.billDate),
@@ -189,6 +193,7 @@ export const billsRouter = router({
         notes: input.notes ?? null,
         uploadedById: ctx.user.id,
       }).$returningId();
+      const billId = result.id;
 
       // Update lastBillDate and lastBillAmount on the account
       await db.update(utilityAccounts).set({
@@ -196,7 +201,33 @@ export const billsRouter = router({
         lastBillAmount: input.amount,
       }).where(eq(utilityAccounts.id, input.accountId));
 
-      return { id: result.id, isAnomaly, avg3m: avg3m?.toFixed(2) ?? null };
+      // ── Auto-fill into monthly expenses ──────────────────────────────────────
+      let autoExpenseId: number | null = null;
+      if (input.autoFillExpense && account) {
+        const { receipts } = await import("../../drizzle/schema");
+        const vendor = account.supplier;
+        const categoryName = `Bills & Utilities — ${account.category.charAt(0).toUpperCase() + account.category.slice(1)}`;
+        const [expResult] = await db.insert(receipts).values({
+          userId: ctx.user.id,
+          vendor,
+          receiptDate: new Date(input.billDate),
+          amount: input.amount,
+          departmentName: account.building,
+          categoryName,
+          status: "approved",
+          notes: `Auto-filled from Bills & Utilities: ${account.building} — ${account.supplier} (${account.category})${input.notes ? `\n${input.notes}` : ""}`,
+          currency: "GBP",
+          paymentStatus: "pending",
+        } as any);
+        autoExpenseId = (expResult as any).insertId as number;
+
+        // Link the bill to the expense
+        await db.update(utilityBills)
+          .set({ autoExpenseLinkedId: autoExpenseId })
+          .where(eq(utilityBills.id, billId));
+      }
+
+      return { id: billId, isAnomaly, avg3m: avg3m?.toFixed(2) ?? null, autoExpenseId };
     }),
 
   deleteBill: protectedProcedure
@@ -220,15 +251,16 @@ export const billsRouter = router({
       const expiringSoon = accounts.filter(a => a.contractEndDate && new Date(a.contractEndDate) <= in60Days && new Date(a.contractEndDate) >= now);
       const expired = accounts.filter(a => a.contractEndDate && new Date(a.contractEndDate) < now);
 
-      // Total monthly direct debit
       const totalDD = accounts.reduce((s, a) => s + parseFloat(a.directDebitAmount ?? "0"), 0);
 
-      // Bills this month
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
       const allBills = await db.select().from(utilityBills)
         .where(and(gte(utilityBills.billDate, monthStart), lte(utilityBills.billDate, monthEnd)));
       const totalBillsThisMonth = allBills.reduce((s, b) => s + parseFloat(b.amount), 0);
+
+      // Get all unique buildings (static + dynamic)
+      const allBuildings = Array.from(new Set(accounts.map(a => a.building)));
 
       return {
         totalAccounts: accounts.length,
@@ -236,11 +268,110 @@ export const billsRouter = router({
         expired: expired.length,
         totalMonthlyDD: totalDD.toFixed(2),
         totalBillsThisMonth: totalBillsThisMonth.toFixed(2),
-        byBuilding: BUILDINGS.map(b => ({
+        byBuilding: allBuildings.map(b => ({
           building: b,
           count: accounts.filter(a => a.building === b).length,
           totalDD: accounts.filter(a => a.building === b).reduce((s, a) => s + parseFloat(a.directDebitAmount ?? "0"), 0).toFixed(2),
         })),
       };
+    }),
+
+  // ── Editable Buildings ────────────────────────────────────────────────────────
+  listBuildings: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const custom = await db.select().from(utilityBuildings).orderBy(utilityBuildings.name);
+    // Merge with static defaults (dedup by name)
+    const customNames = new Set(custom.map(b => b.name));
+    const defaults = BUILDINGS.filter(b => !customNames.has(b)).map((b, i) => ({
+      id: -(i + 1), name: b, address: null, notes: null, isActive: true, createdAt: new Date(),
+    }));
+    return [...defaults, ...custom];
+  }),
+
+  addBuilding: adminProcedure
+    .input(z.object({ name: z.string().min(1), address: z.string().optional(), notes: z.string().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [r] = await db.insert(utilityBuildings).values({
+        name: input.name,
+        address: input.address ?? null,
+        notes: input.notes ?? null,
+        isActive: true,
+      }).$returningId();
+      return { id: r.id };
+    }),
+
+  updateBuilding: adminProcedure
+    .input(z.object({ id: z.number().int(), name: z.string().min(1).optional(), address: z.string().optional(), notes: z.string().optional(), isActive: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { id, ...data } = input;
+      await db.update(utilityBuildings).set(data).where(eq(utilityBuildings.id, id));
+      return { success: true };
+    }),
+
+  deleteBuilding: adminProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(utilityBuildings).where(eq(utilityBuildings.id, input.id));
+      return { success: true };
+    }),
+
+  // ── Editable Categories ───────────────────────────────────────────────────────
+  listCategories: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const custom = await db.select().from(utilityCategories).orderBy(utilityCategories.name);
+    const customNames = new Set(custom.map(c => c.name));
+    const CATEGORY_COLOURS: Record<string, string> = {
+      electricity: "#f59e0b",
+      gas: "#f97316",
+      water: "#3b82f6",
+      broadband: "#8b5cf6",
+      telephone: "#06b6d4",
+      insurance: "#10b981",
+      other: "#6b7280",
+    };
+    const defaults = CATEGORIES.filter(c => !customNames.has(c)).map((c, i) => ({
+      id: -(i + 1), name: c, colour: CATEGORY_COLOURS[c] ?? "#6b7280", isActive: true, createdAt: new Date(),
+    }));
+    return [...defaults, ...custom];
+  }),
+
+  addCategory: adminProcedure
+    .input(z.object({ name: z.string().min(1), colour: z.string().default("#6b7280") }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [r] = await db.insert(utilityCategories).values({
+        name: input.name,
+        colour: input.colour,
+        isActive: true,
+      }).$returningId();
+      return { id: r.id };
+    }),
+
+  updateCategory: adminProcedure
+    .input(z.object({ id: z.number().int(), name: z.string().min(1).optional(), colour: z.string().optional(), isActive: z.boolean().optional() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { id, ...data } = input;
+      await db.update(utilityCategories).set(data).where(eq(utilityCategories.id, id));
+      return { success: true };
+    }),
+
+  deleteCategory: adminProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(utilityCategories).where(eq(utilityCategories.id, input.id));
+      return { success: true };
     }),
 });

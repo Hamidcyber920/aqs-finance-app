@@ -1560,3 +1560,13 @@
 - [x] Bills & Utilities — monthly direct debit calendar view showing all upcoming DD dates colour-coded by utility type
 - [x] Training Tracker — bulk enrol dialog to assign multiple staff to a course in one action
 - [x] LBMW Correspondence — auto-link to compliance actions: one-click option to create a linked Compliance Action with response deadline pre-filled
+
+## Round 10 Next Steps (May 12, 2026)
+
+- [x] LBMW — Gmail folder pull: fetch emails from a configured Gmail label/folder, auto-create correspondence records
+- [x] LBMW — AI email summary: LLM summarises each pulled email, detects if action/invoice is needed
+- [x] LBMW — Auto-create task + notify trustees/staff when email requires action
+- [x] LBMW — Invoice tag: flag correspondence as invoice-to-pay, auto-populate into monthly expenses
+- [x] Bills & Utilities — Auto-fill bills into monthly expenses on bill record creation/update
+- [x] Bills & Utilities — Editable categories (utility types) in a settings panel
+- [x] Bills & Utilities — Editable buildings list in a settings panel

@@ -31,6 +31,7 @@ import { conflictsRouter } from "./routers/conflicts";
 import { savedViewsRouter } from "./routers/savedViews";
 import { billsRouter } from "./routers/bills";
 import { trainingRouter } from "./routers/training";
+import { lbmwGmailRouter } from "./routers/lbmwGmail";
 import { qrCodesRouter } from "./routers/qrCodes";
 import { recognitionTiersRouter } from "./routers/recognitionTiers";
 import {
@@ -393,6 +394,7 @@ export const appRouter = router({
   recognitionTiers: recognitionTiersRouter,
   bills: billsRouter,
   training: trainingRouter,
+  lbmwGmail: lbmwGmailRouter,
 
   // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
   succession: router({
