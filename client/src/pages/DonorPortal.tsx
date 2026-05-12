@@ -82,7 +82,7 @@ export default function DonorPortal() {
     );
   }
 
-  const { donor, pledges, giftAidDeclarations } = data as { donor: PortalDonor; pledges: PortalPledge[]; giftAidDeclarations: PortalGiftAid[]; tokenPurpose: string; };
+  const { donor, pledges, giftAidDeclarations, isLead, leadData } = data as { donor: PortalDonor; pledges: PortalPledge[]; giftAidDeclarations: PortalGiftAid[]; tokenPurpose: string; isLead?: boolean; leadData?: { isUkTaxpayer: boolean; giftAidConsent: boolean; profileComplete: boolean; address?: string | null; postcode?: string | null; }; };
   const firstName = donor.name?.split(" ")[0] ?? "Brother/Sister";
   const activePledges = pledges.filter((p: PortalPledge) => p.status === "active" || p.status === "lapsed");
   const fulfilledPledges = pledges.filter((p: PortalPledge) => p.status === "fulfilled");
@@ -111,6 +111,20 @@ export default function DonorPortal() {
               <div>
                 <p className="font-semibold text-green-800">JazakAllah Khayran!</p>
                 <p className="text-sm text-green-700">Your payment has been received. May Allah accept it and bless you abundantly. 🤲</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Lead profile completion prompt */}
+        {isLead && !leadData?.profileComplete && (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold text-amber-800">Complete Your Donor Profile</p>
+                <p className="text-sm text-amber-700 mt-1">To enable Gift Aid on your donations and receive a full donor record, please contact AQ Society to complete your profile. This takes just 2 minutes.</p>
+                <a href="https://wa.me/447958465328" className="inline-block mt-2 text-sm text-amber-800 underline">Contact AQ Society via WhatsApp →</a>
               </div>
             </CardContent>
           </Card>

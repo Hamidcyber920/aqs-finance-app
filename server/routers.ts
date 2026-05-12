@@ -50,7 +50,7 @@ import {
   getDashboardStats,
 } from "./db";
 import { eq, and, sql, desc, isNull, gte, lte } from "drizzle-orm";
-import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations } from "../drizzle/schema";
+import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations, donorLeads } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 // sendGmail is defined locally in this file (line ~123)
 
@@ -5597,6 +5597,43 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           .limit(1);
         if (!tokenRow) throw new TRPCError({ code: "NOT_FOUND", message: "Invalid or expired link" });
         if (tokenRow.expiresAt < new Date()) throw new TRPCError({ code: "FORBIDDEN", message: "This link has expired" });
+
+        // Handle donor lead tokens (from QuickCapture or Send Portal Link on a lead)
+        if (tokenRow.donorLeadId && !tokenRow.donorId) {
+          const [lead] = await db.select().from(donorLeads).where(eq(donorLeads.id, tokenRow.donorLeadId)).limit(1);
+          if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Donor lead not found" });
+          // If lead has been converted to a full donor, use that donor's data
+          if (lead.convertedToDonorId) {
+            const donor = await getDonorById(lead.convertedToDonorId);
+            if (donor) {
+              const donorPledges = await db.select().from(pledges).where(eq(pledges.donorId, lead.convertedToDonorId));
+              const giftAidDecls = await db.select().from(giftAidDeclarations).where(eq(giftAidDeclarations.donorEmail, donor.email ?? ""));
+              return {
+                donor: { id: donor.id, name: donor.name, email: donor.email, phone: donor.phone, totalGiven: donor.totalGiven },
+                pledges: donorPledges,
+                giftAidDeclarations: giftAidDecls,
+                tokenPurpose: tokenRow.purpose,
+                isLead: false,
+              };
+            }
+          }
+          // Return lead data for profile completion flow
+          return {
+            donor: { id: lead.id, name: lead.name, email: lead.email, phone: lead.whatsapp, totalGiven: "0.00" },
+            pledges: [],
+            giftAidDeclarations: [],
+            tokenPurpose: tokenRow.purpose,
+            isLead: true,
+            leadData: {
+              isUkTaxpayer: lead.isUkTaxpayer,
+              giftAidConsent: lead.giftAidConsent,
+              profileComplete: lead.profileComplete,
+              address: lead.address,
+              postcode: lead.postcode,
+            },
+          };
+        }
+
         if (!tokenRow.donorId) throw new TRPCError({ code: "NOT_FOUND", message: "No donor linked to this token" });
         const donor = await getDonorById(tokenRow.donorId);
         if (!donor) throw new TRPCError({ code: "NOT_FOUND", message: "Donor not found" });
@@ -5607,6 +5644,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           pledges: donorPledges,
           giftAidDeclarations: giftAidDecls,
           tokenPurpose: tokenRow.purpose,
+          isLead: false,
         };
       }),
     // Public: create a Stripe checkout session for a pledge payment via portal token

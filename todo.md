@@ -1467,3 +1467,4 @@
 - [x] Fix Scanner Gallery button — on mobile it opens camera instead of file picker; need accept="image/*,application/pdf" and correct capture attribute
 - [x] Fix duplicate bottom nav bar on mobile — in-app bottom nav shows twice when browser PWA bar is visible; add safe-area padding and hide duplicate
 - [x] Fix Comms Hub right panel overflow on mobile — message list/detail panel overflows off-screen on narrow viewports; make it responsive single-column
+- [x] Fix donor portal "Link Not Valid" error — getByToken now handles donorLeadId tokens (QuickCapture leads) in addition to donorId tokens
