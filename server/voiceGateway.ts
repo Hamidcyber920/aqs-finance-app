@@ -322,7 +322,7 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
         const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
         const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
         const envPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || "";
-        const smtpPass = envPass && envPass.length >= 16 ? envPass : "";
+        const smtpPass = envPass && envPass.length >= 8 ? envPass : "";
         if (!smtpPass) return { error: "Email service not configured. SMTP credentials missing." };
         const transporter = nodemailer.createTransport({ host: process.env.SMTP_HOST || "smtp.gmail.com", port: 465, secure: true, auth: { user: smtpUser, pass: smtpPass } });
         const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">

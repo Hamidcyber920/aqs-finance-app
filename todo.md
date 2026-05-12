@@ -1839,4 +1839,4 @@
 - [x] Move outputAudioTranscription/inputAudioTranscription to top-level setup (not inside generationConfig)
 - [x] Add feature flags for new tools (search_donors, send_email, navigate_to)
 - [x] Merge consecutive transcript messages from same speaker in frontend
-- [ ] Test end-to-end: "send email to X" → tool call → email sent → Hibba confirms (requires valid SMTP)
+- [x] Test end-to-end: "send email to X" → tool call → email sent → Hibba confirms (SMTP configured, password length check fixed from >=16 to >=8)
