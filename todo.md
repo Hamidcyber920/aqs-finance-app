@@ -1468,3 +1468,13 @@
 - [x] Fix duplicate bottom nav bar on mobile — in-app bottom nav shows twice when browser PWA bar is visible; add safe-area padding and hide duplicate
 - [x] Fix Comms Hub right panel overflow on mobile — message list/detail panel overflows off-screen on narrow viewports; make it responsive single-column
 - [x] Fix donor portal "Link Not Valid" error — getByToken now handles donorLeadId tokens (QuickCapture leads) in addition to donorId tokens
+
+## Donor Portal Enhancements (May 12 2026)
+- [x] Inline profile completion form on donor portal — leads can fill in address, postcode, Gift Aid consent directly without contacting AQ Society
+- [x] Token expiry warning banner on donor portal — show "This link expires in X days" when fewer than 7 days remain
+- [x] Resend Portal Link button on QuickCapture leads table — regenerate and resend expired/new portal links in one click
+
+## Comms Hub Improvements (May 12 2026)
+- [x] Mark All Read button in Comms Hub section header
+- [x] Swipe-to-archive gesture on mobile email list items
+- [x] Inline PDF/image attachment preview in Comms Hub email detail panel

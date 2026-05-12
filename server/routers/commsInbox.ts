@@ -944,6 +944,28 @@ Return JSON with this exact structure: { "replies": ["reply1", "reply2", "reply3
       return { replies: parsed.replies as string[] };
     }),
 
+  // ── Mark all emails in a section (or all) as read ──────────────────────
+  markAllRead: protectedProcedure
+    .input(z.object({
+      sectionId: z.number().nullable().optional(), // null = unsorted, undefined = all sections
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const conditions: any[] = [eq(inboundEmails.status, "unread")];
+      if (input.sectionId !== undefined) {
+        conditions.push(
+          input.sectionId === null
+            ? isNull(inboundEmails.sectionId)
+            : eq(inboundEmails.sectionId, input.sectionId)
+        );
+      }
+      await db.update(inboundEmails)
+        .set({ status: "read" })
+        .where(and(...conditions));
+      return { success: true };
+    }),
+
   // ── Per-section unread counts (for sidebar badges) ───────────────────────
   getSectionUnreadCounts: protectedProcedure.query(async () => {
     const db = await getDb();

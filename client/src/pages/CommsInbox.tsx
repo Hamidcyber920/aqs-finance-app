@@ -226,6 +226,45 @@ export default function CommsInboxPage() {
     onError: (e) => toast.error(`Link failed: ${e.message}`),
   });
 
+  const markAllRead = trpc.commsInbox.markAllRead.useMutation({
+    onSuccess: () => {
+      toast.success("All messages marked as read");
+      refetchEmails();
+      utils.commsInbox.getSectionUnreadCounts.invalidate();
+    },
+    onError: (e) => toast.error(`Failed: ${e.message}`),
+  });
+
+  // Swipe-to-archive state
+  const [swipingEmailId, setSwipingEmailId] = useState<number | null>(null);
+  const [swipeX, setSwipeX] = useState(0);
+  const swipeTouchStartX = useRef(0);
+  const swipeTouchStartY = useRef(0);
+  const handleSwipeTouchStart = (e: React.TouchEvent, emailId: number) => {
+    swipeTouchStartX.current = e.touches[0].clientX;
+    swipeTouchStartY.current = e.touches[0].clientY;
+    setSwipingEmailId(emailId);
+    setSwipeX(0);
+  };
+  const handleSwipeTouchMove = (e: React.TouchEvent, emailId: number) => {
+    if (swipingEmailId !== emailId) return;
+    const dx = e.touches[0].clientX - swipeTouchStartX.current;
+    const dy = e.touches[0].clientY - swipeTouchStartY.current;
+    if (Math.abs(dy) > Math.abs(dx)) { setSwipingEmailId(null); return; }
+    if (dx < 0) setSwipeX(Math.max(dx, -80));
+  };
+  const handleSwipeTouchEnd = (emailId: number) => {
+    if (swipeX < -60) {
+      updateEmail.mutate({ id: emailId, status: "archived" });
+      toast.success("Archived");
+    }
+    setSwipingEmailId(null);
+    setSwipeX(0);
+  };
+
+  // Inline attachment preview state
+  const [previewAttachment, setPreviewAttachment] = useState<{ url: string; mimeType: string; filename: string } | null>(null);
+
   const classifyPriority = trpc.commsInbox.classifyPriority.useMutation({
     onSuccess: (data) => {
       toast.success(`Priority set to ${data.priority} — ${data.reason}`);
@@ -465,6 +504,11 @@ export default function CommsInboxPage() {
               onClick={() => setShowPushDialog(true)}>
               <Plus className="w-3 h-3" />
             </Button>
+            <Button size="sm" title="Mark all as read" className="h-7 text-xs px-2 bg-white/5 border-white/10 text-gray-300 hover:text-white hover:bg-emerald-700/30"
+              onClick={() => markAllRead.mutate({ sectionId: selectedSectionId !== undefined ? selectedSectionId : undefined })}
+              disabled={markAllRead.isPending}>
+              {markAllRead.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <MailOpen className="w-3 h-3" />}
+            </Button>
           </div>
 
           {/* Filter panel */}
@@ -560,8 +604,19 @@ export default function CommsInboxPage() {
               const isUnread = email.status === "unread";
               const isChecked = selectedEmailIds.has(email.id);
               return (
-                <div key={email.id} className={`border-b border-white/5 transition-colors ${isSelected ? "bg-indigo-600/20" : isChecked ? "bg-indigo-900/20" : "hover:bg-white/5"}`}>
-                  <div className="flex items-start gap-2 p-3">
+                <div key={email.id} className="relative border-b border-white/5 overflow-hidden">
+                  {/* Swipe-to-archive background */}
+                  <div className="absolute inset-y-0 right-0 w-20 bg-red-600/80 flex items-center justify-center pointer-events-none"
+                    style={{ opacity: swipingEmailId === email.id && swipeX < -20 ? Math.min(1, Math.abs(swipeX) / 60) : 0 }}>
+                    <Archive className="w-5 h-5 text-white" />
+                  </div>
+                  <div
+                    className={`flex items-start gap-2 p-3 transition-colors ${isSelected ? "bg-indigo-600/20" : isChecked ? "bg-indigo-900/20" : "hover:bg-white/5"}`}
+                    style={{ transform: swipingEmailId === email.id ? `translateX(${swipeX}px)` : "translateX(0)", transition: swipingEmailId === email.id ? "none" : "transform 0.2s ease" }}
+                    onTouchStart={(e) => handleSwipeTouchStart(e, email.id)}
+                    onTouchMove={(e) => handleSwipeTouchMove(e, email.id)}
+                    onTouchEnd={() => handleSwipeTouchEnd(email.id)}
+                  >
                     <div className="flex items-center gap-1.5 mt-1 flex-shrink-0">
                       <Checkbox
                         checked={isChecked}
@@ -790,9 +845,15 @@ export default function CommsInboxPage() {
                               )}
                             </div>
                             <div className="flex gap-1 flex-shrink-0">
+                              {att.s3Url && (att.mimeType?.startsWith("image/") || att.mimeType === "application/pdf") && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                                  onClick={() => setPreviewAttachment({ url: att.s3Url, mimeType: att.mimeType, filename: att.filename })}>
+                                  <Eye className="w-3 h-3" />
+                                </Button>
+                              )}
                               <Button size="sm" variant="outline" className="h-7 text-xs border-white/20 text-gray-400 hover:text-white"
                                 onClick={() => window.open(att.s3Url, "_blank")}>
-                                <Eye className="w-3 h-3" />
+                                <Paperclip className="w-3 h-3" />
                               </Button>
                               {(att.mimeType?.startsWith("image/") || att.mimeType === "application/pdf") && (
                                 <Button size="sm" variant="outline" className="h-7 text-xs border-indigo-500/40 text-indigo-400 hover:bg-indigo-500/10"
@@ -1297,6 +1358,43 @@ export default function CommsInboxPage() {
               })}>
               {upsertSectionTemplate.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
               {templateForm.id ? "Update" : "Add Template"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inline Attachment Preview Dialog */}
+      <Dialog open={!!previewAttachment} onOpenChange={(open) => { if (!open) setPreviewAttachment(null); }}>
+        <DialogContent className="bg-[#0d1226] border-white/10 text-white max-w-3xl w-full max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2 text-sm">
+              <Paperclip className="w-4 h-4 text-gray-400" />
+              {previewAttachment?.filename}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto flex items-center justify-center min-h-0 bg-black/30 rounded-lg p-2">
+            {previewAttachment?.mimeType?.startsWith("image/") ? (
+              <img
+                src={previewAttachment.url}
+                alt={previewAttachment.filename}
+                className="max-w-full max-h-[70vh] object-contain rounded"
+              />
+            ) : previewAttachment?.mimeType === "application/pdf" ? (
+              <iframe
+                src={previewAttachment.url}
+                title={previewAttachment.filename}
+                className="w-full h-[70vh] rounded border-0"
+              />
+            ) : null}
+          </div>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" className="border-white/20 text-gray-300 hover:text-white hover:bg-white/10"
+              onClick={() => setPreviewAttachment(null)}>
+              Close
+            </Button>
+            <Button className="bg-indigo-600 hover:bg-indigo-700"
+              onClick={() => window.open(previewAttachment?.url, "_blank")}>
+              Open in New Tab
             </Button>
           </DialogFooter>
         </DialogContent>

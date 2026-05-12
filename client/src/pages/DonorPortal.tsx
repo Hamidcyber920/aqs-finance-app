@@ -5,8 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { CreditCard, FileText, CheckCircle, AlertCircle, Loader2, Heart } from "lucide-react";
+import { CreditCard, FileText, CheckCircle, AlertCircle, Loader2, Heart, Clock, UserCheck } from "lucide-react";
 
 function statusColor(status: string) {
   if (status === "fulfilled") return "bg-green-100 text-green-800";
@@ -16,15 +19,30 @@ function statusColor(status: string) {
   return "bg-gray-100 text-gray-800";
 }
 
+function daysUntil(dateStr: string): number {
+  const ms = new Date(dateStr).getTime() - Date.now();
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
 export default function DonorPortal() {
   const { token } = useParams<{ token: string }>();
   const search = useSearch();
   const paid = new URLSearchParams(search).get("paid") === "1";
   const [payingPledgeId, setPayingPledgeId] = useState<number | null>(null);
 
+  // Profile completion form state
+  const [profileFormOpen, setProfileFormOpen] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [formAddress, setFormAddress] = useState("");
+  const [formPostcode, setFormPostcode] = useState("");
+  const [formIsUkTaxpayer, setFormIsUkTaxpayer] = useState(false);
+  const [formGiftAidConsent, setFormGiftAidConsent] = useState(false);
+
   type PortalPledge = { id: number; campaignName?: string | null; totalAmount: string; balanceOwing: string; paidToDate: string; status: string; nextDueDate?: string | null; frequency: string; isGiftAid: boolean; };
   type PortalGiftAid = { id: number; campaignName?: string | null; amount: string; donationDate: string; declarationMethod: string; };
   type PortalDonor = { id: number; name: string; email?: string | null; phone?: string | null; totalGiven: string; };
+  type LeadData = { isUkTaxpayer: boolean; giftAidConsent: boolean; profileComplete: boolean; address?: string | null; postcode?: string | null; };
+
   const { data, isLoading, error } = (trpc as any).donorPortal.getByToken.useQuery(
     { token: token ?? "" },
     { enabled: !!token, retry: false }
@@ -42,11 +60,35 @@ export default function DonorPortal() {
     },
   });
 
+  const completeProfile = (trpc as any).donorPortal.completeLeadProfile.useMutation({
+    onSuccess: () => {
+      setProfileSaved(true);
+      setProfileFormOpen(false);
+      toast.success("JazakAllah Khayran! Your profile has been updated.");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handlePay = (pledgeId: number, balance: string) => {
     const amount = parseFloat(balance);
     if (!amount || amount <= 0) { toast.error("No balance owing"); return; }
     setPayingPledgeId(pledgeId);
     checkout.mutate({ token: token ?? "", pledgeId, amount, origin: window.location.origin });
+  };
+
+  const handleProfileSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formAddress.trim() || !formPostcode.trim()) {
+      toast.error("Please enter your address and postcode");
+      return;
+    }
+    completeProfile.mutate({
+      token: token ?? "",
+      address: formAddress.trim(),
+      postcode: formPostcode.trim(),
+      isUkTaxpayer: formIsUkTaxpayer,
+      giftAidConsent: formGiftAidConsent,
+    });
   };
 
   if (!token) {
@@ -77,15 +119,38 @@ export default function DonorPortal() {
           <h2 className="text-xl font-semibold mb-2">Link Not Valid</h2>
           <p className="text-muted-foreground">{error.message}</p>
           <p className="text-sm text-muted-foreground mt-2">Please contact AQ Society for a new link.</p>
+          <a href="https://wa.me/447958465328" className="inline-block mt-4 text-sm text-emerald-700 underline">Contact AQ Society via WhatsApp →</a>
         </Card>
       </div>
     );
   }
 
-  const { donor, pledges, giftAidDeclarations, isLead, leadData } = data as { donor: PortalDonor; pledges: PortalPledge[]; giftAidDeclarations: PortalGiftAid[]; tokenPurpose: string; isLead?: boolean; leadData?: { isUkTaxpayer: boolean; giftAidConsent: boolean; profileComplete: boolean; address?: string | null; postcode?: string | null; }; };
+  const { donor, pledges, giftAidDeclarations, isLead, leadData, tokenExpiry } = data as {
+    donor: PortalDonor;
+    pledges: PortalPledge[];
+    giftAidDeclarations: PortalGiftAid[];
+    tokenPurpose: string;
+    isLead?: boolean;
+    leadData?: LeadData;
+    tokenExpiry?: string;
+  };
+
   const firstName = donor.name?.split(" ")[0] ?? "Brother/Sister";
   const activePledges = pledges.filter((p: PortalPledge) => p.status === "active" || p.status === "lapsed");
   const fulfilledPledges = pledges.filter((p: PortalPledge) => p.status === "fulfilled");
+
+  // Expiry warning: show if fewer than 7 days remain
+  const expiryDays = tokenExpiry ? daysUntil(tokenExpiry) : null;
+  const showExpiryWarning = expiryDays !== null && expiryDays <= 7 && expiryDays > 0;
+
+  // Pre-fill form from existing lead data when opening
+  const openProfileForm = () => {
+    setFormAddress(leadData?.address ?? "");
+    setFormPostcode(leadData?.postcode ?? "");
+    setFormIsUkTaxpayer(leadData?.isUkTaxpayer ?? false);
+    setFormGiftAidConsent(leadData?.giftAidConsent ?? false);
+    setProfileFormOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
@@ -116,15 +181,132 @@ export default function DonorPortal() {
           </Card>
         )}
 
-        {/* Lead profile completion prompt */}
-        {isLead && !leadData?.profileComplete && (
-          <Card className="border-amber-200 bg-amber-50">
-            <CardContent className="pt-4 flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+        {/* Token expiry warning */}
+        {showExpiryWarning && (
+          <Card className="border-orange-200 bg-orange-50">
+            <CardContent className="pt-4 flex items-center gap-3">
+              <Clock className="h-5 w-5 text-orange-600 shrink-0" />
               <div>
-                <p className="font-semibold text-amber-800">Complete Your Donor Profile</p>
-                <p className="text-sm text-amber-700 mt-1">To enable Gift Aid on your donations and receive a full donor record, please contact AQ Society to complete your profile. This takes just 2 minutes.</p>
-                <a href="https://wa.me/447958465328" className="inline-block mt-2 text-sm text-amber-800 underline">Contact AQ Society via WhatsApp →</a>
+                <p className="font-semibold text-orange-800">
+                  {expiryDays === 1 ? "This link expires today!" : `This link expires in ${expiryDays} day${expiryDays !== 1 ? "s" : ""}`}
+                </p>
+                <p className="text-sm text-orange-700">Please bookmark this page or ask AQ Society for a new link before it expires.</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Profile completion prompt / form */}
+        {isLead && !profileSaved && !leadData?.profileComplete && (
+          <Card className="border-amber-200 bg-amber-50">
+            <CardContent className="pt-4">
+              {!profileFormOpen ? (
+                <div className="flex items-start gap-3">
+                  <UserCheck className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-amber-800">Complete Your Donor Profile</p>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Add your address and Gift Aid consent to enable AQ Society to claim 25% Gift Aid on your donations — at no cost to you.
+                    </p>
+                    <Button
+                      size="sm"
+                      className="mt-3 bg-amber-600 hover:bg-amber-700 text-white"
+                      onClick={openProfileForm}
+                    >
+                      Complete Profile Now
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <form onSubmit={handleProfileSubmit} className="space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <UserCheck className="h-5 w-5 text-amber-600" />
+                    <p className="font-semibold text-amber-800">Complete Your Donor Profile</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="address" className="text-amber-900">Home Address</Label>
+                    <Input
+                      id="address"
+                      placeholder="e.g. 12 High Street, Liverpool"
+                      value={formAddress}
+                      onChange={e => setFormAddress(e.target.value)}
+                      className="bg-white border-amber-300"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="postcode" className="text-amber-900">Postcode</Label>
+                    <Input
+                      id="postcode"
+                      placeholder="e.g. L3 8EE"
+                      value={formPostcode}
+                      onChange={e => setFormPostcode(e.target.value.toUpperCase())}
+                      className="bg-white border-amber-300 max-w-[180px]"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-3 pt-1">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="ukTaxpayer"
+                        checked={formIsUkTaxpayer}
+                        onCheckedChange={v => setFormIsUkTaxpayer(!!v)}
+                        className="mt-0.5"
+                      />
+                      <Label htmlFor="ukTaxpayer" className="text-sm text-amber-900 leading-snug cursor-pointer">
+                        I am a UK taxpayer and pay Income Tax or Capital Gains Tax equal to or more than the Gift Aid claimed on my donations.
+                      </Label>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="giftAid"
+                        checked={formGiftAidConsent}
+                        onCheckedChange={v => setFormGiftAidConsent(!!v)}
+                        className="mt-0.5"
+                      />
+                      <Label htmlFor="giftAid" className="text-sm text-amber-900 leading-snug cursor-pointer">
+                        I consent to AQ Society claiming Gift Aid on all qualifying donations I have made in the past 4 years and any future donations.
+                      </Label>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                      disabled={completeProfile.isPending}
+                    >
+                      {completeProfile.isPending ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Saving…</> : "Save Profile"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-amber-700"
+                      onClick={() => setProfileFormOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Profile completion success */}
+        {(profileSaved || (isLead && leadData?.profileComplete)) && (
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="pt-4 flex items-center gap-3">
+              <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
+              <div>
+                <p className="font-semibold text-green-800">Profile Complete</p>
+                <p className="text-sm text-green-700">Your donor profile is up to date. JazakAllah Khayran!</p>
               </div>
             </CardContent>
           </Card>
@@ -274,6 +456,7 @@ export default function DonorPortal() {
         <p className="text-center text-xs text-muted-foreground pb-6">
           Abdullah Quilliam Society · Registered Charity · This portal is secure and personalised for {donor.name}.
           <br />For queries, contact <a href="mailto:info@aqsociety.org" className="underline">info@aqsociety.org</a>
+          {" "}or <a href="https://wa.me/447958465328" className="underline">WhatsApp</a>
         </p>
       </div>
     </div>

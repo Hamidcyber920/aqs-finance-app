@@ -5623,6 +5623,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
             pledges: [],
             giftAidDeclarations: [],
             tokenPurpose: tokenRow.purpose,
+            tokenExpiry: tokenRow.expiresAt.toISOString(),
             isLead: true,
             leadData: {
               isUkTaxpayer: lead.isUkTaxpayer,
@@ -5644,8 +5645,35 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           pledges: donorPledges,
           giftAidDeclarations: giftAidDecls,
           tokenPurpose: tokenRow.purpose,
+          tokenExpiry: tokenRow.expiresAt.toISOString(),
           isLead: false,
         };
+      }),
+    // Public: complete a donor lead's profile via portal token
+    completeLeadProfile: publicProcedure
+      .input(z.object({
+        token: z.string(),
+        address: z.string().min(5),
+        postcode: z.string().min(3).max(10),
+        isUkTaxpayer: z.boolean(),
+        giftAidConsent: z.boolean(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const [tokenRow] = await db.select().from(donorPortalTokens).where(eq(donorPortalTokens.token, input.token)).limit(1);
+        if (!tokenRow || tokenRow.expiresAt < new Date()) throw new TRPCError({ code: "FORBIDDEN", message: "Invalid or expired link" });
+        if (!tokenRow.donorLeadId) throw new TRPCError({ code: "BAD_REQUEST", message: "This link is not for a donor lead" });
+        await db.update(donorLeads)
+          .set({
+            address: input.address,
+            postcode: input.postcode,
+            isUkTaxpayer: input.isUkTaxpayer,
+            giftAidConsent: input.giftAidConsent,
+            profileComplete: true,
+          })
+          .where(eq(donorLeads.id, tokenRow.donorLeadId));
+        return { ok: true };
       }),
     // Public: create a Stripe checkout session for a pledge payment via portal token
     createPledgeCheckout: publicProcedure

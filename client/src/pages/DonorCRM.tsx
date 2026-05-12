@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Users, Zap, Heart, FileCheck, Link2, Star, TrendingUp, Copy,
   CheckCircle2, Clock, AlertCircle, MessageCircle, Mail, Plus, Download,
-  ChevronRight, Building2, BookOpen
+  ChevronRight, Building2, BookOpen, RefreshCw, Loader2
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 
@@ -187,13 +187,18 @@ function QuickCapturePanel() {
 function DonorLeadsTable() {
   const { data: leads, isLoading } = trpc.crm.listLeads.useQuery();
   const utils = trpc.useUtils();
+  const [resendingId, setResendingId] = useState<number | null>(null);
+  const [resendResult, setResendResult] = useState<{ id: number; portalUrl: string; whatsappLink: string } | null>(null);
 
   const generateLink = trpc.crm.generatePortalLink.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
+      const leadId = (variables as any).donorLeadId;
+      setResendingId(null);
+      setResendResult({ id: leadId, portalUrl: data.portalUrl, whatsappLink: data.whatsappLink ?? `https://wa.me/${(variables as any).whatsapp?.replace(/\D/g, "").replace(/^0/, "44")}?text=${encodeURIComponent("Your updated portal link: " + data.portalUrl)}` });
       navigator.clipboard.writeText(data.portalUrl);
-      toast.success("Portal link copied to clipboard!");
+      toast.success("New portal link generated and copied!");
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => { setResendingId(null); toast.error(e.message); },
   });
 
   if (isLoading) return <div className="text-center py-8 text-muted-foreground">Loading leads...</div>;
@@ -242,28 +247,57 @@ function DonorLeadsTable() {
               </td>
               <td className="py-2 px-3 text-muted-foreground">{fmtDate(lead.createdAt)}</td>
               <td className="py-2 px-3">
-                <div className="flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => window.location.href = `https://wa.me/${lead.whatsapp.replace(/\D/g, "").replace(/^0/, "44")}`}
-                  >
-                    <MessageCircle className="w-3 h-3" />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-xs"
-                    onClick={() => generateLink.mutate({
-                      donorLeadId: lead.id,
-                      whatsapp: lead.whatsapp,
-                      purpose: "donation_history",
-                      origin: window.location.origin,
-                    })}
-                  >
-                    <Link2 className="w-3 h-3" />
-                  </Button>
+                <div className="flex flex-col gap-1">
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      title="Open WhatsApp"
+                      onClick={() => window.open(`https://wa.me/${lead.whatsapp.replace(/\D/g, "").replace(/^0/, "44")}`, "_blank")}
+                    >
+                      <MessageCircle className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-emerald-400 hover:text-emerald-300"
+                      title="Resend Portal Link"
+                      disabled={resendingId === lead.id}
+                      onClick={() => {
+                        setResendingId(lead.id);
+                        setResendResult(null);
+                        generateLink.mutate({
+                          donorLeadId: lead.id,
+                          whatsapp: lead.whatsapp,
+                          purpose: "donation_history",
+                          origin: window.location.origin,
+                        });
+                      }}
+                    >
+                      {resendingId === lead.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    </Button>
+                  </div>
+                  {/* Inline resend result for this row */}
+                  {resendResult?.id === lead.id && (
+                    <div className="flex gap-1 flex-wrap mt-0.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => { navigator.clipboard.writeText(resendResult.portalUrl); toast.success("Link copied!"); }}
+                      >
+                        <Copy className="w-3 h-3 mr-1" />Copy
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-6 px-2 text-xs bg-green-600 hover:bg-green-700"
+                        onClick={() => window.open(resendResult.whatsappLink, "_blank")}
+                      >
+                        <MessageCircle className="w-3 h-3 mr-1" />WhatsApp
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </td>
             </tr>

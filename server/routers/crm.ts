@@ -338,7 +338,15 @@ export const crmRouter = router({
       const origin = input.origin || "https://receiptapp-excmtodu.manus.space";
       const portalUrl = `${origin}/give/${token}`;
 
-      return { token, portalUrl, expiresAt: expiresAt.toISOString() };
+      // Build WhatsApp link if phone is provided
+      let waLink: string | undefined;
+      if (input.whatsapp) {
+        const phone = input.whatsapp.replace(/\D/g, "").replace(/^0/, "44");
+        const msg = encodeURIComponent(`Assalamu Alaikum,\n\nHere is your personal AQ Society donor portal link:\n${portalUrl}\n\nYou can view your pledges, Gift Aid status, and make payments securely.\n\nBarakAllahu feekum,\nAQS Finance Team`);
+        waLink = `https://wa.me/${phone}?text=${msg}`;
+      }
+
+      return { token, portalUrl, whatsappLink: waLink, expiresAt: expiresAt.toISOString() };
     }),
 
   // ─── DONOR PORTAL: Validate token and get donor data ─────────────────────
