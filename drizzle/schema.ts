@@ -1848,3 +1848,29 @@ export const recognitionTiers = mysqlTable("recognition_tiers", {
 });
 export type RecognitionTier = typeof recognitionTiers.$inferSelect;
 export type InsertRecognitionTier = typeof recognitionTiers.$inferInsert;
+
+// ─── DONOR COMMUNICATION LOG ──────────────────────────────────────────────────
+// Records every outreach action taken for a donor: portal links sent, annual
+// statements emailed, manual notes, etc.
+export const donorCommsLog = mysqlTable("donor_comms_log", {
+  id: int("id").autoincrement().primaryKey(),
+  donorId: int("donorId"),           // FK to donors.id (null if lead-only)
+  donorLeadId: int("donorLeadId"),   // FK to donor_leads.id (for pre-conversion leads)
+  type: mysqlEnum("type", [
+    "portal_link_sent",
+    "annual_statement_sent",
+    "pledge_reminder_sent",
+    "payment_receipt_sent",
+    "thank_you_sent",
+    "manual_note",
+    "email_sent",
+    "whatsapp_sent",
+  ]).notNull(),
+  channel: mysqlEnum("channel", ["email", "whatsapp", "sms", "system"]).default("email").notNull(),
+  subject: varchar("subject", { length: 300 }),
+  notes: text("notes"),
+  sentByUserId: int("sentByUserId"),  // FK to users.id — who triggered the action
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type DonorCommsLog = typeof donorCommsLog.$inferSelect;
+export type InsertDonorCommsLog = typeof donorCommsLog.$inferInsert;

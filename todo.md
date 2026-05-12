@@ -1483,3 +1483,8 @@
 - [x] Comms Hub Flagged filter shortcut — one-tap "Flagged" button in email list toolbar to instantly filter to flagged messages
 - [x] Send Annual Statement email — button on Donor Profile that emails the generated PDF directly to the donor with a pre-written covering message
 - [x] Donor portal Pay Pledge Stripe flow — leads can make a Stripe payment directly from the /give/:token portal page without needing a full donor account
+
+## Round 7 Next Steps (May 12 2026)
+- [x] Donor communication log — DB table (donor_comms_log), backend listCommsLog/addCommsLog procedures, Communications tab on Donor Profile showing timestamped history of portal links, statements, and emails sent
+- [x] Bulk annual statement export — batchSendAnnualStatements procedure generates + emails PDFs to all donors for a selected tax year; "Export All Statements" button on Gift Aid & CRM+ page with progress feedback
+- [x] Compose New Email in Comms Hub — Compose button in toolbar opens dialog pre-filled with sender address from selected thread; sends via Gmail API and saves as outbound record

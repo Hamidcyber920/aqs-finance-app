@@ -50,7 +50,7 @@ import {
   getDashboardStats,
 } from "./db";
 import { eq, and, sql, desc, isNull, gte, lte } from "drizzle-orm";
-import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations, donorLeads } from "../drizzle/schema";
+import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations, donorLeads, donorCommsLog } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 // sendGmail is defined locally in this file (line ~123)
 
@@ -3008,7 +3008,101 @@ export const appRouter = router({
             <p>BarakAllahu feekum,<br/>AQ Society Finance Team</p>
           </div>`;
         await sendGmail(donor.email, donor.name, `Your Annual Giving Statement ${input.taxYear}/${input.taxYear + 1} — AQ Society`, html);
+        // Log the communication
+        await db.insert(donorCommsLog).values({
+          donorId: input.donorId,
+          type: "annual_statement_sent",
+          channel: "email",
+          subject: `Annual Giving Statement ${input.taxYear}/${input.taxYear + 1}`,
+          notes: `Total giving: £${grandTotal.toFixed(2)}. PDF: ${url}`,
+        });
         return { success: true, url, taxYear: input.taxYear, donorName: donor.name, grandTotal };
+      }),
+
+    batchSendAnnualStatements: adminProcedure
+      .input(z.object({ taxYear: z.number().int() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const { fundraisingDonations: fd, fundraisingCampaigns: fc, pledgePayments: pp, pledges: pl, donors: dt } = await import("../drizzle/schema");
+        // Get all donors with email addresses
+        const allDonors = await getDonors({ limit: 1000 });
+        const eligibleDonors = allDonors.filter((d: any) => d.email);
+        const startDate = `${input.taxYear}-04-06`;
+        const endDate = `${input.taxYear + 1}-04-05`;
+        const { generateAnnualStatement } = await import("./annualStatement");
+        let sent = 0;
+        let skipped = 0;
+        let failed = 0;
+        const errors: string[] = [];
+        for (const donor of eligibleDonors) {
+          try {
+            // Get donations for this donor in the tax year
+            const donations = await db.select({
+              id: fd.id, amount: fd.amount, donatedAt: fd.donatedAt,
+              paymentMethod: fd.paymentMethod, giftAidDeclared: fd.giftAidDeclared,
+              notes: fd.notes, campaignName: fc.name, referenceCode: fd.referenceCode,
+            }).from(fd)
+              .leftJoin(fc, eq(fd.campaignId, fc.id))
+              .where(donor.email
+                ? sql`${fd.donorEmail} = ${donor.email} AND ${fd.donatedAt} >= ${startDate} AND ${fd.donatedAt} <= ${endDate}`
+                : sql`${fd.donorName} = ${donor.name} AND ${fd.donatedAt} >= ${startDate} AND ${fd.donatedAt} <= ${endDate}`)
+              .orderBy(fd.donatedAt);
+            const pledgePaymentsRows = await db.select({
+              id: pp.id, amount: pp.amount, paymentDate: pp.paymentDate,
+              reference: pp.reference, pledgeId: pp.pledgeId, campaignName: pl.campaignName,
+            }).from(pp)
+              .leftJoin(pl, eq(pp.pledgeId, pl.id))
+              .where(sql`${pp.donorId} = ${donor.id} AND ${pp.paymentDate} >= ${startDate} AND ${pp.paymentDate} <= ${endDate}`)
+              .orderBy(pp.paymentDate);
+            const totalDonated = donations.reduce((s: number, d: any) => s + Number(d.amount ?? 0), 0);
+            const totalPledgePaid = pledgePaymentsRows.reduce((s: number, p: any) => s + Number(p.amount ?? 0), 0);
+            const grandTotal = totalDonated + totalPledgePaid;
+            // Skip donors with no giving in this tax year
+            if (grandTotal === 0) { skipped++; continue; }
+            const giftAidTotal = donations.filter((d: any) => d.giftAidDeclared).reduce((s: number, d: any) => s + Number(d.amount ?? 0), 0);
+            const pdfBuffer = await generateAnnualStatement({
+              donorName: donor.name, donorEmail: donor.email!, donorAddress: donor.address,
+              taxYear: input.taxYear,
+              donations: donations.map((d: any) => ({
+                date: d.donatedAt ? new Date(d.donatedAt).toLocaleDateString("en-GB") : "—",
+                amount: Number(d.amount ?? 0), campaign: d.campaignName,
+                method: d.paymentMethod, giftAid: !!d.giftAidDeclared, reference: d.referenceCode,
+              })),
+              pledgePayments: pledgePaymentsRows.map((p: any) => ({
+                date: p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—",
+                amount: Number(p.amount ?? 0), campaign: p.campaignName, reference: p.reference,
+              })),
+              totalDonated, totalPledgePaid, grandTotal, giftAidTotal,
+            });
+            const fileKey = `statements/${donor.id}-${input.taxYear}-${Date.now()}.pdf`;
+            const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+            const firstName = donor.name.split(" ")[0];
+            const html = `
+              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+                <p>AssalamuAlaikum Dear ${firstName},</p>
+                <p>Please find attached your Annual Giving Statement for the UK tax year <strong>${input.taxYear}/${input.taxYear + 1}</strong> (6 April ${input.taxYear} – 5 April ${input.taxYear + 1}).</p>
+                <p>Your total giving for this period: <strong>£${grandTotal.toFixed(2)}</strong>${giftAidTotal > 0 ? `, of which £${giftAidTotal.toFixed(2)} is eligible for Gift Aid (adding £${(giftAidTotal * 0.25).toFixed(2)} to your donations at no cost to you).` : "."}</p>
+                <p>You can download your statement here: <a href="${url}">Download Annual Statement PDF</a></p>
+                <p>JazakAllahu Khayran for your continued generosity and support of AQ Society.</p>
+                <p>BarakAllahu feekum,<br/>AQ Society Finance Team</p>
+              </div>`;
+            await sendGmail(donor.email!, donor.name, `Your Annual Giving Statement ${input.taxYear}/${input.taxYear + 1} — AQ Society`, html);
+            // Log the communication
+            await db.insert(donorCommsLog).values({
+              donorId: donor.id,
+              type: "annual_statement_sent",
+              channel: "email",
+              subject: `Annual Giving Statement ${input.taxYear}/${input.taxYear + 1}`,
+              notes: `Batch send. Total giving: £${grandTotal.toFixed(2)}`,
+            });
+            sent++;
+          } catch (err: any) {
+            failed++;
+            errors.push(`${donor.name}: ${err?.message ?? "unknown error"}`);
+          }
+        }
+        return { success: true, sent, skipped, failed, errors, taxYear: input.taxYear, totalEligible: eligibleDonors.length };
       }),
   }),
   // ─── EMAIL CAMPAIGNS ──────────────────────────────────────────────────────

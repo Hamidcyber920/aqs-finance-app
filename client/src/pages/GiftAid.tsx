@@ -120,6 +120,21 @@ export default function GiftAidPage() {
     onError: (e) => toast.error(e.message),
   });
 
+  const [showBatchStatementDialog, setShowBatchStatementDialog] = useState(false);
+  const [batchStatementYear, setBatchStatementYear] = useState(() => {
+    const now = new Date();
+    return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  });
+  const [batchResult, setBatchResult] = useState<{ sent: number; skipped: number; failed: number; errors: string[] } | null>(null);
+
+  const batchSendStatements = (trpc as any).donors.batchSendAnnualStatements.useMutation({
+    onSuccess: (d: any) => {
+      setBatchResult(d);
+      toast.success(`Statements sent to ${d.sent} donors (${d.skipped} skipped, ${d.failed} failed)`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleExport = async () => {
     const result = await utils.donorsV3.exportGiftAidCsv.fetch({ taxYear, quarter });
     if (!result?.csv) { toast.error("No data to export"); return; }
@@ -208,6 +223,9 @@ export default function GiftAidPage() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => buildR68.mutate({ taxYear, quarter })} disabled={buildR68.isPending}>
               <Download className="h-4 w-4 mr-1" />{buildR68.isPending ? "Building XML..." : "Build R68 XML"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setBatchResult(null); setShowBatchStatementDialog(true); }}>
+              <Send className="h-4 w-4 mr-1" />Export All Statements
             </Button>
           </div>
 
@@ -493,6 +511,69 @@ export default function GiftAidPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setReEngageDonorId(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Batch Annual Statement Dialog */}
+      <Dialog open={showBatchStatementDialog} onOpenChange={(o) => { if (!o) { setShowBatchStatementDialog(false); setBatchResult(null); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export All Annual Statements</DialogTitle>
+          </DialogHeader>
+          {!batchResult ? (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">This will generate and email a personalised Annual Giving Statement PDF to every donor who has an email address and made at least one donation in the selected tax year.</p>
+              <div>
+                <label className="text-sm font-medium">Tax Year</label>
+                <Select value={String(batchStatementYear)} onValueChange={v => setBatchStatementYear(Number(v))}>
+                  <SelectTrigger className="mt-1 w-40"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                      <SelectItem key={y} value={String(y)}>{y}/{y + 1}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">UK tax year: 6 April {batchStatementYear} – 5 April {batchStatementYear + 1}</p>
+              </div>
+              <div className="rounded bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                <strong>Note:</strong> This sends emails immediately to all eligible donors. Donors with £0 total giving in this tax year are automatically skipped.
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded border p-3 text-center">
+                  <p className="text-2xl font-bold text-green-600">{batchResult.sent}</p>
+                  <p className="text-xs text-muted-foreground">Sent</p>
+                </div>
+                <div className="rounded border p-3 text-center">
+                  <p className="text-2xl font-bold text-gray-500">{batchResult.skipped}</p>
+                  <p className="text-xs text-muted-foreground">Skipped (£0)</p>
+                </div>
+                <div className="rounded border p-3 text-center">
+                  <p className="text-2xl font-bold text-red-500">{batchResult.failed}</p>
+                  <p className="text-xs text-muted-foreground">Failed</p>
+                </div>
+              </div>
+              {batchResult.errors.length > 0 && (
+                <div className="rounded bg-red-50 border border-red-200 p-3 text-xs text-red-800 max-h-32 overflow-y-auto">
+                  <p className="font-medium mb-1">Errors:</p>
+                  {batchResult.errors.map((e, i) => <p key={i}>{e}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowBatchStatementDialog(false); setBatchResult(null); }}>Close</Button>
+            {!batchResult && (
+              <Button
+                disabled={batchSendStatements.isPending}
+                onClick={() => batchSendStatements.mutate({ taxYear: batchStatementYear })}
+              >
+                <Send className="h-4 w-4 mr-1" />
+                {batchSendStatements.isPending ? "Sending..." : `Send All Statements for ${batchStatementYear}/${batchStatementYear + 1}`}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

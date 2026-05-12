@@ -78,6 +78,17 @@ export default function CommsInboxPage() {
 
   // Gmail push webhook registration state
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
+
+  // Compose new email state
+  const [showComposeDialog, setShowComposeDialog] = useState(false);
+  const [composeForm, setComposeForm] = useState({
+    to: "",
+    toName: "",
+    subject: "",
+    body: "",
+    priority: "normal" as "urgent" | "high" | "normal" | "low",
+    sectionId: "",
+  });
   const [webhookUrl, setWebhookUrl] = useState("");
 
   // ── Queries ───────────────────────────────────────────────────────────────
@@ -233,6 +244,16 @@ export default function CommsInboxPage() {
       utils.commsInbox.getSectionUnreadCounts.invalidate();
     },
     onError: (e) => toast.error(`Failed: ${e.message}`),
+  });
+
+  const composeEmail = (trpc as any).commsInbox.composeEmail.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Email sent to ${data.to}`);
+      setShowComposeDialog(false);
+      setComposeForm({ to: "", toName: "", subject: "", body: "", priority: "normal", sectionId: "" });
+      refetchEmails();
+    },
+    onError: (e: any) => toast.error(`Failed to send: ${e.message}`),
   });
 
   // Swipe-to-archive state
@@ -501,8 +522,14 @@ export default function CommsInboxPage() {
               {hasActiveFilters && <span className="ml-1 w-1.5 h-1.5 rounded-full bg-orange-400" />}
             </Button>
             <Button size="sm" className="h-7 text-xs bg-indigo-600 hover:bg-indigo-700 px-2"
-              onClick={() => setShowPushDialog(true)}>
+              onClick={() => setShowPushDialog(true)}
+              title="Push email to inbox">
               <Plus className="w-3 h-3" />
+            </Button>
+            <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 px-2"
+              onClick={() => setShowComposeDialog(true)}
+              title="Compose new email">
+              <Mail className="w-3 h-3" />
             </Button>
             <Button size="sm" title="Mark all as read" className="h-7 text-xs px-2 bg-white/5 border-white/10 text-gray-300 hover:text-white hover:bg-emerald-700/30"
               onClick={() => markAllRead.mutate({ sectionId: selectedSectionId !== undefined ? selectedSectionId : undefined })}
@@ -1424,6 +1451,101 @@ export default function CommsInboxPage() {
             <Button className="bg-indigo-600 hover:bg-indigo-700"
               onClick={() => window.open(previewAttachment?.url, "_blank")}>
               Open in New Tab
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ── Compose New Email Dialog ──────────────────────────────────────────── */}
+      <Dialog open={showComposeDialog} onOpenChange={(o) => { if (!o) { setShowComposeDialog(false); setComposeForm({ to: "", toName: "", subject: "", body: "", priority: "normal", sectionId: "" }); } }}>
+        <DialogContent className="max-w-lg bg-[#0d1326] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Compose New Email</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-gray-400">To (email) *</Label>
+                <Input
+                  className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                  placeholder="recipient@example.com"
+                  value={composeForm.to}
+                  onChange={e => setComposeForm(f => ({ ...f, to: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-gray-400">Recipient Name</Label>
+                <Input
+                  className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                  placeholder="e.g. Ahmed Khan"
+                  value={composeForm.toName}
+                  onChange={e => setComposeForm(f => ({ ...f, toName: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-400">Subject *</Label>
+              <Input
+                className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+                placeholder="Email subject"
+                value={composeForm.subject}
+                onChange={e => setComposeForm(f => ({ ...f, subject: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-gray-400">Priority</Label>
+                <Select value={composeForm.priority} onValueChange={v => setComposeForm(f => ({ ...f, priority: v as any }))}>
+                  <SelectTrigger className="mt-1 bg-white/5 border-white/10 text-white"><SelectValue /></SelectTrigger>
+                  <SelectContent className="bg-[#0d1326] border-white/10">
+                    <SelectItem value="urgent" className="text-red-400">Urgent</SelectItem>
+                    <SelectItem value="high" className="text-orange-400">High</SelectItem>
+                    <SelectItem value="normal" className="text-white">Normal</SelectItem>
+                    <SelectItem value="low" className="text-gray-400">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-gray-400">File in Section</Label>
+                <Select value={composeForm.sectionId} onValueChange={v => setComposeForm(f => ({ ...f, sectionId: v }))}>
+                  <SelectTrigger className="mt-1 bg-white/5 border-white/10 text-white"><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent className="bg-[#0d1326] border-white/10">
+                    <SelectItem value="none" className="text-gray-400">None</SelectItem>
+                    {(sections as any[]).map((s: any) => (
+                      <SelectItem key={s.id} value={String(s.id)} className="text-white">{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-400">Message *</Label>
+              <Textarea
+                className="mt-1 bg-white/5 border-white/10 text-white placeholder:text-gray-500 min-h-[140px]"
+                placeholder="Write your message here..."
+                value={composeForm.body}
+                onChange={e => setComposeForm(f => ({ ...f, body: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="border-white/20 text-gray-300 hover:text-white hover:bg-white/10"
+              onClick={() => { setShowComposeDialog(false); setComposeForm({ to: "", toName: "", subject: "", body: "", priority: "normal", sectionId: "" }); }}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              disabled={composeEmail.isPending || !composeForm.to || !composeForm.subject || !composeForm.body}
+              onClick={() => composeEmail.mutate({
+                to: composeForm.to,
+                toName: composeForm.toName || undefined,
+                subject: composeForm.subject,
+                body: composeForm.body,
+                priority: composeForm.priority,
+                sectionId: composeForm.sectionId && composeForm.sectionId !== "none" ? Number(composeForm.sectionId) : undefined,
+              })}
+            >
+              <Mail className="w-4 h-4 mr-1" />
+              {composeEmail.isPending ? "Sending..." : "Send Email"}
             </Button>
           </DialogFooter>
         </DialogContent>

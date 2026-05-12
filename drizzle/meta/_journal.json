@@ -428,6 +428,13 @@
       "when": 1778562079608,
       "tag": "0060_unusual_proemial_gods",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "5",
+      "when": 1778563038175,
+      "tag": "0061_clever_mole_man",
+      "breakpoints": true
     }
   ]
 }

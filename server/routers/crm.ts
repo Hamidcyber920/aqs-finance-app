@@ -11,8 +11,9 @@ import {
   fundraisingDonations,
   stripePaymentSessions,
   donors,
+  donorCommsLog,
 } from "../../drizzle/schema";
-import { eq, desc, and, lt, isNull, gte } from "drizzle-orm";
+import { eq, desc, and, lt, isNull, gte, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 import { notifyOwner } from "../_core/notification";
@@ -622,5 +623,49 @@ export const crmRouter = router({
         });
       }
       return { action: "created", leadId: inserted.id };
+    }),
+
+  // ─── DONOR COMMUNICATION LOG ──────────────────────────────────────────────
+  listCommsLog: protectedProcedure
+    .input(z.object({
+      donorId: z.number().optional(),
+      donorLeadId: z.number().optional(),
+      limit: z.number().min(1).max(200).default(50),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const conditions = [];
+      if (input.donorId) conditions.push(eq(donorCommsLog.donorId, input.donorId));
+      if (input.donorLeadId) conditions.push(eq(donorCommsLog.donorLeadId, input.donorLeadId));
+      if (conditions.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "donorId or donorLeadId required" });
+      return db.select().from(donorCommsLog)
+        .where(or(...conditions))
+        .orderBy(desc(donorCommsLog.createdAt))
+        .limit(input.limit);
+    }),
+
+  addCommsLog: protectedProcedure
+    .input(z.object({
+      donorId: z.number().optional(),
+      donorLeadId: z.number().optional(),
+      type: z.enum(["portal_link_sent", "annual_statement_sent", "pledge_reminder_sent", "payment_receipt_sent", "thank_you_sent", "manual_note", "email_sent", "whatsapp_sent"]),
+      channel: z.enum(["email", "whatsapp", "sms", "system"]).default("email"),
+      subject: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [result] = await db.insert(donorCommsLog).values({
+        donorId: input.donorId,
+        donorLeadId: input.donorLeadId,
+        type: input.type,
+        channel: input.channel,
+        subject: input.subject,
+        notes: input.notes,
+        sentByUserId: ctx.user.id,
+      });
+      return { id: (result as any).insertId };
     }),
 });

@@ -87,6 +87,18 @@ export default function DonorProfile() {
     { enabled: !!donor?.email && activeTab === "comms" }
   );
 
+  const { data: commsLog, refetch: refetchCommsLog } = (trpc as any).crm.listCommsLog.useQuery(
+    { donorId: donorId! },
+    { enabled: !!donorId && activeTab === "comms" }
+  );
+
+  const [showAddLogDialog, setShowAddLogDialog] = useState(false);
+  const [logForm, setLogForm] = useState({ type: "manual_note" as string, channel: "email" as string, subject: "", notes: "" });
+  const addCommsLogMut = (trpc as any).crm.addCommsLog.useMutation({
+    onSuccess: () => { toast.success("Communication logged"); setShowAddLogDialog(false); setLogForm({ type: "manual_note", channel: "email", subject: "", notes: "" }); refetchCommsLog(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const { data: notes, refetch: refetchNotes } = (trpc as any).donorPipeline.listNotes.useQuery(
     { donorId: donorId! },
     { enabled: !!donorId && activeTab === "notes" }
@@ -472,37 +484,99 @@ export default function DonorProfile() {
         )}
 
         {activeTab === "comms" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Communications</CardTitle>
-              {donor?.email && <p className="text-xs text-muted-foreground mt-1">Showing emails from <strong>{donor.email}</strong></p>}
-            </CardHeader>
-            <CardContent>
-              {!emailsList?.length ? (
-                <p className="text-muted-foreground text-sm py-4 text-center">No emails found for this donor{donor?.email ? " (" + donor.email + ")" : ""}</p>
-              ) : (
-                <div className="space-y-2">
-                  {(emailsList as any[]).map((e: any) => (
-                    <div key={e.id} className="border rounded p-3 text-sm hover:bg-muted/30 transition-colors">
-                      <div className="flex justify-between items-start gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {e.status === "unread" && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
-                          {e.priority === "urgent" && <span className="text-xs font-bold text-red-500 flex-shrink-0">URGENT</span>}
-                          <span className="font-medium truncate">{e.subject || "(No subject)"}</span>
-                        </div>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">{e.receivedAt ? new Date(e.receivedAt).toLocaleDateString("en-GB") : ""}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-muted-foreground text-xs">{e.fromName ? `${e.fromName} <${e.fromEmail}>` : e.fromEmail}</p>
-                        {e.sectionId && <span className="text-xs bg-muted px-1.5 py-0.5 rounded">Section #{e.sectionId}</span>}
-                      </div>
-                      {e.snippet && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{e.snippet}</p>}
-                    </div>
-                  ))}
+          <div className="space-y-4">
+            {/* Communication History Log */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <div>
+                  <CardTitle className="text-base">Communication History</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">Portal links, statements, reminders and manual notes</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <Button size="sm" variant="outline" onClick={() => setShowAddLogDialog(true)}>
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Log Interaction
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {!commsLog?.length ? (
+                  <p className="text-muted-foreground text-sm py-4 text-center">No communication history yet. Actions like sending portal links and annual statements are logged here automatically.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(commsLog as any[]).map((entry: any) => {
+                      const typeLabels: Record<string, string> = {
+                        portal_link_sent: "Portal Link Sent",
+                        annual_statement_sent: "Annual Statement Sent",
+                        pledge_reminder_sent: "Pledge Reminder Sent",
+                        payment_receipt_sent: "Payment Receipt Sent",
+                        thank_you_sent: "Thank You Sent",
+                        manual_note: "Manual Note",
+                        email_sent: "Email Sent",
+                        whatsapp_sent: "WhatsApp Sent",
+                      };
+                      const typeColors: Record<string, string> = {
+                        portal_link_sent: "bg-blue-100 text-blue-800",
+                        annual_statement_sent: "bg-green-100 text-green-800",
+                        pledge_reminder_sent: "bg-amber-100 text-amber-800",
+                        payment_receipt_sent: "bg-purple-100 text-purple-800",
+                        thank_you_sent: "bg-pink-100 text-pink-800",
+                        manual_note: "bg-gray-100 text-gray-800",
+                        email_sent: "bg-cyan-100 text-cyan-800",
+                        whatsapp_sent: "bg-emerald-100 text-emerald-800",
+                      };
+                      const channelIcon: Record<string, string> = { email: "✉️", whatsapp: "💬", sms: "📱", system: "⚙️" };
+                      return (
+                        <div key={entry.id} className="border rounded p-3 text-sm flex items-start gap-3">
+                          <span className="text-base mt-0.5">{channelIcon[entry.channel] ?? "📧"}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${typeColors[entry.type] ?? "bg-gray-100 text-gray-800"}`}>
+                                {typeLabels[entry.type] ?? entry.type}
+                              </span>
+                              {entry.subject && <span className="font-medium truncate">{entry.subject}</span>}
+                            </div>
+                            {entry.notes && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{entry.notes}</p>}
+                            <p className="text-xs text-muted-foreground mt-1">{new Date(entry.createdAt).toLocaleString("en-GB")}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Inbox Emails from this donor */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Inbox Emails</CardTitle>
+                {donor?.email && <p className="text-xs text-muted-foreground mt-0.5">Emails received from <strong>{donor.email}</strong></p>}
+              </CardHeader>
+              <CardContent>
+                {!emailsList?.length ? (
+                  <p className="text-muted-foreground text-sm py-4 text-center">No emails found for this donor{donor?.email ? " (" + donor.email + ")" : ""}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(emailsList as any[]).map((e: any) => (
+                      <div key={e.id} className="border rounded p-3 text-sm hover:bg-muted/30 transition-colors">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {e.status === "unread" && <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />}
+                            {e.priority === "urgent" && <span className="text-xs font-bold text-red-500 flex-shrink-0">URGENT</span>}
+                            <span className="font-medium truncate">{e.subject || "(No subject)"}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">{e.receivedAt ? new Date(e.receivedAt).toLocaleDateString("en-GB") : ""}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-muted-foreground text-xs">{e.fromName ? `${e.fromName} <${e.fromEmail}>` : e.fromEmail}</p>
+                          {e.sectionId && <span className="text-xs bg-muted px-1.5 py-0.5 rounded">Section #{e.sectionId}</span>}
+                        </div>
+                        {e.snippet && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{e.snippet}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {activeTab === "notes" && (
@@ -834,6 +908,65 @@ export default function DonorProfile() {
             >
               <Mail className="w-4 h-4 mr-1" />
               {sendStatementMut.isPending ? "Sending..." : "Send via Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Log Interaction Dialog */}
+      <Dialog open={showAddLogDialog} onOpenChange={setShowAddLogDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Log Interaction with {donorName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-sm font-medium">Type</label>
+              <Select value={logForm.type} onValueChange={v => setLogForm(f => ({ ...f, type: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="manual_note">Manual Note</SelectItem>
+                  <SelectItem value="email_sent">Email Sent</SelectItem>
+                  <SelectItem value="whatsapp_sent">WhatsApp Sent</SelectItem>
+                  <SelectItem value="portal_link_sent">Portal Link Sent</SelectItem>
+                  <SelectItem value="thank_you_sent">Thank You Sent</SelectItem>
+                  <SelectItem value="pledge_reminder_sent">Pledge Reminder Sent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Channel</label>
+              <Select value={logForm.channel} onValueChange={v => setLogForm(f => ({ ...f, channel: v }))}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="sms">SMS</SelectItem>
+                  <SelectItem value="system">System / Auto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Subject / Title</label>
+              <Input className="mt-1" placeholder="e.g. Ramadan appeal follow-up" value={logForm.subject} onChange={e => setLogForm(f => ({ ...f, subject: e.target.value }))} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Notes</label>
+              <Textarea className="mt-1" rows={3} placeholder="What was communicated?" value={logForm.notes} onChange={e => setLogForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddLogDialog(false)}>Cancel</Button>
+            <Button
+              disabled={addCommsLogMut.isPending}
+              onClick={() => addCommsLogMut.mutate({
+                donorId: donorId!,
+                type: logForm.type as any,
+                channel: logForm.channel as any,
+                subject: logForm.subject || undefined,
+                notes: logForm.notes || undefined,
+              })}
+            >
+              {addCommsLogMut.isPending ? "Saving..." : "Save Log Entry"}
             </Button>
           </DialogFooter>
         </DialogContent>

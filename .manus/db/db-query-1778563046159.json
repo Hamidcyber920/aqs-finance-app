@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `donor_comms_log` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`donorId` int,\n\t`donorLeadId` int,\n\t`type` enum('portal_link_sent','annual_statement_sent','pledge_reminder_sent','payment_receipt_sent','thank_you_sent','manual_note','email_sent','whatsapp_sent') NOT NULL,\n\t`channel` enum('email','whatsapp','sms','system') NOT NULL DEFAULT 'email',\n\t`subject` varchar(300),\n\t`notes` text,\n\t`sentByUserId` int,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `donor_comms_log_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE `donor_comms_log` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`donorId` int,\n\t`donorLeadId` int,\n\t`type` enum('portal_link_sent','annual_statement_sent','pledge_reminder_sent','payment_receipt_sent','thank_you_sent','manual_note','email_sent','whatsapp_sent') NOT NULL,\n\t`channel` enum('email','whatsapp','sms','system') NOT NULL DEFAULT 'email',\n\t`subject` varchar(300),\n\t`notes` text,\n\t`sentByUserId` int,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `donor_comms_log_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 368
+}

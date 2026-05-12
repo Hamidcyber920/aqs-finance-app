@@ -968,6 +968,79 @@ Return JSON with this exact structure: { "replies": ["reply1", "reply2", "reply3
       return { success: true };
     }),
 
+  // ── Compose a new outbound email (not a reply) ───────────────────────
+  composeEmail: protectedProcedure
+    .input(z.object({
+      to: z.string().email(),
+      toName: z.string().optional(),
+      subject: z.string().min(1),
+      body: z.string().min(1),
+      priority: z.enum(["urgent", "high", "normal", "low"]).default("normal"),
+      sectionId: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+      const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+      const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+      const GMAIL_FROM_EMAIL = process.env.GMAIL_FROM_EMAIL;
+      if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN || !GMAIL_FROM_EMAIL) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Gmail credentials not configured" });
+      }
+      // Refresh access token
+      const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: GMAIL_CLIENT_ID,
+          client_secret: GMAIL_CLIENT_SECRET,
+          refresh_token: GMAIL_REFRESH_TOKEN,
+          grant_type: "refresh_token",
+        }),
+      });
+      if (!tokenRes.ok) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to refresh Gmail access token" });
+      const { access_token } = await tokenRes.json() as { access_token: string };
+      const toField = input.toName ? `"${input.toName}" <${input.to}>` : input.to;
+      const rawMessage = [
+        `From: ${GMAIL_FROM_EMAIL}`,
+        `To: ${toField}`,
+        `Subject: =?UTF-8?B?${Buffer.from(input.subject).toString("base64")}?=`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/plain; charset=UTF-8`,
+        ``,
+        input.body,
+      ].join("\r\n");
+      const encodedMessage = Buffer.from(rawMessage).toString("base64url");
+      const sendRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ raw: encodedMessage }),
+        }
+      );
+      if (!sendRes.ok) {
+        const err = await sendRes.text();
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Gmail send failed: ${err}` });
+      }
+      // Log the sent email as an outbound entry in the inbox (status=actioned so it doesn't show as unread)
+      const db = await getDb();
+      if (db) {
+        await db.insert(inboundEmails).values({
+          fromEmail: GMAIL_FROM_EMAIL,
+          fromName: "AQ Society (Sent)",
+          toEmail: input.to,
+          subject: `[Sent] ${input.subject}`,
+          bodyText: input.body,
+          snippet: input.body.slice(0, 200),
+          status: "actioned" as any,
+          priority: input.priority,
+          sectionId: input.sectionId ?? null,
+          receivedAt: new Date(),
+        });
+      }
+      return { success: true, to: input.to, subject: input.subject };
+    }),
+
   // ── Per-section unread counts (for sidebar badges) ───────────────────────
   getSectionUnreadCounts: protectedProcedure.query(async () => {
     const db = await getDb();
