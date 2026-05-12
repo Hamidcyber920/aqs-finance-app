@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO voice_feature_flags (toolName, enabledRoles, phase, enabled, updatedAt) VALUES \n('search_donors', '[\"superadmin\",\"trustee\",\"manager\"]', '2', 1, NOW()),\n('send_email', '[\"superadmin\",\"trustee\",\"manager\"]', '3', 1, NOW()),\n('navigate_to', '[\"superadmin\",\"trustee\",\"manager\",\"deputy\",\"staff\",\"reception\"]', '1', 1, NOW());",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute INSERT INTO voice_feature_flags (toolName, enabledRoles, phase, enabled, updatedAt) VALUES \n('search_donors', '[\"superadmin\",\"trustee\",\"manager\"]', '2', 1, NOW()),\n('send_email', '[\"superadmin\",\"trustee\",\"manager\"]', '3', 1, NOW()),\n('navigate_to', '[\"superadmin\",\"trustee\",\"manager\",\"deputy\",\"staff\",\"reception\"]', '1', 1, NOW());",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 275
+}

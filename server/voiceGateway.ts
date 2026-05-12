@@ -11,7 +11,7 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server as HttpServer, IncomingMessage } from "http";
 import { nanoid } from "nanoid";
-import { eq, and, sql, gte, desc } from "drizzle-orm";
+import { eq, and, sql, gte, desc, or, like } from "drizzle-orm";
 import { getDb } from "./db";
 import {
   voiceSessions,
@@ -40,6 +40,7 @@ interface VoiceClient {
   tokenCount: number;
   lastActivity: number;
   isGeminiReady: boolean;
+  resumptionHandle: string | null;
 }
 
 interface ClientMessage {
@@ -100,6 +101,7 @@ const TOOL_DECLARATIONS = [
   { name: "get_staff_directory", description: "Get the staff directory", parameters: { type: "object", properties: {}, required: [] } },
   { name: "get_trustees", description: "Get the list of trustees", parameters: { type: "object", properties: {}, required: [] } },
   { name: "get_donor", description: "Get donor details by ID", parameters: { type: "object", properties: { donorId: { type: "number", description: "Donor ID" } }, required: ["donorId"] } },
+  { name: "search_donors", description: "Search donors by name, email, or phone. Use this when the user mentions a donor by name or wants to find someone.", parameters: { type: "object", properties: { query: { type: "string", description: "Name, email, or phone to search for" }, limit: { type: "number", description: "Max results (default 10)" } }, required: ["query"] } },
   { name: "search_transactions", description: "Search recent transactions", parameters: { type: "object", properties: { limit: { type: "number", description: "Max results" } }, required: [] } },
   { name: "get_fund_balance", description: "Get fund/campaign balance", parameters: { type: "object", properties: { campaignId: { type: "number" } }, required: [] } },
   { name: "get_campaign_status", description: "Get all campaign statuses", parameters: { type: "object", properties: {}, required: [] } },
@@ -109,8 +111,10 @@ const TOOL_DECLARATIONS = [
   { name: "update_donor_profile", description: "Update donor profile fields", parameters: { type: "object", properties: { donorId: { type: "number" }, phone: { type: "string" }, email: { type: "string" }, addressLine1: { type: "string" }, postcode: { type: "string" } }, required: ["donorId"] } },
   { name: "log_communication", description: "Log a communication with a donor", parameters: { type: "object", properties: { donorId: { type: "number" }, channel: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["donorId"] } },
   { name: "create_payment_link", description: "Generate a Stripe payment link", parameters: { type: "object", properties: { donorId: { type: "number" }, amount: { type: "number" } }, required: ["donorId", "amount"] } },
-  { name: "draft_whatsapp", description: "Draft a WhatsApp message", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
-  { name: "draft_email", description: "Draft an email", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
+  { name: "send_email", description: "Send an email to a donor or staff member immediately. Use this when the user explicitly asks to send (not just draft) an email.", parameters: { type: "object", properties: { to: { type: "string", description: "Recipient email address" }, recipientName: { type: "string", description: "Recipient name" }, subject: { type: "string", description: "Email subject" }, body: { type: "string", description: "Email body (plain text or HTML)" }, donorId: { type: "number", description: "Optional donor ID for logging" } }, required: ["to", "subject", "body"] } },
+  { name: "draft_whatsapp", description: "Draft a WhatsApp message (saves to outbox for review)", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
+  { name: "draft_email", description: "Save an email draft to the outbox for later review (does NOT send immediately)", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
+  { name: "navigate_to", description: "Navigate the user to a specific page in the app. Use this when the user asks to go to a page, view something, or open a section.", parameters: { type: "object", properties: { page: { type: "string", description: "Page path e.g. /donors, /donors/123, /campaigns, /comms-v3, /dashboard, /reports, /receipts, /payroll, /loans, /gift-aid, /meetings, /trustees, /compliance, /facilities" } }, required: ["page"] } },
   { name: "flag_for_review", description: "Flag something for Dr. Hamid's review", parameters: { type: "object", properties: { transcriptId: { type: "number" }, note: { type: "string" } }, required: [] } },
 ];
 
@@ -186,27 +190,31 @@ async function executeToolCall(toolName: string, args: Record<string, unknown>, 
   try {
     const result = await routeToolCall(toolName, args, client);
     const latencyMs = Date.now() - startTime;
-    await db.insert(voiceToolCalls).values({
-      sessionId: client.dbSessionId,
-      toolName,
-      params: JSON.stringify(args),
-      resultSummary: JSON.stringify(result).substring(0, 500),
-      latencyMs,
-      success: true,
-      createdAt: new Date(),
-    });
+    if (db) {
+      await db.insert(voiceToolCalls).values({
+        sessionId: client.dbSessionId,
+        toolName,
+        params: JSON.stringify(args),
+        resultSummary: JSON.stringify(result).substring(0, 500),
+        latencyMs,
+        success: true,
+        createdAt: new Date(),
+      });
+    }
     return { status: "success", data: result };
   } catch (err: any) {
     const latencyMs = Date.now() - startTime;
-    await db.insert(voiceToolCalls).values({
-      sessionId: client.dbSessionId,
-      toolName,
-      params: JSON.stringify(args),
-      resultSummary: err.message || "Error",
-      latencyMs,
-      success: false,
-      createdAt: new Date(),
-    });
+    if (db) {
+      await db.insert(voiceToolCalls).values({
+        sessionId: client.dbSessionId,
+        toolName,
+        params: JSON.stringify(args),
+        resultSummary: err.message || "Error",
+        latencyMs,
+        success: false,
+        createdAt: new Date(),
+      });
+    }
     return { status: "error", data: null, error: err.message || "Tool execution failed" };
   }
 }
@@ -214,6 +222,7 @@ async function executeToolCall(toolName: string, args: Record<string, unknown>, 
 // --- Tool routing ---
 async function routeToolCall(toolName: string, args: Record<string, unknown>, client: VoiceClient): Promise<unknown> {
   const db = await getDb();
+  if (!db) return { error: "Database connection unavailable" };
   switch (toolName) {
     case "get_current_user":
       return { userId: client.userId, role: client.userRole, name: client.userName, language: client.language };
@@ -236,6 +245,21 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       const donor = result[0]!;
       if (client.userRole === "reception") return { id: donor.id, name: donor.name, phone: donor.phone, email: donor.email };
       return donor;
+    }
+    case "search_donors": {
+      const { donors } = await import("../drizzle/schema");
+      const query = String(args.query || "").trim();
+      if (!query) return { error: "Search query required" };
+      const limit = Math.min(Number(args.limit) || 10, 25);
+      const searchPattern = `%${query}%`;
+      const results = await db.select({
+        id: donors.id, name: donors.name, email: donors.email, phone: donors.phone,
+        totalGiven: donors.totalGiven, lastGiftDate: donors.lastGiftDate, status: donors.status,
+      }).from(donors).where(
+        or(like(donors.name, searchPattern), like(donors.email, searchPattern), like(donors.phone, searchPattern))
+      ).limit(limit);
+      if (!results.length) return { found: 0, message: `No donors found matching "${query}"` };
+      return { found: results.length, donors: results };
     }
     case "search_transactions": {
       const { receipts } = await import("../drizzle/schema");
@@ -287,6 +311,45 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
     }
     case "create_payment_link":
       return { status: "payment_link_ready", suggestedUrl: `/pay?donorId=${args.donorId}&amount=${args.amount}` };
+    case "send_email": {
+      const toEmail = String(args.to || "").trim();
+      const subject = String(args.subject || "").trim();
+      const body = String(args.body || "").trim();
+      const recipientName = String(args.recipientName || "Recipient");
+      if (!toEmail || !subject || !body) return { error: "to, subject, and body are all required" };
+      try {
+        const nodemailer = await import("nodemailer");
+        const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
+        const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
+        const envPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || "";
+        const smtpPass = envPass && envPass.length >= 16 ? envPass : "";
+        if (!smtpPass) return { error: "Email service not configured. SMTP credentials missing." };
+        const transporter = nodemailer.createTransport({ host: process.env.SMTP_HOST || "smtp.gmail.com", port: 465, secure: true, auth: { user: smtpUser, pass: smtpPass } });
+        const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+          <p>Dear ${recipientName},</p>
+          ${body.includes("<") ? body : `<p>${body.replace(/\n/g, "</p><p>")}</p>`}
+          <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+          <p style="font-size:12px;color:#888">Sent via Hibba Voice Assistant on behalf of ${client.userName} &middot; Abdullah Quilliam Society</p>
+        </div>`;
+        await transporter.sendMail({ from: `"Abdullah Quilliam Society" <${fromEmail}>`, to: toEmail, subject, html: htmlBody });
+        // Log to donor comms if donorId provided
+        if (args.donorId) {
+          const { donorCommsLog } = await import("../drizzle/schema");
+          await db.insert(donorCommsLog).values({ donorId: Number(args.donorId), type: "email_sent", channel: "email", subject, notes: `Sent via voice agent by ${client.userName}`, sentByUserId: client.userId, createdAt: new Date() });
+        }
+        return { success: true, message: `Email sent successfully to ${toEmail}` };
+      } catch (err: any) {
+        return { error: `Failed to send email: ${err.message}` };
+      }
+    }
+    case "navigate_to": {
+      const page = String(args.page || "/dashboard").trim();
+      // Send navigation command to the client
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify({ type: "navigate", path: page }));
+      }
+      return { success: true, message: `Navigating to ${page}` };
+    }
     case "draft_whatsapp":
     case "draft_email": {
       const { commsOutbox } = await import("../drizzle/schema");
@@ -321,25 +384,29 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
 
   geminiWs.on("open", () => {
     console.log(`[VoiceGateway] Gemini Live connected for ${connectionId}`);
-    const setupMessage = {
-      setup: {
-        model: GEMINI_MODEL,
-        generationConfig: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: "Kore"
-              }
+    const setupPayload: any = {
+      model: GEMINI_MODEL,
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: "Kore"
             }
           }
         },
-        systemInstruction: {
-          parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent user: ${client.userName} (role: ${client.userRole}). Screen: ${client.screenContext}. Language: ${client.language}.` }]
-        },
-        tools: [{ functionDeclarations: TOOL_DECLARATIONS }]
-      }
+      },
+      systemInstruction: {
+        parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent user: ${client.userName} (role: ${client.userRole}). Screen: ${client.screenContext}. Language: ${client.language}.` }]
+      },
+      tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+      outputAudioTranscription: {},
+      inputAudioTranscription: {},
+      sessionResumption: { handle: client.resumptionHandle || undefined },
     };
+    // Remove undefined sessionResumption handle on first connect
+    if (!setupPayload.sessionResumption.handle) delete setupPayload.sessionResumption;
+    const setupMessage = { setup: setupPayload };
     geminiWs.send(JSON.stringify(setupMessage));
   });
 
@@ -357,7 +424,8 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
       }
 
       if (msg.serverContent) {
-        const { modelTurn, turnComplete } = msg.serverContent;
+        const { modelTurn, turnComplete, outputTranscription, inputTranscription } = msg.serverContent;
+        // Process audio chunks from modelTurn
         if (modelTurn?.parts) {
           for (const part of modelTurn.parts) {
             if (part.inlineData && client.ws.readyState === WebSocket.OPEN) {
@@ -367,12 +435,25 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
                 mimeType: part.inlineData.mimeType || "audio/pcm;rate=24000",
               }));
             }
+            // In TEXT+AUDIO mode, text parts may appear here too
             if (part.text && client.ws.readyState === WebSocket.OPEN) {
               client.ws.send(JSON.stringify({ type: "transcript", text: part.text, speaker: "assistant" }));
               const db = await getDb();
-              await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: part.text, createdAt: new Date() });
+              if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: part.text, createdAt: new Date() });
             }
           }
+        }
+        // Output transcription: text version of what Gemini is speaking
+        if (outputTranscription?.text && client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify({ type: "transcript", text: outputTranscription.text, speaker: "assistant" }));
+          const db = await getDb();
+          if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: outputTranscription.text, createdAt: new Date() });
+        }
+        // Input transcription: text version of what the user said via mic
+        if (inputTranscription?.text && client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify({ type: "transcript", text: inputTranscription.text, speaker: "user" }));
+          const db = await getDb();
+          if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "user", content: inputTranscription.text, createdAt: new Date() });
         }
         if (turnComplete && client.ws.readyState === WebSocket.OPEN) {
           client.ws.send(JSON.stringify({ type: "turn_complete" }));
@@ -405,6 +486,16 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
         console.log(`[VoiceGateway] Tool call cancelled for ${connectionId}`);
         return;
       }
+
+      // Session resumption: store handle for reconnection
+      if (msg.sessionResumptionUpdate) {
+        const { newHandle, resumable } = msg.sessionResumptionUpdate;
+        if (newHandle) {
+          client.resumptionHandle = newHandle;
+          console.log(`[VoiceGateway] Session resumption handle updated for ${connectionId}`);
+        }
+        return;
+      }
     } catch (err: any) {
       console.error(`[VoiceGateway] Error processing Gemini message:`, err.message);
     }
@@ -421,6 +512,17 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
     console.log(`[VoiceGateway] Gemini WS closed for ${connectionId}: ${code} ${reason.toString()}`);
     client.isGeminiReady = false;
     client.geminiWs = null;
+    // Auto-reconnect if we have a resumption handle and the client is still connected
+    if (client.resumptionHandle && client.ws.readyState === WebSocket.OPEN) {
+      console.log(`[VoiceGateway] Attempting session resumption for ${connectionId}`);
+      sendToClient(client, { type: "status", text: "Reconnecting..." });
+      setTimeout(() => {
+        if (client.ws.readyState === WebSocket.OPEN) {
+          const newGeminiWs = connectToGeminiLive(client, connectionId);
+          client.geminiWs = newGeminiWs;
+        }
+      }, 1000);
+    }
   });
 
   return geminiWs;
@@ -475,6 +577,7 @@ export function attachVoiceGateway(server: HttpServer) {
      ws.on("message", async (raw) => {
       let msg: ClientMessage;
       try { msg = JSON.parse(raw.toString()); } catch { ws.send(JSON.stringify({ type: "error", error: "Invalid JSON" })); return; }
+      console.log(`[VoiceGateway] Message from ${connectionId}: ${msg.type}`);
       try {
       if (msg.type === "start_session") {
         const enabled = await isFeatureEnabled("*", auth.role);
@@ -507,6 +610,7 @@ export function attachVoiceGateway(server: HttpServer) {
           sessionId: conversationId, dbSessionId, screenContext: msg.screenContext || "dashboard",
           entityContext: msg.entityContext || null, language: msg.language || "en-GB",
           isAlive: true, tokenCount: 0, lastActivity: Date.now(), isGeminiReady: false,
+          resumptionHandle: null,
         };
         activeClients.set(connectionId, client);
 
@@ -541,9 +645,9 @@ export function attachVoiceGateway(server: HttpServer) {
 
       if (msg.type === "text_input" && msg.text) {
         const db = await getDb();
-        await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "user", content: msg.text, createdAt: new Date() });
+        if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "user", content: msg.text, createdAt: new Date() });
         if (client.geminiWs && client.geminiWs.readyState === WebSocket.OPEN && client.isGeminiReady) {
-          // clientContent is the correct format for text turns per API reference
+          // For Gemini 3.1 Flash Live, use realtimeInput for text during conversation
           client.geminiWs.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text: msg.text }] }], turnComplete: true } }));
         } else {
           try {

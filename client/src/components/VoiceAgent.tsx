@@ -13,6 +13,7 @@ import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, Ph
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TranscriptEntry {
@@ -228,6 +229,7 @@ function WaveformAnimation({ isActive }: { isActive: boolean }) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function VoiceAgent({ screenContext = "dashboard", entityContext }: VoiceAgentProps) {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [status, setStatus] = useState<string>("idle");
@@ -290,9 +292,20 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         setIsSpeaking(false);
         setIsProcessing(false);
         break;
-      case "transcript":
-        setTranscript((prev) => [...prev, { id: `${msg.speaker}-${Date.now()}`, speaker: msg.speaker === "assistant" ? "agent" : msg.speaker, text: msg.text, timestamp: new Date() }]);
+      case "transcript": {
+        const speaker = msg.speaker === "assistant" ? "agent" : msg.speaker;
+        setTranscript((prev) => {
+          // Merge with the last entry if it's from the same speaker and within 3 seconds
+          const last = prev[prev.length - 1];
+          if (last && last.speaker === speaker && (Date.now() - last.timestamp.getTime()) < 3000) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, text: last.text + " " + msg.text };
+            return updated;
+          }
+          return [...prev, { id: `${speaker}-${Date.now()}`, speaker, text: msg.text, timestamp: new Date() }];
+        });
         break;
+      }
       case "agent_response":
         setTranscript((prev) => [...prev, { id: `agent-${Date.now()}`, speaker: "agent", text: msg.text, timestamp: new Date() }]);
         setIsProcessing(false);
@@ -310,6 +323,12 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         toast.error(msg.error || "Voice agent error");
         setIsProcessing(false);
         break;
+      case "navigate":
+        if (msg.path) {
+          navigate(msg.path);
+          toast.success(`Navigating to ${msg.path}`);
+        }
+        break;
       case "session_ended":
         setStatus("disconnected");
         setIsProcessing(false);
@@ -317,7 +336,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         setIsGeminiReady(false);
         break;
     }
-  }, []);
+  }, [navigate]);
 
   // Connect to voice gateway
   const connect = useCallback(() => {

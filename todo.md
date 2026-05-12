@@ -1823,3 +1823,20 @@
 - [x] Fix audio input format: use `realtimeInput.audio.data` (not deprecated `mediaChunks`)
 - [x] Add null-safety for getDb() calls in voiceGateway.ts helper functions
 - [x] End-to-end test: direct Gemini Live API connection + gateway relay both verified working
+
+### Voice Agent Agentic + UX Improvements (May 12 2026)
+- [x] Fix tool call pipeline: Gemini Live toolCall → server executeToolCall → routeToolCall → DB query → toolResponse back to Gemini
+- [x] Verify all TOOL_DECLARATIONS match routeToolCall cases (donors, emails, campaigns, expenses, etc.)
+- [x] Ensure toolResponse is sent back to Gemini in correct format so it can speak the results
+- [x] Add output transcription display: show live text of what Hibba is saying alongside audio
+- [x] Add input transcription display: show live text of what user is saying
+- [x] Add session resumption: store Gemini sessionResumptionUpdate handle, reconnect on WS drop
+- [x] Test end-to-end: "find donor X" → tool call → data returned → Hibba speaks the answer
+- [x] Add search_donors tool (search by name/email/phone using LIKE query)
+- [x] Add send_email tool (actually sends via SMTP/Gmail, not just draft)
+- [x] Add navigate_to tool (sends navigation command to frontend)
+- [x] Fix totalGiven field name (was totalGiving — field didn't exist in schema)
+- [x] Move outputAudioTranscription/inputAudioTranscription to top-level setup (not inside generationConfig)
+- [x] Add feature flags for new tools (search_donors, send_email, navigate_to)
+- [x] Merge consecutive transcript messages from same speaker in frontend
+- [ ] Test end-to-end: "send email to X" → tool call → email sent → Hibba confirms (requires valid SMTP)
