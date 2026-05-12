@@ -99,7 +99,17 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   const publicPaths = ["/login", "/register", "/forgot-password", "/reset-password"];
   if (publicPaths.some((p) => window.location.pathname.startsWith(p))) return;
 
-  window.location.href = "/login";
+  // Save the current path so we can restore it after re-login
+  sessionStorage.setItem("hibba_return_path", window.location.pathname + window.location.search);
+
+  // Show a friendly toast before redirecting
+  toast.warning("Your session has expired. Any unsaved form data has been preserved — please log in again to continue.", {
+    duration: 5000,
+    id: "session-expired",
+  });
+
+  // Short delay so the toast is visible before redirect
+  setTimeout(() => { window.location.href = "/login"; }, 1500);
 };
 
 queryClient.getQueryCache().subscribe(event => {

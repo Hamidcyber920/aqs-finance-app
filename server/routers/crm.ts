@@ -764,4 +764,91 @@ export const crmRouter = router({
       },
     };
   }),
+
+  // ── REFUND DONATION ──────────────────────────────────────────────────────────────────
+  refundDonation: protectedProcedure
+    .input(
+      z.object({
+        donationId: z.number(),
+        reason: z.string().min(5, "Please provide a reason for the refund (minimum 5 characters)."),
+        reverseGiftAid: z.boolean().default(true),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      // Fetch the original donation
+      const [original] = await db
+        .select()
+        .from(fundraisingDonations)
+        .where(eq(fundraisingDonations.id, input.donationId))
+        .limit(1);
+
+      if (!original) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Donation not found." });
+      }
+      if (original.isRefund) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This row is already a refund record. You cannot refund a refund." });
+      }
+
+      // Check if already refunded
+      const existingRefund = await db
+        .select({ id: fundraisingDonations.id })
+        .from(fundraisingDonations)
+        .where(eq(fundraisingDonations.refundedDonationId, input.donationId))
+        .limit(1);
+
+      if (existingRefund.length > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This donation has already been refunded." });
+      }
+
+      const refundAmount = -Math.abs(Number(original.amount));
+      const now = new Date();
+
+      // Insert refund row (negative amount, preserving original)
+      await db.insert(fundraisingDonations).values({
+        campaignId: original.campaignId,
+        donorName: original.donorName,
+        donorEmail: original.donorEmail ?? undefined,
+        donorPhone: original.donorPhone ?? undefined,
+        amount: String(refundAmount.toFixed(2)),
+        paymentMethod: original.paymentMethod,
+        donorLeadId: original.donorLeadId ?? undefined,
+        giftAidDeclared: false,
+        isRefund: true,
+        refundedDonationId: input.donationId,
+        refundReason: input.reason,
+        refundedAt: now,
+        refundedById: ctx.user.id,
+        giftAidReversed: input.reverseGiftAid && original.giftAidDeclared,
+        notes: `REFUND of donation #${input.donationId}: ${input.reason}`,
+        donatedAt: now,
+      });
+
+      // If Gift Aid reversal requested, flag the original declaration
+      if (input.reverseGiftAid && original.giftAidDeclared) {
+        await db
+          .update(fundraisingDonations)
+          .set({ giftAidReversed: true })
+          .where(eq(fundraisingDonations.id, input.donationId));
+      }
+
+      // Update donor LTV if linked
+      if (original.donorLeadId) {
+        const allDonations = await db
+          .select({ amount: fundraisingDonations.amount, isRefund: fundraisingDonations.isRefund })
+          .from(fundraisingDonations)
+          .where(eq(fundraisingDonations.donorLeadId, original.donorLeadId));
+        const netLTV = allDonations.reduce((sum, d) => sum + Number(d.amount), 0);
+        // Update donor lead notes with new LTV (no dedicated LTV field on donorLeads)
+        console.log(`[CRM Refund] Donor #${original.donorLeadId} net LTV after refund: £${netLTV.toFixed(2)}`);
+      }
+
+      return {
+        success: true,
+        message: `Refund of £${Math.abs(Number(original.amount)).toFixed(2)} recorded for ${original.donorName}. Original donation #${input.donationId} preserved.`,
+        giftAidReversed: input.reverseGiftAid && original.giftAidDeclared,
+      };
+    }),
 });

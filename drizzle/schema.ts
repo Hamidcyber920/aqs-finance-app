@@ -246,6 +246,13 @@ export const fundraisingDonations = mysqlTable("fundraising_donations", {
   referenceCode: varchar("referenceCode", { length: 50 }),
   donatedAt: timestamp("donatedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  // Refund tracking
+  isRefund: boolean("isRefund").default(false).notNull(),
+  refundedDonationId: int("refundedDonationId"), // points to original donation row
+  refundReason: varchar("refundReason", { length: 500 }),
+  refundedAt: timestamp("refundedAt"),
+  refundedById: int("refundedById"),
+  giftAidReversed: boolean("giftAidReversed").default(false).notNull(),
 });
 
 export type FundraisingDonation = typeof fundraisingDonations.$inferSelect;

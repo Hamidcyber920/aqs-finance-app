@@ -773,6 +773,23 @@ export const appRouter = router({
       await updateReceipt(input.receiptId, { status: "processing" });
       try {
         const extracted = await extractReceiptData(receipt.imageUrl, receipt.mimeType ?? "image/jpeg");
+
+        // ── OCR confidence threshold: flag low-confidence scans for manual review ──
+        const OCR_CONFIDENCE_THRESHOLD = 0.4;
+        if (extracted.confidence != null && extracted.confidence < OCR_CONFIDENCE_THRESHOLD) {
+          await updateReceipt(input.receiptId, {
+            status: "failed",
+            rawText: extracted.rawText ?? undefined,
+            notes: `Low OCR confidence (${(extracted.confidence * 100).toFixed(0)}%). Please review manually — the image may be blurry, blank, or unreadable.`,
+          });
+          return {
+            success: false,
+            lowConfidence: true,
+            confidence: extracted.confidence,
+            message: `OCR confidence too low (${(extracted.confidence * 100).toFixed(0)}%). Please upload a clearer image or enter the details manually.`,
+          };
+        }
+
         const receiptDate = extracted.date ? new Date(extracted.date) : undefined;
         await updateReceipt(input.receiptId, {
           vendor: extracted.vendor ?? undefined, receiptDate,
@@ -782,7 +799,7 @@ export const appRouter = router({
           lineItems: extracted.lineItems, rawText: extracted.rawText ?? undefined, status: "processed",
         });
         const updatedReceipt = await getReceiptById(input.receiptId);
-        await notifyOwner({ title: "New Receipt Processed", content: `Receipt from "${extracted.vendor ?? "Unknown"}" for £${extracted.amount ?? 0} categorised as "${extracted.categoryName}".` }).catch(() => {});
+        await notifyOwner({ title: "New Receipt Processed", content: `Receipt from "${extracted.vendor ?? "Unknown"}" for £${extracted.amount ?? 0} categorised as "${extracted.categoryName}" (confidence: ${(extracted.confidence * 100).toFixed(0)}%).` }).catch(() => {});
         if (receiptDate) {
           const monthlyTotal = await getMonthlyTotal(ctx.user.id, receiptDate.getFullYear(), receiptDate.getMonth() + 1);
           if (monthlyTotal > 5000) {

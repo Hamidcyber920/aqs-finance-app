@@ -18,6 +18,7 @@ import {
   ChevronRight, Building2, BookOpen, RefreshCw, Loader2, Settings, BarChart3
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
+import { useFormPersist } from "@/hooks/useFormPersist";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtCurrency(v: string | number | null | undefined) {
@@ -37,12 +38,19 @@ function progressPct(current: string | number, target: string | number) {
 }
 
 // ─── Two-Click QuickCapture Panel ────────────────────────────────────────────
+const QC_EMPTY = { name: "", whatsapp: "", amount: "", paymentMethod: "cash" };
+
 function QuickCapturePanel() {
-  const [name, setName] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
+  const [form, setForm, clearForm] = useFormPersist("quick-capture", QC_EMPTY);
+  const name = form.name;
+  const setName = (v: string) => setForm(f => ({ ...f, name: v }));
+  const whatsapp = form.whatsapp;
+  const setWhatsapp = (v: string) => setForm(f => ({ ...f, whatsapp: v }));
+  const amount = form.amount;
+  const setAmount = (v: string) => setForm(f => ({ ...f, amount: v }));
+  const paymentMethod = form.paymentMethod;
+  const setPaymentMethod = (v: string) => setForm(f => ({ ...f, paymentMethod: v }));
   const [campaignId, setCampaignId] = useState<number | undefined>();
-  const [amount, setAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<string>("cash");
   const [result, setResult] = useState<{ whatsappLink: string; profileUrl: string } | null>(null);
 
   const { data: campaigns } = trpc.crm.listCampaignsWithProgress.useQuery();
@@ -51,6 +59,7 @@ function QuickCapturePanel() {
   const capture = trpc.crm.quickCapture.useMutation({
     onSuccess: (data) => {
       setResult(data);
+      clearForm(); // clear persisted form on success
       utils.crm.listLeads.invalidate();
       toast.success(`Donor lead captured for ${name}`);
     },

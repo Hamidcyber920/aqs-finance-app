@@ -62,6 +62,10 @@ export default function DonorProfile() {
   const [showSendLinkDialog, setShowSendLinkDialog] = useState(false);
   const [portalLinkData, setPortalLinkData] = useState<{ token: string; url: string } | null>(null);
   const [showStatementDialog, setShowStatementDialog] = useState(false);
+  const [showRefundDialog, setShowRefundDialog] = useState(false);
+  const [refundDonationId, setRefundDonationId] = useState<number | null>(null);
+  const [refundReason, setRefundReason] = useState("");
+  const [refundReverseGiftAid, setRefundReverseGiftAid] = useState(true);
   const [statementTaxYear, setStatementTaxYear] = useState(() => {
     const now = new Date();
     return now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
@@ -94,6 +98,17 @@ export default function DonorProfile() {
 
   const [showAddLogDialog, setShowAddLogDialog] = useState(false);
   const [logForm, setLogForm] = useState({ type: "manual_note" as string, channel: "email" as string, subject: "", notes: "" });
+  const refundMut = (trpc as any).crm.refundDonation.useMutation({
+    onSuccess: (res: any) => {
+      toast.success(res.message);
+      setShowRefundDialog(false);
+      setRefundDonationId(null);
+      setRefundReason("");
+      refetchDonations();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const addCommsLogMut = (trpc as any).crm.addCommsLog.useMutation({
     onSuccess: () => { toast.success("Communication logged"); setShowAddLogDialog(false); setLogForm({ type: "manual_note", channel: "email", subject: "", notes: "" }); refetchCommsLog(); },
     onError: (e: any) => toast.error(e.message),
@@ -488,6 +503,20 @@ export default function DonorProfile() {
                         <td className="py-2 pr-4 text-muted-foreground">{d.campaignName || "—"}</td>
                         <td className="py-2 pr-4 text-muted-foreground capitalize">{d.paymentMethod?.replace("_", " ") || "—"}</td>
                         <td className="py-2">{d.giftAidDeclared ? <Badge className="bg-green-100 text-green-800">Yes</Badge> : "No"}</td>
+                        <td className="py-2">
+                          {d.isRefund ? (
+                            <Badge className="bg-red-100 text-red-800 text-xs">Refund</Badge>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700 h-6 px-2 text-xs"
+                              onClick={() => { setRefundDonationId(d.id); setRefundReason(""); setRefundReverseGiftAid(d.giftAidDeclared); setShowRefundDialog(true); }}
+                            >
+                              Refund
+                            </Button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -496,6 +525,46 @@ export default function DonorProfile() {
             </CardContent>
           </Card>
         )}
+
+        {/* Refund Dialog */}
+        <Dialog open={showRefundDialog} onOpenChange={setShowRefundDialog}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Refund Donation</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">The original donation row will be preserved. A new negative-amount refund row will be created.</p>
+              <div>
+                <label className="text-sm font-medium">Reason for refund *</label>
+                <Textarea
+                  className="mt-1"
+                  placeholder="e.g. Donor requested refund due to duplicate payment"
+                  value={refundReason}
+                  onChange={e => setRefundReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="reverseGiftAid"
+                  checked={refundReverseGiftAid}
+                  onChange={e => setRefundReverseGiftAid(e.target.checked)}
+                  className="h-4 w-4"
+                />
+                <label htmlFor="reverseGiftAid" className="text-sm">Reverse Gift Aid declaration</label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowRefundDialog(false)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={refundReason.length < 5 || refundMut.isPending}
+                onClick={() => refundDonationId && refundMut.mutate({ donationId: refundDonationId, reason: refundReason, reverseGiftAid: refundReverseGiftAid })}
+              >
+                {refundMut.isPending ? "Processing..." : "Confirm Refund"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {activeTab === "pledges" && (
           <Card>
