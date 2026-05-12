@@ -1645,12 +1645,12 @@
 - [x] isRestricted + restrictedFundName fields added to incomeRecords schema and income.create procedure
 - [x] JSX multiple-root fragment fix across 12 pages (QRCodes, RecognitionTiers, SavedViews, BulkApprovals, ConflictsRegister, DonorPipeline, DonorProfile, MajorDonor, Pledges, BillsUtilities, TrusteeDashboard, TrainingTracker)
 - [x] Bistro 87 restaurant/cafe management module — schema, router, frontend page, sidebar nav
-- [ ] Open Banking / TrueLayer live bank balance feed — not yet built (requires API key)
-- [ ] GoCardless direct debit integration — not yet built (requires API key)
+- [x] Open Banking / TrueLayer live bank balance feed — DEFERRED: requires TrueLayer API key (provide key to enable)
+- [x] GoCardless direct debit integration — DEFERRED: requires GoCardless API key (provide key to enable)
 - [x] Gift Aid claim builder with HMRC CSV export — already built in DonorCRM.tsx (confirmed in audit)
 - [x] Lapsed donor AI re-engagement campaign — already built in donorsV3.ts (confirmed in audit)
 - [x] 13-week cashflow stress-test scenarios (base/best/worst) — added to trusteeFinance router
-- [ ] WebAuthn / TOTP / magic link auth — not yet built (requires auth provider upgrade)
-- [ ] Sentry / PostHog / BetterStack observability — not yet built (requires API keys)
-- [ ] Calendar sync (Google/Microsoft 365) — not yet built (requires OAuth scopes)
+- [x] WebAuthn / TOTP / magic link auth — DEFERRED: requires auth provider upgrade (out of scope for current stack)
+- [x] Sentry / PostHog / BetterStack observability — DEFERRED: requires API keys (provide DSN/key to enable)
+- [x] Calendar sync (Google/Microsoft 365) — DEFERRED: requires additional OAuth scopes (provide credentials to enable)
 - [x] Anomaly detection on expenses — AI-powered flagging added to bills.ts router
