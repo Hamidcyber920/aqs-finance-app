@@ -12,7 +12,6 @@ import { notifyOwner } from "./_core/notification";
 import { nanoid } from "nanoid";
 import { localAuthRouter, adminRouter } from "./routers/localAuth";
 import { backupRouter, triggerBackupSoon } from "./routers/backup";
-import { voiceAgentRouter } from "./routers/voiceAgent";
 import { accommodationRouter } from "./routers/accommodation";
 import { fintechRouter } from "./routers/fintech";
 import { crmRouter } from "./routers/crm";
@@ -378,7 +377,6 @@ export const appRouter = router({
   localAuth: localAuthRouter,
   admin: adminRouter,
   backup: backupRouter,
-  voiceAgent: voiceAgentRouter,
   accommodation: accommodationRouter,
   fintech: fintechRouter,
   crm: crmRouter,
