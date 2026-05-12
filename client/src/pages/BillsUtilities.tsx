@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Plus, Zap, Droplets, Flame, Wifi, Phone, Shield, MoreHorizontal, AlertTriangle, CheckCircle, Clock, Trash2, Edit2, FileText } from "lucide-react";
 
 const BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"] as const;
@@ -42,7 +42,6 @@ const categoryColor = (cat: string) => {
 };
 
 export default function BillsUtilities() {
-  const { toast } = useToast();
   const [buildingFilter, setBuildingFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -94,9 +93,9 @@ export default function BillsUtilities() {
       utils.bills.summary.invalidate();
       setShowAddAccount(false);
       setAccountForm({ building: "QLH", supplier: "", accountNumber: "", category: "electricity", tariff: "", contractStartDate: "", contractEndDate: "", mpan: "", directDebitAmount: "", notes: "" });
-      toast({ title: "Account added", description: "Utility account created successfully." });
+      toast.success("Account added — utility account created successfully.");
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const updateAccount = trpc.bills.updateAccount.useMutation({
@@ -104,9 +103,9 @@ export default function BillsUtilities() {
       utils.bills.listAccounts.invalidate();
       utils.bills.summary.invalidate();
       setEditAccount(null);
-      toast({ title: "Account updated" });
+      toast.success("Account updated");
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const deleteAccount = trpc.bills.deleteAccount.useMutation({
@@ -114,9 +113,9 @@ export default function BillsUtilities() {
       utils.bills.listAccounts.invalidate();
       utils.bills.summary.invalidate();
       setSelectedAccountId(null);
-      toast({ title: "Account deleted" });
+      toast.success("Account deleted");
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const addBill = trpc.bills.addBill.useMutation({
@@ -126,18 +125,18 @@ export default function BillsUtilities() {
       setShowAddBill(false);
       setBillForm({ accountId: 0, billDate: new Date().toISOString().split("T")[0], periodStart: "", periodEnd: "", amount: "", consumptionUnits: "", unitType: "", notes: "" });
       if (data.isAnomaly) {
-        toast({ title: "⚠️ Anomaly Detected", description: `This bill (£${parseFloat(billForm.amount).toFixed(2)}) is 50%+ above the 3-month average (£${data.avg3m}).`, variant: "destructive" });
+        toast.warning(`⚠️ Anomaly Detected — This bill (£${parseFloat(billForm.amount).toFixed(2)}) is 50%+ above the 3-month average (£${data.avg3m}).`);
       } else {
-        toast({ title: "Bill recorded", description: "Utility bill added successfully." });
+        toast.success("Bill recorded — utility bill added successfully.");
       }
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const deleteBill = trpc.bills.deleteBill.useMutation({
     onSuccess: () => {
       utils.bills.getAccount.invalidate({ id: selectedAccountId! });
-      toast({ title: "Bill deleted" });
+      toast.success("Bill deleted");
     },
   });
 

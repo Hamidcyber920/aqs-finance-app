@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { useState } from "react";
 import type { ReactElement } from "react";
 import { trpc } from "@/lib/trpc";
@@ -11,7 +12,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { Plus, CheckCircle, AlertTriangle, XCircle, Clock, Search, Trash2, Edit2, Award, Users, BookOpen, Grid3X3 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -33,7 +33,6 @@ const STATUS_ICON: Record<string, ReactElement> = {
 };
 
 export default function TrainingTracker() {
-  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
@@ -63,9 +62,9 @@ export default function TrainingTracker() {
       utils.training.summary.invalidate();
       setShowAdd(false);
       setForm({ userName: "", module: "", provider: "", completedAt: new Date().toISOString().split("T")[0], expiresAt: "", certificateUrl: "", notes: "" });
-      toast({ title: "Training recorded", description: "Record added successfully." });
+      toast.success("Training recorded — record added successfully.");
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const updateRecord = trpc.training.update.useMutation({
@@ -73,16 +72,16 @@ export default function TrainingTracker() {
       utils.training.list.invalidate();
       utils.training.summary.invalidate();
       setEditRecord(null);
-      toast({ title: "Record updated" });
+      toast.success("Record updated");
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const deleteRecord = trpc.training.delete.useMutation({
     onSuccess: () => {
       utils.training.list.invalidate();
       utils.training.summary.invalidate();
-      toast({ title: "Record deleted" });
+      toast.success("Record deleted");
     },
   });
 
