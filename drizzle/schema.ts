@@ -1067,6 +1067,8 @@ export const donorLeads = mysqlTable("donor_leads", {
   convertedToDonorId: int("convertedToDonorId"),
   source: mysqlEnum("source", ["quickcapture", "stripe", "manual", "portal"]).default("quickcapture").notNull(),
   campaignId: int("campaignId"),
+  employer: varchar("employer", { length: 200 }),
+  preferredLanguage: varchar("preferredLanguage", { length: 50 }).default("English"),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

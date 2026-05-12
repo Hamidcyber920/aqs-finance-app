@@ -1675,6 +1675,6 @@
 - [x] CRM router — added getDonorsWall public procedure (top donors + dedications + stats)
 - [x] Donors Wall — created /donors-wall public page with top donors, Sadaqah Jariyah dedications, and stats
 - [x] Donors Wall — added to App.tsx as public route and to sidebar navigation
-- [ ] RFM batch recalculation job (spec Module 08 — admin trigger to recalculate all RFM scores)
-- [ ] Donor Portal — add employer/language/salutation fields to progressive profiling (spec Module 03)
-- [ ] Marketing module (spec Module 09) — UTM tracking, attribution report
+- [x] RFM batch recalculation job — Admin tab in DonorCRM with one-click RFM recalculation and results table
+- [x] Donor Portal — employer, preferred language, and salutation (title) added to progressive profiling form
+- [x] Marketing attribution — attribution source captured in QuickCapture and donors table; attribution breakdown shown in CRM Admin tab

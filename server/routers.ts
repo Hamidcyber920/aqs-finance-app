@@ -5997,6 +5997,9 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         postcode: z.string().min(3).max(10),
         isUkTaxpayer: z.boolean(),
         giftAidConsent: z.boolean(),
+        title: z.string().max(20).optional(),
+        employer: z.string().max(200).optional(),
+        preferredLanguage: z.string().max(50).optional(),
       }))
       .mutation(async ({ input }) => {
         const db = await getDb();
@@ -6011,6 +6014,9 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
             isUkTaxpayer: input.isUkTaxpayer,
             giftAidConsent: input.giftAidConsent,
             profileComplete: true,
+            ...(input.title ? { title: input.title } : {}),
+            ...(input.employer ? { employer: input.employer } : {}),
+            ...(input.preferredLanguage ? { preferredLanguage: input.preferredLanguage } : {}),
           })
           .where(eq(donorLeads.id, tokenRow.donorLeadId));
         return { ok: true };

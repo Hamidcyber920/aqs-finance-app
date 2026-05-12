@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Users, Zap, Heart, FileCheck, Link2, Star, TrendingUp, Copy,
   CheckCircle2, Clock, AlertCircle, MessageCircle, Mail, Plus, Download,
-  ChevronRight, Building2, BookOpen, RefreshCw, Loader2
+  ChevronRight, Building2, BookOpen, RefreshCw, Loader2, Settings, BarChart3
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 
@@ -951,6 +951,127 @@ function DonorPortalPanel() {
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+
+// ─── CRM Admin Panel ─────────────────────────────────────────────────────────
+function CrmAdminPanel() {
+  const utils = trpc.useUtils();
+  const recalcRfm = trpc.donorsV3.computeRfmScores.useMutation({
+    onSuccess: (data) => {
+      toast.success(`RFM scores updated for ${data.length} donors`);
+      utils.donorsV3.listDonors.invalidate();
+    },
+    onError: (err) => toast.error(`RFM recalculation failed: ${err.message}`),
+  });
+
+  return (
+    <div className="space-y-6 p-1">
+      <div>
+        <h3 className="text-lg font-semibold mb-1">CRM Administration</h3>
+        <p className="text-sm text-muted-foreground">Batch operations and system maintenance tools.</p>
+      </div>
+
+      {/* RFM Recalculation */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-primary" />
+            RFM Score Recalculation
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Recalculates Recency, Frequency, and Monetary scores for all donors based on their donation history.
+            Segments donors into: <strong>Champions</strong>, <strong>Loyal</strong>, <strong>Potential</strong>, <strong>At Risk</strong>, and <strong>Lapsed</strong>.
+          </p>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => recalcRfm.mutate()}
+              disabled={recalcRfm.isPending}
+              className="flex items-center gap-2"
+            >
+              {recalcRfm.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              {recalcRfm.isPending ? "Recalculating…" : "Recalculate All RFM Scores"}
+            </Button>
+            {recalcRfm.data && (
+              <span className="text-sm text-muted-foreground">
+                Last run: updated {recalcRfm.data.length} donors
+              </span>
+            )}
+          </div>
+          {recalcRfm.data && (
+            <div className="mt-3 border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-2 font-medium">Donor</th>
+                    <th className="text-center p-2 font-medium">R</th>
+                    <th className="text-center p-2 font-medium">F</th>
+                    <th className="text-center p-2 font-medium">M</th>
+                    <th className="text-center p-2 font-medium">Score</th>
+                    <th className="text-left p-2 font-medium">Segment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recalcRfm.data.slice(0, 10).map((d) => (
+                    <tr key={d.donorId} className="border-t">
+                      <td className="p-2 truncate max-w-[140px]">{d.name}</td>
+                      <td className="p-2 text-center">{d.recency}</td>
+                      <td className="p-2 text-center">{d.frequency}</td>
+                      <td className="p-2 text-center">{d.monetary}</td>
+                      <td className="p-2 text-center font-semibold">{d.rfmScore}</td>
+                      <td className="p-2">
+                        <Badge variant={d.segment === "Champions" ? "default" : d.segment === "Lapsed" ? "destructive" : "secondary"} className="text-xs">
+                          {d.segment}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {recalcRfm.data.length > 10 && (
+                <p className="text-xs text-muted-foreground p-2 border-t">
+                  Showing 10 of {recalcRfm.data.length} donors
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* UTM Attribution */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            Donor Attribution
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">
+            Track how donors found Hibba — via social media, events, word of mouth, or other channels.
+            Attribution source is captured during donor registration and QuickCapture.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {["Social Media", "Event", "Word of Mouth", "Website", "Referral", "Email", "Other"].map((src) => (
+              <div key={src} className="border rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-primary">—</div>
+                <div className="text-xs text-muted-foreground mt-1">{src}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Live attribution counts will appear here as donors are added with source data.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function DonorCRM() {
   const { data: leads, refetch: refetchLeads } = trpc.crm.listLeads.useQuery();
   const { data: certs } = trpc.crm.listGiftAidCertificates.useQuery();
@@ -1065,6 +1186,9 @@ export default function DonorCRM() {
             <TabsTrigger value="portal" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
               <Link2 className="w-3.5 h-3.5 shrink-0" /> <span>Donor Portal</span>
             </TabsTrigger>
+            <TabsTrigger value="admin" className="flex items-center gap-1.5 whitespace-nowrap text-xs sm:text-sm">
+              <Settings className="w-3.5 h-3.5 shrink-0" /> <span>Admin</span>
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -1074,6 +1198,7 @@ export default function DonorCRM() {
         <TabsContent value="campaigns"><CampaignProgressPanel /></TabsContent>
         <TabsContent value="sadaqah"><SadaqahJariyahPanel /></TabsContent>
         <TabsContent value="portal"><DonorPortalPanel /></TabsContent>
+        <TabsContent value="admin"><CrmAdminPanel /></TabsContent>
       </Tabs>
     </div>
   );

@@ -39,11 +39,14 @@ export default function DonorPortal() {
   const [formPostcode, setFormPostcode] = useState("");
   const [formIsUkTaxpayer, setFormIsUkTaxpayer] = useState(false);
   const [formGiftAidConsent, setFormGiftAidConsent] = useState(false);
+  const [formTitle, setFormTitle] = useState("");
+  const [formEmployer, setFormEmployer] = useState("");
+  const [formLanguage, setFormLanguage] = useState("English");
 
   type PortalPledge = { id: number; campaignName?: string | null; totalAmount: string; balanceOwing: string; paidToDate: string; status: string; nextDueDate?: string | null; frequency: string; isGiftAid: boolean; };
   type PortalGiftAid = { id: number; campaignName?: string | null; amount: string; donationDate: string; declarationMethod: string; };
   type PortalDonor = { id: number; name: string; email?: string | null; phone?: string | null; totalGiven: string; };
-  type LeadData = { isUkTaxpayer: boolean; giftAidConsent: boolean; profileComplete: boolean; address?: string | null; postcode?: string | null; };
+  type LeadData = { isUkTaxpayer: boolean; giftAidConsent: boolean; profileComplete: boolean; address?: string | null; postcode?: string | null; title?: string | null; employer?: string | null; preferredLanguage?: string | null; };
 
   const { data, isLoading, error } = (trpc as any).donorPortal.getByToken.useQuery(
     { token: token ?? "" },
@@ -170,6 +173,9 @@ export default function DonorPortal() {
     setFormPostcode(leadData?.postcode ?? "");
     setFormIsUkTaxpayer(leadData?.isUkTaxpayer ?? false);
     setFormGiftAidConsent(leadData?.giftAidConsent ?? false);
+    setFormTitle(leadData?.title ?? "");
+    setFormEmployer(leadData?.employer ?? "");
+    setFormLanguage(leadData?.preferredLanguage ?? "English");
     setProfileFormOpen(true);
   };
 
@@ -269,6 +275,55 @@ export default function DonorPortal() {
                     />
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="title" className="text-amber-900">Title (optional)</Label>
+                      <select
+                        id="title"
+                        value={formTitle}
+                        onChange={e => setFormTitle(e.target.value)}
+                        className="w-full border border-amber-300 rounded-md px-3 py-2 text-sm bg-white"
+                      >
+                        <option value="">Select…</option>
+                        <option value="Mr">Mr</option>
+                        <option value="Mrs">Mrs</option>
+                        <option value="Miss">Miss</option>
+                        <option value="Ms">Ms</option>
+                        <option value="Dr">Dr</option>
+                        <option value="Sheikh">Sheikh</option>
+                        <option value="Hafiz">Hafiz</option>
+                        <option value="Haji">Haji</option>
+                        <option value="Hajia">Hajia</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="language" className="text-amber-900">Preferred Language</Label>
+                      <select
+                        id="language"
+                        value={formLanguage}
+                        onChange={e => setFormLanguage(e.target.value)}
+                        className="w-full border border-amber-300 rounded-md px-3 py-2 text-sm bg-white"
+                      >
+                        <option value="English">English</option>
+                        <option value="Urdu">Urdu</option>
+                        <option value="Arabic">Arabic</option>
+                        <option value="Punjabi">Punjabi</option>
+                        <option value="Bengali">Bengali</option>
+                        <option value="Somali">Somali</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="employer" className="text-amber-900">Employer (optional)</Label>
+                    <Input
+                      id="employer"
+                      placeholder="e.g. NHS, University of Liverpool"
+                      value={formEmployer}
+                      onChange={e => setFormEmployer(e.target.value)}
+                      className="bg-white border-amber-300"
+                    />
+                  </div>
                   <div className="space-y-3 pt-1">
                     <div className="flex items-start gap-3">
                       <Checkbox
