@@ -400,7 +400,11 @@ export function registerScheduledJobs() {
   cron.schedule("15 8 * * *", () => {
     runDailyLbmwGmailPull().catch(console.error);
   }, { timezone: "Europe/London" });
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15)");
+  // Daily at 07:00 UK time — utility contract renewal reminders (60-day warning)
+  cron.schedule("0 7 * * *", () => {
+    sendContractRenewalReminders().catch(console.error);
+  }, { timezone: "Europe/London" });
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15) + contract renewal reminders (daily 07:00)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
@@ -1255,5 +1259,113 @@ export async function runDailyLbmwGmailPull() {
     console.log(`[Scheduled] LBMW pull complete: ${created} created, ${skipped} skipped, ${actionsCreated} actions, ${invoices} invoices.`);
   } catch (e) {
     console.error("[Scheduled] LBMW Gmail pull failed:", e);
+  }
+}
+
+
+// ─── Contract Renewal Reminders ──────────────────────────────────────────────
+/**
+ * Daily at 07:00 UK time — check utility accounts whose contractEndDate is
+ * within the next 60 days and send an email reminder to the admin.
+ */
+export async function sendContractRenewalReminders() {
+  console.log("[Scheduled] Running contract renewal reminder check...");
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const { utilityAccounts, supplierContacts } = await import("../drizzle/schema");
+    const { and, lte, gte, isNotNull } = await import("drizzle-orm");
+    const now = new Date();
+    const in60Days = new Date(now);
+    in60Days.setDate(in60Days.getDate() + 60);
+
+    const accounts = await db.select().from(utilityAccounts)
+      .where(and(
+        isNotNull((utilityAccounts as any).contractEndDate),
+        lte((utilityAccounts as any).contractEndDate, in60Days),
+        gte((utilityAccounts as any).contractEndDate, now)
+      ));
+
+    if (accounts.length === 0) {
+      console.log("[Scheduled] No contracts expiring within 60 days.");
+      return;
+    }
+
+    // Fetch linked supplier contacts
+    const accountsWithContacts = await Promise.all(accounts.map(async (acc: any) => {
+      let contact = null;
+      if (acc.supplierContactId) {
+        const contacts = await db.select().from(supplierContacts)
+          .where((supplierContacts as any).id === acc.supplierContactId)
+          .limit(1);
+        contact = contacts[0] ?? null;
+      }
+      return { ...acc, contact };
+    }));
+
+    const rows = accountsWithContacts.map((acc: any) => {
+      const daysLeft = Math.ceil((new Date(acc.contractEndDate).getTime() - now.getTime()) / 86400000);
+      const contactInfo = acc.contact
+        ? `${acc.contact.name}${acc.contact.phone ? ` · ${acc.contact.phone}` : ""}${acc.contact.email ? ` · ${acc.contact.email}` : ""}`
+        : "No contact linked";
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.supplierName || acc.accountName || "Unknown"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.utilityType || "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.building || "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.accountNumber || "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${daysLeft <= 14 ? "#dc2626" : daysLeft <= 30 ? "#d97706" : "#1a4731"};">${daysLeft} days (${new Date(acc.contractEndDate).toLocaleDateString("en-GB")})</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;">${contactInfo}</td>
+        </tr>`;
+    }).join("");
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
+        <div style="background:#1a4731;padding:24px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
+          <p style="color:#c9a84c;margin:4px 0 0;">Utility Contract Renewal Reminder</p>
+        </div>
+        <div style="padding:24px;background:#fff;">
+          <p>Assalamu Alaikum,</p>
+          <p>This is an automated reminder that the following utility contracts are due for renewal within the next <strong>60 days</strong>. Please contact the relevant suppliers to arrange renewals.</p>
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">
+            <thead>
+              <tr style="background:#f0fdf4;">
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Supplier</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Type</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Building</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Account No.</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Expires In</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Supplier Contact</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <p>Please update the contract end dates in the Bills & Utilities section once renewals are confirmed.</p>
+          <p>JazakAllahu Khayran,<br><strong>AQ Society Finance System</strong></p>
+        </div>
+        <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
+          AQ Society Automated Contract Renewal Alert
+        </div>
+      </div>`;
+
+    const adminRecipients = [
+      { name: "Mumin Khan", email: "meds.mumin@gmail.com" },
+      { name: "Mr Galib Khan", email: "khan.galib@gmail.com" },
+    ];
+
+    for (const recipient of adminRecipients) {
+      await sendEmail(
+        recipient.email,
+        recipient.name,
+        `⚠️ ${accounts.length} Utility Contract(s) Expiring Within 60 Days — AQ Society`,
+        html
+      ).then(() => console.log(`[Scheduled] Contract renewal reminder sent to ${recipient.email}`))
+        .catch(e => console.error(`[Scheduled] Failed to send contract renewal reminder to ${recipient.email}:`, e));
+    }
+
+    console.log(`[Scheduled] Contract renewal reminders sent for ${accounts.length} account(s).`);
+  } catch (e) {
+    console.error("[Scheduled] Contract renewal reminder failed:", e);
   }
 }

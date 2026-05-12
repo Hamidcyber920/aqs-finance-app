@@ -10,11 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import {
-  Plus, RefreshCw, Mail, Phone, Building, FileText, AlertTriangle,
+import { Plus, RefreshCw, Mail, Phone, Building, FileText, AlertTriangle,
   CheckCircle2, Clock, XCircle, Link2, Unlink, Zap, Download, Receipt, ScanLine,
   Paperclip, ExternalLink,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
@@ -76,6 +76,8 @@ const emptyForm = {
 export default function LbmwCorrespondence() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [previewFile, setPreviewFile] = useState<{ url: string; name: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<string>("responded");
 
   // Gmail pull dialog state
   const [gmailDialog, setGmailDialog] = useState(false);
@@ -108,6 +110,35 @@ export default function LbmwCorrespondence() {
 
   const utils = trpc.useUtils();
   const { data: items = [], isLoading, refetch } = trpc.lbmw.list.useQuery({ status: statusFilter || undefined });
+
+  const allItemIds = (items as any[]).map((i: any) => i.id);
+  const allSelected = allItemIds.length > 0 && allItemIds.every((id: number) => selectedIds.has(id));
+  const someSelected = selectedIds.size > 0;
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(allItemIds));
+    }
+  }
+
+  function toggleSelectItem(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const bulkUpdateStatusMut = trpc.lbmw.bulkUpdateStatus.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.updated} record(s) updated to "${data.status.replace('_', ' ')}".`);
+      setSelectedIds(new Set());
+      refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   // Gmail procedures
   const { data: gmailLabels = [], isLoading: labelsLoading } = trpc.lbmwGmail.listLabels.useQuery(undefined, { enabled: gmailDialog, retry: false });
@@ -291,8 +322,46 @@ export default function LbmwCorrespondence() {
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
+                  {/* Bulk action toolbar */}
+                  {someSelected && (
+                    <div className="flex items-center gap-3 px-4 py-2.5 bg-primary/10 border-b border-primary/20">
+                      <span className="text-sm font-medium text-primary">{selectedIds.size} selected</span>
+                      <div className="flex items-center gap-2 ml-auto">
+                        <span className="text-xs text-muted-foreground">Set status to:</span>
+                        <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                          <SelectTrigger className="h-7 w-36 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="awaiting_reply">Awaiting Reply</SelectItem>
+                            <SelectItem value="responded">Responded</SelectItem>
+                            <SelectItem value="closed">Closed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={bulkUpdateStatusMut.isPending}
+                          onClick={() => bulkUpdateStatusMut.mutate({ ids: Array.from(selectedIds), status: bulkStatus as any })}
+                        >
+                          {bulkUpdateStatusMut.isPending ? "Updating…" : "Apply"}
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedIds(new Set())}>
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   <thead>
                     <tr className="border-b border-border">
+                      <th className="p-3 w-8">
+                        <Checkbox
+                          checked={allSelected}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Select all"
+                        />
+                      </th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Contact</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Subject</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Channel</th>
@@ -311,7 +380,14 @@ export default function LbmwCorrespondence() {
                       const isOverdue = days !== null && days < 0 && item.status !== "responded" && item.status !== "closed";
                       const linkedAction = item.linkedComplianceActionId ? actionMap[item.linkedComplianceActionId] : null;
                       return (
-                        <tr key={item.id} className="border-b border-border/50 hover:bg-muted/20">
+                        <tr key={item.id} className={`border-b border-border/50 hover:bg-muted/20 ${selectedIds.has(item.id) ? 'bg-primary/5' : ''}`}>
+                          <td className="p-3 w-8">
+                            <Checkbox
+                              checked={selectedIds.has(item.id)}
+                              onCheckedChange={() => toggleSelectItem(item.id)}
+                              aria-label={`Select row ${item.id}`}
+                            />
+                          </td>
                           <td className="p-3">
                             <p className="font-medium">{item.contactName}</p>
                             {item.contactRole && <p className="text-xs text-muted-foreground">{item.contactRole}</p>}

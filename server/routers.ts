@@ -6229,6 +6229,22 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         .orderBy(desc(complianceActions.createdAt))
         .limit(100);
     }),
+
+    bulkUpdateStatus: adminProcedure
+      .input(z.object({
+        ids: z.array(z.number()).min(1),
+        status: z.enum(['pending', 'responded', 'awaiting_reply', 'closed']),
+      }))
+      .mutation(async ({ input }) => {
+        const { lbmwCorrespondence } = await import('../drizzle/schema');
+        const { inArray } = await import('drizzle-orm');
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        await db.update(lbmwCorrespondence)
+          .set({ status: input.status, updatedAt: new Date() })
+          .where(inArray(lbmwCorrespondence.id, input.ids));
+        return { updated: input.ids.length, status: input.status };
+      }),
   }),
 });
 export type AppRouter = typeof appRouter;

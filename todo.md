@@ -1584,3 +1584,9 @@
 - [x] LBMW Correspondence: show "View File" link on each row that has an attached document, with a preview dialog (image/PDF)
 - [x] AiDocumentScanner: add camera capture button (mobile-friendly, uses device camera directly)
 - [x] Bills & Utilities: link supplier contacts to utility accounts — store supplierContactId on accounts, show contact card inline on account row
+
+## Round 13 Next Steps (May 12, 2026)
+
+- [x] LBMW Correspondence — bulk status update: checkbox select multiple rows, bulk toolbar to set status (Responded/Closed/Pending) in one action
+- [x] Bills & Utilities — contract renewal reminder emails: auto-email admin when a contract is within 60 days of expiry, including supplier name, account number, and linked supplier contact details
+- [x] Receipt Capture (ScanReceipt) — AI scanner integration: confirmed already built into the main Capture page (Camera + Gallery + AI OCR + auto-fill + submit flow)
