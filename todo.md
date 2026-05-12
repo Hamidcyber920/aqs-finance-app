@@ -1637,3 +1637,20 @@
 
 ## Round 18 — Mobile Layout Fixes (May 12, 2026)
 - [x] Remove duplicate DashboardLayout wrappers from all pages that have them (causes double top bar + bottom nav on mobile): ComplianceCockpit, Decisions, BulkApprovals, ConflictsRegister, DonorPipeline, DonorProfile, MajorDonor, Pledges, QRCodes, RecognitionTiers, SavedViews, BillsUtilities, TrainingTracker, LbmwCorrespondence, TrusteeDashboard
+
+## Round 19 — Spec Audit & Gap Fill (May 12, 2026)
+- [x] P60 year-end certificate generation (per employee, HTML download via S3) — in Payroll module
+- [x] P32 employer payment record generation (monthly totals, HTML download via S3) — in Payroll module
+- [x] Facilities & Room Booking module — schema (facility_rooms, facility_bookings), router, frontend page, sidebar nav
+- [x] isRestricted + restrictedFundName fields added to incomeRecords schema and income.create procedure
+- [x] JSX multiple-root fragment fix across 12 pages (QRCodes, RecognitionTiers, SavedViews, BulkApprovals, ConflictsRegister, DonorPipeline, DonorProfile, MajorDonor, Pledges, BillsUtilities, TrusteeDashboard, TrainingTracker)
+- [ ] Bistro 87 restaurant/cafe management module (spec Section 8) — not yet built (requires external POS/menu data)
+- [ ] Open Banking / TrueLayer live bank balance feed — not yet built (requires API key)
+- [ ] GoCardless direct debit integration — not yet built (requires API key)
+- [ ] Gift Aid claim builder with HMRC CSV export — not yet built
+- [ ] Lapsed donor AI re-engagement campaign — not yet built
+- [ ] 13-week cashflow stress-test scenarios — not yet built
+- [ ] WebAuthn / TOTP / magic link auth — not yet built (requires auth provider upgrade)
+- [ ] Sentry / PostHog / BetterStack observability — not yet built (requires API keys)
+- [ ] Calendar sync (Google/Microsoft 365) — not yet built (requires OAuth scopes)
+- [ ] Anomaly detection on expenses — not yet built

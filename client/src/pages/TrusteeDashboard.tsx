@@ -122,6 +122,7 @@ export default function TrusteeDashboard() {
   const netPositive = (totals?.netPosition ?? 0) >= 0;
 
   return (
+      <>
       <div className="p-6 space-y-6">
         {/* - Header - */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -565,6 +566,7 @@ export default function TrusteeDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
   );
 }
 

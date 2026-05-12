@@ -519,6 +519,13 @@
       "when": 1778581798106,
       "tag": "0073_long_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "5",
+      "when": 1778584683209,
+      "tag": "0074_tearful_firelord",
+      "breakpoints": true
     }
   ]
 }

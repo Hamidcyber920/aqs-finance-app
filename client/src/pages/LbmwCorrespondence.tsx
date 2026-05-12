@@ -251,6 +251,7 @@ export default function LbmwCorrespondence() {
   const actionMap = Object.fromEntries(complianceActions.map(a => [a.id, a]));
 
   return (
+      <>
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -1071,5 +1072,6 @@ export default function LbmwCorrespondence() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
   );
 }

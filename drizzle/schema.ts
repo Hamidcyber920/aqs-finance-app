@@ -443,6 +443,9 @@ export const incomeRecords = mysqlTable("income_records", {
   // Additional evidence
   evidenceUrl2: text("evidenceUrl2"),
   recordedById: int("recordedById").notNull(),
+  // Restricted fund tracking
+  isRestricted: boolean("isRestricted").default(false).notNull(),
+  restrictedPurpose: varchar("restrictedPurpose", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -2100,3 +2103,60 @@ export const scheduledPayments = mysqlTable("scheduled_payments", {
 });
 export type ScheduledPayment = typeof scheduledPayments.$inferSelect;
 export type InsertScheduledPayment = typeof scheduledPayments.$inferInsert;
+
+// ─── FACILITIES & ROOM BOOKING ────────────────────────────────────────────────
+
+export const facilityRooms = mysqlTable("facility_rooms", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  building: varchar("building", { length: 100 }).notNull().default("QLH"),
+  capacity: int("capacity"),
+  description: text("description"),
+  amenities: text("amenities"), // comma-separated list
+  hourlyRate: decimal("hourlyRate", { precision: 8, scale: 2 }),
+  halfDayRate: decimal("halfDayRate", { precision: 8, scale: 2 }),
+  fullDayRate: decimal("fullDayRate", { precision: 8, scale: 2 }),
+  isActive: boolean("isActive").default(true).notNull(),
+  imageUrl: text("imageUrl"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type FacilityRoom = typeof facilityRooms.$inferSelect;
+
+export const facilityBookings = mysqlTable("facility_bookings", {
+  id: int("id").autoincrement().primaryKey(),
+  roomId: int("roomId").notNull(),
+  bookedByUserId: int("bookedByUserId"),
+  // Booker details (for external/walk-in bookings)
+  bookerName: varchar("bookerName", { length: 200 }).notNull(),
+  bookerEmail: varchar("bookerEmail", { length: 320 }),
+  bookerPhone: varchar("bookerPhone", { length: 30 }),
+  organisation: varchar("organisation", { length: 200 }),
+  // Booking details
+  title: varchar("title", { length: 300 }).notNull(),
+  purpose: text("purpose"),
+  startDatetime: timestamp("startDatetime").notNull(),
+  endDatetime: timestamp("endDatetime").notNull(),
+  attendeeCount: int("attendeeCount"),
+  // Pricing
+  rateType: mysqlEnum("rateType", ["hourly", "half_day", "full_day", "custom", "free"]).default("hourly").notNull(),
+  agreedAmount: decimal("agreedAmount", { precision: 10, scale: 2 }).default("0").notNull(),
+  depositAmount: decimal("depositAmount", { precision: 10, scale: 2 }).default("0"),
+  depositPaid: boolean("depositPaid").default(false).notNull(),
+  // Status
+  status: mysqlEnum("status", ["enquiry", "confirmed", "cancelled", "completed"]).default("enquiry").notNull(),
+  cancellationReason: text("cancellationReason"),
+  // Payment
+  paymentStatus: mysqlEnum("paymentStatus", ["unpaid", "partial", "paid"]).default("unpaid").notNull(),
+  paymentMethod: mysqlEnum("paymentMethod", ["cash", "bank_transfer", "card", "invoice"]),
+  invoiceUrl: text("invoiceUrl"),
+  // Notes
+  internalNotes: text("internalNotes"),
+  // Linked income record
+  incomeRecordId: int("incomeRecordId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type FacilityBooking = typeof facilityBookings.$inferSelect;
+export type InsertFacilityBooking = typeof facilityBookings.$inferInsert;

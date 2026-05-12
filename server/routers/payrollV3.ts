@@ -472,6 +472,163 @@ All monetary values as numbers (no £ sign). If a field is not visible, return n
       }
       return { sent: true, recipient: toEmail, recipientName: toName };
     }),
+
+  // --- P60 Year-End Certificate ---
+  generateP60: protectedProcedure
+    .input(z.object({
+      employeeId: z.number(),
+      employeeName: z.string(),
+      taxYear: z.string(), // e.g. "2024-25"
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ADMIN_ROLES.includes(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN' });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+
+      const [startYr] = input.taxYear.split('-');
+      const yearNum = parseInt(startYr);
+
+      // Get all payroll records for this employee in this tax year (Apr-Mar)
+      const records = await db.select().from(payrollV2)
+        .where(and(
+          eq(payrollV2.employeeId, input.employeeId),
+          // Tax year spans two calendar years: Apr YYYY to Mar YYYY+1
+          // We use month/year fields
+        ));
+
+      // Filter to tax year months
+      const taxYearRecords = records.filter(r => {
+        if (!r.year || !r.month) return false;
+        if (r.year === yearNum && r.month >= 4) return true;
+        if (r.year === yearNum + 1 && r.month <= 3) return true;
+        return false;
+      });
+
+      const totalGross = taxYearRecords.reduce((s, r) => s + Number(r.grossPay ?? 0), 0);
+      const totalTax = taxYearRecords.reduce((s, r) => s + Number(r.incomeTax ?? 0), 0);
+      const totalNI = taxYearRecords.reduce((s, r) => s + Number(r.nationalInsurance ?? 0), 0);
+      const totalNet = taxYearRecords.reduce((s, r) => s + Number(r.netPay ?? 0), 0);
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        body{font-family:Arial,sans-serif;font-size:12px;color:#000;margin:20px}
+        h1{font-size:18px;border-bottom:2px solid #000;padding-bottom:8px}
+        h2{font-size:14px;margin-top:20px;color:#333}
+        table{width:100%;border-collapse:collapse;margin-top:8px}
+        td,th{padding:6px 8px;border:1px solid #ccc;text-align:left}
+        th{background:#f5f5f5;font-weight:bold}
+        .total{font-weight:bold;background:#f9f9f9}
+        .footer{margin-top:30px;font-size:10px;color:#666;border-top:1px solid #ccc;padding-top:8px}
+      </style></head><body>
+        <h1>P60 - End of Year Certificate</h1>
+        <p><strong>Tax Year:</strong> ${input.taxYear} (6 April ${startYr} to 5 April ${yearNum+1})</p>
+        <h2>Employee Details</h2>
+        <table>
+          <tr><th>Name</th><td>${input.employeeName}</td></tr>
+          <tr><th>Employee ID</th><td>${input.employeeId}</td></tr>
+        </table>
+        <h2>Pay and Tax Summary</h2>
+        <table>
+          <tr><th>Description</th><th>Amount (GBP)</th></tr>
+          <tr><td>Total Gross Pay</td><td>&#163;${totalGross.toFixed(2)}</td></tr>
+          <tr><td>Total Income Tax Deducted</td><td>&#163;${totalTax.toFixed(2)}</td></tr>
+          <tr><td>Total Employee NI Contributions</td><td>&#163;${totalNI.toFixed(2)}</td></tr>
+          <tr class="total"><td>Total Net Pay</td><td>&#163;${totalNet.toFixed(2)}</td></tr>
+        </table>
+        <p style="margin-top:16px">Pay periods included: ${taxYearRecords.length}</p>
+        <div class="footer">
+          <p>This is a computer-generated P60. Employer: Hibba Education Trust | Generated: ${new Date().toLocaleDateString('en-GB')}</p>
+        </div>
+      </body></html>`;
+
+      const { storagePut } = await import('../storage');
+      const { nanoid } = await import('nanoid');
+      const key = `p60/${input.employeeId}-${input.taxYear}-${nanoid(6)}.html`;
+      const { url } = await storagePut(key, Buffer.from(html, 'utf8'), 'text/html');
+      return { url, employeeName: input.employeeName, taxYear: input.taxYear, totalGross, totalTax, totalNI, totalNet, periods: taxYearRecords.length };
+    }),
+
+  // --- P32 Employer Payment Record ---
+  generateP32: protectedProcedure
+    .input(z.object({
+      taxYear: z.string(), // e.g. "2024-25"
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ADMIN_ROLES.includes(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN' });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+
+      const [startYr] = input.taxYear.split('-');
+      const yearNum = parseInt(startYr);
+
+      const allRecords = await db.select().from(payrollV2);
+      const taxYearRecords = allRecords.filter(r => {
+        if (!r.year || !r.month) return false;
+        if (r.year === yearNum && r.month >= 4) return true;
+        if (r.year === yearNum + 1 && r.month <= 3) return true;
+        return false;
+      });
+
+      // Group by month label
+      const monthly: Record<string, { incomeTax: number; ni: number; gross: number; count: number }> = {};
+      const monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      for (const r of taxYearRecords) {
+        const label = `${monthNames[r.month!]} ${r.year}`;
+        if (!monthly[label]) monthly[label] = { incomeTax: 0, ni: 0, gross: 0, count: 0 };
+        monthly[label].incomeTax += Number(r.incomeTax ?? 0);
+        monthly[label].ni += Number(r.nationalInsurance ?? 0);
+        monthly[label].gross += Number(r.grossPay ?? 0);
+        monthly[label].count++;
+      }
+
+      const rows = Object.entries(monthly);
+      const totals = rows.reduce((acc, [, v]) => {
+        acc.incomeTax += v.incomeTax; acc.ni += v.ni; acc.gross += v.gross;
+        return acc;
+      }, { incomeTax: 0, ni: 0, gross: 0 });
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        body{font-family:Arial,sans-serif;font-size:12px;color:#000;margin:20px}
+        h1{font-size:18px;border-bottom:2px solid #000;padding-bottom:8px}
+        table{width:100%;border-collapse:collapse;margin-top:12px}
+        td,th{padding:6px 8px;border:1px solid #ccc;text-align:right}
+        th:first-child,td:first-child{text-align:left}
+        th{background:#f5f5f5;font-weight:bold}
+        .total{font-weight:bold;background:#f9f9f9}
+        .footer{margin-top:30px;font-size:10px;color:#666;border-top:1px solid #ccc;padding-top:8px}
+      </style></head><body>
+        <h1>P32 - Employer Payment Record</h1>
+        <p><strong>Tax Year:</strong> ${input.taxYear} | <strong>Employer:</strong> Hibba Education Trust</p>
+        <table>
+          <tr><th>Month</th><th>Gross Pay</th><th>Income Tax</th><th>Employee NI</th><th>Total Due to HMRC</th><th>Employees</th></tr>
+          ${rows.map(([month, v]) => `<tr>
+            <td>${month}</td>
+            <td>&#163;${v.gross.toFixed(2)}</td>
+            <td>&#163;${v.incomeTax.toFixed(2)}</td>
+            <td>&#163;${v.ni.toFixed(2)}</td>
+            <td>&#163;${(v.incomeTax + v.ni).toFixed(2)}</td>
+            <td>${v.count}</td>
+          </tr>`).join('')}
+          <tr class="total">
+            <td>TOTAL</td>
+            <td>&#163;${totals.gross.toFixed(2)}</td>
+            <td>&#163;${totals.incomeTax.toFixed(2)}</td>
+            <td>&#163;${totals.ni.toFixed(2)}</td>
+            <td>&#163;${(totals.incomeTax + totals.ni).toFixed(2)}</td>
+            <td>${taxYearRecords.length}</td>
+          </tr>
+        </table>
+        <div class="footer">
+          <p>This P32 is for internal records. Submit RTI FPS/EPS to HMRC via your payroll software.</p>
+          <p>Generated: ${new Date().toLocaleDateString('en-GB')}</p>
+        </div>
+      </body></html>`;
+
+      const { storagePut } = await import('../storage');
+      const { nanoid } = await import('nanoid');
+      const key = `p32/${input.taxYear}-${nanoid(6)}.html`;
+      const { url } = await storagePut(key, Buffer.from(html, 'utf8'), 'text/html');
+      return { url, taxYear: input.taxYear, months: rows.length, ...totals };
+    }),
 });
 
 export type PayrollV3Router = typeof payrollV3Router;

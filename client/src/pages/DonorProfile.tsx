@@ -259,6 +259,7 @@ export default function DonorProfile() {
   if (!donorId) return null;
 
   return (
+      <>
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
@@ -969,5 +970,6 @@ export default function DonorProfile() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
   );
 }

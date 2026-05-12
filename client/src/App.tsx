@@ -61,6 +61,7 @@ import BillsUtilitiesPage from "./pages/BillsUtilities";
 import TrainingTrackerPage from "./pages/TrainingTracker";
 import LbmwCorrespondencePage from "./pages/LbmwCorrespondence";
 import TrusteeDashboardPage from "./pages/TrusteeDashboard";
+import FacilitiesPage from "./pages/Facilities";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay", "/give"];
 
@@ -134,6 +135,7 @@ function Router() {
         <Route path="/training-tracker" component={TrainingTrackerPage} />
         <Route path="/lbmw-correspondence" component={LbmwCorrespondencePage} />
         <Route path="/trustee-dashboard" component={TrusteeDashboardPage} />
+        <Route path="/facilities" component={FacilitiesPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />

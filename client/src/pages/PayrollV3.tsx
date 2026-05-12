@@ -80,6 +80,16 @@ export default function PayrollV3Page() {
     onError: (e) => toast.error(e.message),
   });
 
+  const generateP60 = trpc.payrollV3.generateP60.useMutation({
+    onSuccess: (d) => toast.success(`P60 generated for ${d.employeeName}`),
+    onError: (e) => toast.error(e.message),
+  });
+
+  const generateP32 = trpc.payrollV3.generateP32.useMutation({
+    onSuccess: (d) => toast.success(`P32 generated for ${d.taxYear}`),
+    onError: (e) => toast.error(e.message),
+  });
+
   const extractFromPayslip = trpc.payrollV3.extractFromPayslip.useMutation({
     onSuccess: (d) => { setOcrFields(d.fields); setOcrConfirmed(false); },
     onError: (e) => toast.error(e.message),
@@ -382,6 +392,89 @@ export default function PayrollV3Page() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Year-End Documents: P60 and P32 */}
+      <div className="mt-8 border-t pt-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-1">Year-End Documents</h2>
+        <p className="text-sm text-gray-500 mb-4">Generate P60 (per employee) and P32 (employer payment record) for HMRC compliance.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* P60 */}
+          <div className="border rounded-lg p-4 bg-gray-50">
+            <h3 className="font-medium text-gray-800 mb-2">P60 - Employee Year-End Certificate</h3>
+            <p className="text-xs text-gray-500 mb-3">Generates a P60 for a single employee showing total pay, tax and NI for the selected tax year.</p>
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs">Employee ID</Label>
+                <Input type="number" placeholder="e.g. 1" className="h-8 text-sm" id="p60-emp-id" />
+              </div>
+              <div>
+                <Label className="text-xs">Employee Name</Label>
+                <Input placeholder="e.g. Ahmed Khan" className="h-8 text-sm" id="p60-emp-name" />
+              </div>
+              <div>
+                <Label className="text-xs">Tax Year</Label>
+                <Input
+                  placeholder="e.g. 2024-25"
+                  className="h-8 text-sm"
+                  id="p60-tax-year"
+                  defaultValue={`${new Date().getFullYear() - 1}-${String(new Date().getFullYear()).slice(2)}`}
+                />
+              </div>
+              <Button
+                size="sm" className="w-full mt-1"
+                onClick={() => {
+                  const empId = parseInt((document.getElementById('p60-emp-id') as HTMLInputElement)?.value ?? '0');
+                  const empName = (document.getElementById('p60-emp-name') as HTMLInputElement)?.value ?? '';
+                  const taxYear = (document.getElementById('p60-tax-year') as HTMLInputElement)?.value ?? '';
+                  if (!empId || !empName || !taxYear) { toast.error('Please fill in all fields'); return; }
+                  generateP60.mutate({ employeeId: empId, employeeName: empName, taxYear });
+                }}
+                disabled={generateP60.isPending}
+              >
+                {generateP60.isPending ? 'Generating...' : 'Generate P60'}
+              </Button>
+              {generateP60.data && (
+                <a href={generateP60.data.url} target="_blank" rel="noreferrer" className="block text-center text-xs text-blue-600 underline mt-1">
+                  Download P60 for {generateP60.data.employeeName} ({generateP60.data.taxYear})
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/* P32 */}
+          <div className="border rounded-lg p-4 bg-gray-50">
+            <h3 className="font-medium text-gray-800 mb-2">P32 - Employer Payment Record</h3>
+            <p className="text-xs text-gray-500 mb-3">Generates a P32 showing monthly totals of tax and NI due to HMRC across all employees.</p>
+            <div className="space-y-2">
+              <div>
+                <Label className="text-xs">Tax Year</Label>
+                <Input
+                  placeholder="e.g. 2024-25"
+                  className="h-8 text-sm"
+                  id="p32-tax-year"
+                  defaultValue={`${new Date().getFullYear() - 1}-${String(new Date().getFullYear()).slice(2)}`}
+                />
+              </div>
+              <Button
+                size="sm" className="w-full mt-1"
+                onClick={() => {
+                  const taxYear = (document.getElementById('p32-tax-year') as HTMLInputElement)?.value ?? '';
+                  if (!taxYear) { toast.error('Please enter a tax year'); return; }
+                  generateP32.mutate({ taxYear });
+                }}
+                disabled={generateP32.isPending}
+              >
+                {generateP32.isPending ? 'Generating...' : 'Generate P32'}
+              </Button>
+              {generateP32.data && (
+                <a href={generateP32.data.url} target="_blank" rel="noreferrer" className="block text-center text-xs text-blue-600 underline mt-1">
+                  Download P32 ({generateP32.data.taxYear}) - {generateP32.data.months} months
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

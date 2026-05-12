@@ -480,6 +480,7 @@ export default function ComplianceCockpit() {
   const isAdmin = ["superadmin", "trustee", "manager", "admin"].includes(user?.role ?? "");
 
   return (
+      <>
       <div className="space-y-5">
         {/* Header */}
         <div className="page-header">
@@ -931,5 +932,6 @@ export default function ComplianceCockpit() {
           />
         </DialogContent>
       </Dialog>
+      </>
   );
 }

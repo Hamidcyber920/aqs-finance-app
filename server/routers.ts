@@ -37,6 +37,7 @@ import { aiScannerRouter } from "./routers/aiScanner";
 import { trusteeFinanceRouter } from "./routers/trusteeFinance";
 import { qrCodesRouter } from "./routers/qrCodes";
 import { recognitionTiersRouter } from "./routers/recognitionTiers";
+import { facilitiesRouter } from "./routers/facilities";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -401,6 +402,7 @@ export const appRouter = router({
   supplierContacts: supplierContactsRouter,
   aiScanner: aiScannerRouter,
   trusteeFinance: trusteeFinanceRouter,
+  facilities: facilitiesRouter,
   // ─── SUCCESSIONN & DELEGATION ──────────────────────────────────────────────────
   succession: router({
     /** Get current succession status: who is the delegate, last owner activity, inactivity days */
@@ -2684,6 +2686,9 @@ export const appRouter = router({
         // Sign-off
         signedByManager: z.string().optional(),
         signedByTrustee: z.string().optional(),
+        // Fund type
+        isRestricted: z.boolean().optional(),
+        restrictedFundName: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         let catId = input.categoryId ?? 1;
@@ -2728,6 +2733,8 @@ export const appRouter = router({
           signedAt: hasSignOff ? new Date() : null,
           periodStart: input.periodStart ? new Date(input.periodStart + 'T12:00:00') : null,
           periodEnd: input.periodEnd ? new Date(input.periodEnd + 'T12:00:00') : null,
+          isRestricted: input.isRestricted ?? false,
+          restrictedFundName: input.restrictedFundName ?? null,
         } as any);
       }),
     update: adminProcedure

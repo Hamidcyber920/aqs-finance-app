@@ -88,6 +88,7 @@ const adminItems = [
   { icon: GraduationCap, label: "Training Tracker", path: "/training-tracker" },
   { icon: MailSearch, label: "LBMW Correspondence", path: "/lbmw-correspondence" },
   { icon: ShieldCheck, label: "Trustee Dashboard", path: "/trustee-dashboard" },
+  { icon: Building2, label: "Facilities & Bookings", path: "/facilities" },
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Shield, label: "Audit Trail", path: "/audit-trail" },
