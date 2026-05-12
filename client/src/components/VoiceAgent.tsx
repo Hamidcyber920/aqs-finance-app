@@ -50,7 +50,7 @@ class VoiceConnection {
     this.onStatusChange = onStatusChange;
   }
 
-  connect(token: string, screenContext: string, entityContext?: string, language?: string) {
+  connect(screenContext: string, entityContext?: string, language?: string) {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/api/voice`;
 
@@ -64,7 +64,7 @@ class VoiceConnection {
         this.ws?.send(
           JSON.stringify({
             type: "start_session",
-            sessionToken: token,
+            
             screenContext,
             entityContext,
             language: language || "en-GB",
@@ -265,18 +265,9 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
       return;
     }
 
-    // Get session token from cookie
-    const cookies = document.cookie.split(";").map((c) => c.trim());
-    const sessionCookie = cookies.find((c) => c.startsWith("session="));
-    const token = sessionCookie?.split("=")[1];
-
-    if (!token) {
-      toast.error("Session expired. Please log in again.");
-      return;
-    }
-
+    // Auth is handled server-side via the httpOnly cookie in the WebSocket upgrade request
     const conn = new VoiceConnection(handleMessage, setStatus);
-    conn.connect(token, screenContext, entityContext);
+    conn.connect(screenContext, entityContext);
     connectionRef.current = conn;
   }, [user, screenContext, entityContext, handleMessage]);
 

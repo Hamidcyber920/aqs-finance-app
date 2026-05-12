@@ -1786,3 +1786,11 @@
 - [x] Database tables created (voice_sessions, voice_tool_calls, voice_transcripts, voice_cost_tracking, voice_feature_flags, voice_review_queue)
 - [x] Feature flags seeded for 24 tools across 4 rollout phases
 - [x] 314 tests passing (3 pre-existing credential failures only)
+
+### Bug Fix: Voice Agent Session Error (May 12 2026)
+- [x] Fix "Session expired. Please log in again" error when clicking Start Session in Voice Assistant
+- [x] Rewrote voiceGateway.ts auth to use SDK cookie from WebSocket upgrade headers (httpOnly cookie)
+- [x] Removed client-side cookie reading from VoiceAgent.tsx (was impossible due to httpOnly)
+- [x] Fixed all schema column mismatches (speaker→role, text→content, flagName→toolName, etc.)
+- [x] Used voiceReviewQueue table for correct_this/flag_for_review instead of non-existent voiceTranscripts columns
+- [x] 314 tests passing, production build clean
