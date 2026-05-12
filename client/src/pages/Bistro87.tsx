@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   UtensilsCrossed, Plus, Edit, Trash2, ShoppingCart, CheckCircle,
   TrendingUp, Clock, ChefHat, BarChart3, X, RefreshCw
@@ -60,12 +60,12 @@ export default function Bistro87() {
   const { data: stats } = trpc.bistro.getRevenueStats.useQuery({ days: 30 });
 
   // --- Mutations ---
-  const addMenuItem = trpc.bistro.addMenuItem.useMutation({ onSuccess: () => { refetchMenu(); setMenuDialog(false); toast({ title: "Menu item added" }); } });
-  const updateMenuItem = trpc.bistro.updateMenuItem.useMutation({ onSuccess: () => { refetchMenu(); setMenuDialog(false); toast({ title: "Menu item updated" }); } });
-  const deleteMenuItem = trpc.bistro.deleteMenuItem.useMutation({ onSuccess: () => { refetchMenu(); toast({ title: "Item removed" }); } });
-  const createOrder = trpc.bistro.createOrder.useMutation({ onSuccess: () => { refetchOrders(); setOrderDialog(false); setCart([]); toast({ title: "Order created" }); } });
+  const addMenuItem = trpc.bistro.addMenuItem.useMutation({ onSuccess: () => { refetchMenu(); setMenuDialog(false); toast("Menu item added"); } });
+  const updateMenuItem = trpc.bistro.updateMenuItem.useMutation({ onSuccess: () => { refetchMenu(); setMenuDialog(false); toast("Menu item updated"); } });
+  const deleteMenuItem = trpc.bistro.deleteMenuItem.useMutation({ onSuccess: () => { refetchMenu(); toast("Item removed"); } });
+  const createOrder = trpc.bistro.createOrder.useMutation({ onSuccess: () => { refetchOrders(); setOrderDialog(false); setCart([]); toast("Order created"); } });
   const updateOrderStatus = trpc.bistro.updateOrderStatus.useMutation({ onSuccess: () => { refetchOrders(); } });
-  const closeTill = trpc.bistro.closeDailyTill.useMutation({ onSuccess: () => { toast({ title: "Daily till closed" }); } });
+  const closeTill = trpc.bistro.closeDailyTill.useMutation({ onSuccess: () => { toast("Daily till closed"); } });
 
   // --- Grouped menu ---
   const groupedMenu = useMemo(() => {
@@ -119,7 +119,7 @@ export default function Bistro87() {
   }
 
   function placeOrder() {
-    if (cart.length === 0) { toast({ title: "Add items to the order first", variant: "destructive" }); return; }
+    if (cart.length === 0) { toast.error("Add items to the order first"); return; }
     createOrder.mutate({ ...orderForm, items: cart });
   }
 
