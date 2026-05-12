@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form";
 import {
   Calendar, ChevronDown, ChevronUp, CheckCircle2, XCircle, Clock,
   TrendingDown, PoundSterling, AlertTriangle, Plus, RefreshCw,
-  Check, Pause, RotateCcw, StickyNote, FileText, Building2
+  Check, Pause, RotateCcw, StickyNote, FileText, Building2, Download
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
@@ -133,6 +133,10 @@ function CashFlowPlanner() {
     onError: (e) => toast.error(e.message),
   });
 
+  const exportCSVMutation = trpc.trusteeFinance.exportScheduledCSV.useMutation({
+    onSuccess: (res) => { window.open(res.url, "_blank"); toast.success("CSV downloaded"); },
+    onError: (e) => toast.error(e.message),
+  });
   const addManualMutation = trpc.bills.addManualScheduled.useMutation({
     onSuccess: () => { toast.success("Manual payment added"); utils.bills.listScheduled.invalidate(); setAddManualOpen(false); setManualForm({ description:"",supplier:"",building:"",dueDate:"",amount:"",note:"" }); },
     onError: (e) => toast.error(e.message),
@@ -203,6 +207,11 @@ function CashFlowPlanner() {
         <Button size="sm" variant="outline" onClick={() => setAddManualOpen(true)}
           style={{ background:"rgba(99,91,255,0.08)",border:"1px solid rgba(99,91,255,0.2)",color:"#a78bfa",fontSize:12 }}>
           <Plus size={13} className="mr-1"/> Add Manual
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => exportCSVMutation.mutate({ from: fromDate, to: toDate, status: "all" })}
+          disabled={exportCSVMutation.isPending}
+          style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.7)",fontSize:12 }}>
+          <Download size={13} className="mr-1"/> {exportCSVMutation.isPending ? "Exporting…" : "Export CSV"}
         </Button>
         {selectedIds.size > 0 && (
           <>

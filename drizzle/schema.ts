@@ -1,6 +1,5 @@
 import {
   int,
-  bigint,
   mysqlEnum,
   mysqlTable,
   text,
@@ -1901,6 +1900,7 @@ export const utilityAccounts = mysqlTable("utility_accounts", {
   lastBillAmount: decimal("lastBillAmount", { precision: 10, scale: 2 }),
   notes: text("notes"),
   supplierContactId: int("supplierContactId"),   // FK to supplier_contacts.id (nullable)
+  monthlyBudget: decimal("monthlyBudget", { precision: 10, scale: 2 }),  // optional monthly budget for this account
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -2084,11 +2084,11 @@ export const scheduledPayments = mysqlTable("scheduled_payments", {
   // Status
   status: varchar("status", { length: 20 }).notNull().default("pending"), // pending | paid | held
   // Paid stamp
-  paidAt: bigint("paidAt", { mode: "number" }),
+  paidAt: int("paidAt"),
   paidByUserId: int("paidByUserId"),
   paidByName: varchar("paidByName", { length: 200 }),
   // Held stamp
-  heldAt: bigint("heldAt", { mode: "number" }),
+  heldAt: int("heldAt"),
   heldByUserId: int("heldByUserId"),
   heldByName: varchar("heldByName", { length: 200 }),
   // Note (required when held, optional otherwise)

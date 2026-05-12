@@ -498,6 +498,20 @@
       "when": 1778577963325,
       "tag": "0070_elite_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "5",
+      "when": 1778580471409,
+      "tag": "0071_woozy_lorna_dane",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "5",
+      "when": 1778580780940,
+      "tag": "0072_flowery_colonel_america",
+      "breakpoints": true
     }
   ]
 }

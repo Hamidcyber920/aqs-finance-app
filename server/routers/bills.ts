@@ -87,6 +87,7 @@ export const billsRouter = router({
       billingDay: z.number().int().min(1).max(31).optional(),
       notes: z.string().optional(),
       supplierContactId: z.number().optional().nullable(),
+      monthlyBudget: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -104,6 +105,7 @@ export const billsRouter = router({
         billingDay: input.billingDay ?? null,
         notes: input.notes ?? null,
         supplierContactId: input.supplierContactId ?? null,
+        monthlyBudget: input.monthlyBudget ?? null,
       }).$returningId();
       return { id: result.id };
     }),
@@ -123,6 +125,7 @@ export const billsRouter = router({
       billingDay: z.number().int().min(1).max(31).optional().nullable(),
       notes: z.string().optional(),
       supplierContactId: z.number().optional().nullable(),
+      monthlyBudget: z.string().optional().nullable(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();

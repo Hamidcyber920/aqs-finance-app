@@ -19,6 +19,7 @@ import {
   Receipt, ScanLine, Users,
 } from "lucide-react";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
+import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 
 const FALLBACK_BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"];
 const FALLBACK_CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"];
@@ -581,6 +582,7 @@ export default function BillsUtilities() {
     billingDay: "",
     notes: "",
     supplierContactId: null as number | null,
+    monthlyBudget: "",
   });
 
   const [billForm, setBillForm] = useState({
@@ -620,7 +622,7 @@ export default function BillsUtilities() {
       utils.bills.listAccounts.invalidate();
       utils.bills.summary.invalidate();
       setShowAddAccount(false);
-      setAccountForm({ building: "QLH", supplier: "", accountNumber: "", category: "electricity", tariff: "", contractStartDate: "", contractEndDate: "", mpan: "", directDebitAmount: "", billingDay: "", notes: "", supplierContactId: null });
+      setAccountForm({ building: "QLH", supplier: "", accountNumber: "", category: "electricity", tariff: "", contractStartDate: "", contractEndDate: "", mpan: "", directDebitAmount: "", billingDay: "", notes: "", supplierContactId: null, monthlyBudget: "" });
       toast.success("Account added successfully.");
     },
     onError: (e) => toast.error(e.message),
@@ -839,8 +841,38 @@ export default function BillsUtilities() {
                         {accountDetail.account.contractStartDate && <div><span className="text-muted-foreground">Contract Start:</span> <span className="font-medium">{new Date(accountDetail.account.contractStartDate).toLocaleDateString()}</span></div>}
                         {accountDetail.account.contractEndDate && <div><span className="text-muted-foreground">Contract End:</span> <span className={`font-medium ${new Date(accountDetail.account.contractEndDate) < new Date() ? "text-red-600" : ""}`}>{new Date(accountDetail.account.contractEndDate).toLocaleDateString()}</span></div>}
                         {accountDetail.avg3m !== null && <div><span className="text-muted-foreground">3-Month Avg:</span> <span className="font-medium">£{parseFloat(accountDetail.avg3m!.toString()).toFixed(2)}</span></div>}
+                        {accountDetail.account.monthlyBudget && <div><span className="text-muted-foreground">Monthly Budget:</span> <span className="font-medium text-blue-600">£{parseFloat(accountDetail.account.monthlyBudget).toFixed(2)}</span></div>}
                       </div>
                       {accountDetail.account.notes && <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">{accountDetail.account.notes}</p>}
+
+                      {/* Sparkline: last 6 bills */}
+                      {accountDetail.bills.length >= 2 && (() => {
+                        const sparkData = [...accountDetail.bills]
+                          .sort((a: any, b: any) => new Date(a.billDate).getTime() - new Date(b.billDate).getTime())
+                          .slice(-6)
+                          .map((b: any) => ({ date: new Date(b.billDate).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }), amount: parseFloat(b.amount) }));
+                        const budget = accountDetail.account.monthlyBudget ? parseFloat(accountDetail.account.monthlyBudget) : null;
+                        const latest = sparkData[sparkData.length - 1]?.amount ?? 0;
+                        const overBudget = budget !== null && latest > budget;
+                        return (
+                          <div className="p-3 bg-muted/30 rounded-lg">
+                            <div className="flex items-center justify-between mb-1">
+                              <p className="text-xs font-medium text-muted-foreground">Bill trend (last {sparkData.length})</p>
+                              {budget !== null && (
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${overBudget ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+                                  {overBudget ? "Over budget" : "Within budget"}
+                                </span>
+                              )}
+                            </div>
+                            <ResponsiveContainer width="100%" height={60}>
+                              <LineChart data={sparkData}>
+                                <Line type="monotone" dataKey="amount" stroke={overBudget ? "#dc2626" : "#1a4731"} strokeWidth={2} dot={{ r: 3 }} />
+                                <RechartsTooltip formatter={(v: number) => [`£${v.toFixed(2)}`, "Amount"]} labelFormatter={(l) => l} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        );
+                      })()}
 
                       {/* Supplier Contact inline card */}
                       {(accountDetail.account as any).supplierContact && (
@@ -956,6 +988,9 @@ export default function BillsUtilities() {
               <div><Label>Monthly Direct Debit (£)</Label><Input type="number" step="0.01" value={accountForm.directDebitAmount} onChange={e => setAccountForm(f => ({ ...f, directDebitAmount: e.target.value }))} placeholder="0.00" /></div>
               <div><Label>DD Day of Month (1–31)</Label><Input type="number" min="1" max="31" value={accountForm.billingDay} onChange={e => setAccountForm(f => ({ ...f, billingDay: e.target.value }))} placeholder="e.g. 15" /></div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Monthly Budget (£)</Label><Input type="number" step="0.01" value={accountForm.monthlyBudget} onChange={e => setAccountForm(f => ({ ...f, monthlyBudget: e.target.value }))} placeholder="0.00" /></div>
+            </div>
             <div><Label>Notes</Label><Textarea value={accountForm.notes} onChange={e => setAccountForm(f => ({ ...f, notes: e.target.value }))} rows={2} /></div>
             <div>
               <Label>Supplier Contact (optional)</Label>
@@ -1011,6 +1046,9 @@ export default function BillsUtilities() {
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>DD Day of Month (1–31)</Label><Input type="number" min="1" max="31" value={editAccount.billingDay ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, billingDay: e.target.value ? parseInt(e.target.value) : null }))} placeholder="e.g. 15" /></div>
                 <div><Label>MPAN / Meter Ref</Label><Input value={editAccount.mpan ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, mpan: e.target.value }))} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Monthly Budget (£)</Label><Input type="number" step="0.01" value={editAccount.monthlyBudget ?? ""} onChange={e => setEditAccount((a: any) => ({ ...a, monthlyBudget: e.target.value }))} placeholder="0.00" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Contract Start</Label><Input type="date" value={editAccount.contractStartDate ? new Date(editAccount.contractStartDate).toISOString().split("T")[0] : ""} onChange={e => setEditAccount((a: any) => ({ ...a, contractStartDate: e.target.value }))} /></div>

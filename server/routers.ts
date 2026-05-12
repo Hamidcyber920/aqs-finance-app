@@ -34,6 +34,7 @@ import { trainingRouter } from "./routers/training";
 import { lbmwGmailRouter } from "./routers/lbmwGmail";
 import { supplierContactsRouter } from "./routers/supplierContacts";
 import { aiScannerRouter } from "./routers/aiScanner";
+import { trusteeFinanceRouter } from "./routers/trusteeFinance";
 import { qrCodesRouter } from "./routers/qrCodes";
 import { recognitionTiersRouter } from "./routers/recognitionTiers";
 import {
@@ -399,6 +400,7 @@ export const appRouter = router({
   lbmwGmail: lbmwGmailRouter,
   supplierContacts: supplierContactsRouter,
   aiScanner: aiScannerRouter,
+  trusteeFinance: trusteeFinanceRouter,
   // ─── SUCCESSIONN & DELEGATION ──────────────────────────────────────────────────
   succession: router({
     /** Get current succession status: who is the delegate, last owner activity, inactivity days */

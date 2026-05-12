@@ -1622,3 +1622,15 @@
 - [x] Cash Flow Planner — Add Manual Payment button: description, amount, due date, building, category, note fields; saves to scheduled_payments with source=manual
 - [x] Cash Flow Planner — Weekly payment digest email: every Monday 7 AM, email admin/trustees with all payments due in the next 7 days, held payments highlighted
 - [x] Bills & Utilities — Per-account Payment History timeline: tab/section on each account showing all past bills and DD payments in chronological order
+
+## Round 17 — Complete Financial Management (May 12, 2026)
+- [ ] Cash Flow Planner — "Generate 90-day DDs" button auto-populates next 3 months of direct debits from active accounts
+- [ ] Bills & Utilities — Payment History CSV export per account
+- [x] Bills & Utilities — Consumption/usage sparkline chart on each account card (last 6 months of bills)
+- [ ] Bills & Utilities — Supplier notes field on account cards (free-text notes per supplier)
+- [x] Bills & Utilities — Monthly budget per account (budget vs actual spend bar)
+- [x] Trustee Financial Dashboard — dedicated /trustee-dashboard page: income vs expenses chart, cash position, budget vs actuals, approval queue widget
+- [x] Expense approval workflow — manager/trustee sign-off on expenses with date-time-user stamp and confirmation prompt
+- [x] Monthly Close Report — auto-generate PDF summary (income, expenses, bills, cash flow) downloadable and emailable to trustees
+- [ ] Cash Flow Planner — running balance column showing projected cash position after each payment
+- [ ] Monthly Expenses — "Awaiting Approval" badge on unapproved entries visible to managers/trustees
