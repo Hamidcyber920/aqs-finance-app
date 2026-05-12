@@ -136,7 +136,7 @@ export default function Bistro87() {
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-orange-500/20">
             <UtensilsCrossed className="h-6 w-6 text-orange-400" />
@@ -146,7 +146,7 @@ export default function Bistro87() {
             <p className="text-sm text-slate-400">Restaurant & Cafe Management</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => { refetchOrders(); refetchMenu(); }}>
             <RefreshCw className="h-4 w-4 mr-1" /> Refresh
           </Button>
@@ -187,18 +187,20 @@ export default function Bistro87() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-slate-800 border-slate-700 mb-4">
-          <TabsTrigger value="orders"><Clock className="h-4 w-4 mr-1" />Live Orders</TabsTrigger>
-          <TabsTrigger value="menu"><ChefHat className="h-4 w-4 mr-1" />Menu</TabsTrigger>
-          <TabsTrigger value="analytics"><BarChart3 className="h-4 w-4 mr-1" />Analytics</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1 pb-1 mb-4">
+          <TabsList className="bg-slate-800 border-slate-700 inline-flex w-max min-w-full h-auto gap-1 p-1">
+            <TabsTrigger value="orders" className="whitespace-nowrap"><Clock className="h-4 w-4 mr-1" />Live Orders</TabsTrigger>
+            <TabsTrigger value="menu" className="whitespace-nowrap"><ChefHat className="h-4 w-4 mr-1" />Menu</TabsTrigger>
+            <TabsTrigger value="analytics" className="whitespace-nowrap"><BarChart3 className="h-4 w-4 mr-1" />Analytics</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* LIVE ORDERS TAB */}
         <TabsContent value="orders">
-          <div className="flex gap-2 mb-4 flex-wrap">
+          <div className="flex gap-2 mb-4 flex-wrap overflow-x-auto pb-1">
             {["pending", "preparing", "ready", "served", "all"].map(s => (
               <Button key={s} size="sm" variant={orderFilter === s ? "default" : "outline"}
-                className={orderFilter === s ? "bg-orange-600 hover:bg-orange-700" : ""}
+                className={`whitespace-nowrap ${orderFilter === s ? "bg-orange-600 hover:bg-orange-700" : ""}`}
                 onClick={() => setOrderFilter(s)}>
                 {s.charAt(0).toUpperCase() + s.slice(1)}
               </Button>

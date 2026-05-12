@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `bank_connections` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`accessToken` text NOT NULL,\n\t`refreshToken` text NOT NULL,\n\t`bankName` varchar(200),\n\t`accountId` varchar(200),\n\t`accountName` varchar(200),\n\t`currency` varchar(10) DEFAULT 'GBP',\n\t`expiresAt` int,\n\t`isActive` boolean NOT NULL DEFAULT true,\n\t`lastSyncedAt` int,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `bank_connections_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE `bank_connections` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`accessToken` text NOT NULL,\n\t`refreshToken` text NOT NULL,\n\t`bankName` varchar(200),\n\t`accountId` varchar(200),\n\t`accountName` varchar(200),\n\t`currency` varchar(10) DEFAULT 'GBP',\n\t`expiresAt` int,\n\t`isActive` boolean NOT NULL DEFAULT true,\n\t`lastSyncedAt` int,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `bank_connections_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 472
+}

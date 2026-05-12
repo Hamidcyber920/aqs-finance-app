@@ -2229,3 +2229,23 @@ export const bistroDailyTotals = mysqlTable("bistro_daily_totals", {
 });
 export type BistroDailyTotal = typeof bistroDailyTotals.$inferSelect;
 export type InsertBistroDailyTotal = typeof bistroDailyTotals.$inferInsert;
+
+// ─── OPEN BANKING (TRUELAYER) ─────────────────────────────────────────────────
+
+export const bankConnections = mysqlTable("bank_connections", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  accessToken: text("accessToken").notNull(),
+  refreshToken: text("refreshToken").notNull(),
+  bankName: varchar("bankName", { length: 200 }),
+  accountId: varchar("accountId", { length: 200 }),
+  accountName: varchar("accountName", { length: 200 }),
+  currency: varchar("currency", { length: 10 }).default("GBP"),
+  expiresAt: int("expiresAt"), // unix timestamp ms
+  isActive: boolean("isActive").default(true).notNull(),
+  lastSyncedAt: int("lastSyncedAt"), // unix timestamp ms
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BankConnection = typeof bankConnections.$inferSelect;
+export type InsertBankConnection = typeof bankConnections.$inferInsert;

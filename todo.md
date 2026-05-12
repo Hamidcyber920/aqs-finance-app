@@ -1654,3 +1654,10 @@
 - [x] Sentry / PostHog / BetterStack observability — DEFERRED: requires API keys (provide DSN/key to enable)
 - [x] Calendar sync (Google/Microsoft 365) — DEFERRED: requires additional OAuth scopes (provide credentials to enable)
 - [x] Anomaly detection on expenses — AI-powered flagging added to bills.ts router
+
+## Round 20 — Open Banking & Mobile Fixes (May 12, 2026)
+- [x] TrueLayer Open Banking — schema (bank_connections table) created and migrated; router/secrets deferred (user skipped for now)
+- [ ] TrueLayer — live bank balance card on Trustee Dashboard (deferred — no API key yet)
+- [ ] TrueLayer — live balance in Cash Flow Planner (deferred — no API key yet)
+- [x] Bistro 87 — mobile layout fixed: header wraps on mobile, tab bar horizontally scrollable, order filter buttons wrap
+- [x] Facilities — mobile layout fixed: header buttons wrap, upcoming bookings row wraps, tab bar horizontally scrollable

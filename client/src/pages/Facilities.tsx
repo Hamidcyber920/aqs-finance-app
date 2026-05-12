@@ -201,7 +201,7 @@ export default function Facilities() {
             <p className="text-sm text-white/50">Manage bookable spaces across QLH, Bistro 87 & Accommodation</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => setShowNewRoom(true)} className="border-white/20 text-white hover:bg-white/10">
             <Plus className="w-4 h-4 mr-1" /> Add Room
           </Button>
@@ -240,12 +240,12 @@ export default function Facilities() {
           <CardContent>
             <div className="space-y-2">
               {stats.data.upcoming.map((u: any) => (
-                <div key={u.booking.id} className="flex items-center justify-between p-2 rounded-lg bg-white/5 text-sm">
-                  <div>
+                <div key={u.booking.id} className="flex flex-wrap items-start justify-between gap-1 p-2 rounded-lg bg-white/5 text-sm">
+                  <div className="flex-1 min-w-0">
                     <span className="font-medium">{u.booking.title}</span>
                     <span className="text-white/50 ml-2">{u.roomName}</span>
                   </div>
-                  <span className="text-white/60 text-xs">{fmtDt(u.booking.startDatetime)}</span>
+                  <span className="text-white/60 text-xs whitespace-nowrap">{fmtDt(u.booking.startDatetime)}</span>
                 </div>
               ))}
             </div>
@@ -255,10 +255,12 @@ export default function Facilities() {
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-white/5 border border-white/10">
-          <TabsTrigger value="bookings" className="data-[state=active]:bg-indigo-600">Bookings</TabsTrigger>
-          <TabsTrigger value="rooms" className="data-[state=active]:bg-indigo-600">Rooms</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-1 px-1 pb-1">
+          <TabsList className="bg-white/5 border border-white/10 inline-flex w-max min-w-full h-auto gap-1 p-1">
+            <TabsTrigger value="bookings" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Bookings</TabsTrigger>
+            <TabsTrigger value="rooms" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Rooms</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Bookings Tab */}
         <TabsContent value="bookings" className="mt-4">
