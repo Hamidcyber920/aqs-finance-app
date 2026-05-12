@@ -1874,3 +1874,92 @@ export const donorCommsLog = mysqlTable("donor_comms_log", {
 });
 export type DonorCommsLog = typeof donorCommsLog.$inferSelect;
 export type InsertDonorCommsLog = typeof donorCommsLog.$inferInsert;
+
+// ─── BILLS & UTILITIES ────────────────────────────────────────────────────────
+// Tracks utility accounts (electricity, gas, water, broadband) per building
+// and individual bills for anomaly detection and contract renewal alerts.
+export const utilityAccounts = mysqlTable("utility_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  building: varchar("building", { length: 100 }).notNull(),   // e.g. "QLH", "Bistro", "Accommodation"
+  supplier: varchar("supplier", { length: 150 }).notNull(),
+  accountNumber: varchar("accountNumber", { length: 100 }),
+  category: mysqlEnum("category", ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"]).notNull(),
+  tariff: varchar("tariff", { length: 200 }),
+  contractStartDate: date("contractStartDate"),
+  contractEndDate: date("contractEndDate"),
+  mpan: varchar("mpan", { length: 50 }),
+  directDebitAmount: decimal("directDebitAmount", { precision: 10, scale: 2 }),
+  lastBillDate: date("lastBillDate"),
+  lastBillAmount: decimal("lastBillAmount", { precision: 10, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type UtilityAccount = typeof utilityAccounts.$inferSelect;
+export type InsertUtilityAccount = typeof utilityAccounts.$inferInsert;
+
+export const utilityBills = mysqlTable("utility_bills", {
+  id: int("id").autoincrement().primaryKey(),
+  accountId: int("accountId").notNull(),
+  billDate: date("billDate").notNull(),
+  periodStart: date("periodStart"),
+  periodEnd: date("periodEnd"),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  consumptionUnits: decimal("consumptionUnits", { precision: 10, scale: 3 }),
+  unitType: varchar("unitType", { length: 20 }),
+  billUrl: varchar("billUrl", { length: 500 }),
+  notes: text("notes"),
+  uploadedById: int("uploadedById"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type UtilityBill = typeof utilityBills.$inferSelect;
+export type InsertUtilityBill = typeof utilityBills.$inferInsert;
+
+// (trainingCourses and trainingRecords are defined above at the compliance section)
+
+// ─── SERIOUS INCIDENT REPORTING ──────────────────────────────────────────────
+// Charity Commission requires serious incidents to be reported promptly.
+// This table tracks all reportable incidents for AQS.
+export const seriousIncidents = mysqlTable("serious_incidents", {
+  id: int("id").autoincrement().primaryKey(),
+  incidentDate: date("incidentDate").notNull(),
+  reportedAt: timestamp("reportedAt").defaultNow().notNull(),
+  reportedByUserId: int("reportedByUserId").notNull(),
+  title: varchar("title", { length: 300 }).notNull(),
+  description: text("description").notNull(),
+  category: mysqlEnum("category", [
+    "financial_crime", "safeguarding", "data_breach", "fraud",
+    "terrorism", "money_laundering", "governance", "other"
+  ]).notNull(),
+  severity: mysqlEnum("severity", ["critical", "high", "medium", "low"]).notNull().default("medium"),
+  status: mysqlEnum("status", ["draft", "reported_to_cc", "under_investigation", "closed"]).notNull().default("draft"),
+  charityCommissionRef: varchar("charityCommissionRef", { length: 100 }),
+  reportedToCC: boolean("reportedToCC").default(false),
+  reportedToCCDate: date("reportedToCCDate"),
+  actionsTaken: text("actionsTaken"),
+  outcome: text("outcome"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type SeriousIncident = typeof seriousIncidents.$inferSelect;
+export type InsertSeriousIncident = typeof seriousIncidents.$inferInsert;
+
+// ─── ANNUAL RETURN TRACKER ────────────────────────────────────────────────────
+// Tracks Charity Commission Annual Return submissions and key deadlines.
+export const annualReturns = mysqlTable("annual_returns", {
+  id: int("id").autoincrement().primaryKey(),
+  financialYear: varchar("financialYear", { length: 20 }).notNull(), // e.g. "2024-25"
+  yearEndDate: date("yearEndDate").notNull(),
+  submissionDeadline: date("submissionDeadline").notNull(),
+  submittedAt: timestamp("submittedAt"),
+  submittedByUserId: int("submittedByUserId"),
+  status: mysqlEnum("status", ["not_started", "in_progress", "submitted", "overdue"]).notNull().default("not_started"),
+  totalIncome: decimal("totalIncome", { precision: 12, scale: 2 }),
+  totalExpenditure: decimal("totalExpenditure", { precision: 12, scale: 2 }),
+  charityCommissionRef: varchar("charityCommissionRef", { length: 100 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AnnualReturn = typeof annualReturns.$inferSelect;
+export type InsertAnnualReturn = typeof annualReturns.$inferInsert;

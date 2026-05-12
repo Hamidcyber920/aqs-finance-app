@@ -57,6 +57,8 @@ import QRCodesPage from "./pages/QRCodes";
 import DonorProfilePage from "./pages/DonorProfile";
 import SavedViewsPage from "./pages/SavedViews";
 import DonorPortalPage from "./pages/DonorPortal";
+import BillsUtilitiesPage from "./pages/BillsUtilities";
+import TrainingTrackerPage from "./pages/TrainingTracker";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay", "/give"];
 
@@ -126,6 +128,8 @@ function Router() {
         <Route path="/recognition-tiers" component={RecognitionTiersPage} />
         <Route path="/qr-codes" component={QRCodesPage} />
         <Route path="/saved-views" component={SavedViewsPage} />
+        <Route path="/bills-utilities" component={BillsUtilitiesPage} />
+        <Route path="/training-tracker" component={TrainingTrackerPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />

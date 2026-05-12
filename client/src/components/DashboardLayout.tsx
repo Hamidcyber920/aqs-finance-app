@@ -30,7 +30,7 @@ import {
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
   Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity,
-  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark,
+  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark, Zap, GraduationCap,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -86,6 +86,8 @@ const adminItems = [
   { icon: AlertTriangle, label: "Conflicts Register", path: "/conflicts-register" },
   { icon: Gavel, label: "Decisions Register", path: "/decisions" },
   { icon: AlertTriangle, label: "Bulk Approvals", path: "/bulk-approvals" },
+  { icon: Zap, label: "Bills & Utilities", path: "/bills-utilities" },
+  { icon: GraduationCap, label: "Training Tracker", path: "/training-tracker" },
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Shield, label: "Audit Trail", path: "/audit-trail" },

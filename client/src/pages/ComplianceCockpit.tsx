@@ -334,6 +334,125 @@ function PolicyForm({ initial, onClose, onSaved }: PolicyFormProps) {
   );
 }
 
+
+// ─── Incident Form ────────────────────────────────────────────────────────────
+function IncidentForm({ initial, onClose, onSaved }: { initial?: any; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    incidentDate: initial?.incidentDate ? new Date(initial.incidentDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    title: initial?.title ?? "",
+    description: initial?.description ?? "",
+    category: initial?.category ?? "other",
+    severity: initial?.severity ?? "medium",
+    status: initial?.status ?? "draft",
+    charityCommissionRef: initial?.charityCommissionRef ?? "",
+    reportedToCC: initial?.reportedToCC ?? false,
+    reportedToCCDate: initial?.reportedToCCDate ? new Date(initial.reportedToCCDate).toISOString().split('T')[0] : "",
+    actionsTaken: initial?.actionsTaken ?? "",
+    outcome: initial?.outcome ?? "",
+  });
+  const utils = (trpc as any).useUtils();
+  const upsert = (trpc as any).compliance.upsertIncident.useMutation({
+    onSuccess: () => { utils.compliance.listIncidents.invalidate(); toast.success(initial ? "Incident updated" : "Incident reported"); onSaved(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const f = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Incident Date</Label><Input type="date" value={form.incidentDate} onChange={e => f('incidentDate', e.target.value)} /></div>
+        <div><Label>Severity</Label>
+          <Select value={form.severity} onValueChange={v => f('severity', v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {['critical','high','medium','low'].map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div><Label>Title *</Label><Input value={form.title} onChange={e => f('title', e.target.value)} placeholder="Brief description of incident" /></div>
+      <div><Label>Category</Label>
+        <Select value={form.category} onValueChange={v => f('category', v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {['financial_crime','safeguarding','data_breach','fraud','terrorism','money_laundering','governance','other'].map(c => <SelectItem key={c} value={c} className="capitalize">{c.replace(/_/g,' ')}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div><Label>Description *</Label><Textarea value={form.description} onChange={e => f('description', e.target.value)} rows={3} placeholder="Full description of what happened" /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Status</Label>
+          <Select value={form.status} onValueChange={v => f('status', v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {['draft','reported_to_cc','under_investigation','closed'].map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g,' ')}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div><Label>CC Reference</Label><Input value={form.charityCommissionRef} onChange={e => f('charityCommissionRef', e.target.value)} placeholder="CC ref number" /></div>
+      </div>
+      <div><Label>Actions Taken</Label><Textarea value={form.actionsTaken} onChange={e => f('actionsTaken', e.target.value)} rows={2} /></div>
+      <div><Label>Outcome</Label><Textarea value={form.outcome} onChange={e => f('outcome', e.target.value)} rows={2} /></div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button onClick={() => upsert.mutate({ ...form, id: initial?.id })} disabled={!form.title || !form.description || upsert.isPending}>
+          {upsert.isPending ? "Saving…" : initial ? "Update" : "Report"}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
+// ─── Annual Return Form ───────────────────────────────────────────────────────
+function AnnualReturnForm({ initial, onClose, onSaved }: { initial?: any; onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({
+    financialYear: initial?.financialYear ?? "",
+    yearEndDate: initial?.yearEndDate ? new Date(initial.yearEndDate).toISOString().split('T')[0] : "",
+    submissionDeadline: initial?.submissionDeadline ? new Date(initial.submissionDeadline).toISOString().split('T')[0] : "",
+    status: initial?.status ?? "not_started",
+    totalIncome: initial?.totalIncome ?? "",
+    totalExpenditure: initial?.totalExpenditure ?? "",
+    charityCommissionRef: initial?.charityCommissionRef ?? "",
+    notes: initial?.notes ?? "",
+  });
+  const utils = (trpc as any).useUtils();
+  const upsert = (trpc as any).compliance.upsertAnnualReturn.useMutation({
+    onSuccess: () => { utils.compliance.listAnnualReturns.invalidate(); toast.success(initial ? "Annual return updated" : "Annual return added"); onSaved(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const f = (k: string, v: any) => setForm(p => ({ ...p, [k]: v }));
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Financial Year *</Label><Input value={form.financialYear} onChange={e => f('financialYear', e.target.value)} placeholder="e.g. 2024-25" /></div>
+        <div><Label>Status</Label>
+          <Select value={form.status} onValueChange={v => f('status', v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {['not_started','in_progress','submitted','overdue'].map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g,' ')}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Year End Date *</Label><Input type="date" value={form.yearEndDate} onChange={e => f('yearEndDate', e.target.value)} /></div>
+        <div><Label>Submission Deadline *</Label><Input type="date" value={form.submissionDeadline} onChange={e => f('submissionDeadline', e.target.value)} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Total Income (£)</Label><Input type="number" value={form.totalIncome} onChange={e => f('totalIncome', e.target.value)} placeholder="0.00" /></div>
+        <div><Label>Total Expenditure (£)</Label><Input type="number" value={form.totalExpenditure} onChange={e => f('totalExpenditure', e.target.value)} placeholder="0.00" /></div>
+      </div>
+      <div><Label>CC Reference</Label><Input value={form.charityCommissionRef} onChange={e => f('charityCommissionRef', e.target.value)} placeholder="Charity Commission reference" /></div>
+      <div><Label>Notes</Label><Textarea value={form.notes} onChange={e => f('notes', e.target.value)} rows={2} /></div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button onClick={() => upsert.mutate({ ...form, id: initial?.id })} disabled={!form.financialYear || !form.yearEndDate || !form.submissionDeadline || upsert.isPending}>
+          {upsert.isPending ? "Saving…" : initial ? "Update" : "Add"}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ComplianceCockpit() {
@@ -348,6 +467,10 @@ export default function ComplianceCockpit() {
   const { data: actions = [], isLoading: actionsLoading, refetch: refetchActions } = (trpc as any).compliance.listActions.useQuery();
   const { data: training = [], isLoading: trainingLoading, refetch: refetchTraining } = (trpc as any).compliance.listTraining.useQuery();
   const { data: policies = [], isLoading: policiesLoading, refetch: refetchPolicies } = (trpc as any).compliance.listPolicies.useQuery();
+  const { data: incidents = [], isLoading: incidentsLoading, refetch: refetchIncidents } = (trpc as any).compliance.listIncidents.useQuery();
+  const { data: annualReturns = [], isLoading: annualReturnsLoading, refetch: refetchAnnualReturns } = (trpc as any).compliance.listAnnualReturns.useQuery();
+  const [incidentDialog, setIncidentDialog] = useState<{ open: boolean; item?: any }>({ open: false });
+  const [annualReturnDialog, setAnnualReturnDialog] = useState<{ open: boolean; item?: any }>({ open: false });
 
   // Summary stats
   const overdueActions = actions.filter((a: any) => a.status === "overdue" || (a.dueDate && new Date(a.dueDate) < new Date() && a.status !== "completed")).length;
@@ -413,7 +536,7 @@ export default function ComplianceCockpit() {
 
         {/* Tabs */}
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full grid-cols-3 max-w-lg">
+          <TabsList className="grid w-full grid-cols-5 max-w-3xl">
             <TabsTrigger value="actions">
               <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
               Inquiry Actions
@@ -428,6 +551,15 @@ export default function ComplianceCockpit() {
               <FileText className="h-3.5 w-3.5 mr-1.5" />
               Policies
               {overduePolices > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">{overduePolices}</span>}
+            </TabsTrigger>
+            <TabsTrigger value="incidents">
+              <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+              Incidents
+              {incidents.filter((i: any) => i.status !== 'closed').length > 0 && <span className="ml-1.5 bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">{incidents.filter((i: any) => i.status !== 'closed').length}</span>}
+            </TabsTrigger>
+            <TabsTrigger value="annual">
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+              Annual Return
             </TabsTrigger>
           </TabsList>
 
@@ -775,6 +907,32 @@ export default function ComplianceCockpit() {
           }}
         />
       )}
+      {/* Incident Dialog */}
+      <Dialog open={incidentDialog.open} onOpenChange={o => !o && setIncidentDialog({ open: false })}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{incidentDialog.item ? "Edit Incident" : "Report Serious Incident"}</DialogTitle>
+          </DialogHeader>
+          <IncidentForm
+            initial={incidentDialog.item}
+            onClose={() => setIncidentDialog({ open: false })}
+            onSaved={() => { setIncidentDialog({ open: false }); refetchIncidents(); }}
+          />
+        </DialogContent>
+      </Dialog>
+      {/* Annual Return Dialog */}
+      <Dialog open={annualReturnDialog.open} onOpenChange={o => !o && setAnnualReturnDialog({ open: false })}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{annualReturnDialog.item ? "Edit Annual Return" : "Add Annual Return"}</DialogTitle>
+          </DialogHeader>
+          <AnnualReturnForm
+            initial={annualReturnDialog.item}
+            onClose={() => setAnnualReturnDialog({ open: false })}
+            onSaved={() => { setAnnualReturnDialog({ open: false }); refetchAnnualReturns(); }}
+          />
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

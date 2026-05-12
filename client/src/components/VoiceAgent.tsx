@@ -1,24 +1,26 @@
 /**
- * VoiceAgent — Floating AI voice assistant
+ * VoiceAgent — HIBBA AI Voice Assistant
  *
  * Features:
  * - Hold-to-talk mic button (floating, bottom-right)
+ * - Spacebar keyboard shortcut (hold to talk)
  * - Records audio via MediaRecorder API
+ * - Auto language detection (Arabic, Urdu, Bengali, English, French, German)
  * - Uploads to S3, transcribes via Whisper
- * - Sends transcript to LLM agent (function-calling)
- * - Displays transcript + agent response
+ * - Sends transcript to Gemini 2.5 Flash agent (function-calling)
+ * - Displays transcript + agent response with language indicator
  * - Plays TTS audio response automatically
  * - Navigates to correct page and pre-fills forms if agent returns a navigation action
+ * - Multi-turn conversation memory within session
  */
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Mic, MicOff, X, Volume2, Loader2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Mic, MicOff, X, Volume2, Loader2, ChevronDown, ChevronUp, Sparkles, Globe, Trash2, MessageSquare } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 
 interface VoiceAgentProps {
-  /** Expose a setter so parent pages can pre-fill forms */
   onFormFill?: (page: string, fields: Record<string, unknown>) => void;
 }
 
@@ -28,7 +30,17 @@ interface Message {
   role: "user" | "agent";
   text: string;
   audioUrl?: string | null;
+  language?: string;
 }
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: "English", ar: "العربية", ur: "اردو", bn: "বাংলা",
+  fr: "Français", de: "Deutsch",
+};
+
+const LANGUAGE_FLAGS: Record<string, string> = {
+  en: "🇬🇧", ar: "🇸🇦", ur: "🇵🇰", bn: "🇧🇩", fr: "🇫🇷", de: "🇩🇪",
+};
 
 export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
   const [, navigate] = useLocation();
@@ -38,6 +50,8 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [detectedLanguage, setDetectedLanguage] = useState<string>("en");
+  const [spacebarHeld, setSpacebarHeld] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -47,6 +61,7 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const spacebarRecordingRef = useRef(false);
 
   const transcribeMutation = trpc.voiceAgent.transcribe.useMutation();
   const queryMutation = trpc.voiceAgent.query.useMutation();
@@ -55,6 +70,32 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Spacebar push-to-talk
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && e.target === document.body && !spacebarRecordingRef.current && open) {
+        e.preventDefault();
+        spacebarRecordingRef.current = true;
+        setSpacebarHeld(true);
+        startRecording();
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space" && spacebarRecordingRef.current) {
+        e.preventDefault();
+        spacebarRecordingRef.current = false;
+        setSpacebarHeld(false);
+        stopRecording();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [open]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -66,10 +107,10 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
   }, []);
 
   const startRecording = useCallback(async () => {
+    if (state === "recording") return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Set up audio level analyser for waveform visualisation
       const ctx = new AudioContext();
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
@@ -87,7 +128,6 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
       };
       animateLevel();
 
-      // Start recording
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : MediaRecorder.isTypeSupported("audio/webm")
@@ -103,11 +143,11 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
       setState("recording");
       setRecordingSeconds(0);
       timerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
-    } catch (err) {
-      toast.error("Microphone access denied. Please allow microphone access to use the voice agent.");
+    } catch {
+      toast.error("Microphone access denied. Please allow microphone access to use the voice assistant.");
       setState("error");
     }
-  }, []);
+  }, [state]);
 
   const stopRecording = useCallback(async () => {
     if (!mediaRecorderRef.current || state !== "recording") return;
@@ -126,8 +166,6 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
     });
 
     const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType });
-    // Whisper requires a meaningful audio payload — anything under 10KB is likely
-    // an empty/near-silent webm container that the API will reject.
     if (blob.size < 10000) {
       setState("idle");
       toast.info("Recording too short — please hold the button for at least 2 seconds and speak clearly.");
@@ -140,18 +178,12 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
   const processAudio = async (blob: Blob) => {
     setState("uploading");
     try {
-      // Upload audio to S3 via the file upload endpoint.
-      // Derive extension from MIME type (strip codec params first).
-      const baseMime = blob.type.split(';')[0].trim();
+      const baseMime = blob.type.split(";")[0].trim();
       const mimeToExt: Record<string, string> = {
-        'audio/webm': 'webm',
-        'audio/ogg': 'ogg',
-        'audio/mp4': 'm4a',
-        'audio/mpeg': 'mp3',
-        'audio/wav': 'wav',
+        "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a",
+        "audio/mpeg": "mp3", "audio/wav": "wav",
       };
-      const ext = mimeToExt[baseMime] ?? 'webm';
-      // Re-create the blob with the clean MIME type (no codec suffix) so S3 stores it correctly.
+      const ext = mimeToExt[baseMime] ?? "webm";
       const cleanBlob = new Blob([blob], { type: baseMime });
       const formData = new FormData();
       formData.append("file", cleanBlob, `voice-${Date.now()}.${ext}`);
@@ -160,23 +192,33 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
       if (!uploadRes.ok) throw new Error("Upload failed");
       const { url: audioUrl } = await uploadRes.json();
 
-      // Transcribe
+      // Transcribe — auto-detect language
       setState("transcribing");
-      const { transcript } = await transcribeMutation.mutateAsync({ audioUrl });
+      const transcribeResult = await transcribeMutation.mutateAsync({ audioUrl });
+      const { transcript, language } = transcribeResult;
       if (!transcript?.trim()) {
         setState("idle");
         toast.info("Couldn't hear anything clearly — please try again.");
         return;
       }
 
-      setMessages(prev => [...prev, { role: "user", text: transcript }]);
+      // Update detected language
+      const lang = language?.slice(0, 2) ?? "en";
+      setDetectedLanguage(lang);
 
-      // Query the agent
+      setMessages(prev => [...prev, { role: "user", text: transcript, language: lang }]);
+
+      // Query the agent with language context
       setState("thinking");
       const currentPage = window.location.pathname.replace("/", "") || "dashboard";
-      const response = await queryMutation.mutateAsync({ transcript, currentPage, withTts: true });
+      const response = await queryMutation.mutateAsync({
+        transcript,
+        currentPage,
+        withTts: true,
+        detectedLanguage: language ?? "en",
+      });
 
-      setMessages(prev => [...prev, { role: "agent", text: response.answer, audioUrl: response.audioUrl }]);
+      setMessages(prev => [...prev, { role: "agent", text: response.answer, audioUrl: response.audioUrl, language: lang }]);
 
       // Handle navigation action
       if (response.navigationAction) {
@@ -203,7 +245,8 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
     } catch (err: any) {
       console.error("[VoiceAgent]", err);
       setState("error");
-      setMessages(prev => [...prev, { role: "agent", text: "Sorry, something went wrong. Please try again." }]);
+      const errMsg = err?.message?.includes("No speech") ? "No speech detected — please try again." : "Something went wrong. Please try again.";
+      setMessages(prev => [...prev, { role: "agent", text: errMsg }]);
     }
   };
 
@@ -216,24 +259,28 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
     setState("idle");
     setMessages([]);
     setRecordingSeconds(0);
+    setDetectedLanguage("en");
   };
 
   const stateLabel: Record<AgentState, string> = {
-    idle: "Hold to speak",
+    idle: "Hold to speak  ·  or hold Space",
     recording: `Recording… ${recordingSeconds}s`,
     uploading: "Processing…",
     transcribing: "Transcribing…",
     thinking: "Thinking…",
     speaking: "Speaking…",
-    done: "Hold to speak",
+    done: "Hold to speak  ·  or hold Space",
     error: "Error — try again",
   };
 
   const isBusy = ["uploading", "transcribing", "thinking"].includes(state);
 
+  const langFlag = LANGUAGE_FLAGS[detectedLanguage] ?? "🌐";
+  const langLabel = LANGUAGE_LABELS[detectedLanguage] ?? detectedLanguage;
+
   return (
     <>
-      {/* Floating mic button */}
+      {/* Floating trigger button */}
       <button
         onClick={() => setOpen(o => !o)}
         className={cn(
@@ -243,36 +290,41 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
             ? "bg-red-500 hover:bg-red-600 text-white"
             : "bg-gradient-to-br from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 text-white"
         )}
-        title="AI Voice Assistant"
-        aria-label="AI Voice Assistant"
+        title="HIBBA AI Assistant"
+        aria-label="HIBBA AI Assistant"
       >
         {open ? <X className="w-6 h-6" /> : <Sparkles className="w-6 h-6" />}
         {/* Pulsing ring when recording */}
         {state === "recording" && (
-          <span className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-60" />
+          <span className="absolute inset-0 rounded-full animate-ping bg-red-400 opacity-40" />
         )}
       </button>
 
-      {/* Agent panel */}
+      {/* Chat panel */}
       {open && (
         <div className={cn(
-          "fixed z-40 bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300",
-          "bottom-36 right-4 w-[calc(100vw-2rem)] max-w-sm",
-          "sm:bottom-24 sm:right-4 sm:w-96",
-        )}>
+          "fixed bottom-36 right-4 sm:bottom-24 z-50 w-80 sm:w-96 rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col",
+          "bg-card text-card-foreground",
+        )} style={{ maxHeight: "70vh" }}>
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-emerald-700 to-emerald-900 text-white">
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-emerald-800 to-emerald-700 text-white">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              <span className="font-semibold text-sm">AQS Finance Assistant</span>
+              <Sparkles className="w-4 h-4 text-emerald-300" />
+              <span className="font-semibold text-sm tracking-tight">HIBBA AI Assistant</span>
+              {messages.length > 0 && (
+                <span className="flex items-center gap-1 text-xs text-emerald-200 ml-1">
+                  <Globe className="w-3 h-3" />
+                  {langFlag} {langLabel}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1">
               {messages.length > 0 && (
-                <button onClick={resetAgent} className="text-white/70 hover:text-white text-xs px-2 py-1 rounded">
-                  Clear
+                <button onClick={resetAgent} className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white" title="Clear conversation">
+                  <Trash2 className="w-3.5 h-3.5" />
                 </button>
               )}
-              <button onClick={() => setIsExpanded(e => !e)} className="text-white/70 hover:text-white p-1">
+              <button onClick={() => setIsExpanded(e => !e)} className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white p-1">
                 {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
               </button>
             </div>
@@ -285,8 +337,33 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
                 {messages.length === 0 && (
                   <div className="text-center text-muted-foreground text-sm py-4">
                     <Sparkles className="w-8 h-8 mx-auto mb-2 text-emerald-500 opacity-50" />
-                    <p>Ask me anything about AQS finances.</p>
-                    <p className="text-xs mt-1 opacity-70">Try: "What are this month's expenses?" or "Add payroll for Ahmed, £1,200"</p>
+                    <p className="font-medium">Assalamu Alaikum!</p>
+                    <p className="text-xs mt-1 opacity-70">Ask me anything about AQS — finances, donors, compliance, staff, accommodation.</p>
+                    <p className="text-xs mt-1 opacity-50">Supports English · العربية · اردو · বাংলা</p>
+                    <div className="mt-3 space-y-1">
+                      {["What's this month's balance?", "Show me Gift Aid balance", "Who are our active tenants?"].map(q => (
+                        <button key={q} className="block w-full text-left text-xs px-2 py-1.5 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors" onClick={() => {
+                          setMessages(prev => [...prev, { role: "user", text: q }]);
+                          setState("thinking");
+                          const currentPage = window.location.pathname.replace("/", "") || "dashboard";
+                          queryMutation.mutateAsync({ transcript: q, currentPage, withTts: true, detectedLanguage: "en" }).then(response => {
+                            setMessages(prev => [...prev, { role: "agent", text: response.answer, audioUrl: response.audioUrl }]);
+                            if (response.audioUrl) {
+                              setState("speaking");
+                              const audio = new Audio(response.audioUrl);
+                              audioRef.current = audio;
+                              audio.onended = () => setState("done");
+                              audio.play().catch(() => setState("done"));
+                            } else {
+                              setState("done");
+                            }
+                          }).catch(() => setState("error"));
+                        }}>
+                          <MessageSquare className="w-3 h-3 inline mr-1 opacity-50" />
+                          {q}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {messages.map((msg, i) => (
@@ -297,7 +374,7 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
                         ? "bg-emerald-600 text-white rounded-br-sm"
                         : "bg-muted text-foreground rounded-bl-sm"
                     )}>
-                      <p className="leading-relaxed">{msg.text}</p>
+                      <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                       {msg.role === "agent" && msg.audioUrl && (
                         <button
                           onClick={() => { const a = new Audio(msg.audioUrl!); a.play(); }}
@@ -336,7 +413,6 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
                     ))}
                   </div>
                 )}
-
                 {/* Hold-to-talk button */}
                 <button
                   onMouseDown={startRecording}
@@ -346,7 +422,7 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
                   disabled={isBusy}
                   className={cn(
                     "w-16 h-16 rounded-full flex items-center justify-center transition-all duration-200 select-none touch-none",
-                    state === "recording"
+                    state === "recording" || spacebarHeld
                       ? "bg-red-500 scale-110 shadow-lg shadow-red-500/40"
                       : isBusy
                       ? "bg-muted text-muted-foreground cursor-not-allowed"
@@ -355,7 +431,7 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
                       : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md hover:shadow-lg active:scale-95"
                   )}
                   onClick={state === "speaking" ? stopSpeaking : undefined}
-                  title={state === "speaking" ? "Stop speaking" : "Hold to talk"}
+                  title={state === "speaking" ? "Tap to stop" : "Hold to talk"}
                 >
                   {isBusy ? (
                     <Loader2 className="w-7 h-7 animate-spin" />
@@ -367,7 +443,6 @@ export function VoiceAgent({ onFormFill }: VoiceAgentProps) {
                     <Mic className="w-7 h-7" />
                   )}
                 </button>
-
                 <p className="text-xs text-muted-foreground text-center">
                   {state === "speaking" ? "Tap to stop" : stateLabel[state]}
                 </p>

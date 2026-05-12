@@ -29,6 +29,8 @@ import { majorDonorRouter } from "./routers/majorDonor";
 import { bulkApprovalsRouter } from "./routers/bulkApprovals";
 import { conflictsRouter } from "./routers/conflicts";
 import { savedViewsRouter } from "./routers/savedViews";
+import { billsRouter } from "./routers/bills";
+import { trainingRouter } from "./routers/training";
 import { qrCodesRouter } from "./routers/qrCodes";
 import { recognitionTiersRouter } from "./routers/recognitionTiers";
 import {
@@ -389,6 +391,8 @@ export const appRouter = router({
   savedViews: savedViewsRouter,
   qrCodes: qrCodesRouter,
   recognitionTiers: recognitionTiersRouter,
+  bills: billsRouter,
+  training: trainingRouter,
 
   // ─── SUCCESSION & DELEGATION ──────────────────────────────────────────────────
   succession: router({
@@ -5668,6 +5672,100 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           await db.update(pd).set({ fileUrl: input.fileUrl }).where(eq(pd.id, input.recordId));
         }
         return { ok: true };
+      }),
+
+    // ── Serious Incident Reporting ────────────────────────────────────────────
+    listIncidents: protectedProcedure
+      .query(async () => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { seriousIncidents } = await import('../drizzle/schema');
+        return db.select().from(seriousIncidents).orderBy(desc(seriousIncidents.incidentDate));
+      }),
+    upsertIncident: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        incidentDate: z.string(),
+        title: z.string().min(1),
+        description: z.string().min(1),
+        category: z.enum(['financial_crime', 'safeguarding', 'data_breach', 'fraud', 'terrorism', 'money_laundering', 'governance', 'other']),
+        severity: z.enum(['critical', 'high', 'medium', 'low']).default('medium'),
+        status: z.enum(['draft', 'reported_to_cc', 'under_investigation', 'closed']).default('draft'),
+        charityCommissionRef: z.string().optional(),
+        reportedToCC: z.boolean().default(false),
+        reportedToCCDate: z.string().optional(),
+        actionsTaken: z.string().optional(),
+        outcome: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { seriousIncidents } = await import('../drizzle/schema');
+        const data: any = {
+          incidentDate: new Date(input.incidentDate),
+          title: input.title,
+          description: input.description,
+          category: input.category,
+          severity: input.severity,
+          status: input.status,
+          charityCommissionRef: input.charityCommissionRef ?? null,
+          reportedToCC: input.reportedToCC,
+          reportedToCCDate: input.reportedToCCDate ? new Date(input.reportedToCCDate) : null,
+          actionsTaken: input.actionsTaken ?? null,
+          outcome: input.outcome ?? null,
+          updatedAt: new Date(),
+        };
+        if (input.id) {
+          await db.update(seriousIncidents).set(data).where(eq(seriousIncidents.id, input.id));
+          return { id: input.id };
+        } else {
+          const [result] = await db.insert(seriousIncidents).values({ ...data, reportedByUserId: ctx.user.id });
+          return { id: (result as any).insertId };
+        }
+      }),
+
+    // ── Annual Return Tracker ─────────────────────────────────────────────────
+    listAnnualReturns: protectedProcedure
+      .query(async () => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { annualReturns } = await import('../drizzle/schema');
+        return db.select().from(annualReturns).orderBy(desc(annualReturns.yearEndDate));
+      }),
+    upsertAnnualReturn: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        financialYear: z.string().min(1),
+        yearEndDate: z.string(),
+        submissionDeadline: z.string(),
+        status: z.enum(['not_started', 'in_progress', 'submitted', 'overdue']).default('not_started'),
+        totalIncome: z.string().optional(),
+        totalExpenditure: z.string().optional(),
+        charityCommissionRef: z.string().optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+        const { annualReturns } = await import('../drizzle/schema');
+        const data: any = {
+          financialYear: input.financialYear,
+          yearEndDate: new Date(input.yearEndDate),
+          submissionDeadline: new Date(input.submissionDeadline),
+          status: input.status,
+          totalIncome: input.totalIncome ?? null,
+          totalExpenditure: input.totalExpenditure ?? null,
+          charityCommissionRef: input.charityCommissionRef ?? null,
+          notes: input.notes ?? null,
+          updatedAt: new Date(),
+        };
+        if (input.id) {
+          await db.update(annualReturns).set(data).where(eq(annualReturns.id, input.id));
+          return { id: input.id };
+        } else {
+          const [result] = await db.insert(annualReturns).values({ ...data, submittedByUserId: ctx.user.id });
+          return { id: (result as any).insertId };
+        }
       }),
   }),
 

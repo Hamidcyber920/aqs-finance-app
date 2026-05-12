@@ -435,6 +435,20 @@
       "when": 1778563038175,
       "tag": "0061_clever_mole_man",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "5",
+      "when": 1778569157266,
+      "tag": "0062_dizzy_cyclops",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "5",
+      "when": 1778570086052,
+      "tag": "0063_short_firestar",
+      "breakpoints": true
     }
   ]
 }

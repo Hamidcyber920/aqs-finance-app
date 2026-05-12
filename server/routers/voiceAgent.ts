@@ -1,11 +1,14 @@
 /**
- * Voice Agent Router
+ * Voice Agent Router — HIBBA AI Assistant
  *
  * Handles:
- * 1. voiceAgent.transcribe  — converts audio URL → text via Whisper
- * 2. voiceAgent.query       — processes natural-language transcript via LLM function-calling,
- *                             queries/writes the DB, and returns a structured response
+ * 1. voiceAgent.transcribe  — converts audio URL → text via Whisper (auto language detection)
+ * 2. voiceAgent.query       — processes natural-language transcript via Gemini 2.5 Flash
+ *                             function-calling, queries/writes the DB, returns structured response
  * 3. voiceAgent.speak       — converts text → audio URL via TTS
+ *
+ * Multi-language: Arabic, Urdu, Bengali, English — responds in the same language as the user
+ * AI: Gemini 2.5 Flash (via invokeLLM — model is set in llm.ts)
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -17,17 +20,18 @@ import { storagePut } from "../storage";
 
 // ─── LLM Tools (function-calling definitions) ─────────────────────────────────
 const agentTools: Tool[] = [
+  // ── FINANCE ──────────────────────────────────────────────────────────────────
   {
     type: "function",
     function: {
       name: "get_expenses",
-      description: "Get all expense receipts for a given month and year. Use this when the user asks about expenses, spending, or receipts.",
+      description: "Get all expense receipts for a given month and year. Use for questions about expenses, spending, or receipts.",
       parameters: {
         type: "object",
         properties: {
           month: { type: "number", description: "Month number 1-12. Use current month if not specified." },
           year: { type: "number", description: "4-digit year. Use current year if not specified." },
-          userId: { type: "number", description: "Optional: filter by specific user ID. Omit for all users." },
+          userId: { type: "number", description: "Optional: filter by specific user ID." },
         },
         required: ["month", "year"],
         additionalProperties: false,
@@ -71,11 +75,11 @@ const agentTools: Tool[] = [
     type: "function",
     function: {
       name: "get_loans",
-      description: "Get Qarde Hasan loan applications, optionally filtered by status.",
+      description: "Get Qarde Hasan (interest-free) loan applications, optionally filtered by status.",
       parameters: {
         type: "object",
         properties: {
-          status: { type: "string", enum: ["pending", "approved", "rejected", "active", "completed", "all"], description: "Filter by loan status. Use 'all' if not specified." },
+          status: { type: "string", enum: ["pending", "approved", "rejected", "active", "completed", "all"] },
         },
         required: [],
         additionalProperties: false,
@@ -86,12 +90,12 @@ const agentTools: Tool[] = [
     type: "function",
     function: {
       name: "get_friday_collections",
-      description: "Get Friday collection records, optionally for a specific month/year.",
+      description: "Get Friday Jumu'ah collection records, optionally for a specific month/year.",
       parameters: {
         type: "object",
         properties: {
-          month: { type: "number", description: "Optional month filter." },
-          year: { type: "number", description: "Optional year filter." },
+          month: { type: "number" },
+          year: { type: "number" },
           limit: { type: "number", description: "Max records to return. Default 10." },
         },
         required: [],
@@ -103,7 +107,7 @@ const agentTools: Tool[] = [
     type: "function",
     function: {
       name: "get_financial_summary",
-      description: "Get a combined financial summary for a month: total income, total expenses, payroll total, balance. Use this for questions like 'how are we doing this month', 'what is the balance', 'give me a financial overview'.",
+      description: "Get a combined financial summary for a month: total income, total expenses, payroll total, balance. Use for questions like 'how are we doing this month', 'what is the balance', 'give me a financial overview'.",
       parameters: {
         type: "object",
         properties: {
@@ -115,11 +119,12 @@ const agentTools: Tool[] = [
       },
     },
   },
+  // ── DONORS & FUNDRAISING ──────────────────────────────────────────────────────
   {
     type: "function",
     function: {
       name: "get_donors",
-      description: "Get donor list, optionally searching by name.",
+      description: "Get donor list, optionally searching by name or filtering by regular donors.",
       parameters: {
         type: "object",
         properties: {
@@ -131,6 +136,66 @@ const agentTools: Tool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "personal_contact_history",
+      description: "Get the contact/donation history for a specific donor by name or ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          donorName: { type: "string" },
+          donorId: { type: "number" },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "gift_aid_balance",
+      description: "Get the total Gift Aid reclaimable balance — sum of all eligible donations not yet claimed.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_campaigns",
+      description: "Get fundraising campaigns with progress and donation totals.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["active", "completed", "all"], description: "Filter by campaign status. Default all." },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_pledges",
+      description: "Get donor pledges, optionally filtered by status.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["active", "fulfilled", "cancelled", "all"] },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  // ── STAFF & ORGANISATION ─────────────────────────────────────────────────────
   {
     type: "function",
     function: {
@@ -147,18 +212,84 @@ const agentTools: Tool[] = [
   {
     type: "function",
     function: {
-      name: "create_payroll_record",
-      description: "Add a new payroll record for an employee. Use when the user says 'add payroll', 'record salary', 'pay [name]'.",
+      name: "get_training_status",
+      description: "Get training completion status for a specific person or for all staff. Shows which courses are completed, expired, or missing.",
       parameters: {
         type: "object",
         properties: {
-          employeeName: { type: "string", description: "Full name of the employee." },
-          month: { type: "number", description: "Month 1-12." },
-          year: { type: "number", description: "4-digit year." },
-          grossPay: { type: "string", description: "Gross pay amount as a string, e.g. '1200.00'." },
-          netPay: { type: "string", description: "Net pay amount as a string. If not specified, use grossPay." },
-          paymentMethod: { type: "string", enum: ["bank", "cheque", "cash"], description: "Payment method." },
-          taxCode: { type: "string", description: "Tax code if mentioned, otherwise omit." },
+          personName: { type: "string", description: "Staff member name to check. Omit for all staff." },
+          courseCategory: { type: "string", description: "Optional: filter by course category e.g. 'safeguarding', 'health_safety'." },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  // ── ACCOMMODATION ────────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_accommodation_tenants",
+      description: "Get student accommodation tenants, their rent status, and upcoming payments. Use when asked about tenants, student accommodation, or rent.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["active", "all", "overdue"], description: "Filter by tenancy status. Default active." },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  // ── COMPLIANCE ───────────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_compliance_actions",
+      description: "Get compliance actions and their status. Use when asked about compliance, regulatory actions, or Charity Commission obligations.",
+      parameters: {
+        type: "object",
+        properties: {
+          status: { type: "string", enum: ["open", "completed", "overdue", "all"], description: "Filter by status. Default open." },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  // ── BILLS & UTILITIES ────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "get_utility_bills",
+      description: "Get utility bills and accounts for AQS buildings. Use when asked about electricity, gas, water, broadband, or utility costs.",
+      parameters: {
+        type: "object",
+        properties: {
+          building: { type: "string", description: "Optional: filter by building name." },
+          category: { type: "string", description: "Optional: filter by utility type e.g. electricity, gas, water." },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  // ── WRITE OPERATIONS ─────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "create_payroll_record",
+      description: "Add a new payroll record for an employee.",
+      parameters: {
+        type: "object",
+        properties: {
+          employeeName: { type: "string" },
+          month: { type: "number" },
+          year: { type: "number" },
+          grossPay: { type: "string" },
+          netPay: { type: "string" },
+          paymentMethod: { type: "string", enum: ["bank", "cheque", "cash"] },
+          taxCode: { type: "string" },
         },
         required: ["employeeName", "month", "year", "grossPay", "netPay", "paymentMethod"],
         additionalProperties: false,
@@ -169,15 +300,15 @@ const agentTools: Tool[] = [
     type: "function",
     function: {
       name: "create_income_record",
-      description: "Add a new income or rental record. Use when user says 'add income', 'record rent', 'log payment from [tenant]'.",
+      description: "Add a new income or rental record.",
       parameters: {
         type: "object",
         properties: {
-          payerName: { type: "string", description: "Name of the payer or tenant." },
-          amount: { type: "string", description: "Amount as string, e.g. '500.00'." },
-          categoryName: { type: "string", description: "Income category name, e.g. 'Student Accommodation', 'Hall Hire', 'Friday Collection'." },
-          period: { type: "string", enum: ["daily", "weekly", "monthly", "one-off"], description: "Payment period." },
-          notes: { type: "string", description: "Optional notes." },
+          payerName: { type: "string" },
+          amount: { type: "string" },
+          categoryName: { type: "string" },
+          period: { type: "string", enum: ["daily", "weekly", "monthly", "one-off"] },
+          notes: { type: "string" },
         },
         required: ["payerName", "amount", "categoryName", "period"],
         additionalProperties: false,
@@ -188,15 +319,15 @@ const agentTools: Tool[] = [
     type: "function",
     function: {
       name: "create_expense",
-      description: "Add a new expense receipt. Use when user says 'add expense', 'record a purchase', 'log a receipt'.",
+      description: "Add a new expense receipt.",
       parameters: {
         type: "object",
         properties: {
-          description: { type: "string", description: "Description of the expense." },
-          amount: { type: "string", description: "Amount as string, e.g. '75.50'." },
-          vendor: { type: "string", description: "Vendor or supplier name." },
-          categoryName: { type: "string", description: "Expense category name." },
-          paymentMethod: { type: "string", enum: ["cash", "card", "cheque", "bank_transfer"], description: "Payment method." },
+          description: { type: "string" },
+          amount: { type: "string" },
+          vendor: { type: "string" },
+          categoryName: { type: "string" },
+          paymentMethod: { type: "string", enum: ["cash", "card", "cheque", "bank_transfer"] },
         },
         required: ["description", "amount"],
         additionalProperties: false,
@@ -207,15 +338,15 @@ const agentTools: Tool[] = [
     type: "function",
     function: {
       name: "create_friday_collection",
-      description: "Record a Friday collection entry. Use when user says 'add Friday collection', 'record collection', 'log bucket total'.",
+      description: "Record a Friday Jumu'ah collection entry.",
       parameters: {
         type: "object",
         properties: {
-          totalAmount: { type: "string", description: "Total collection amount." },
-          bucketAmount: { type: "string", description: "Cash bucket amount if specified." },
-          cardAmount: { type: "string", description: "Card terminal amount if specified." },
-          collectionDate: { type: "string", description: "Date in YYYY-MM-DD format. Use today if not specified." },
-          notes: { type: "string", description: "Optional notes." },
+          totalAmount: { type: "string" },
+          bucketAmount: { type: "string" },
+          cardAmount: { type: "string" },
+          collectionDate: { type: "string", description: "Date in YYYY-MM-DD format." },
+          notes: { type: "string" },
         },
         required: ["totalAmount", "collectionDate"],
         additionalProperties: false,
@@ -226,61 +357,38 @@ const agentTools: Tool[] = [
     type: "function",
     function: {
       name: "add_donation",
-      description: "Record a donation from a named donor to a campaign. Use when user says 'add donation', 'log gift', 'record donation from [name]'.",
+      description: "Record a donation from a named donor to a campaign.",
       parameters: {
         type: "object",
         properties: {
-          donorName: { type: "string", description: "Donor's full name." },
-          amount: { type: "string", description: "Donation amount as a string e.g. '50.00'." },
-          campaignId: { type: "number", description: "Campaign ID to attribute the donation to. Use 1 if unknown." },
-          paymentMethod: { type: "string", enum: ["cash", "card", "bank_transfer", "cheque", "standing_order", "other"], description: "Payment method." },
-          notes: { type: "string", description: "Optional notes." },
+          donorName: { type: "string" },
+          amount: { type: "string" },
+          campaignId: { type: "number" },
+          paymentMethod: { type: "string", enum: ["cash", "card", "bank_transfer", "cheque", "standing_order", "other"] },
+          notes: { type: "string" },
         },
         required: ["donorName", "amount", "campaignId"],
         additionalProperties: false,
       },
     },
   },
-  {
-    type: "function",
-    function: {
-      name: "gift_aid_balance",
-      description: "Get the total Gift Aid reclaimable balance — sum of all eligible donations that haven't yet been claimed. Use when user asks 'how much Gift Aid can we claim', 'what's our Gift Aid balance'.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-        additionalProperties: false,
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "personal_contact_history",
-      description: "Get the contact/donation history for a specific donor by name or ID. Use when user asks 'what's the history for [name]', 'show me [name]'s donations'.",
-      parameters: {
-        type: "object",
-        properties: {
-          donorName: { type: "string", description: "Donor's name to search for." },
-          donorId: { type: "number", description: "Donor ID if known." },
-        },
-        required: [],
-        additionalProperties: false,
-      },
-    },
-  },
+  // ── NAVIGATION ───────────────────────────────────────────────────────────────
   {
     type: "function",
     function: {
       name: "navigate_to_form",
-      description: "Navigate the user to a specific page and pre-fill a form. Use when the user wants to add something but hasn't provided all details, or wants to open a specific section.",
+      description: "Navigate the user to a specific page and optionally pre-fill a form. Use when the user wants to open a section or add something that needs more details.",
       parameters: {
         type: "object",
         properties: {
           page: {
             type: "string",
-            enum: ["payroll", "income", "expenses", "loans", "fundraising", "friday-collection", "donors", "monthly-expenses", "reconciliation", "dashboard"],
+            enum: [
+              "payroll", "income", "expenses", "loans", "fundraising", "friday-collection",
+              "donors", "monthly-expenses", "reconciliation", "dashboard", "accommodation",
+              "compliance", "training", "gift-aid", "pledges", "donor-pipeline", "campaigns",
+              "comms-inbox", "bills", "backups", "audit-trail", "trustees", "reports",
+            ],
             description: "The page to navigate to.",
           },
           prefillFields: {
@@ -303,7 +411,7 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
   if (!db) return JSON.stringify({ error: "Database unavailable" });
 
   const schema = await import("../../drizzle/schema");
-  const { eq, and, gte, lte, like, desc } = await import("drizzle-orm");
+  const { eq, and, gte, lte, like, desc, or } = await import("drizzle-orm");
 
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
@@ -321,7 +429,7 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
         .orderBy(desc(schema.receipts.createdAt))
         .limit(50);
       const total = rows.reduce((s, r) => s + parseFloat(r.amount ?? "0"), 0);
-      return JSON.stringify({ count: rows.length, totalAmount: total.toFixed(2), records: rows.slice(0, 10).map(r => ({ id: r.id, description: r.notes ?? r.vendor ?? 'Receipt', amount: r.amount, vendor: r.vendor, date: r.createdAt })) });
+      return JSON.stringify({ count: rows.length, totalAmount: total.toFixed(2), records: rows.slice(0, 10).map(r => ({ id: r.id, description: r.notes ?? r.vendor ?? "Receipt", amount: r.amount, vendor: r.vendor, date: r.createdAt })) });
     }
 
     case "get_income": {
@@ -341,9 +449,9 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
     case "get_payroll": {
       const month = (args.month as number) ?? currentMonth;
       const year = (args.year as number) ?? currentYear;
-      let query = db.select().from(schema.payrollRecords)
-        .where(and(eq(schema.payrollRecords.month, month), eq(schema.payrollRecords.year, year)));
-      const rows = await query.limit(50);
+      const rows = await db.select().from(schema.payrollRecords)
+        .where(and(eq(schema.payrollRecords.month, month), eq(schema.payrollRecords.year, year)))
+        .limit(50);
       const filtered = args.employeeName
         ? rows.filter(r => r.employeeName?.toLowerCase().includes((args.employeeName as string).toLowerCase()))
         : rows;
@@ -422,9 +530,100 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
       return JSON.stringify({ count: filtered.length, records: filtered.map(r => ({ id: r.id, name: r.name, email: r.email, isRegular: r.isRegular, totalGiven: r.totalGiven })) });
     }
 
+    case "personal_contact_history": {
+      const donorId = args.donorId as number | undefined;
+      const donorName = args.donorName as string | undefined;
+      let donorRows: any[] = [];
+      if (donorId) {
+        donorRows = await db.select().from(schema.donors).where(eq(schema.donors.id, donorId)).limit(1);
+      } else if (donorName) {
+        donorRows = await db.select().from(schema.donors).where(like(schema.donors.name, `%${donorName}%`)).limit(1);
+      }
+      if (!donorRows.length) return JSON.stringify({ error: `No donor found matching '${donorName ?? donorId}'.` });
+      const donor = donorRows[0];
+      const donations = await db.select().from(schema.fundraisingDonations)
+        .where(like(schema.fundraisingDonations.donorName, `%${donor.name}%`))
+        .orderBy(desc(schema.fundraisingDonations.donatedAt))
+        .limit(20);
+      const total = donations.reduce((s: number, d: any) => s + parseFloat(d.amount ?? "0"), 0);
+      return JSON.stringify({ donor: { id: donor.id, name: donor.name, email: donor.email, phone: donor.phone }, totalDonations: donations.length, totalAmount: `£${total.toFixed(2)}`, recentDonations: donations.slice(0, 5).map((d: any) => ({ amount: d.amount, date: d.donatedAt, method: d.paymentMethod })) });
+    }
+
+    case "gift_aid_balance": {
+      const claims = await db.select().from(schema.giftAidClaims).limit(200);
+      const unclaimed = claims.filter((c: any) => c.status === "draft" || c.status === "pending");
+      const total = unclaimed.reduce((s: number, c: any) => s + parseFloat(c.totalDonations ?? "0") * 0.25, 0);
+      return JSON.stringify({ unclaimedClaims: unclaimed.length, estimatedGiftAidBalance: `£${total.toFixed(2)}`, message: `You have ${unclaimed.length} unclaimed Gift Aid batch(es) worth approximately £${total.toFixed(2)}.` });
+    }
+
+    case "get_campaigns": {
+      const status = args.status as string | undefined;
+      const rows = await db.select().from(schema.fundraisingCampaigns)
+        .where(status === "active" ? eq(schema.fundraisingCampaigns.isActive, true) : status === "completed" ? eq(schema.fundraisingCampaigns.isActive, false) : undefined)
+        .orderBy(desc(schema.fundraisingCampaigns.createdAt))
+        .limit(20);
+      return JSON.stringify({ count: rows.length, records: rows.map(r => ({ id: r.id, name: r.name, isActive: r.isActive, targetAmount: r.targetAmount, raisedAmount: r.currentAmount, startDate: r.startDate, endDate: r.endDate })) });
+    }
+
+    case "get_pledges": {
+      const status = args.status as string | undefined;
+      const rows = await db.select().from(schema.pledges)
+        .where(status && status !== "all" ? eq(schema.pledges.status, status as any) : undefined)
+        .orderBy(desc(schema.pledges.createdAt))
+        .limit(30);
+      const total = rows.reduce((s: number, r: any) => s + parseFloat(r.totalAmount ?? "0"), 0);
+      return JSON.stringify({ count: rows.length, totalPledged: total.toFixed(2), records: rows.map((r: any) => ({ id: r.id, donorName: r.donorName, totalAmount: r.totalAmount, status: r.status, frequency: r.frequency })) });
+    }
+
     case "get_staff": {
       const rows = await db.select().from(schema.users).limit(50);
       return JSON.stringify({ count: rows.length, records: rows.map(r => ({ id: r.id, name: r.name, email: r.email, role: r.role, status: r.status })) });
+    }
+
+    case "get_training_status": {
+      // Training completions table may not exist yet — graceful fallback
+      try {
+        const completions = await db.select().from(schema.trainingRecords).limit(100);
+        const filtered = args.personName
+          ? completions.filter((c: any) => c.staffName?.toLowerCase().includes((args.personName as string).toLowerCase()))
+          : completions;
+        return JSON.stringify({ count: filtered.length, records: filtered.map((c: any) => ({ id: c.id, staffName: c.staffName, courseName: c.courseName, completedAt: c.completedAt, expiresAt: c.expiresAt, status: c.status })) });
+      } catch {
+        return JSON.stringify({ message: "Training records are not yet available. Visit the Training Tracker page to add records." });
+      }
+    }
+
+    case "get_accommodation_tenants": {
+      const status = args.status as string | undefined;
+      const rows = await db.select().from(schema.accommodationTenants)
+        .where(status === "active" ? eq(schema.accommodationTenants.status, "active") : undefined)
+        .orderBy(desc(schema.accommodationTenants.createdAt))
+        .limit(30);
+      return JSON.stringify({ count: rows.length, records: rows.map(r => ({ id: r.id, name: r.fullName, room: r.roomNumber, rentAmount: r.rentAmount, status: r.status, leaseEnd: r.contractEndDate })) });
+    }
+
+    case "get_compliance_actions": {
+      const status = args.status as string | undefined;
+      const rows = await db.select().from(schema.complianceActions)
+        .where(status && status !== "all" ? eq(schema.complianceActions.status, status as any) : undefined)
+        .orderBy(desc(schema.complianceActions.createdAt))
+        .limit(30);
+      return JSON.stringify({ count: rows.length, records: rows.map(r => ({ id: r.id, title: r.title, status: r.status, dueDate: r.dueDate, priority: r.priority, owner: r.owner })) });
+    }
+
+    case "get_utility_bills": {
+      try {
+        const rows = await db.select().from(schema.utilityAccounts).limit(30);
+        const filtered = args.building
+          ? rows.filter((r: any) => r.building?.toLowerCase().includes((args.building as string).toLowerCase()))
+          : rows;
+        const catFiltered = args.category
+          ? filtered.filter((r: any) => r.category?.toLowerCase().includes((args.category as string).toLowerCase()))
+          : filtered;
+        return JSON.stringify({ count: catFiltered.length, records: catFiltered.map((r: any) => ({ id: r.id, building: r.building, supplier: r.supplier, category: r.category, accountNumber: r.accountNumber, lastBillAmount: r.lastBillAmount, lastBillDate: r.lastBillDate, contractEnd: r.contractEnd })) });
+      } catch {
+        return JSON.stringify({ message: "Bills & Utilities module is being set up. Visit the Bills & Utilities page to add accounts." });
+      }
     }
 
     case "create_payroll_record": {
@@ -445,7 +644,6 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
     }
 
     case "create_income_record": {
-      // Look up category by name
       const cats = await db.select().from(schema.incomeCategories);
       const cat = cats.find(c => c.name.toLowerCase().includes((args.categoryName as string).toLowerCase()));
       const [record] = await db.insert(schema.incomeRecords).values({
@@ -503,30 +701,7 @@ async function executeTool(name: string, args: Record<string, unknown>, userId: 
         paymentMethod: ((args.paymentMethod as string) ?? "cash") as any,
         notes: (args.notes as string) ?? null,
       }).$returningId();
-      return JSON.stringify({ success: true, id: result?.id, message: `Donation of £${args.amount} from ${args.donorName} recorded.` });
-    }
-
-    case "gift_aid_balance": {
-      const claims = await db.select().from(schema.giftAidClaims).limit(200);
-      const unclaimed = claims.filter((c: any) => c.status === "draft" || c.status === "pending");
-      const total = unclaimed.reduce((s: number, c: any) => s + parseFloat(c.totalDonations ?? "0") * 0.25, 0);
-      return JSON.stringify({ unclaimedClaims: unclaimed.length, estimatedGiftAidBalance: `£${total.toFixed(2)}`, message: `You have ${unclaimed.length} unclaimed Gift Aid batch(es) worth approximately £${total.toFixed(2)}.` });
-    }
-
-    case "personal_contact_history": {
-      const donorId = args.donorId as number | undefined;
-      const donorName = args.donorName as string | undefined;
-      let donorRows: any[] = [];
-      if (donorId) {
-        donorRows = await db.select().from(schema.donors).where(eq(schema.donors.id, donorId)).limit(1);
-      } else if (donorName) {
-        donorRows = await db.select().from(schema.donors).where(like(schema.donors.name, `%${donorName}%`)).limit(1);
-      }
-      if (!donorRows.length) return JSON.stringify({ error: `No donor found matching '${donorName ?? donorId}'.` });
-      const donor = donorRows[0];
-      const donations = await db.select().from(schema.fundraisingDonations).where(like(schema.fundraisingDonations.donorName, `%${donor.name}%`)).orderBy(desc(schema.fundraisingDonations.donatedAt)).limit(20);
-      const total = donations.reduce((s: number, d: any) => s + parseFloat(d.amount ?? "0"), 0);
-      return JSON.stringify({ donor: { id: donor.id, name: donor.name, email: donor.email, phone: donor.phone }, totalDonations: donations.length, totalAmount: `£${total.toFixed(2)}`, recentDonations: donations.slice(0, 5).map((d: any) => ({ amount: d.amount, date: d.donatedAt, method: d.paymentMethod })) });
+      return JSON.stringify({ success: true, id: result?.id, message: `Donation of £${args.amount} from ${args.donorName} recorded. JazakAllah Khair.` });
     }
 
     case "navigate_to_form": {
@@ -559,55 +734,82 @@ async function textToSpeech(text: string): Promise<string | null> {
   }
 }
 
+// ─── Language detection helper ────────────────────────────────────────────────
+function detectLanguageInstruction(detectedLang: string | undefined): string {
+  const lang = detectedLang?.toLowerCase() ?? "en";
+  if (lang.startsWith("ar")) return "The user is speaking Arabic. Respond in Arabic (Modern Standard or Gulf dialect as appropriate). Use Islamic greetings naturally.";
+  if (lang.startsWith("ur")) return "The user is speaking Urdu. Respond in Urdu. Use Islamic greetings naturally.";
+  if (lang.startsWith("bn")) return "The user is speaking Bengali. Respond in Bengali. Use Islamic greetings naturally.";
+  if (lang.startsWith("fr")) return "The user is speaking French. Respond in French.";
+  if (lang.startsWith("de")) return "The user is speaking German. Respond in German.";
+  return "Respond in English.";
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 export const voiceAgentRouter = router({
-  // Step 1: Transcribe audio → text
+  // Step 1: Transcribe audio → text (auto-detects language)
   transcribe: protectedProcedure
     .input(z.object({ audioUrl: z.string().url(), language: z.string().optional() }))
     .mutation(async ({ input }) => {
-      const result = await transcribeAudio({ audioUrl: input.audioUrl, language: input.language ?? "en" });
+      const result = await transcribeAudio({ audioUrl: input.audioUrl, language: input.language });
       if ("error" in result) {
         const detail = result.details ? ` (${result.details})` : "";
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `${result.error}${detail}`,
+          message: result.error === "NO_SPEECH_DETECTED"
+            ? "No speech detected in the recording. Please speak clearly and try again."
+            : `Transcription failed: ${result.error}${detail}`,
         });
       }
-      if (!result.text?.trim()) {
-        throw new TRPCError({
-          code: "UNPROCESSABLE_CONTENT",
-          message: "No speech detected in the recording. Please speak clearly and try again.",
-        });
-      }
-      return { transcript: result.text };
+      return {
+        transcript: result.text,
+        language: result.language ?? "en",
+        duration: result.duration,
+      };
     }),
 
-  // Step 2: Process transcript → LLM function-calling → DB action → response
+  // Step 2: Query the AI agent with function-calling (Gemini 2.5 Flash)
   query: protectedProcedure
     .input(z.object({
-      transcript: z.string(),
+      transcript: z.string().min(1),
       currentPage: z.string().optional(),
       withTts: z.boolean().optional().default(true),
+      detectedLanguage: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const now = new Date();
-      const systemPrompt = `You are the AQS (Abdullah Quilliam Society) Finance Assistant — an intelligent voice agent embedded in the AQS HR & Finance management system.
+      const langInstruction = detectLanguageInstruction(input.detectedLanguage);
+
+      const systemPrompt = `You are HIBBA — the intelligent AI assistant for the Abdullah Quilliam Society (AQS), a 130-year-old Islamic charity in Liverpool, UK.
+You are embedded in the AQS management system (Hibba) and have access to live financial, donor, staff, accommodation, compliance, and operational data.
 
 Today is ${now.toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}.
 Current month: ${now.getMonth() + 1}, Current year: ${now.getFullYear()}.
 The user is currently on the "${input.currentPage ?? "dashboard"}" page.
 The user's role is: ${ctx.user.role}.
+The user's name is: ${ctx.user.name ?? "Staff member"}.
 
-You have access to tools to query and write the AQS financial database. Use them to answer the user's question or carry out their instruction.
+AQS CONTEXT:
+- AQS operates from three buildings in Liverpool: the main Abdullah Quilliam House (QLH), the Bistro restaurant, and student accommodation.
+- Key funds: General Fund (unrestricted), Waqf Fund (restricted endowment), Sadaqah Jariyah Fund, Masjid Fund.
+- Charity Commission registered. Subject to annual return and Gift Aid obligations.
+- Key people: Dr. Abdul Hamid (Chairman/Superadmin), Galib Khan (Trustee/Finance), Farid Ahmed (Accommodation), Waleed (Finance Officer), Hawa, Caroline (Staff).
+- Friday Jumu'ah collections are a primary income source.
+- Qarde Hasan = interest-free loans (Islamic finance principle).
 
-Guidelines:
-- Always call the most appropriate tool(s) to get real data before answering.
+LANGUAGE: ${langInstruction}
+
+GUIDELINES:
+- Always call the most appropriate tool(s) to get real data before answering. NEVER invent figures.
 - For financial questions, provide specific numbers from the database.
 - For "add" or "create" commands, use the create_* tools directly if all required info is provided.
 - If information is missing for a create action, use navigate_to_form to open the correct page.
 - Be concise, friendly, and professional. Respond as if speaking aloud — no markdown, no bullet points.
-- Address the user by their first name if possible.
-- Format currency as £X,XXX.XX.`;
+- Address the user by their first name.
+- Format currency as £X,XXX.XX.
+- Use Islamic greetings naturally (Assalamu Alaikum, JazakAllah Khair, Alhamdulillah) where appropriate.
+- Flag regulated transactions: donations over £25,000 or related-party payments require trustee approval.
+- If you don't have data for something, say so clearly — never guess.`;
 
       const messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }> = [
         { role: "system", content: systemPrompt },
@@ -619,16 +821,14 @@ Guidelines:
       let dataCreated: { type: string; id: number; message: string } | null = null;
 
       // Agentic loop — keep calling tools until the LLM produces a final text answer
-      for (let iteration = 0; iteration < 5; iteration++) {
+      for (let iteration = 0; iteration < 6; iteration++) {
         const result = await invokeLLM({
           messages,
           tools: agentTools,
           tool_choice: "auto",
         });
-
         const choice = result.choices?.[0];
         if (!choice) break;
-
         const msg = choice.message;
 
         // If the model produced a text response, we're done
@@ -648,33 +848,36 @@ Guidelines:
         messages.push({ role: "assistant", content: JSON.stringify(toolCalls) });
 
         // Execute each tool and add results
-        for (const tc of toolCalls) {
-          let args: Record<string, unknown> = {};
-          try { args = JSON.parse(tc.function.arguments); } catch { /* ignore */ }
+        for (const call of toolCalls) {
+          let toolArgs: Record<string, unknown> = {};
+          try { toolArgs = JSON.parse(call.function.arguments); } catch { /* ignore */ }
 
-          const toolResult = await executeTool(tc.function.name, args, ctx.user.id);
-          const parsed = JSON.parse(toolResult);
+          const toolResult = await executeTool(call.function.name, toolArgs, ctx.user.id);
 
-          // Track side effects
-          if (parsed.navigate) {
-            navigationAction = { page: parsed.page, prefillFields: parsed.prefillFields };
-          }
-          if (parsed.success && parsed.id) {
-            dataCreated = { type: tc.function.name.replace("create_", ""), id: parsed.id, message: parsed.message };
-          }
+          // Check for navigation action
+          try {
+            const parsed = JSON.parse(toolResult);
+            if (parsed.navigate && parsed.page) {
+              navigationAction = { page: parsed.page, prefillFields: parsed.prefillFields };
+            }
+            if (parsed.success && parsed.id) {
+              dataCreated = { type: call.function.name, id: parsed.id, message: parsed.message };
+            }
+          } catch { /* ignore */ }
 
           messages.push({
             role: "tool",
             content: toolResult,
-          });
+            ...(call.id ? { tool_call_id: call.id } : {}),
+          } as any);
         }
       }
 
       if (!finalAnswer) {
-        finalAnswer = dataCreated?.message ?? "Done. The data has been saved.";
+        finalAnswer = "I processed your request but couldn't generate a response. Please try again.";
       }
 
-      // Generate TTS audio
+      // Generate TTS audio if requested
       let audioUrl: string | null = null;
       if (input.withTts) {
         audioUrl = await textToSpeech(finalAnswer);
@@ -688,11 +891,12 @@ Guidelines:
       };
     }),
 
-  // Step 3: Text → speech (standalone, for re-reading responses)
+  // Step 3: Text → speech (standalone TTS endpoint)
   speak: protectedProcedure
-    .input(z.object({ text: z.string() }))
+    .input(z.object({ text: z.string().min(1).max(4096) }))
     .mutation(async ({ input }) => {
-      const url = await textToSpeech(input.text);
-      return { audioUrl: url };
+      const audioUrl = await textToSpeech(input.text);
+      if (!audioUrl) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "TTS generation failed." });
+      return { audioUrl };
     }),
 });

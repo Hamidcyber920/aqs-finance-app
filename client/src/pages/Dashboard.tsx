@@ -9,7 +9,7 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, Users, AlertCircle,
   CheckCircle2, Clock, ArrowUpRight, ArrowDownRight, RefreshCw,
-  Receipt, CreditCard, HandHeart, BookOpen, Wallet
+  Receipt, CreditCard, HandHeart, BookOpen, Wallet, Zap, GraduationCap
 } from "lucide-react";
 
 /* ── Brand tokens ── */
@@ -144,6 +144,8 @@ export default function DashboardPage() {
     { enabled: isAdmin }
   );
   const { data: users } = trpc.users.list.useQuery({}, { enabled: isAdmin });
+  const { data: billsSummary } = (trpc as any).bills?.summary?.useQuery(undefined, { enabled: isAdmin });
+  const { data: trainingSummary } = (trpc as any).training?.summary?.useQuery(undefined, { enabled: isAdmin });
   const { data: complianceActions = [] } = (trpc as any).compliance.listActions.useQuery(undefined, { enabled: isAdmin });
   const { data: trainingData = [] } = (trpc as any).compliance.listTraining.useQuery(undefined, { enabled: isAdmin });
   const { data: policies = [] } = (trpc as any).compliance.listPolicies.useQuery(undefined, { enabled: isAdmin });
@@ -521,6 +523,58 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* ── Bills & Utilities strip (admin only) ── */}
+        {isAdmin && billsSummary && (
+          <Link href="/bills-utilities">
+            <div style={{ background: T.card, backdropFilter: 'blur(20px)', border: `1px solid ${T.border}`, borderRadius: 14, padding: '14px 20px', marginBottom: 20, cursor: 'pointer', animation: 'fadeUp 0.5s ease 340ms both', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#f59e0b22', border: '1px solid #f59e0b44', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Zap size={20} style={{ color: '#f59e0b' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, color: T.muted, margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>Bills & Utilities</p>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: T.white, margin: 0, lineHeight: 1.1 }}>£{parseFloat(billsSummary.totalMonthlyDD || '0').toLocaleString()}<span style={{ fontSize: 13, fontWeight: 500, color: T.muted }}>/mo DD</span></p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                {[{ label: 'Accounts', value: billsSummary.totalAccounts, color: T.mint }, { label: 'Expiring Soon', value: billsSummary.expiringSoon, color: '#f59e0b' }, { label: 'Expired', value: billsSummary.expired, color: '#f87171' }].map(s => (
+                  <div key={s.label} style={{ textAlign: 'center' }}>
+                    <p style={{ fontSize: 18, fontWeight: 800, color: s.value > 0 && s.label !== 'Accounts' ? s.color : T.muted, margin: 0 }}>{s.value}</p>
+                    <p style={{ fontSize: 10, color: T.muted, margin: 0, whiteSpace: 'nowrap' }}>{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              <span style={{ fontSize: 11, color: T.muted, marginLeft: 'auto' }}>Manage Bills →</span>
+            </div>
+          </Link>
+        )}
+
+        {/* ── Training strip (admin only) ── */}
+        {isAdmin && trainingSummary && (
+          <Link href="/training-tracker">
+            <div style={{ background: T.card, backdropFilter: 'blur(20px)', border: `1px solid ${(trainingSummary.expired > 0 || trainingSummary.expiringSoon > 0) ? '#a78bfa' : T.border}`, borderRadius: 14, padding: '14px 20px', marginBottom: 20, cursor: 'pointer', animation: 'fadeUp 0.5s ease 360ms both', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: '#a78bfa22', border: '1px solid #a78bfa44', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <GraduationCap size={20} style={{ color: '#a78bfa' }} />
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, color: T.muted, margin: 0, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>Training Compliance</p>
+                  <p style={{ fontSize: 22, fontWeight: 800, color: '#a78bfa', margin: 0, lineHeight: 1.1 }}>{trainingSummary.staffCount} <span style={{ fontSize: 13, fontWeight: 500, color: T.muted }}>staff tracked</span></p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                {[{ label: 'Valid', value: trainingSummary.valid, color: T.mint }, { label: 'Expiring Soon', value: trainingSummary.expiringSoon, color: '#f59e0b' }, { label: 'Expired', value: trainingSummary.expired, color: '#f87171' }].map(s => (
+                  <div key={s.label} style={{ textAlign: 'center' }}>
+                    <p style={{ fontSize: 18, fontWeight: 800, color: s.value > 0 && s.label !== 'Valid' ? s.color : T.muted, margin: 0 }}>{s.value}</p>
+                    <p style={{ fontSize: 10, color: T.muted, margin: 0, whiteSpace: 'nowrap' }}>{s.label}</p>
+                  </div>
+                ))}
+              </div>
+              <span style={{ fontSize: 11, color: T.muted, marginLeft: 'auto' }}>View Training Matrix →</span>
+            </div>
+          </Link>
+        )}
+
         {/* ── Quick actions ── */}
         <div style={{
           display: "grid",
@@ -534,6 +588,8 @@ export default function DashboardPage() {
             { label: "Add Income", icon: TrendingUp, path: "/income", color: "#f59e0b" },
             { label: "Payroll", icon: Wallet, path: "/payroll", color: "#a78bfa" },
             { label: "Donors", icon: HandHeart, path: "/donors", color: "#f472b6" },
+            { label: "Bills & Utilities", icon: Zap, path: "/bills-utilities", color: "#f59e0b" },
+            { label: "Training", icon: GraduationCap, path: "/training-tracker", color: "#a78bfa" },
           ].map((a) => (
             <a key={a.label} href={a.path} style={{ textDecoration: "none" }}>
               <div style={{
