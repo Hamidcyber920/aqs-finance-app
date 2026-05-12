@@ -170,7 +170,7 @@ export const donorsV3Router = router({
       return { updated: input.ids.length };
     }),
 
-  /** Export Gift Aid claims as CSV-ready rows (HMRC R68 format) */
+  /** Export Gift Aid claims as CSV-ready rows (HMRC ChR1 format) */
   exportGiftAidCsv: protectedProcedure
     .input(z.object({
       taxYear: z.string(),
@@ -398,12 +398,12 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
     return { total, regular, giftAidEligible, totalGiven, lapsed, pendingGiftAid };
   }),
 
-  // ── Gift Aid R68 XML Export ─────────────────────────────────────────────────
+  // ── Gift Aid ChR1 XML Export ─────────────────────────────────────────────────
   /**
-   * Build an HMRC R68-compatible XML string for all pending/submitted gift aid claims
+   * Build an HMRC ChR1-compatible XML string for all pending/submitted gift aid claims
    * in a given tax year and quarter, then return it as a downloadable string.
    */
-  buildGiftAidR68Xml: protectedProcedure
+  buildGiftAidChr1Xml: protectedProcedure
     .input(z.object({
       taxYear: z.string().regex(/^\d{4}-\d{2}$/, "Format: YYYY-YY e.g. 2024-25"),
       quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]),
@@ -487,7 +487,7 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
     }),
 
   /**
-   * Email the R68 XML as an attachment to the finance trustee for review before HMRC submission.
+   * Email the ChR1 XML as an attachment to the finance trustee for review before HMRC submission.
    */
   submitGiftAidToTrustee: protectedProcedure
     .input(z.object({
@@ -502,9 +502,9 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
     .mutation(async ({ input }) => {
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-          <h2 style="color:#1a5c38;">Gift Aid R68 XML &mdash; Ready for HMRC Submission</h2>
+          <h2 style="color:#1a5c38;">Gift Aid ChR1 XML &mdash; Ready for HMRC Submission</h2>
           <p>Assalamu Alaikum, ${input.trusteeName},</p>
-          <p>Please find the HMRC R68 Gift Aid claim XML below for <strong>${input.taxYear} ${input.quarter}</strong>.</p>
+          <p>Please find the HMRC ChR1 Gift Aid claim XML below for <strong>${input.taxYear} ${input.quarter}</strong>.</p>
           <table style="border-collapse:collapse;width:100%;margin:16px 0;">
             <tr style="background:#f0f7f4;">
               <td style="padding:8px 12px;border:1px solid #ccc;"><strong>Tax Year</strong></td>
@@ -526,7 +526,7 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
           <p>Please review and submit via HMRC Charities Online at
           <a href="https://www.gov.uk/guidance/claim-gift-aid-online">gov.uk/guidance/claim-gift-aid-online</a>.</p>
           <details style="margin-top:16px;">
-            <summary style="cursor:pointer;color:#1a5c38;">View R68 XML</summary>
+            <summary style="cursor:pointer;color:#1a5c38;">View ChR1 XML</summary>
             <pre style="background:#f5f5f5;padding:12px;font-size:11px;overflow:auto;">${escapeXml(input.xml)}</pre>
           </details>
           <p style="margin-top:24px;">JazakAllah Khayran,<br/>Abdullah Quilliam Society Finance System</p>
@@ -534,7 +534,7 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
       await sendEmail(
         input.trusteeEmail,
         input.trusteeName,
-        `Gift Aid R68 XML \u2014 ${input.taxYear} ${input.quarter} (${input.claimCount} donors, \u00a3${input.totalGiftAid})`,
+        `Gift Aid ChR1 XML \u2014 ${input.taxYear} ${input.quarter} (${input.claimCount} donors, \u00a3${input.totalGiftAid})`,
         html
       );
       return { sent: true };

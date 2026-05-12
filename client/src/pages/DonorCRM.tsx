@@ -115,34 +115,59 @@ function QuickCapturePanel() {
                 ))}
               </select>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Initial Donation Amount (optional)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="e.g. 50.00"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Payment Method</Label>
-                <select
-                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  disabled={!amount}
+            <div className="space-y-1.5">
+              <Label>Initial Donation Amount (optional)</Label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {[5, 10, 20, 50, 100, 250].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setAmount(String(preset))}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                      amount === String(preset)
+                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        : "bg-transparent border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/40"
+                    }`}
+                  >
+                    £{preset}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setAmount("")}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                    amount && !["5","10","20","50","100","250"].includes(amount)
+                      ? "bg-emerald-600 border-emerald-600 text-white"
+                      : "bg-transparent border-emerald-700/50 text-muted-foreground hover:bg-emerald-900/40"
+                  }`}
                 >
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="standing_order">Standing Order</option>
-                  <option value="other">Other</option>
-                </select>
+                  Other
+                </button>
               </div>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Enter custom amount..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Payment Method</Label>
+              <select
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                disabled={!amount}
+              >
+                <option value="cash">Cash</option>
+                <option value="card">Card</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="cheque">Cheque</option>
+                <option value="standing_order">Standing Order</option>
+                <option value="other">Other</option>
+              </select>
             </div>
             <Button type="submit" disabled={capture.isPending} className="w-full bg-emerald-600 hover:bg-emerald-700">
               {capture.isPending ? "Capturing..." : "⚡ Capture Donor Lead"}

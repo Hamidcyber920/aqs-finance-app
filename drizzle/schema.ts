@@ -458,17 +458,63 @@ export type InsertIncomeRecord = typeof incomeRecords.$inferInsert;
 export const donors = mysqlTable("donors", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
+  // Split name fields (spec Module 01)
+  firstName: varchar("firstName", { length: 100 }),
+  lastName: varchar("lastName", { length: 100 }),
+  title: varchar("title", { length: 30 }),
+  gender: mysqlEnum("gender", ["male", "female", "other", "prefer_not_to_say"]),
+  dob: date("dob"),
+  // Contact
   email: varchar("email", { length: 320 }),
+  emailVerified: boolean("emailVerified").default(false),
   phone: varchar("phone", { length: 30 }),
+  whatsappPhone: varchar("whatsappPhone", { length: 30 }),
+  // Address (split for HMRC Gift Aid ChR1 compliance)
+  addressLine1: varchar("addressLine1", { length: 200 }),
+  addressLine2: varchar("addressLine2", { length: 200 }),
+  city: varchar("city", { length: 100 }),
+  postcode: varchar("postcode", { length: 20 }),
+  country: varchar("country", { length: 100 }).default("United Kingdom"),
   address: text("address"),
+  // Status & source (spec Module 01)
+  status: mysqlEnum("status", ["lead", "active", "lapsed", "major", "anonymous", "deceased", "do_not_contact"]).default("lead"),
+  source: mysqlEnum("source", ["friday_collection", "website", "restaurant", "event", "referral", "scan", "manual", "import"]).default("manual"),
+  // Communication preferences
+  preferredChannel: mysqlEnum("preferredChannel", ["whatsapp", "sms", "email", "post", "none"]).default("whatsapp"),
+  preferredContact: mysqlEnum("preferredContact", ["email", "phone", "both"]).default("email"),
+  language: mysqlEnum("language", ["en", "ur", "ar", "bn", "so", "other"]).default("en"),
+  salutationPreference: mysqlEnum("salutationPreference", ["Brother", "Sister", "Dr.", "Hajji", "Sheikh", "none"]).default("none"),
+  // Consent (GDPR)
+  marketingConsent: boolean("marketingConsent").default(false),
+  consentUpdatedAt: timestamp("consentUpdatedAt"),
+  // Giving statistics
   donorboxId: varchar("donorboxId", { length: 100 }),
   isRegular: boolean("isRegular").default(false).notNull(),
   totalGiven: decimal("totalGiven", { precision: 12, scale: 2 }).default("0").notNull(),
+  donationCount: int("donationCount").default(0),
+  firstGiftDate: date("firstGiftDate"),
   lastGiftDate: date("lastGiftDate"),
   lastGiftAmount: decimal("lastGiftAmount", { precision: 10, scale: 2 }),
-  preferredContact: mysqlEnum("preferredContact", ["email", "phone", "both"]).default("email"),
+  averageGift: decimal("averageGift", { precision: 10, scale: 2 }),
+  largestGift: decimal("largestGift", { precision: 10, scale: 2 }),
+  lapsedAt: timestamp("lapsedAt"),
+  reactivationCount: int("reactivationCount").default(0),
+  // Gift Aid
+  giftAidStatus: mysqlEnum("giftAidStatus", ["eligible", "ineligible", "pending", "expired"]).default("pending"),
+  // Attribution (spec Module 09)
+  firstTouchChannel: varchar("firstTouchChannel", { length: 50 }),
+  firstTouchCampaign: varchar("firstTouchCampaign", { length: 200 }),
+  firstTouchUtm: varchar("firstTouchUtm", { length: 500 }),
+  conversionChannel: varchar("conversionChannel", { length: 50 }),
+  conversionCampaign: varchar("conversionCampaign", { length: 200 }),
+  // Relationships
+  householdId: int("householdId"),
+  referredByDonorId: int("referredByDonorId"),
+  employer: varchar("employer", { length: 200 }),
+  // Notes & tags
   notes: text("notes"),
-   tags: json("tags").$type<string[]>(),
+  pinnedNote: text("pinnedNote"),
+  tags: json("tags").$type<string[]>(),
   // RFM scoring
   rfmScore: varchar("rfmScore", { length: 5 }),
   rfmSegment: varchar("rfmSegment", { length: 50 }),

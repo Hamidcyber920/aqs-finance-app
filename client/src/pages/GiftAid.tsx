@@ -39,10 +39,10 @@ export default function GiftAidPage() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [hmrcRef, setHmrcRef] = useState("");
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
-  const [showR68Dialog, setShowR68Dialog] = useState(false);
-  const [r68Xml, setR68Xml] = useState("");
-  const [r68ClaimCount, setR68ClaimCount] = useState(0);
-  const [r68Total, setR68Total] = useState("0.00");
+  const [showChr1Dialog, setShowR68Dialog] = useState(false);
+  const [chr1Xml, setR68Xml] = useState("");
+  const [chr1ClaimCount, setR68ClaimCount] = useState(0);
+  const [chr1Total, setR68Total] = useState("0.00");
   const [trusteeEmail, setTrusteeEmail] = useState("");
   const [trusteeName, setTrusteeName] = useState("Dr. Abdul Hamid");
   const [markHmrcRef, setMarkHmrcRef] = useState("");
@@ -78,20 +78,20 @@ export default function GiftAidPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const buildR68 = trpc.donorsV3.buildGiftAidR68Xml.useMutation({
+  const buildChr1 = trpc.donorsV3.buildGiftAidChr1Xml.useMutation({
     onSuccess: (d) => {
       setR68Xml(d.xml);
       setR68ClaimCount(d.claimCount);
       setR68Total(d.totalGiftAid);
       setShowR68Dialog(true);
-      toast.success(`R68 XML built for ${d.claimCount} donors — £${d.totalGiftAid} reclaimable`);
+      toast.success(`ChR1 XML built for ${d.claimCount} donors — £${d.totalGiftAid} reclaimable`);
       utils.donorsV3.listGiftAidClaims.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const sendR68ToTrustee = trpc.donorsV3.submitGiftAidToTrustee.useMutation({
-    onSuccess: () => { toast.success("R68 XML emailed to trustee for review"); setShowR68Dialog(false); },
+  const sendChr1ToTrustee = trpc.donorsV3.submitGiftAidToTrustee.useMutation({
+    onSuccess: () => { toast.success("ChR1 XML emailed to trustee for review"); setShowR68Dialog(false); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -106,13 +106,13 @@ export default function GiftAidPage() {
     onError: (e) => toast.error(e.message),
   });
 
-  const handleDownloadR68 = () => {
-    const blob = new Blob([r68Xml], { type: "application/xml" });
+  const handleDownloadChr1 = () => {
+    const blob = new Blob([chr1Xml], { type: "application/xml" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `R68-${taxYear}-${quarter}.xml`; a.click();
+    a.href = url; a.download = `ChR1-${taxYear}-${quarter}.xml`; a.click();
     URL.revokeObjectURL(url);
-    toast.success("R68 XML downloaded");
+    toast.success("ChR1 XML downloaded");
   };
 
   const sendThankYou = trpc.donorsV3.sendThankYou.useMutation({
@@ -221,8 +221,8 @@ export default function GiftAidPage() {
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4 mr-1" />Export CSV
             </Button>
-            <Button variant="outline" size="sm" onClick={() => buildR68.mutate({ taxYear, quarter })} disabled={buildR68.isPending}>
-              <Download className="h-4 w-4 mr-1" />{buildR68.isPending ? "Building XML..." : "Build R68 XML"}
+            <Button variant="outline" size="sm" onClick={() => buildChr1.mutate({ taxYear, quarter })} disabled={buildChr1.isPending}>
+              <Download className="h-4 w-4 mr-1" />{buildChr1.isPending ? "Building XML..." : "Build ChR1 XML"}
             </Button>
             <Button variant="outline" size="sm" onClick={() => { setBatchResult(null); setShowBatchStatementDialog(true); }}>
               <Send className="h-4 w-4 mr-1" />Export All Statements
@@ -390,7 +390,7 @@ export default function GiftAidPage() {
           <DialogHeader><DialogTitle>Submit {selectedIds.length} Claims to HMRC</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-gray-600">Enter the HMRC reference number (optional):</p>
-            <Input placeholder="e.g. R68-2024-Q1-001" value={hmrcRef} onChange={e => setHmrcRef(e.target.value)} />
+            <Input placeholder="e.g. ChR1-2024-Q1-001" value={hmrcRef} onChange={e => setHmrcRef(e.target.value)} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSubmitDialog(false)}>Cancel</Button>
@@ -401,24 +401,24 @@ export default function GiftAidPage() {
         </DialogContent>
       </Dialog>
 
-      {/* R68 XML Review & Submit to Trustee dialog */}
-      <Dialog open={showR68Dialog} onOpenChange={setShowR68Dialog}>
+      {/* ChR1 XML Review & Submit to Trustee dialog */}
+      <Dialog open={showChr1Dialog} onOpenChange={setShowR68Dialog}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>R68 XML — {taxYear} {quarter}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>ChR1 XML — {taxYear} {quarter}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="bg-green-50 rounded p-3">
                 <p className="text-gray-500">Donors</p>
-                <p className="text-xl font-bold text-green-700">{r68ClaimCount}</p>
+                <p className="text-xl font-bold text-green-700">{chr1ClaimCount}</p>
               </div>
               <div className="bg-green-50 rounded p-3">
                 <p className="text-gray-500">Gift Aid Reclaimable</p>
-                <p className="text-xl font-bold text-green-700">£{r68Total}</p>
+                <p className="text-xl font-bold text-green-700">£{chr1Total}</p>
               </div>
             </div>
             <div>
               <p className="text-xs text-gray-500 mb-1">XML Preview</p>
-              <pre className="bg-gray-50 border rounded p-3 text-xs overflow-auto max-h-48 font-mono">{r68Xml.slice(0, 1200)}{r68Xml.length > 1200 ? "\n... (truncated)" : ""}</pre>
+              <pre className="bg-gray-50 border rounded p-3 text-xs overflow-auto max-h-48 font-mono">{chr1Xml.slice(0, 1200)}{chr1Xml.length > 1200 ? "\n... (truncated)" : ""}</pre>
             </div>
             <div className="border-t pt-3 space-y-2">
               <p className="text-sm font-medium">Email to Finance Trustee for Review</p>
@@ -436,14 +436,14 @@ export default function GiftAidPage() {
           </div>
           <DialogFooter className="flex gap-2">
             <Button variant="outline" onClick={() => setShowR68Dialog(false)}>Close</Button>
-            <Button variant="outline" onClick={handleDownloadR68}>
+            <Button variant="outline" onClick={handleDownloadChr1}>
               <Download className="h-4 w-4 mr-1" />Download XML
             </Button>
             <Button
-              onClick={() => sendR68ToTrustee.mutate({ xml: r68Xml, taxYear, quarter, claimCount: r68ClaimCount, totalGiftAid: r68Total, trusteeEmail, trusteeName })}
-              disabled={sendR68ToTrustee.isPending || !trusteeEmail}
+              onClick={() => sendChr1ToTrustee.mutate({ xml: chr1Xml, taxYear, quarter, claimCount: chr1ClaimCount, totalGiftAid: chr1Total, trusteeEmail, trusteeName })}
+              disabled={sendChr1ToTrustee.isPending || !trusteeEmail}
             >
-              <Send className="h-4 w-4 mr-1" />{sendR68ToTrustee.isPending ? "Sending..." : "Email to Trustee"}
+              <Send className="h-4 w-4 mr-1" />{sendChr1ToTrustee.isPending ? "Sending..." : "Email to Trustee"}
             </Button>
             <Button
               variant="default"
@@ -470,7 +470,7 @@ export default function GiftAidPage() {
               <Input
                 value={markHmrcRef}
                 onChange={e => setMarkHmrcRef(e.target.value)}
-                placeholder="e.g. R68-2024-Q1-XXXXXXXX"
+                placeholder="e.g. ChR1-2024-Q1-XXXXXXXX"
               />
               <p className="text-xs text-gray-400 mt-1">You can find this in your HMRC Charities Online submission confirmation.</p>
             </div>

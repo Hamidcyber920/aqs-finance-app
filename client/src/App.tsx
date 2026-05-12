@@ -57,6 +57,7 @@ import QRCodesPage from "./pages/QRCodes";
 import DonorProfilePage from "./pages/DonorProfile";
 import SavedViewsPage from "./pages/SavedViews";
 import DonorPortalPage from "./pages/DonorPortal";
+import DonorsWallPage from "./pages/DonorsWall";
 import BillsUtilitiesPage from "./pages/BillsUtilities";
 import TrainingTrackerPage from "./pages/TrainingTracker";
 import LbmwCorrespondencePage from "./pages/LbmwCorrespondence";
@@ -64,7 +65,7 @@ import TrusteeDashboardPage from "./pages/TrusteeDashboard";
 import FacilitiesPage from "./pages/Facilities";
 import Bistro87Page from "./pages/Bistro87";
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay", "/give"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay", "/give", "/donors-wall"];
 
 function Router() {
   const path = window.location.pathname;
@@ -79,6 +80,7 @@ function Router() {
         <Route path="/reset-password" component={ResetPasswordPage} />
         <Route path="/pay" component={PayPage} />
         <Route path="/give/:token" component={DonorPortalPage} />
+        <Route path="/donors-wall" component={DonorsWallPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route component={NotFound} />

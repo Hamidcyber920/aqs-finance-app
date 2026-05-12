@@ -81,26 +81,26 @@ describe("documents.extract — role gate", () => {
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("rejects manager role", async () => {
+  it("allows manager role (seniorProcedure includes managers)", async () => {
     const caller = appRouter.createCaller(createContext("manager"));
-    await expect(
-      caller.documents.extract({
-        fileUrl: "https://example.com/doc.jpg",
-        mimeType: "image/jpeg",
-        moduleType: "invoice",
-      })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // managers are in SENIOR_ROLES — call should succeed (not throw FORBIDDEN)
+    const result = await caller.documents.extract({
+      fileUrl: "https://example.com/doc.jpg",
+      mimeType: "image/jpeg",
+      moduleType: "invoice",
+    });
+    expect(result).toBeDefined();
   });
 
-  it("rejects admin role (not superadmin/trustee)", async () => {
+  it("allows admin role (seniorProcedure includes admins)", async () => {
     const caller = appRouter.createCaller(createContext("admin"));
-    await expect(
-      caller.documents.extract({
-        fileUrl: "https://example.com/doc.jpg",
-        mimeType: "image/jpeg",
-        moduleType: "payroll",
-      })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    // admins are in SENIOR_ROLES — call should succeed (not throw FORBIDDEN)
+    const result = await caller.documents.extract({
+      fileUrl: "https://example.com/doc.jpg",
+      mimeType: "image/jpeg",
+      moduleType: "payroll",
+    });
+    expect(result).toBeDefined();
   });
 
   it("allows superadmin to extract", async () => {

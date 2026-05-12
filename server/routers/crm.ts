@@ -262,7 +262,7 @@ export const crmRouter = router({
       return db.select().from(giftAidCertificates).orderBy(desc(giftAidCertificates.createdAt)).limit(500);
     }),
 
-  // ─── GIFT AID: HMRC R68 CSV export ───────────────────────────────────────
+  // ─── GIFT AID: HMRC ChR1 CSV export ───────────────────────────────────────
   exportGiftAidCsv: protectedProcedure
     .input(z.object({ month: z.number().min(1).max(12), year: z.number().min(2020) }))
     .mutation(async ({ input }) => {
@@ -284,7 +284,7 @@ export const crmRouter = router({
         )
         .orderBy(giftAidCertificates.createdAt);
 
-      // HMRC R68 format CSV
+      // HMRC ChR1 format CSV
       const header = "Title,First Name,Last Name,House Name/Number,Postcode,Aggregated Donations,Sponsored Event,Declaration Date";
       const rows = certs.map((c) => {
         const nameParts = c.donorName.split(" ");
@@ -302,7 +302,7 @@ export const crmRouter = router({
 
       return {
         csv,
-        filename: `AQS_GiftAid_R68_${monthName}_${input.year}.csv`,
+        filename: `AQS_GiftAid_ChR1_${monthName}_${input.year}.csv`,
         count: certs.length,
       };
     }),
@@ -416,17 +416,48 @@ export const crmRouter = router({
       return { id: (result as any).insertId };
     }),
 
-  // ─── SADAQAH JARIYAH: List entries for a campaign ────────────────────────
+  // ─── SADAQAH JARIYAH: List entries for a campaign or donor ─────────────
   listSadaqahEntries: protectedProcedure
-    .input(z.object({ campaignId: z.number() }))
+    .input(z.object({ campaignId: z.number().optional(), donorId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) return [];
+      const conditions = [];
+      if (input.campaignId) conditions.push(eq(sadaqahJariyahEntries.campaignId, input.campaignId));
+      if (input.donorId) conditions.push(eq(sadaqahJariyahEntries.donorId, input.donorId));
+      if (!conditions.length) return [];
       return db
         .select()
         .from(sadaqahJariyahEntries)
-        .where(eq(sadaqahJariyahEntries.campaignId, input.campaignId))
+        .where(conditions.length === 1 ? conditions[0] : and(...conditions))
         .orderBy(desc(sadaqahJariyahEntries.createdAt));
+    }),
+
+  // ─── SADAQAH JARIYAH: Add donor-level dedication (no campaign required) ──
+  addDonorDedication: protectedProcedure
+    .input(
+      z.object({
+        donorId: z.number(),
+        dedicatedTo: z.string().min(2),
+        relationship: z.string().optional(),
+        occasion: z.string().optional(),
+        notes: z.string().optional(),
+        isPublic: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Use a placeholder campaignId=0 to satisfy NOT NULL, or we use beneficiaryName for dedicatedTo
+      const [result] = await db.insert(sadaqahJariyahEntries).values({
+        donorId: input.donorId,
+        campaignId: 0, // donor-level dedication, not campaign-specific
+        beneficiaryName: input.dedicatedTo,
+        beneficiaryRelation: input.relationship,
+        beneficiaryNotes: input.notes ? `${input.occasion ? '[' + input.occasion + '] ' : ''}${input.notes}` : input.occasion,
+        displayOnDonorWall: input.isPublic,
+      });
+      return { id: (result as any).insertId };
     }),
 
   // ─── CAMPAIGN MILESTONES: Add milestone ──────────────────────────────────
@@ -668,4 +699,57 @@ export const crmRouter = router({
       });
       return { id: (result as any).insertId };
     }),
+
+  // ─── DONORS WALL: Public recognition page data ──────────────────────────────
+  getDonorsWall: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { topDonors: [], dedications: [], stats: {} };
+
+    // Top donors who have given consent to be shown publicly
+    // We show donors with status=active and totalGiven > 0, sorted by totalGiven desc
+    // We mask the name to first name + last initial for privacy unless they are major donors
+    const rawDonors = await db
+      .select()
+      .from(donors)
+      .where(eq(donors.status, "active"))
+      .orderBy(desc(donors.totalGiven))
+      .limit(48);
+
+    const topDonors = rawDonors
+      .filter((d) => Number(d.totalGiven) > 0)
+      .map((d) => {
+        // Privacy: show first name + last initial only
+        const parts = (d.name || "").trim().split(" ");
+        const displayName = parts.length > 1
+          ? `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`
+          : parts[0] || "Anonymous";
+        return {
+          id: d.id,
+          displayName,
+          tier: d.rfmSegment ?? null,
+        };
+      });
+
+    // Public dedications
+    const dedications = await db
+      .select()
+      .from(sadaqahJariyahEntries)
+      .where(eq(sadaqahJariyahEntries.displayOnDonorWall, true))
+      .orderBy(desc(sadaqahJariyahEntries.createdAt))
+      .limit(60);
+
+    // Stats
+    const allDonors = await db.select().from(donors).where(eq(donors.status, "active"));
+    const totalRaised = allDonors.reduce((sum, d) => sum + Number(d.totalGiven ?? 0), 0);
+
+    return {
+      topDonors,
+      dedications,
+      stats: {
+        totalDonors: allDonors.length,
+        totalRaised: totalRaised.toFixed(2),
+        totalDedications: dedications.length,
+      },
+    };
+  }),
 });

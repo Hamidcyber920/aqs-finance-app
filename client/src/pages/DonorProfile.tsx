@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen, Plus, Share2, Send, Mail, Phone, Download, Calendar } from "lucide-react";
+import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen, Plus, Share2, Send, Mail, Phone, Download, Calendar, Star } from "lucide-react";
 import { Link } from "wouter";
 
 const TABS = [
@@ -17,6 +17,7 @@ const TABS = [
   { id: "donations", label: "Donations", icon: Heart },
   { id: "pledges", label: "Pledges", icon: FileText },
   { id: "comms", label: "Communications", icon: MessageSquare },
+  { id: "dedications", label: "Dedications", icon: Star },
   { id: "notes", label: "Notes", icon: BookOpen },
   { id: "audit", label: "Audit", icon: Activity },
 ];
@@ -107,6 +108,17 @@ export default function DonorProfile() {
     { entity: "donor", search: donor?.fullName || donor?.name, pageSize: 50 },
     { enabled: !!donor && activeTab === "audit" }
   );
+
+  const { data: sadaqahEntries, refetch: refetchSadaqah } = (trpc as any).crm.listSadaqahEntries.useQuery(
+    { donorId: donorId! },
+    { enabled: !!donorId && activeTab === "dedications" }
+  );
+  const [showDedicationDialog, setShowDedicationDialog] = useState(false);
+  const [dedicationForm, setDedicationForm] = useState({ dedicatedTo: "", relationship: "", occasion: "", notes: "", isPublic: false });
+  const addDedicationMut = (trpc as any).crm.addDonorDedication.useMutation({
+    onSuccess: () => { toast.success("Dedication recorded"); setShowDedicationDialog(false); setDedicationForm({ dedicatedTo: "", relationship: "", occasion: "", notes: "", isPublic: false }); refetchSadaqah(); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const { data: campaigns } = (trpc as any).fundraising.listCampaigns.useQuery(
     undefined,
@@ -385,6 +397,61 @@ export default function DonorProfile() {
                 {donor.consentGiven !== undefined && <p><span className="text-muted-foreground">Consent:</span> {donor.consentGiven ? "Given" : "Not given"}</p>}
               </CardContent>
             </Card>
+            {/* Next Best Action card (spec Module 01) */}
+            <Card className="md:col-span-2 lg:col-span-3 border-l-4 border-l-emerald-500">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Suggested Next Action
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const seg = donor.rfmSegment ?? "";
+                  const lastGift = donor.lastGiftDate ?? donor.lastDonationDate;
+                  const daysSince = lastGift ? Math.floor((Date.now() - new Date(lastGift).getTime()) / 86400000) : null;
+                  const status = donor.status ?? "lead";
+                  const hasGiftAid = donor.isGiftAidEligible || donor.giftAidStatus === "eligible";
+                  let action = "";
+                  let colour = "text-emerald-700";
+                  if (status === "lead" || status === "prospect") {
+                    action = "Send a personalised welcome link via WhatsApp to complete their profile and make their first donation.";
+                    colour = "text-blue-700";
+                  } else if (status === "lapsed" || (daysSince !== null && daysSince > 365)) {
+                    action = "This donor has not given in over a year. Send a re-engagement message with a campaign update and a donation link.";
+                    colour = "text-amber-700";
+                  } else if (!hasGiftAid) {
+                    action = "Gift Aid declaration is missing. Send a portal link to collect their address and Gift Aid consent — worth 25% extra on every donation.";
+                    colour = "text-orange-700";
+                  } else if (seg === "Champion" || seg === "Loyal") {
+                    action = "This is a high-value loyal donor. Consider inviting them to a Major Donor stewardship event or a personal thank-you call.";
+                    colour = "text-purple-700";
+                  } else if (seg === "At Risk") {
+                    action = "Donor is at risk of lapsing. Send a personalised impact update and a soft ask within the next 14 days.";
+                    colour = "text-red-700";
+                  } else if (!donor.isRegular) {
+                    action = "Invite this donor to set up a monthly standing order to become a regular supporter.";
+                    colour = "text-teal-700";
+                  } else {
+                    action = "Donor is active and engaged. Send a campaign update or impact report to maintain the relationship.";
+                    colour = "text-emerald-700";
+                  }
+                  return (
+                    <div className={`text-sm font-medium ${colour}`}>
+                      {action}
+                      <div className="flex gap-2 mt-3 flex-wrap">
+                        <Button size="sm" variant="outline" onClick={() => donorId && generatePortalTokenMut.mutate({ donorId, purpose: "donation_history" })} disabled={generatePortalTokenMut.isPending}>
+                          <Send className="w-3.5 h-3.5 mr-1.5" /> Send Portal Link
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setShowDonationDialog(true)}>
+                          <Plus className="w-3.5 h-3.5 mr-1.5" /> Record Donation
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -614,6 +681,92 @@ export default function DonorProfile() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {activeTab === "dedications" && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Sadaqah Jariyah Dedications</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">Perpetual charity dedications recorded for this donor</p>
+                </div>
+                <Button size="sm" onClick={() => setShowDedicationDialog(true)}>
+                  <Plus className="w-4 h-4 mr-1" /> Add Dedication
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {!sadaqahEntries?.length ? (
+                  <div className="text-center py-8">
+                    <Star className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                    <p className="text-muted-foreground text-sm">No dedications recorded yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Sadaqah Jariyah dedications are perpetual charity gifts made in memory of or in honour of a named individual</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(sadaqahEntries as any[]).map((entry: any) => (
+                      <div key={entry.id} className="border rounded-lg p-4 bg-amber-50/30 dark:bg-amber-900/10">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Star className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                            <div>
+                              <p className="font-semibold">{entry.beneficiaryName}</p>
+                              {entry.beneficiaryRelation && <p className="text-xs text-muted-foreground">{entry.beneficiaryRelation}</p>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {entry.displayOnDonorWall && <Badge className="bg-green-100 text-green-800 text-xs">Public</Badge>}
+                          </div>
+                        </div>
+                        {entry.beneficiaryNotes && <p className="text-sm text-muted-foreground mt-2 ml-6">{entry.beneficiaryNotes}</p>}
+                        <p className="text-xs text-muted-foreground mt-2 ml-6">{new Date(entry.createdAt).toLocaleDateString("en-GB")}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Add Dedication Dialog */}
+            <Dialog open={showDedicationDialog} onOpenChange={setShowDedicationDialog}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Add Sadaqah Jariyah Dedication</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Dedicated To (Name) *</label>
+                    <Input value={dedicationForm.dedicatedTo} onChange={e => setDedicationForm(f => ({ ...f, dedicatedTo: e.target.value }))} placeholder="e.g. Late Brother Muhammad Ali" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Relationship to Donor</label>
+                    <Input value={dedicationForm.relationship} onChange={e => setDedicationForm(f => ({ ...f, relationship: e.target.value }))} placeholder="e.g. Father, Mother, Spouse" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Occasion</label>
+                    <Input value={dedicationForm.occasion} onChange={e => setDedicationForm(f => ({ ...f, occasion: e.target.value }))} placeholder="e.g. In memory of, In honour of" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">Notes</label>
+                    <Textarea value={dedicationForm.notes} onChange={e => setDedicationForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes..." rows={2} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="isPublic" checked={dedicationForm.isPublic} onChange={e => setDedicationForm(f => ({ ...f, isPublic: e.target.checked }))} />
+                    <label htmlFor="isPublic" className="text-sm">Show on public Donors Wall</label>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowDedicationDialog(false)}>Cancel</Button>
+                  <Button
+                    disabled={!dedicationForm.dedicatedTo || addDedicationMut.isPending}
+                    onClick={() => addDedicationMut.mutate({ donorId: donorId!, dedicatedTo: dedicationForm.dedicatedTo, relationship: dedicationForm.relationship || undefined, occasion: dedicationForm.occasion || undefined, notes: dedicationForm.notes || undefined, isPublic: dedicationForm.isPublic })}
+                  >
+                    {addDedicationMut.isPending ? "Saving..." : "Save Dedication"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
 

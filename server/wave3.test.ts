@@ -105,11 +105,11 @@ describe("Wave 3 schema tables", () => {
 });
 
 // ── Wave 3 next-step procedures ───────────────────────────────────────────────
-describe("donorsV3 R68 procedures", () => {
-  it("exports buildGiftAidR68Xml and submitGiftAidToTrustee", async () => {
+describe("donorsV3 ChR1 procedures", () => {
+  it("exports buildGiftAidChr1Xml and submitGiftAidToTrustee", async () => {
     const mod = await import("./routers/donorsV3");
     const keys = Object.keys(mod.donorsV3Router);
-    expect(keys).toContain("buildGiftAidR68Xml");
+    expect(keys).toContain("buildGiftAidChr1Xml");
     expect(keys).toContain("submitGiftAidToTrustee");
   });
 });

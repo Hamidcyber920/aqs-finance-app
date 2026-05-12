@@ -91,12 +91,22 @@ async function capturePayPalOrder(orderId: string): Promise<{ status: string; ca
 }
 
 // ─── Reference code generator ─────────────────────────────────────────────────
-function generateRefCode(campaignName: string, id: number): string {
+function generateRefCode(campaignName: string, id: number, donorName?: string): string {
+  // Spec: SURNAME-XXXX style (e.g. RIMMER-A8K2) — personal and unique
+  const CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no ambiguous chars (0/O, 1/I)
+  const rand4 = Array.from({ length: 4 }, () => CHARS[Math.floor(Math.random() * CHARS.length)]).join("");
+  if (donorName && donorName.trim()) {
+    // Use last word of donor name as surname prefix (up to 7 chars)
+    const parts = donorName.trim().toUpperCase().replace(/[^A-Z ]/g, "").split(" ");
+    const surname = (parts[parts.length - 1] || parts[0] || "AQS").slice(0, 7);
+    return `${surname}-${rand4}`;
+  }
+  // Fallback: campaign prefix + random
   const prefix = campaignName
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 8);
-  return `${prefix}-${String(id).padStart(3, "0")}`;
+    .slice(0, 5);
+  return `${prefix || "AQS"}-${rand4}`;
 }
 
 // ─── Open Banking link builder (Truelayer / GoCardless style deep link) ────────
@@ -166,7 +176,7 @@ export const fintechRouter = router({
           provider: "stripe",
         })
         .$returningId();
-      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id);
+      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id, input.donorName);
       await db
         .update(stripePaymentSessions)
         .set({ referenceCode: refCode })
@@ -239,7 +249,7 @@ export const fintechRouter = router({
           provider: "stripe",
         })
         .$returningId();
-      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id);
+      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id, input.donorName);
       await db
         .update(stripePaymentSessions)
         .set({ referenceCode: refCode })
@@ -307,7 +317,7 @@ export const fintechRouter = router({
           provider: "paypal",
         })
         .$returningId();
-      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id);
+      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id, input.donorName);
       await db
         .update(stripePaymentSessions)
         .set({ referenceCode: refCode })
@@ -379,7 +389,7 @@ export const fintechRouter = router({
           provider: "open_banking",
         })
         .$returningId();
-      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id);
+      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id, input.donorName);
       await db
         .update(stripePaymentSessions)
         .set({ referenceCode: refCode })
@@ -547,7 +557,7 @@ export const fintechRouter = router({
           provider: "stripe",
         })
         .$returningId();
-      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id);
+      const refCode = generateRefCode(input.campaignName ?? "AQS", inserted.id, input.donorName);
       await db
         .update(stripePaymentSessions)
         .set({ referenceCode: refCode })
@@ -591,8 +601,8 @@ export const fintechRouter = router({
         .limit(input.limit);
     }),
 
-  // ─── GIFT AID R68 EXPORT ───────────────────────────────────────────────────
-  exportGiftAidR68: protectedProcedure
+  // ─── GIFT AID ChR1 EXPORT ───────────────────────────────────────────────────
+  exportGiftAidChr1: protectedProcedure
     .input(z.object({ month: z.number().min(1).max(12), year: z.number().min(2020) }))
     .query(async ({ input }) => {
       const db = await getDb();
@@ -604,7 +614,7 @@ export const fintechRouter = router({
         .from(giftAidDeclarations)
         .where(gte(giftAidDeclarations.createdAt, startDate))
         .orderBy(giftAidDeclarations.createdAt);
-      // HMRC R68 CSV format — all required columns
+      // HMRC ChR1 CSV format — all required columns
       const csvRows = [
         "Title,First Name,Last Name,House Number or Name,Postcode,Donation Date,Donation Amount,Aggregated Donations,Sponsored Event,Gift Aid Declaration,Unique Reference,Consent Method,Consent Timestamp,IP Address",
       ];

@@ -1661,3 +1661,20 @@
 - [ ] TrueLayer — live balance in Cash Flow Planner (deferred — no API key yet)
 - [x] Bistro 87 — mobile layout fixed: header wraps on mobile, tab bar horizontally scrollable, order filter buttons wrap
 - [x] Facilities — mobile layout fixed: header buttons wrap, upcoming bookings row wraps, tab bar horizontally scrollable
+
+## Donor CRM Spec Audit (Round 21 — May 2026)
+
+- [x] Donors table — added all spec-required fields: status, source, preferredChannel, language, salutationPreference, marketingConsent, totalGiven, donationCount, firstGiftDate, lastGiftDate, averageGift, largestGift, rfmScore, rfmSegment, rfmLastCalculated, giftAidStatus, firstTouchChannel, firstTouchCampaign, conversionChannel, householdId, referredByDonorId, lawfulBasis, pinnedNote, tags, lapsedAt, reactivationCount
+- [x] GiftAid — renamed R68 to ChR1 throughout (router, page, download filename)
+- [x] QuickCapture — added £5/£10/£20/£50/£100/£250 preset buttons above amount input
+- [x] Bank transfer reference codes — updated to SURNAME-XXXX format (e.g. RIMMER-A8K2) using donor surname + random 4-char alphanum
+- [x] DonorProfile — added Dedications tab (Sadaqah Jariyah entries per donor)
+- [x] DonorProfile — added Next Best Action card (spec Module 01) with contextual suggestions based on status/RFM/Gift Aid
+- [x] CRM router — added addDonorDedication mutation (donor-level, no campaign required)
+- [x] CRM router — updated listSadaqahEntries to support donorId filter (not just campaignId)
+- [x] CRM router — added getDonorsWall public procedure (top donors + dedications + stats)
+- [x] Donors Wall — created /donors-wall public page with top donors, Sadaqah Jariyah dedications, and stats
+- [x] Donors Wall — added to App.tsx as public route and to sidebar navigation
+- [ ] RFM batch recalculation job (spec Module 08 — admin trigger to recalculate all RFM scores)
+- [ ] Donor Portal — add employer/language/salutation fields to progressive profiling (spec Module 03)
+- [ ] Marketing module (spec Module 09) — UTM tracking, attribution report

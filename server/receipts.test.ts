@@ -69,7 +69,7 @@ vi.mock("./_core/notification", () => ({
   notifyOwner: vi.fn().mockResolvedValue(true),
 }));
 
-function makeCtx(userId = 1): TrpcContext {
+function makeCtx(userId = 1, role = "user"): TrpcContext {
   return {
     user: {
       id: userId,
@@ -77,7 +77,7 @@ function makeCtx(userId = 1): TrpcContext {
       email: "test@example.com",
       name: "Test User",
       loginMethod: "manus",
-      role: "user",
+      role: role as any,
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),
@@ -137,7 +137,8 @@ describe("receipts.update", () => {
 describe("receipts.delete", () => {
   it("deletes a receipt", async () => {
     const { deleteReceipt } = await import("./db");
-    const caller = appRouter.createCaller(makeCtx());
+    // receipts.delete requires superadmin/owner role (deletion policy)
+    const caller = appRouter.createCaller(makeCtx(1, "superadmin"));
     const result = await caller.receipts.delete({ id: 1 });
     expect(result.success).toBe(true);
     expect(deleteReceipt).toHaveBeenCalledWith(1);

@@ -540,6 +540,13 @@
       "when": 1778587174988,
       "tag": "0076_ordinary_tinkerer",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "5",
+      "when": 1778590250678,
+      "tag": "0077_keen_bloodstrike",
+      "breakpoints": true
     }
   ]
 }
