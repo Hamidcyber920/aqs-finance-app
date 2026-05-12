@@ -404,7 +404,11 @@ export function registerScheduledJobs() {
   cron.schedule("0 7 * * *", () => {
     sendContractRenewalReminders().catch(console.error);
   }, { timezone: "Europe/London" });
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15) + contract renewal reminders (daily 07:00)");
+  // Every Monday at 07:00 UK time — weekly cash flow payment digest
+  cron.schedule("0 7 * * 1", () => {
+    sendWeeklyCashFlowDigest().catch(console.error);
+  }, { timezone: "Europe/London" });
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15) + contract renewal reminders (daily 07:00) + weekly cashflow digest (Mon 07:00)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
@@ -1367,5 +1371,137 @@ export async function sendContractRenewalReminders() {
     console.log(`[Scheduled] Contract renewal reminders sent for ${accounts.length} account(s).`);
   } catch (e) {
     console.error("[Scheduled] Contract renewal reminder failed:", e);
+  }
+}
+
+// ─── Weekly Cash Flow Digest ──────────────────────────────────────────────────
+/**
+ * Every Monday at 07:00 UK time — sends a digest of all upcoming payments
+ * due within the next 7 days, with held payments highlighted.
+ */
+async function sendWeeklyCashFlowDigest() {
+  console.log("[Scheduled] Running weekly cash flow digest...");
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const { scheduledPayments } = await import("../drizzle/schema");
+    const { gte, lte: lteOp, inArray: inArr } = await import("drizzle-orm");
+
+    const now = new Date();
+    const sevenDaysLater = new Date(now);
+    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+
+    // Get all pending + held payments due within 7 days
+    const upcoming = await db.select().from(scheduledPayments)
+      .where(
+        and(
+          gte(scheduledPayments.dueDate, now),
+          lteOp(scheduledPayments.dueDate, sevenDaysLater),
+          inArr(scheduledPayments.status, ["pending", "held"])
+        )
+      )
+      .orderBy(scheduledPayments.dueDate);
+
+    if (upcoming.length === 0) {
+      console.log("[Scheduled] No upcoming payments in next 7 days — skipping digest.");
+      return;
+    }
+
+    const totalPending = upcoming.filter(p => p.status === "pending").reduce((s, p) => s + parseFloat(p.amount ?? "0"), 0);
+    const totalHeld = upcoming.filter(p => p.status === "held").reduce((s, p) => s + parseFloat(p.amount ?? "0"), 0);
+    const totalAll = totalPending + totalHeld;
+
+    const rows = upcoming.map(p => {
+      const isHeld = p.status === "held";
+      const dueDate = new Date(p.dueDate).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" });
+      const statusBadge = isHeld
+        ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">HELD</span>`
+        : `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">PENDING</span>`;
+      const rowBg = isHeld ? "#fffbeb" : "#fff";
+      return `
+        <tr style="background:${rowBg};">
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${p.description ?? "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${p.supplier ?? "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${p.building ?? "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#1a4731;">£${parseFloat(p.amount ?? "0").toFixed(2)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${dueDate}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${statusBadge}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280;">${p.note ?? "—"}</td>
+        </tr>`;
+    }).join("");
+
+    const reportDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;">
+        <div style="background:#1a4731;padding:24px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
+          <p style="color:#c9a84c;margin:4px 0 0;">Weekly Cash Flow Digest — Payments Due This Week</p>
+        </div>
+        <div style="padding:24px;background:#fff;">
+          <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh,</p>
+          <p>This is your weekly cash flow digest for <strong>${reportDate}</strong>. The following payments are due within the next <strong>7 days</strong>:</p>
+
+          <div style="display:flex;gap:16px;margin:16px 0;">
+            <div style="flex:1;background:#f0fdf4;padding:16px;border-radius:8px;text-align:center;">
+              <div style="font-size:22px;font-weight:800;color:#1a4731;">£${totalAll.toFixed(2)}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:4px;">Total Due This Week</div>
+            </div>
+            <div style="flex:1;background:#dbeafe;padding:16px;border-radius:8px;text-align:center;">
+              <div style="font-size:22px;font-weight:800;color:#1e40af;">£${totalPending.toFixed(2)}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:4px;">Pending Payments</div>
+            </div>
+            <div style="flex:1;background:#fef3c7;padding:16px;border-radius:8px;text-align:center;">
+              <div style="font-size:22px;font-weight:800;color:#92400e;">£${totalHeld.toFixed(2)}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:4px;">Held (Insufficient Funds)</div>
+            </div>
+          </div>
+
+          <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">
+            <thead>
+              <tr style="background:#f0fdf4;">
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Description</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Supplier</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Building</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Amount</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Due Date</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Status</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;">Note</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+
+          ${totalHeld > 0 ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
+            <strong style="color:#92400e;">⚠️ Held Payments:</strong> £${totalHeld.toFixed(2)} in payments are currently held due to insufficient funds. Please review the Cash Flow Planner and release payments once funds are available.
+          </div>` : ""}
+
+          <p>Please log into the Finance System and update payment statuses once funds are released. JazakAllahu Khayran for your continued dedication.</p>
+          <p>Warm Islamic greetings,<br><strong>AQ Society Finance System</strong></p>
+        </div>
+        <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
+          AQ Society Automated Cash Flow Digest — Every Monday 07:00
+        </div>
+      </div>`;
+
+    const digestRecipients = [
+      { name: "Mumin Khan", email: "meds.mumin@gmail.com" },
+      { name: "Mr Galib Khan", email: "khan.galib@gmail.com" },
+      { name: "Mr Farid Ahmed", email: "fariddixy@gmail.com" },
+    ];
+
+    for (const recipient of digestRecipients) {
+      await sendEmail(
+        recipient.email,
+        recipient.name,
+        `💰 Cash Flow Digest — ${upcoming.length} Payment(s) Due This Week — AQ Society`,
+        html
+      ).then(() => console.log(`[Scheduled] Cash flow digest sent to ${recipient.email}`))
+        .catch(e => console.error(`[Scheduled] Failed to send cash flow digest to ${recipient.email}:`, e));
+    }
+
+    console.log(`[Scheduled] Weekly cash flow digest sent for ${upcoming.length} upcoming payment(s).`);
+  } catch (e) {
+    console.error("[Scheduled] Weekly cash flow digest failed:", e);
   }
 }

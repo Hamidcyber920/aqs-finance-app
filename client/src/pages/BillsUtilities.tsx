@@ -463,6 +463,101 @@ function SettingsPanel() {
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
+// ─── Payment History Timeline Component ───────────────────────────────────────
+function PaymentHistoryTimeline({ accountId, onDeleteBill }: { accountId: number; onDeleteBill: (id: number) => void }) {
+  const { data: history, isLoading } = trpc.bills.paymentHistory.useQuery({ accountId }, { enabled: !!accountId });
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<"all" | "paid" | "pending" | "held">("all");
+
+  if (isLoading) return <div className="text-sm text-muted-foreground py-4 text-center">Loading history...</div>;
+  if (!history || history.length === 0) return <div className="text-sm text-muted-foreground py-4 text-center">No payment history yet.</div>;
+
+  const filtered = activeFilter === "all" ? history : history.filter(h => h.status === activeFilter);
+  const totalPaid = history.filter(h => h.status === "paid").reduce((s, h) => s + parseFloat(h.amount), 0);
+  const totalPending = history.filter(h => h.status === "pending").reduce((s, h) => s + parseFloat(h.amount), 0);
+  const totalHeld = history.filter(h => h.status === "held").reduce((s, h) => s + parseFloat(h.amount), 0);
+
+  return (
+    <div className="space-y-3">
+      {/* Summary bar */}
+      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+        <div className="bg-green-50 dark:bg-green-950/30 rounded p-2">
+          <div className="font-bold text-green-700 dark:text-green-400">£{totalPaid.toFixed(2)}</div>
+          <div className="text-muted-foreground">Paid</div>
+        </div>
+        <div className="bg-blue-50 dark:bg-blue-950/30 rounded p-2">
+          <div className="font-bold text-blue-700 dark:text-blue-400">£{totalPending.toFixed(2)}</div>
+          <div className="text-muted-foreground">Pending</div>
+        </div>
+        <div className="bg-amber-50 dark:bg-amber-950/30 rounded p-2">
+          <div className="font-bold text-amber-700 dark:text-amber-400">£{totalHeld.toFixed(2)}</div>
+          <div className="text-muted-foreground">Held</div>
+        </div>
+      </div>
+      {/* Filter tabs */}
+      <div className="flex gap-1">
+        {(["all", "paid", "pending", "held"] as const).map(f => (
+          <button key={f} onClick={() => setActiveFilter(f)}
+            className={`px-2 py-1 text-xs rounded capitalize transition-colors ${activeFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
+            {f}
+          </button>
+        ))}
+      </div>
+      {/* Timeline */}
+      <div className="relative space-y-2 max-h-72 overflow-y-auto pr-1">
+        <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />
+        {filtered.map(item => {
+          const isOverdue = item.status === "pending" && new Date(item.date as any) < new Date();
+          const dotColor = item.status === "paid" ? "bg-green-500" : item.status === "held" ? "bg-amber-500" : isOverdue ? "bg-red-500" : "bg-blue-500";
+          const dateStr = new Date(item.date as any).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+          return (
+            <div key={item.id} className="flex gap-3 pl-7 relative">
+              <div className={`absolute left-2 top-2.5 w-2.5 h-2.5 rounded-full border-2 border-background ${dotColor}`} />
+              <div className="flex-1 min-w-0 bg-muted/30 rounded p-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="font-semibold text-sm">£{parseFloat(item.amount).toFixed(2)}</span>
+                    <span className="text-muted-foreground truncate">{item.description}</span>
+                    {item.consumption && <span className="text-muted-foreground">· {item.consumption}</span>}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {item.status === "paid" && <Badge className="text-[9px] bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-0">PAID</Badge>}
+                    {item.status === "pending" && !isOverdue && <Badge className="text-[9px] bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-0">PENDING</Badge>}
+                    {item.status === "pending" && isOverdue && <Badge className="text-[9px] bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 border-0">OVERDUE</Badge>}
+                    {item.status === "held" && <Badge className="text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-0">HELD</Badge>}
+                    {item.type === "bill" && item.fileUrl && (
+                      <button onClick={() => setPreviewUrl(item.fileUrl!)} className="text-blue-500 hover:text-blue-700 underline">File</button>
+                    )}
+                    {item.type === "bill" && (
+                      <button onClick={() => { const id = parseInt(item.id.replace("bill-", "")); onDeleteBill(id); }} className="text-red-400 hover:text-red-600 ml-1">✕</button>
+                    )}
+                  </div>
+                </div>
+                <div className="text-muted-foreground mt-0.5">{dateStr}{item.note ? ` · ${item.note}` : ""}</div>
+                {item.autoExpenseLinkedId && <div className="text-[10px] text-muted-foreground mt-0.5">→ Linked to Expense #{item.autoExpenseLinkedId}</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {/* File preview dialog */}
+      {previewUrl && (
+        <Dialog open={!!previewUrl} onOpenChange={() => setPreviewUrl(null)}>
+          <DialogContent className="max-w-2xl max-h-[80vh]">
+            <DialogHeader><DialogTitle>Attached Document</DialogTitle></DialogHeader>
+            {previewUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+              <img src={previewUrl} alt="Bill document" className="w-full rounded max-h-[60vh] object-contain" />
+            ) : (
+              <iframe src={previewUrl} className="w-full h-[60vh] rounded border" title="Bill document" />
+            )}
+            <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline text-center block">Open in new tab</a>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
 export default function BillsUtilities() {
   const [buildingFilter, setBuildingFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -769,23 +864,11 @@ export default function BillsUtilities() {
                       )}
 
                       <div>
-                        <h3 className="font-medium text-sm mb-2">Bill History</h3>
-                        {accountDetail.bills.length === 0 && <p className="text-sm text-muted-foreground">No bills recorded yet.</p>}
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                          {accountDetail.bills.map(bill => (
-                            <div key={bill.id} className="flex items-center justify-between p-2 bg-muted/30 rounded text-sm">
-                              <div>
-                                <span className="font-medium">£{parseFloat(bill.amount).toFixed(2)}</span>
-                                <span className="text-muted-foreground ml-2">{new Date(bill.billDate).toLocaleDateString()}</span>
-                                {bill.consumptionUnits && <span className="text-muted-foreground ml-2">{bill.consumptionUnits} {bill.unitType}</span>}
-                                {bill.autoExpenseLinkedId && <Badge variant="secondary" className="ml-2 text-[10px]">→ Expense #{bill.autoExpenseLinkedId}</Badge>}
-                              </div>
-                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => deleteBill.mutate({ id: bill.id })}>
-                                <Trash2 className="w-3 h-3 text-red-500" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
+                        <h3 className="font-medium text-sm mb-2 flex items-center gap-2">
+                          Payment History
+                          <Badge variant="outline" className="text-[10px]">{accountDetail.bills.length} bills</Badge>
+                        </h3>
+                        <PaymentHistoryTimeline accountId={selectedAccountId!} onDeleteBill={(id) => deleteBill.mutate({ id })} />
                       </div>
                     </CardContent>
                   </Card>

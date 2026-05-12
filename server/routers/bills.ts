@@ -565,6 +565,58 @@ export const billsRouter = router({
       return { success: true };
     }),
 
+  // Per-account payment history: bills + scheduled payments (paid/held/pending)
+  paymentHistory: protectedProcedure
+    .input(z.object({
+      accountId: z.number(),
+      limit: z.number().optional().default(100),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      // Get bills for this account
+      const bills = await db.select().from(utilityBills)
+        .where(eq(utilityBills.accountId, input.accountId))
+        .orderBy(desc(utilityBills.billDate))
+        .limit(input.limit);
+      // Get scheduled payments linked to this account
+      const scheduled = await db.select().from(scheduledPayments)
+        .where(eq(scheduledPayments.accountId, input.accountId))
+        .orderBy(desc(scheduledPayments.dueDate))
+        .limit(input.limit);
+      // Merge into a unified timeline sorted by date descending
+      const billItems = bills.map(b => ({
+        id: `bill-${b.id}`,
+        type: "bill" as const,
+        date: b.billDate,
+        amount: b.amount,
+        description: `Bill — ${b.periodStart ? new Date(b.periodStart as any).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : ""} to ${b.periodEnd ? new Date(b.periodEnd as any).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : ""}`.trim(),
+        status: "paid" as const,
+        note: b.notes ?? null,
+        fileUrl: b.billUrl ?? null,
+        consumption: b.consumptionUnits ? `${b.consumptionUnits} ${b.unitType ?? ""}`.trim() : null,
+        autoExpenseLinkedId: b.autoExpenseLinkedId ?? null,
+        rawDate: b.billDate instanceof Date ? b.billDate.getTime() : new Date(b.billDate as any).getTime(),
+      }));
+      const scheduledItems = scheduled.map(s => ({
+        id: `sched-${s.id}`,
+        type: "scheduled" as const,
+        date: s.dueDate,
+        amount: s.amount ?? "0",
+        description: s.description ?? "Scheduled Payment",
+        status: s.status as "pending" | "paid" | "held",
+        note: s.note ?? null,
+        fileUrl: null,
+        consumption: null,
+        autoExpenseLinkedId: null,
+        rawDate: s.dueDate instanceof Date ? s.dueDate.getTime() : new Date(s.dueDate as any).getTime(),
+        paidAt: s.paidAt ?? null,
+        heldAt: s.heldAt ?? null,
+      }));
+      const merged = [...billItems, ...scheduledItems].sort((a, b) => b.rawDate - a.rawDate);
+      return merged;
+    }),
+
   // Add a manual one-off future payment
   addManualScheduled: protectedProcedure
     .input(z.object({

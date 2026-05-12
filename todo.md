@@ -1617,3 +1617,8 @@
 - [x] LBMW Correspondence — Send to Trustees: button on PDF export dialog that emails the generated PDF to all trustees in one click
 - [x] Bills & Utilities — Renew Contract button on expired/expiring account cards (pre-fills new start date, opens edit dialog)
 - [x] Dashboard — Bills & Utilities summary widget: total monthly DD, expiring contracts count, next upcoming DD date
+
+## Round 16 (May 12, 2026)
+- [x] Cash Flow Planner — Add Manual Payment button: description, amount, due date, building, category, note fields; saves to scheduled_payments with source=manual
+- [x] Cash Flow Planner — Weekly payment digest email: every Monday 7 AM, email admin/trustees with all payments due in the next 7 days, held payments highlighted
+- [x] Bills & Utilities — Per-account Payment History timeline: tab/section on each account showing all past bills and DD payments in chronological order
