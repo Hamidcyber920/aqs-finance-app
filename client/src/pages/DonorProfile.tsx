@@ -175,6 +175,14 @@ export default function DonorProfile() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const sendStatementMut = (trpc as any).donors.sendAnnualStatement.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`Annual statement emailed to ${donor?.email ?? "donor"} — JazakAllah Khayran!`);
+      setShowStatementDialog(false);
+    },
+    onError: (e: any) => toast.error(e.message ?? "Failed to send statement"),
+  });
+
   const donorName = donor?.fullName || donor?.name || "Donor";
   const donorFirstName = donorName.split(" ")[0];
 
@@ -809,14 +817,23 @@ export default function DonorProfile() {
               </Select>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setShowStatementDialog(false)}>Cancel</Button>
             <Button
-              disabled={exportStatementMut.isPending}
+              variant="outline"
+              disabled={exportStatementMut.isPending || sendStatementMut.isPending}
               onClick={() => donorId && exportStatementMut.mutate({ donorId, taxYear: statementTaxYear })}
             >
               <Download className="w-4 h-4 mr-1" />
-              {exportStatementMut.isPending ? "Generating..." : "Generate PDF"}
+              {exportStatementMut.isPending ? "Generating..." : "Download PDF"}
+            </Button>
+            <Button
+              disabled={sendStatementMut.isPending || exportStatementMut.isPending || !donor?.email}
+              title={!donor?.email ? "Donor has no email address" : `Send to ${donor?.email}`}
+              onClick={() => donorId && sendStatementMut.mutate({ donorId, taxYear: statementTaxYear })}
+            >
+              <Mail className="w-4 h-4 mr-1" />
+              {sendStatementMut.isPending ? "Sending..." : "Send via Email"}
             </Button>
           </DialogFooter>
         </DialogContent>

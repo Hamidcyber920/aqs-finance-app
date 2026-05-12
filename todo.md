@@ -1478,3 +1478,8 @@
 - [x] Mark All Read button in Comms Hub section header
 - [x] Swipe-to-archive gesture on mobile email list items
 - [x] Inline PDF/image attachment preview in Comms Hub email detail panel
+
+## Next Steps Round 6 (May 12 2026)
+- [x] Comms Hub Flagged filter shortcut — one-tap "Flagged" button in email list toolbar to instantly filter to flagged messages
+- [x] Send Annual Statement email — button on Donor Profile that emails the generated PDF directly to the donor with a pre-written covering message
+- [x] Donor portal Pay Pledge Stripe flow — leads can make a Stripe payment directly from the /give/:token portal page without needing a full donor account

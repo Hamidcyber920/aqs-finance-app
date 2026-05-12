@@ -2946,6 +2946,70 @@ export const appRouter = router({
         const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
         return { url, taxYear: input.taxYear, donorName: donor.name, grandTotal: totalDonated + totalPledgePaid };
       }),
+
+    sendAnnualStatement: adminProcedure
+      .input(z.object({ donorId: z.number().int(), taxYear: z.number().int() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const { fundraisingDonations: fd, fundraisingCampaigns: fc, pledgePayments: pp, pledges: pl, donors: dt } = await import("../drizzle/schema");
+        const [donor] = await db.select().from(dt).where(eq(dt.id, input.donorId)).limit(1);
+        if (!donor) throw new TRPCError({ code: "NOT_FOUND", message: "Donor not found" });
+        if (!donor.email) throw new TRPCError({ code: "BAD_REQUEST", message: "Donor has no email address" });
+        const startDate = `${input.taxYear}-04-06`;
+        const endDate = `${input.taxYear + 1}-04-05`;
+        const donations = await db.select({
+          id: fd.id, amount: fd.amount, donatedAt: fd.donatedAt,
+          paymentMethod: fd.paymentMethod, giftAidDeclared: fd.giftAidDeclared,
+          notes: fd.notes, campaignName: fc.name, referenceCode: fd.referenceCode,
+        }).from(fd)
+          .leftJoin(fc, eq(fd.campaignId, fc.id))
+          .where(donor.email
+            ? sql`${fd.donorEmail} = ${donor.email} AND ${fd.donatedAt} >= ${startDate} AND ${fd.donatedAt} <= ${endDate}`
+            : sql`${fd.donorName} = ${donor.name} AND ${fd.donatedAt} >= ${startDate} AND ${fd.donatedAt} <= ${endDate}`)
+          .orderBy(fd.donatedAt);
+        const pledgePaymentsRows = await db.select({
+          id: pp.id, amount: pp.amount, paymentDate: pp.paymentDate,
+          reference: pp.reference, pledgeId: pp.pledgeId, campaignName: pl.campaignName,
+        }).from(pp)
+          .leftJoin(pl, eq(pp.pledgeId, pl.id))
+          .where(sql`${pp.donorId} = ${input.donorId} AND ${pp.paymentDate} >= ${startDate} AND ${pp.paymentDate} <= ${endDate}`)
+          .orderBy(pp.paymentDate);
+        const totalDonated = donations.reduce((s, d) => s + Number(d.amount ?? 0), 0);
+        const totalPledgePaid = pledgePaymentsRows.reduce((s, p) => s + Number(p.amount ?? 0), 0);
+        const giftAidTotal = donations.filter(d => d.giftAidDeclared).reduce((s, d) => s + Number(d.amount ?? 0), 0);
+        const { generateAnnualStatement } = await import("./annualStatement");
+        const pdfBuffer = await generateAnnualStatement({
+          donorName: donor.name, donorEmail: donor.email, donorAddress: donor.address,
+          taxYear: input.taxYear,
+          donations: donations.map(d => ({
+            date: d.donatedAt ? new Date(d.donatedAt).toLocaleDateString("en-GB") : "—",
+            amount: Number(d.amount ?? 0), campaign: d.campaignName,
+            method: d.paymentMethod, giftAid: !!d.giftAidDeclared, reference: d.referenceCode,
+          })),
+          pledgePayments: pledgePaymentsRows.map(p => ({
+            date: p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—",
+            amount: Number(p.amount ?? 0), campaign: p.campaignName, reference: p.reference,
+          })),
+          totalDonated, totalPledgePaid,
+          grandTotal: totalDonated + totalPledgePaid, giftAidTotal,
+        });
+        const fileKey = `statements/${input.donorId}-${input.taxYear}-${Date.now()}.pdf`;
+        const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
+        const firstName = donor.name.split(" ")[0];
+        const grandTotal = totalDonated + totalPledgePaid;
+        const html = `
+          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+            <p>AssalamuAlaikum Dear ${firstName},</p>
+            <p>Please find attached your Annual Giving Statement for the UK tax year <strong>${input.taxYear}/${input.taxYear + 1}</strong> (6 April ${input.taxYear} – 5 April ${input.taxYear + 1}).</p>
+            <p>Your total giving for this period: <strong>£${grandTotal.toFixed(2)}</strong>${giftAidTotal > 0 ? `, of which £${giftAidTotal.toFixed(2)} is eligible for Gift Aid (adding £${(giftAidTotal * 0.25).toFixed(2)} to your donations at no cost to you).` : "."}  </p>
+            <p>You can download your statement here: <a href="${url}">Download Annual Statement PDF</a></p>
+            <p>JazakAllahu Khayran for your continued generosity and support of AQ Society.</p>
+            <p>BarakAllahu feekum,<br/>AQ Society Finance Team</p>
+          </div>`;
+        await sendGmail(donor.email, donor.name, `Your Annual Giving Statement ${input.taxYear}/${input.taxYear + 1} — AQ Society`, html);
+        return { success: true, url, taxYear: input.taxYear, donorName: donor.name, grandTotal };
+      }),
   }),
   // ─── EMAIL CAMPAIGNS ──────────────────────────────────────────────────────
 
@@ -5697,6 +5761,51 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
         });
         return { url: session.url };
       }),
+    // Public: create a Stripe Checkout for a lead to make a donation
+    createLeadDonationCheckout: publicProcedure
+      .input(z.object({
+        token: z.string(),
+        amount: z.number().positive().min(0.5),
+        campaignName: z.string().optional(),
+        origin: z.string().url(),
+      }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const [tokenRow] = await db.select().from(donorPortalTokens).where(eq(donorPortalTokens.token, input.token)).limit(1);
+        if (!tokenRow || tokenRow.expiresAt < new Date()) throw new TRPCError({ code: "FORBIDDEN", message: "Invalid or expired link" });
+        if (!tokenRow.donorLeadId) throw new TRPCError({ code: "BAD_REQUEST", message: "This checkout is only for donor leads" });
+        const [lead] = await db.select().from(donorLeads).where(eq(donorLeads.id, tokenRow.donorLeadId)).limit(1);
+        if (!lead) throw new TRPCError({ code: "NOT_FOUND", message: "Donor lead not found" });
+        const StripeLib = (await import("stripe")).default;
+        const stripe = new StripeLib(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-04-22.dahlia" as any });
+        const campaignLabel = input.campaignName ?? "AQ Society";
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          customer_email: lead.email ?? undefined,
+          line_items: [{
+            price_data: {
+              currency: "gbp",
+              product_data: { name: `Donation — ${campaignLabel}`, description: `From ${lead.name}` },
+              unit_amount: Math.round(input.amount * 100),
+            },
+            quantity: 1,
+          }],
+          mode: "payment",
+          allow_promotion_codes: true,
+          success_url: `${input.origin}/give/${input.token}?paid=1`,
+          cancel_url: `${input.origin}/give/${input.token}`,
+          client_reference_id: `lead_${tokenRow.donorLeadId}`,
+          metadata: {
+            source: "donor_portal_lead",
+            donor_lead_id: String(tokenRow.donorLeadId),
+            donor_name: lead.name,
+            campaign_name: campaignLabel,
+          },
+        });
+        return { url: session.url };
+      }),
+
     // Protected: generate a portal token for a donor
     generateToken: protectedProcedure
       .input(z.object({ donorId: z.number().int(), purpose: z.enum(["profile_complete", "donation_history", "gift_aid_sign", "annual_summary"]).optional() }))

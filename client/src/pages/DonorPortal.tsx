@@ -29,6 +29,8 @@ export default function DonorPortal() {
   const search = useSearch();
   const paid = new URLSearchParams(search).get("paid") === "1";
   const [payingPledgeId, setPayingPledgeId] = useState<number | null>(null);
+  const [donationAmount, setDonationAmount] = useState("");
+  const [donationLoading, setDonationLoading] = useState(false);
 
   // Profile completion form state
   const [profileFormOpen, setProfileFormOpen] = useState(false);
@@ -59,6 +61,25 @@ export default function DonorPortal() {
       setPayingPledgeId(null);
     },
   });
+
+  const leadDonationCheckout = (trpc as any).donorPortal.createLeadDonationCheckout.useMutation({
+    onSuccess: (d: any) => {
+      if (d.url) window.open(d.url, "_blank");
+      else toast.error("Could not create payment session");
+      setDonationLoading(false);
+    },
+    onError: (e: any) => {
+      toast.error(e.message);
+      setDonationLoading(false);
+    },
+  });
+
+  const handleLeadDonate = () => {
+    const amt = parseFloat(donationAmount);
+    if (!amt || amt < 0.5) { toast.error("Minimum donation is £0.50"); return; }
+    setDonationLoading(true);
+    leadDonationCheckout.mutate({ token: token ?? "", amount: amt, origin: window.location.origin });
+  };
 
   const completeProfile = (trpc as any).donorPortal.completeLeadProfile.useMutation({
     onSuccess: () => {
@@ -337,6 +358,58 @@ export default function DonorPortal() {
             )}
           </CardContent>
         </Card>
+
+        {/* Make a Donation card — shown only for leads (no pledges yet) */}
+        {isLead && pledges.length === 0 && (
+          <Card className="border-emerald-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-emerald-600" />
+                Make a Donation
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                You can make a secure card payment directly from this portal. Enter the amount you would like to donate below.
+              </p>
+              <div className="flex gap-2 items-center">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">£</span>
+                  <Input
+                    type="number"
+                    min="0.50"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="pl-7"
+                    value={donationAmount}
+                    onChange={e => setDonationAmount(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleLeadDonate()}
+                  />
+                </div>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 shrink-0"
+                  onClick={handleLeadDonate}
+                  disabled={donationLoading || !donationAmount || parseFloat(donationAmount) < 0.5}
+                >
+                  {donationLoading ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Redirecting…</> : <><CreditCard className="h-4 w-4 mr-1" />Pay Securely</>}
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[10, 25, 50, 100, 250].map(preset => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className="px-3 py-1 text-sm rounded-full border border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-colors"
+                    onClick={() => setDonationAmount(String(preset))}
+                  >
+                    £{preset}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Payments are processed securely via Stripe. You will be redirected to complete payment.</p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Active Pledges */}
         {activePledges.length > 0 && (

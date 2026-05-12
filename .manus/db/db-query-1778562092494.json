@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `inbound_emails` MODIFY COLUMN `status` enum('unread','read','actioned','archived','flagged') NOT NULL DEFAULT 'unread';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute ALTER TABLE `inbound_emails` MODIFY COLUMN `status` enum('unread','read','actioned','archived','flagged') NOT NULL DEFAULT 'unread';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 372
+}

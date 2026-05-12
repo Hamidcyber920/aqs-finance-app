@@ -102,7 +102,7 @@ export const commsInboxRouter = router({
   listEmails: protectedProcedure
     .input(z.object({
       sectionId: z.number().optional(),
-      status: z.enum(["unread", "read", "actioned", "archived"]).optional(),
+      status: z.enum(["unread", "read", "actioned", "archived", "flagged"]).optional(),
       priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
       search: z.string().optional(),
       fromEmail: z.string().optional(), // exact/partial match on fromEmail for donor comms tab
@@ -116,7 +116,7 @@ export const commsInboxRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       const conditions: any[] = [];
       if (input.sectionId !== undefined) conditions.push(eq(inboundEmails.sectionId, input.sectionId));
-      if (input.status) conditions.push(eq(inboundEmails.status, input.status));
+      if (input.status) conditions.push(eq(inboundEmails.status, input.status as any));
       if (input.priority) conditions.push(eq(inboundEmails.priority, input.priority));
       if (input.dateFrom) conditions.push(gte(inboundEmails.receivedAt, new Date(input.dateFrom)));
       if (input.dateTo) conditions.push(lte(inboundEmails.receivedAt, new Date(input.dateTo)));
@@ -223,7 +223,7 @@ export const commsInboxRouter = router({
   updateEmail: protectedProcedure
     .input(z.object({
       id: z.number(),
-      status: z.enum(["unread", "read", "actioned", "archived"]).optional(),
+      status: z.enum(["unread", "read", "actioned", "archived", "flagged"]).optional(),
       priority: z.enum(["urgent", "high", "normal", "low"]).optional(),
       sectionId: z.number().nullable().optional(),
       assignedToUserId: z.number().nullable().optional(),
@@ -670,7 +670,7 @@ export const commsInboxRouter = router({
   bulkAction: protectedProcedure
     .input(z.object({
       emailIds: z.array(z.number()).min(1).max(200),
-      action: z.enum(["markRead", "markUnread", "archive", "moveToSection"]),
+      action: z.enum(["markRead", "markUnread", "archive", "flag", "unflag", "moveToSection"]),
       sectionId: z.number().optional(), // required when action === moveToSection
     }))
     .mutation(async ({ input, ctx }) => {
@@ -680,6 +680,8 @@ export const commsInboxRouter = router({
       if (input.action === "markRead") updates.status = "read";
       else if (input.action === "markUnread") updates.status = "unread";
       else if (input.action === "archive") updates.status = "archived";
+      else if (input.action === "flag") updates.status = "flagged";
+      else if (input.action === "unflag") updates.status = "read";
       else if (input.action === "moveToSection") {
         if (input.sectionId === undefined) throw new TRPCError({ code: "BAD_REQUEST", message: "sectionId required for moveToSection" });
         updates.sectionId = input.sectionId;

@@ -15,7 +15,7 @@ import {
   Mail, MailOpen, AlertTriangle, RefreshCw, Plus, Search, Zap, FileText,
   MoveRight, UserCheck, Archive, CheckCircle, ChevronRight, ChevronLeft, Inbox, Loader2,
   Upload, Eye, Clock, Tag, X, Paperclip, Filter, CalendarDays, ChevronDown,
-  SquareCheck, Trash2
+  SquareCheck, Trash2, Flag
 } from "lucide-react";
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -511,12 +511,27 @@ export default function CommsInboxPage() {
             </Button>
           </div>
 
+          {/* Quick filter shortcuts */}
+          <div className="flex gap-1 flex-wrap">
+            {(["all", "unread", "flagged", "actioned"] as const).map(s => (
+              <button key={s} onClick={() => setStatusFilter(s)}
+                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1 ${
+                  statusFilter === s
+                    ? s === "flagged" ? "bg-orange-600 border-orange-500 text-white" : "bg-indigo-600 border-indigo-500 text-white"
+                    : "border-white/20 text-gray-400 hover:text-white hover:border-white/40"
+                }`}>
+                {s === "flagged" && <Flag className="w-2.5 h-2.5" />}
+                {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+
           {/* Filter panel */}
           {showFilterPanel && (
             <div className="space-y-2 pt-1 border-t border-white/5">
               {/* Status */}
               <div className="flex flex-wrap gap-1">
-                {["all", "unread", "read", "actioned", "archived"].map(s => (
+                {["all", "unread", "read", "actioned", "archived", "flagged"].map(s => (
                   <button key={s} onClick={() => setStatusFilter(s)}
                     className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${statusFilter === s ? "bg-indigo-600 border-indigo-500 text-white" : "border-white/20 text-gray-400 hover:text-white hover:border-white/40"}`}>
                     {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
@@ -629,6 +644,14 @@ export default function CommsInboxPage() {
                         <span className="w-1.5 h-1.5 rounded-full bg-transparent flex-shrink-0" />
                       )}
                     </div>
+                    {/* Flag toggle button on row */}
+                    <button
+                      className={`flex-shrink-0 mt-0.5 p-0.5 rounded hover:bg-white/10 transition-colors ${email.status === "flagged" ? "text-orange-400" : "text-gray-600 hover:text-orange-400"}`}
+                      title={email.status === "flagged" ? "Unflag" : "Flag"}
+                      onClick={(e) => { e.stopPropagation(); updateEmail.mutate({ id: email.id, status: email.status === "flagged" ? "unread" : "flagged" }); }}
+                    >
+                      <Flag className="w-3 h-3" />
+                    </button>
                     <button
                       className="flex-1 text-left min-w-0"
                       onClick={() => {
@@ -637,7 +660,7 @@ export default function CommsInboxPage() {
                       }}
                     >
                       <div className="flex items-center justify-between gap-1">
-                        <span className={`text-xs truncate ${isUnread ? "text-white font-semibold" : "text-gray-300"}`}>
+                        <span className={`text-xs truncate ${isUnread ? "text-white font-semibold" : email.status === "flagged" ? "text-orange-300" : "text-gray-300"}`}>
                           {email.fromName || email.fromEmail}
                         </span>
                         <Badge className={`text-[10px] px-1 py-0 border flex-shrink-0 ${PRIORITY_COLORS[email.priority] ?? ""}`}>
@@ -704,6 +727,12 @@ export default function CommsInboxPage() {
                   <Button size="sm" variant="outline" className="h-8 text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
                     onClick={() => updateEmail.mutate({ id: (selectedEmail as any).id, status: "actioned" })}>
                     <CheckCircle className="w-3 h-3 mr-1" /> Mark Actioned
+                  </Button>
+                  <Button size="sm" variant="outline"
+                    className={`h-8 text-xs ${ (selectedEmail as any).status === "flagged" ? "border-orange-500/40 text-orange-400 hover:bg-orange-500/10" : "border-white/20 text-gray-300 hover:text-orange-400 hover:bg-orange-500/10" }`}
+                    title={(selectedEmail as any).status === "flagged" ? "Unflag" : "Flag"}
+                    onClick={() => updateEmail.mutate({ id: (selectedEmail as any).id, status: (selectedEmail as any).status === "flagged" ? "unread" : "flagged" })}>
+                    <Flag className="w-3 h-3" />
                   </Button>
                   <Button size="sm" variant="outline" className="h-8 text-xs border-white/20 text-gray-400 hover:text-white hover:bg-white/10"
                     onClick={() => updateEmail.mutate({ id: (selectedEmail as any).id, status: "archived" })}>

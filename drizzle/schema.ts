@@ -1585,7 +1585,7 @@ export const inboundEmails = mysqlTable("inbound_emails", {
   // Classification
   sectionId: int("sectionId"),                                  // FK to email_sections.id
   priority: mysqlEnum("priority", ["urgent", "high", "normal", "low"]).default("normal").notNull(),
-  status: mysqlEnum("status", ["unread", "read", "actioned", "archived"]).default("unread").notNull(),
+  status: mysqlEnum("status", ["unread", "read", "actioned", "archived", "flagged"]).default("unread").notNull(),
   // AI processing
   aiSummary: text("aiSummary"),                                 // AI-generated summary
   aiKeyPoints: json("aiKeyPoints").$type<string[]>().default([]),

@@ -1,0 +1,1 @@
+ALTER TABLE `inbound_emails` MODIFY COLUMN `status` enum('unread','read','actioned','archived','flagged') NOT NULL DEFAULT 'unread';
