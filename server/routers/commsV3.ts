@@ -165,6 +165,28 @@ Return JSON: { subject: string, body: string }`;
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
 
+      // ── Quiet hours enforcement (UK time) ─────────────────────────────────────────────
+      if (!input.scheduledAt) {
+        const nowUK = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/London" }));
+        const hour = nowUK.getHours();
+        const minute = nowUK.getMinutes();
+        const dayOfWeek = nowUK.getDay(); // 0=Sun, 5=Fri
+        // Block 22:00–07:00
+        if (hour >= 22 || hour < 7) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Bulk messages cannot be sent between 22:00 and 07:00 UK time. Current UK time: ${hour.toString().padStart(2,"0")}:${minute.toString().padStart(2,"0")}. Please schedule for later or wait until 07:00.`,
+          });
+        }
+        // Block Friday Jumu'ah window 12:00–14:00
+        if (dayOfWeek === 5 && hour >= 12 && hour < 14) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Bulk messages cannot be sent during Friday Jumu'ah (12:00–14:00 UK time) out of respect for the congregation. Please schedule for after 14:00.",
+          });
+        }
+      }
+
       // Create outbox record
       const [outboxResult] = await db.insert(commsOutbox).values({
         templateId: input.templateId,
@@ -184,6 +206,28 @@ Return JSON: { subject: string, body: string }`;
 
         if (input.recipientGroup === "donors_all" || input.recipientGroup.startsWith("donors_")) {
           const allDonors = await db.select().from(donors);
+          // ── 14-day frequency cap: check last bulk send to donors ───────────────────────────
+          const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+          const [lastDonorBroadcast] = await db
+            .select({ sentAt: commsOutbox.sentAt })
+            .from(commsOutbox)
+            .where(
+              and(
+                sql`recipient_group LIKE 'donors_%'`,
+                sql`status = 'sent'`,
+                sql`sent_at IS NOT NULL`
+              )
+            )
+            .orderBy(desc(commsOutbox.sentAt))
+            .limit(1);
+          if (lastDonorBroadcast?.sentAt && new Date(lastDonorBroadcast.sentAt) > fourteenDaysAgo) {
+            const daysSince = Math.floor((Date.now() - new Date(lastDonorBroadcast.sentAt).getTime()) / (1000 * 60 * 60 * 24));
+            const daysLeft = 14 - daysSince;
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Donor frequency cap: a bulk email was sent to donors ${daysSince} day${daysSince !== 1 ? "s" : ""} ago. Please wait ${daysLeft} more day${daysLeft !== 1 ? "s" : ""} before sending another bulk donor email (14-day minimum gap).`,
+            });
+          }
           recipients = allDonors
             .filter((d: any) => d.email)
             .map((d: any) => ({ email: d.email!, name: d.name ?? "Valued Donor" }));

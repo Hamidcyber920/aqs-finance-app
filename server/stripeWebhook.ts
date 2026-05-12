@@ -1,7 +1,7 @@
 import { Express, Request, Response } from "express";
 import Stripe from "stripe";
 import { getDb } from "./db";
-import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns, loanRepayments, loanApplications, pledges, pledgePayments, donors } from "../drizzle/schema";
+import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns, loanRepayments, loanApplications, pledges, pledgePayments, donors, processedStripeEvents } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import nodemailer from "nodemailer";
 
@@ -66,6 +66,32 @@ export function registerStripeWebhook(app: Express) {
       if (!db) {
         console.error("[Stripe Webhook] Database not available");
         return res.status(500).json({ error: "Database unavailable" });
+      }
+
+      // ── Idempotency guard: skip already-processed events ─────────────────────
+      try {
+        const [existing] = await db
+          .select({ id: processedStripeEvents.id })
+          .from(processedStripeEvents)
+          .where(eq(processedStripeEvents.stripeEventId, event.id))
+          .limit(1);
+        if (existing) {
+          console.log(`[Stripe Webhook] Duplicate event ${event.id} — already processed, skipping.`);
+          return res.json({ received: true, duplicate: true });
+        }
+        // Record this event as processed before handling (prevents race conditions)
+        await db.insert(processedStripeEvents).values({
+          stripeEventId: event.id,
+          eventType: event.type,
+        });
+      } catch (idempotencyErr: any) {
+        // If unique constraint violation, another worker already processed it
+        if (idempotencyErr?.code === "ER_DUP_ENTRY" || idempotencyErr?.message?.includes("duplicate")) {
+          console.log(`[Stripe Webhook] Race condition — event ${event.id} already being processed.`);
+          return res.json({ received: true, duplicate: true });
+        }
+        // For other DB errors, let it fall through to the main handler
+        console.error("[Stripe Webhook] Idempotency check error:", idempotencyErr.message);
       }
 
       try {

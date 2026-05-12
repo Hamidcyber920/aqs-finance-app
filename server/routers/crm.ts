@@ -640,6 +640,18 @@ export const crmRouter = router({
           profileComplete: !!(input.donorPhone && input.donorEmail && input.donorAddress),
         })
         .$returningId();
+      // ── Amount edge case validation ──────────────────────────────────────────────────
+      if (input.amount !== undefined) {
+        if (input.amount < 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Donation amount cannot be negative." });
+        if (input.amount === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Donation amount cannot be £0.00. Please enter a valid amount." });
+        if (input.amount < 0.02 && input.amount > 0) {
+          // Flag as suspicious (£0.01 test payments)
+          console.warn(`[CRM] Suspicious donation amount £${input.amount} from ${input.donorName} — flagged for review`);
+        }
+        if (input.amount >= 1000000) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Donations of £1,000,000 or more require manual trustee review. Please contact the finance team directly." });
+        }
+      }
       if (input.amount && input.amount > 0) {
         await db.insert(fundraisingDonations).values({
           donorName: input.donorName,

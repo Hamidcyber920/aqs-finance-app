@@ -58,7 +58,7 @@ import {
   getDashboardStats,
 } from "./db";
 import { eq, and, sql, desc, isNull, gte, lte } from "drizzle-orm";
-import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations, donorLeads, donorCommsLog } from "../drizzle/schema";
+import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations, donorLeads, donorCommsLog, donors } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 // sendGmail is defined locally in this file (line ~123)
 
@@ -2860,7 +2860,27 @@ export const appRouter = router({
     list: adminProcedure.input(z.object({ isRegular: z.boolean().optional(), search: z.string().optional(), limit: z.number().default(100), offset: z.number().default(0) })).query(({ input }) => getDonors(input)),
     get: adminProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => { const d = await getDonorById(input.id); if (!d) throw new TRPCError({ code: "NOT_FOUND" }); return d; }),
     create: adminProcedure.input(z.object({ name: z.string(), email: z.string().optional(), phone: z.string().optional(), address: z.string().optional(), isRegular: z.boolean().default(false), isGiftAid: z.boolean().default(false), notes: z.string().optional() })).mutation(({ input }) => createDonor(input)),
-    update: adminProcedure.input(z.object({ id: z.number(), name: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), isRegular: z.boolean().optional(), isGiftAid: z.boolean().optional(), notes: z.string().optional(), totalGiven: z.string().optional() })).mutation(async ({ input }) => { const { id, ...data } = input; await updateDonor(id, data as any); return { success: true }; }),
+    update: adminProcedure.input(z.object({ id: z.number(), name: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), address: z.string().optional(), isRegular: z.boolean().optional(), isGiftAid: z.boolean().optional(), notes: z.string().optional(), totalGiven: z.string().optional() })).mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      // ── Gift Aid UK postcode guard ─────────────────────────────────────────────
+      if (data.isGiftAid === true) {
+        // If enabling Gift Aid, check the donor has a UK address/postcode
+        const db = await getDb();
+        if (db) {
+          const [existing] = await db.select().from(donors).where(eq(donors.id, id)).limit(1);
+          const address = data.address ?? (existing as any)?.address ?? "";
+          const ukPostcodeRegex = /[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}/i;
+          if (!ukPostcodeRegex.test(address)) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Gift Aid can only be claimed for UK taxpayers with a valid UK address and postcode. Please add a UK address before enabling Gift Aid.",
+            });
+          }
+        }
+      }
+      await updateDonor(id, data as any);
+      return { success: true };
+    }),
     // Create or upsert multiple donors and link them to an income record
     linkToIncome: protectedProcedure.input(z.object({
       incomeRecordId: z.number(),

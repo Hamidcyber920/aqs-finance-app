@@ -2297,3 +2297,14 @@ export const bankConnections = mysqlTable("bank_connections", {
 });
 export type BankConnection = typeof bankConnections.$inferSelect;
 export type InsertBankConnection = typeof bankConnections.$inferInsert;
+
+// ─── STRIPE WEBHOOK IDEMPOTENCY ──────────────────────────────────────────────
+// Tracks processed Stripe event IDs to prevent double-processing on retry
+export const processedStripeEvents = mysqlTable("processed_stripe_events", {
+  id: int("id").autoincrement().primaryKey(),
+  stripeEventId: varchar("stripeEventId", { length: 255 }).notNull().unique(),
+  eventType: varchar("eventType", { length: 100 }).notNull(),
+  processedAt: timestamp("processedAt").defaultNow().notNull(),
+});
+export type ProcessedStripeEvent = typeof processedStripeEvents.$inferSelect;
+export type InsertProcessedStripeEvent = typeof processedStripeEvents.$inferInsert;

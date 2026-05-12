@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `processed_stripe_events` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`stripeEventId` varchar(255) NOT NULL,\n\t`eventType` varchar(100) NOT NULL,\n\t`processedAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `processed_stripe_events_id` PRIMARY KEY(`id`),\n\tCONSTRAINT `processed_stripe_events_stripeEventId_unique` UNIQUE(`stripeEventId`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE `processed_stripe_events` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`stripeEventId` varchar(255) NOT NULL,\n\t`eventType` varchar(100) NOT NULL,\n\t`processedAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `processed_stripe_events_id` PRIMARY KEY(`id`),\n\tCONSTRAINT `processed_stripe_events_stripeEventId_unique` UNIQUE(`stripeEventId`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1091
+}

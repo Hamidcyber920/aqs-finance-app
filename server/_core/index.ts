@@ -1,5 +1,7 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -37,6 +39,36 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // ── Security headers (Helmet) ──────────────────────────────────────────────
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // Vite injects inline scripts in dev; CSP managed at CDN/proxy layer
+      crossOriginEmbedderPolicy: false, // Allow embedding for Manus OAuth portal
+    })
+  );
+
+  // ── Rate limiting ──────────────────────────────────────────────────────────
+  // General API limiter: 300 requests per minute per IP
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests. Please try again in a moment." },
+    skip: (req) => req.path === "/api/stripe/webhook", // Stripe webhook has its own limiter
+  });
+  // Stripe webhook limiter: 60 per minute (Stripe retries are infrequent)
+  const webhookLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Webhook rate limit exceeded." },
+  });
+  app.use("/api/stripe/webhook", webhookLimiter);
+  app.use("/api", apiLimiter);
+
   // Raw body parser for Stripe webhook signature verification (must be before express.json)
   app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
   // Configure body parser with larger size limit for file uploads

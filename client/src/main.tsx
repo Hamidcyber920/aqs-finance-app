@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { Component, ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import { toast } from "sonner";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
@@ -114,6 +115,15 @@ queryClient.getMutationCache().subscribe(event => {
     const error = event.mutation.state.error;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Mutation Error]", error);
+    // ── Show human-readable error toast for tRPC BAD_REQUEST / FORBIDDEN errors ──
+    if (error instanceof TRPCClientError) {
+      const code = (error.data as any)?.code;
+      const msg = error.message;
+      if (code === "BAD_REQUEST" || code === "FORBIDDEN" || code === "NOT_FOUND") {
+        // Use sonner toast if available
+        toast.error(msg || "An error occurred. Please try again.");
+      }
+    }
   }
 });
 
