@@ -19,6 +19,13 @@ interface ThemeProviderProps {
   switchable?: boolean;
 }
 
+function safeGet(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeSet(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "light",
@@ -26,14 +33,14 @@ export function ThemeProvider({
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (switchable) {
-      const stored = localStorage.getItem("theme");
+      const stored = safeGet("theme");
       return (stored as Theme) || defaultTheme;
     }
     return defaultTheme;
   });
 
   const [density, setDensityState] = useState<Density>(() => {
-    const stored = localStorage.getItem("density");
+    const stored = safeGet("density");
     return (stored as Density) || "comfortable";
   });
 
@@ -46,7 +53,7 @@ export function ThemeProvider({
       root.classList.remove("dark");
     }
     if (switchable) {
-      localStorage.setItem("theme", theme);
+      safeSet("theme", theme);
     }
   }, [theme, switchable]);
 
@@ -58,7 +65,7 @@ export function ThemeProvider({
     } else {
       root.classList.remove("density-compact");
     }
-    localStorage.setItem("density", density);
+    safeSet("density", density);
   }, [density]);
 
   const toggleTheme = switchable

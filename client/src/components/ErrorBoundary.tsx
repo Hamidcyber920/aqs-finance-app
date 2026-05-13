@@ -9,20 +9,32 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  componentStack: string | null;
 }
 
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, componentStack: null };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: { componentStack: string }) {
+    console.error("[ErrorBoundary] Error message:", error.message);
+    console.error("[ErrorBoundary] Error stack:", error.stack);
+    console.error("[ErrorBoundary] Component stack:", info.componentStack);
+    this.setState({ componentStack: info.componentStack });
   }
 
   render() {
     if (this.state.hasError) {
+      const msg = this.state.error?.message || "Unknown error";
+      const stack = this.state.error?.stack || "";
+      const compStack = this.state.componentStack || "";
+
       return (
         <div className="flex items-center justify-center min-h-screen p-8 bg-background">
           <div className="flex flex-col items-center w-full max-w-2xl p-8">
@@ -31,11 +43,19 @@ class ErrorBoundary extends Component<Props, State> {
               className="text-destructive mb-6 flex-shrink-0"
             />
 
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
+            <h2 className="text-xl mb-2">An unexpected error occurred.</h2>
+            <p className="text-sm text-destructive font-mono mb-4 text-center break-all">{msg}</p>
 
-            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
+            {compStack && (
+              <div className="p-3 w-full rounded bg-muted overflow-auto mb-3 max-h-40">
+                <p className="text-xs font-semibold text-muted-foreground mb-1">Component stack:</p>
+                <pre className="text-xs text-muted-foreground whitespace-pre-wrap">{compStack}</pre>
+              </div>
+            )}
+
+            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6 max-h-48">
               <pre className="text-sm text-muted-foreground whitespace-break-spaces">
-                {this.state.error?.stack}
+                {stack}
               </pre>
             </div>
 

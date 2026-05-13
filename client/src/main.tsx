@@ -101,7 +101,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (publicPaths.some((p) => window.location.pathname.startsWith(p))) return;
 
   // Save the current path so we can restore it after re-login
-  sessionStorage.setItem("hibba_return_path", window.location.pathname + window.location.search);
+  try { sessionStorage.setItem("hibba_return_path", window.location.pathname + window.location.search); } catch { /* storage unavailable */ }
 
   // Show a friendly toast before redirecting
   toast.warning("Your session has expired. Any unsaved form data has been preserved — please log in again to continue.", {
