@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE IF NOT EXISTS user_briefing_prefs (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  userId INT NOT NULL UNIQUE,\n  enabled BOOLEAN NOT NULL DEFAULT TRUE,\n  includeLoans BOOLEAN NOT NULL DEFAULT TRUE,\n  includeDonations BOOLEAN NOT NULL DEFAULT TRUE,\n  includePayroll BOOLEAN NOT NULL DEFAULT TRUE,\n  includePledges BOOLEAN NOT NULL DEFAULT TRUE,\n  includeTenants BOOLEAN NOT NULL DEFAULT TRUE,\n  includeCompliance BOOLEAN NOT NULL DEFAULT TRUE,\n  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute CREATE TABLE IF NOT EXISTS user_briefing_prefs (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  userId INT NOT NULL UNIQUE,\n  enabled BOOLEAN NOT NULL DEFAULT TRUE,\n  includeLoans BOOLEAN NOT NULL DEFAULT TRUE,\n  includeDonations BOOLEAN NOT NULL DEFAULT TRUE,\n  includePayroll BOOLEAN NOT NULL DEFAULT TRUE,\n  includePledges BOOLEAN NOT NULL DEFAULT TRUE,\n  includeTenants BOOLEAN NOT NULL DEFAULT TRUE,\n  includeCompliance BOOLEAN NOT NULL DEFAULT TRUE,\n  updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 450
+}

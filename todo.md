@@ -1948,3 +1948,8 @@
 - [x] Admin Hibba AI tab in AdminPanel: push quick actions to all users, trigger morning briefing, view/remove shared actions
 - [x] VoiceAgent admin fallback: getAdminSharedActions query as fallback when user has no saved actions
 - [x] Unique constraint on voice_quick_actions (userId, pageKey) for ON DUPLICATE KEY UPDATE
+
+- [x] Per-user morning briefing preferences: user_briefing_prefs table, getBriefingPrefs/saveBriefingPrefs procedures, Settings notifications tab UI
+- [x] TTS voice selector: voice dropdown in Voice History replay bar, loads browser voices, defaults to UK English, filters to English voices
+- [x] Bulk quick action templates: 4 packs (Finance, Trustee, Fundraising, Operations) in Admin Panel Hibba AI tab, each applies to 4 pages at once
+- [x] QUICK_ACTION_TEMPLATES constant with pre-curated actions per page for each pack

@@ -10,7 +10,7 @@ import { invokeLLM } from "../_core/llm";
 import { eq, and, sql, desc, gte, lte, like, or } from "drizzle-orm";
 import {
   voiceSessions, voiceToolCalls, voiceTranscripts, voiceCostTracking,
-  voiceFeatureFlags, voiceReviewQueue, voiceQuickActions,
+  voiceFeatureFlags, voiceReviewQueue, voiceQuickActions, userBriefingPrefs,
   users, donors, fundraisingDonations, fundraisingCampaigns,
   receipts, trustees, donorCommsLog, pledges, pledgePayments,
   giftAidDeclarations, donorLeads, commsOutbox,
@@ -1061,5 +1061,39 @@ ${transcriptText || "No transcript recorded."}
       await generateMorningBriefing();
       return { triggered: true };
     }),
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BRIEFING PREFERENCES
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  getBriefingPrefs: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+    const [prefs] = await db.select().from(userBriefingPrefs).where(eq(userBriefingPrefs.userId, ctx.user.id));
+    // Return defaults if no record exists
+    return prefs ?? {
+      enabled: true, includeLoans: true, includeDonations: true,
+      includePayroll: true, includePledges: true, includeTenants: true, includeCompliance: true,
+    };
+  }),
+
+  saveBriefingPrefs: protectedProcedure
+    .input(z.object({
+      enabled: z.boolean(),
+      includeLoans: z.boolean(),
+      includeDonations: z.boolean(),
+      includePayroll: z.boolean(),
+      includePledges: z.boolean(),
+      includeTenants: z.boolean(),
+      includeCompliance: z.boolean(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.insert(userBriefingPrefs).values({ userId: ctx.user.id, ...input })
+        .onDuplicateKeyUpdate({ set: { ...input } });
+      return { ok: true };
+    }),
+
 
 });

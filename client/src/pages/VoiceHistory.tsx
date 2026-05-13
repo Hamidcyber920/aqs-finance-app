@@ -29,6 +29,27 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
   const [isPaused, setIsPaused] = useState(false);
   const [replayIndex, setReplayIndex] = useState<number | null>(null);
   const [replaySpeed, setReplaySpeed] = useState(1);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>("");
+  // Load available voices (browser may load them async)
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setAvailableVoices(voices);
+        // Default to a UK English or female voice
+        const preferred = voices.find(v =>
+          v.lang.startsWith("en-GB") ||
+          v.name.includes("Samantha") || v.name.includes("Karen") ||
+          v.name.toLowerCase().includes("female")
+        );
+        if (preferred && !selectedVoiceName) setSelectedVoiceName(preferred.name);
+      }
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    return () => { window.speechSynthesis.onvoiceschanged = null; };
+  }, []);
   const utteranceRef = React.useRef<SpeechSynthesisUtterance | null>(null);
   const replayQueueRef = React.useRef<string[]>([]);
   const replayIdxRef = React.useRef(0);
@@ -53,10 +74,12 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
     const utterance = new SpeechSynthesisUtterance(queue[idx]);
     utterance.rate = speed;
     utterance.pitch = 1.05;
-    // Try to use a female voice
+    // Use selected voice or fall back to auto-detect
     const voices = window.speechSynthesis.getVoices();
-    const femaleVoice = voices.find(v => v.name.toLowerCase().includes("female") || v.name.includes("Samantha") || v.name.includes("Karen") || v.name.includes("Moira") || v.name.includes("Victoria") || v.name.includes("Fiona"));
-    if (femaleVoice) utterance.voice = femaleVoice;
+    const chosenVoice = selectedVoiceName
+      ? voices.find(v => v.name === selectedVoiceName)
+      : voices.find(v => v.name.toLowerCase().includes("female") || v.name.includes("Samantha") || v.name.includes("Karen") || v.name.includes("Moira") || v.name.includes("Victoria") || v.name.includes("Fiona"));
+    if (chosenVoice) utterance.voice = chosenVoice;
     utterance.onend = () => {
       replayIdxRef.current = idx + 1;
       speakNext(queue, idx + 1, speed);
@@ -76,7 +99,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
     setIsReplaying(true);
     setIsPaused(false);
     speakNext(assistantMessages, 0, replaySpeed);
-  }, [replaySpeed, speakNext]);
+  }, [replaySpeed, speakNext, selectedVoiceName]);
 
   const togglePause = React.useCallback(() => {
     if (isPaused) {
@@ -172,6 +195,19 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
               <option value={1.25}>1.25×</option>
               <option value={1.5}>1.5×</option>
             </select>
+            {availableVoices.length > 0 && (
+              <select
+                value={selectedVoiceName}
+                onChange={e => setSelectedVoiceName(e.target.value)}
+                disabled={isReplaying}
+                title="Select TTS voice"
+                className="text-xs bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-zinc-300 max-w-[130px] truncate"
+              >
+                {availableVoices.filter(v => v.lang.startsWith("en")).map(v => (
+                  <option key={v.name} value={v.name}>{v.name.replace(/Microsoft |Google |Apple /g, "")}</option>
+                ))}
+              </select>
+            )}
             {!isReplaying ? (
               <Button size="sm" variant="ghost" onClick={() => startReplay(assistantMessages)} className="h-7 px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
                 <Play className="w-3.5 h-3.5 mr-1" /> Play

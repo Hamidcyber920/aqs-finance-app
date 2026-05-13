@@ -37,6 +37,50 @@ function StatusBadge({ status }: { status: string }) {
   return <span style={{ padding:"2px 10px",borderRadius:999,fontSize:11,fontWeight:600,background:s.bg,color:s.color,textTransform:"capitalize" }}>{status}</span>;
 }
 
+
+const QUICK_ACTION_TEMPLATES = [
+  {
+    name: "Finance Pack",
+    emoji: "💰",
+    pages: [
+      { pageKey: "/loans", actions: ["Show overdue loans", "Summarise active loans", "Any loans due this month?"] },
+      { pageKey: "/income", actions: ["Show this month's income", "Compare to last month", "Any pending income entries?"] },
+      { pageKey: "/monthly-expenses", actions: ["Show this month's expenses", "What's the biggest expense?", "Any unapproved expenses?"] },
+      { pageKey: "/reconciliation", actions: ["Show unreconciled items", "Summarise this month's reconciliation", "Any discrepancies?"] },
+    ],
+  },
+  {
+    name: "Trustee Pack",
+    emoji: "🏛️",
+    pages: [
+      { pageKey: "/trustee-dashboard", actions: ["Give me a trustee summary", "Any urgent items?", "Show pending approvals"] },
+      { pageKey: "/compliance", actions: ["Show outstanding compliance items", "Any overdue actions?", "Summarise compliance status"] },
+      { pageKey: "/decisions", actions: ["Show recent decisions", "Any pending decisions?", "Summarise the decisions register"] },
+      { pageKey: "/audit-trail", actions: ["Show recent activity", "Any unusual actions?", "Who made changes today?"] },
+    ],
+  },
+  {
+    name: "Fundraising Pack",
+    emoji: "🎗️",
+    pages: [
+      { pageKey: "/fundraising", actions: ["Show active campaigns", "Which campaign is performing best?", "Any campaigns ending soon?"] },
+      { pageKey: "/donors", actions: ["Show top donors", "Any lapsed donors?", "Who donated this month?"] },
+      { pageKey: "/gift-aid", actions: ["Show pending Gift Aid claims", "How much Gift Aid is outstanding?", "Any declarations expiring?"] },
+      { pageKey: "/pledges", actions: ["Show active pledges", "Any overdue pledge payments?", "Summarise pledge totals"] },
+    ],
+  },
+  {
+    name: "Operations Pack",
+    emoji: "⚙️",
+    pages: [
+      { pageKey: "/payroll", actions: ["Show this month's payroll", "Any pending approvals?", "Summarise staff costs"] },
+      { pageKey: "/accommodation", actions: ["Show current tenants", "Any rent overdue?", "Upcoming tenancy renewals?"] },
+      { pageKey: "/facilities", actions: ["Show today's bookings", "Any maintenance issues?", "What's booked this week?"] },
+      { pageKey: "/bills-utilities", actions: ["Show outstanding bills", "Any overdue utilities?", "Summarise utility costs"] },
+    ],
+  },
+];
+
 export default function AdminPanelPage() {
   const { user } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
@@ -425,6 +469,39 @@ export default function AdminPanelPage() {
               </div>
             </div>
 
+
+            {/* Bulk Quick Action Templates */}
+            <div style={{ background:"rgba(13,34,64,0.8)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"20px 24px" }}>
+              <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
+                <Settings size={18} style={{ color:"#fbbf24" }}/>
+                <p style={{ fontSize:14,fontWeight:700,color:"#FFFFFF",margin:0 }}>Bulk Templates</p>
+              </div>
+              <p style={{ fontSize:13,color:"rgba(255,255,255,0.5)",margin:"0 0 16px" }}>
+                Apply a pre-built pack to push curated quick actions to multiple pages at once.
+              </p>
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:12 }}>
+                {QUICK_ACTION_TEMPLATES.map(tmpl => (
+                  <div key={tmpl.name} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px 16px" }}>
+                    <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
+                      <span style={{ fontSize:18 }}>{tmpl.emoji}</span>
+                      <p style={{ fontSize:13,fontWeight:700,color:"#FFFFFF",margin:0 }}>{tmpl.name}</p>
+                    </div>
+                    <p style={{ fontSize:11,color:"rgba(255,255,255,0.4)",margin:"0 0 12px" }}>{tmpl.pages.length} pages</p>
+                    <button
+                      onClick={() => {
+                        tmpl.pages.forEach(({ pageKey, actions }) => {
+                          shareActionsMut?.mutate?.({ pageKey, actions });
+                        });
+                        toast.success(`"${tmpl.name}" template applied to ${tmpl.pages.length} pages`);
+                      }}
+                      disabled={shareActionsMut?.isPending}
+                      style={{ width:"100%",padding:"8px 0",borderRadius:8,background:"linear-gradient(135deg,rgba(99,91,255,0.3),rgba(79,70,229,0.3))",border:"1px solid rgba(99,91,255,0.3)",color:"rgba(255,255,255,0.9)",fontSize:12,fontWeight:700,cursor:"pointer" }}>
+                      Apply Pack
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
             {/* Currently Shared Actions */}
             <div style={{ background:"rgba(13,34,64,0.8)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"20px 24px" }}>
               <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>

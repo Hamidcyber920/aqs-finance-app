@@ -26,6 +26,27 @@ export default function ProfileSettingsPage() {
   }, [setEntityContext, tab]);
 
   const [tab, setTab] = useState("profile");
+  const { data: briefingPrefs } = (trpc as any).voiceAgent.getBriefingPrefs.useQuery();
+  const saveBriefingPrefsMut = (trpc as any).voiceAgent.saveBriefingPrefs.useMutation({
+    onSuccess: () => toast.success("Briefing preferences saved"),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const [localPrefs, setLocalPrefs] = useState({
+    enabled: true, includeLoans: true, includeDonations: true,
+    includePayroll: true, includePledges: true, includeTenants: true, includeCompliance: true,
+  });
+  // Sync localPrefs when briefingPrefs loads
+  useEffect(() => {
+    if (briefingPrefs) setLocalPrefs({
+      enabled: briefingPrefs.enabled ?? true,
+      includeLoans: briefingPrefs.includeLoans ?? true,
+      includeDonations: briefingPrefs.includeDonations ?? true,
+      includePayroll: briefingPrefs.includePayroll ?? true,
+      includePledges: briefingPrefs.includePledges ?? true,
+      includeTenants: briefingPrefs.includeTenants ?? true,
+      includeCompliance: briefingPrefs.includeCompliance ?? true,
+    });
+  }, [briefingPrefs]);
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);
 
@@ -199,6 +220,57 @@ export default function ProfileSettingsPage() {
                     </label>
                   </div>
                 ))}
+              </div>
+
+              {/* Hibba Morning Briefing Preferences */}
+              <div style={{ marginTop:24,paddingTop:24,borderTop:`1px solid ${T.border}` }}>
+                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+                  <div>
+                    <p style={{ fontSize:14,fontWeight:700,color:T.white,margin:0 }}>Hibba Morning Briefing</p>
+                    <p style={{ fontSize:12,color:T.muted,margin:"2px 0 0" }}>Choose which sections Hibba includes in your daily 7:30am email</p>
+                  </div>
+                  {briefingPrefs && (
+                    <label style={{ position:"relative",width:44,height:24,cursor:"pointer",flexShrink:0 }}>
+                      <input type="checkbox" checked={localPrefs.enabled} onChange={e => setLocalPrefs(p => ({...p, enabled: e.target.checked}))} style={{ opacity:0,width:0,height:0,position:"absolute" }}/>
+                      <span style={{ position:"absolute",inset:0,borderRadius:999,background:localPrefs.enabled?T.mint:"rgba(255,255,255,0.15)",transition:"0.2s",display:"flex",alignItems:"center" }}>
+                        <span style={{ position:"absolute",width:20,height:20,borderRadius:"50%",background:T.white,boxShadow:"0 1px 3px rgba(0,0,0,0.3)",transition:"0.2s",left:localPrefs.enabled?"calc(100% - 22px)":"2px" }}/>
+                      </span>
+                    </label>
+                  )}
+                </div>
+                {briefingPrefs && localPrefs.enabled && (
+                  <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
+                    {([
+                      { key:"includeLoans", label:"Loans", sub:"Active loans and overdue repayments" },
+                      { key:"includeDonations", label:"Donations", sub:"Recent donations and campaign totals" },
+                      { key:"includePayroll", label:"Payroll", sub:"Upcoming payroll and pending approvals" },
+                      { key:"includePledges", label:"Pledges", sub:"Pledge fulfilment progress" },
+                      { key:"includeTenants", label:"Tenants", sub:"Accommodation and rent status" },
+                      { key:"includeCompliance", label:"Compliance", sub:"Outstanding compliance items" },
+                    ] as const).map((item, i, arr) => (
+                      <div key={item.key} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:i<arr.length-1?`1px solid ${T.border}`:"none" }}>
+                        <div>
+                          <p style={{ fontSize:13,fontWeight:600,color:T.white,margin:0 }}>{item.label}</p>
+                          <p style={{ fontSize:11,color:T.muted,margin:"2px 0 0" }}>{item.sub}</p>
+                        </div>
+                        <label style={{ position:"relative",width:40,height:22,cursor:"pointer",flexShrink:0 }}>
+                          <input type="checkbox" checked={localPrefs[item.key]} onChange={e => setLocalPrefs(p => ({...p, [item.key]: e.target.checked}))} style={{ opacity:0,width:0,height:0,position:"absolute" }}/>
+                          <span style={{ position:"absolute",inset:0,borderRadius:999,background:localPrefs[item.key]?T.mint:"rgba(255,255,255,0.15)",transition:"0.2s",display:"flex",alignItems:"center" }}>
+                            <span style={{ position:"absolute",width:18,height:18,borderRadius:"50%",background:T.white,boxShadow:"0 1px 3px rgba(0,0,0,0.3)",transition:"0.2s",left:localPrefs[item.key]?"calc(100% - 20px)":"2px" }}/>
+                          </span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {briefingPrefs && (
+                  <button
+                    onClick={() => saveBriefingPrefsMut.mutate(localPrefs)}
+                    disabled={saveBriefingPrefsMut.isPending}
+                    style={{ marginTop:16,padding:"9px 20px",borderRadius:10,background:"linear-gradient(135deg,#635BFF,#4f46e5)",border:"none",color:T.white,fontSize:13,fontWeight:700,cursor:"pointer",opacity:saveBriefingPrefsMut.isPending?0.6:1 }}>
+                    {saveBriefingPrefsMut.isPending ? "Saving..." : "Save Preferences"}
+                  </button>
+                )}
               </div>
             </div>
           )}

@@ -2408,3 +2408,19 @@ export const voiceQuickActions = mysqlTable("voice_quick_actions", {
 });
 export type VoiceQuickAction = typeof voiceQuickActions.$inferSelect;
 export type InsertVoiceQuickAction = typeof voiceQuickActions.$inferInsert;
+// ─── USER BRIEFING PREFERENCES ──────────────────────────────────────────────
+// Per-user opt-in/out for morning briefing sections
+export const userBriefingPrefs = mysqlTable("user_briefing_prefs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  enabled: boolean("enabled").notNull().default(true),          // opt out entirely
+  includeLoans: boolean("includeLoans").notNull().default(true),
+  includeDonations: boolean("includeDonations").notNull().default(true),
+  includePayroll: boolean("includePayroll").notNull().default(true),
+  includePledges: boolean("includePledges").notNull().default(true),
+  includeTenants: boolean("includeTenants").notNull().default(true),
+  includeCompliance: boolean("includeCompliance").notNull().default(true),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type UserBriefingPref = typeof userBriefingPrefs.$inferSelect;
+export type InsertUserBriefingPref = typeof userBriefingPrefs.$inferInsert;
