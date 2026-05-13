@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect , useCallback} from "react";
+import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -108,6 +109,19 @@ export default function LoansPage() {
     resolver: zodResolver(loanSchema),
     defaultValues: { termUnit: "months", termValue: 6 },
   });
+  // Listen for Hibba voice form-fill commands
+  useHibbaFormFill("/loans", useCallback((fields: Record<string, any>) => {
+    if (fields.applicantName || fields.name) setValue("applicantName", fields.applicantName || fields.name);
+    if (fields.applicantEmail || fields.email) setValue("applicantEmail", fields.applicantEmail || fields.email);
+    if (fields.applicantPhone || fields.phone) setValue("applicantPhone", fields.applicantPhone || fields.phone);
+    if (fields.applicantAddress || fields.address) setValue("applicantAddress", fields.applicantAddress || fields.address);
+    if (fields.amount) setValue("amount", String(fields.amount));
+    if (fields.purpose) setValue("purpose", fields.purpose);
+    if (fields.guarantorName || fields.guarantor) setValue("guarantorName", fields.guarantorName || fields.guarantor);
+    if (fields.notes) setValue("notes", fields.notes);
+    if (fields.termValue || fields.term) setValue("termValue", String(fields.termValue || fields.term));
+  }, [setValue]));
+
 
   const watchAmount = watch("amount");
   const watchTermValue = watch("termValue");

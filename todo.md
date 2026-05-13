@@ -1972,3 +1972,9 @@
 - [ ] Add form-filling capability: Hibba can populate forms on any page based on voice commands
 - [ ] Frontend: handle form-fill tool call responses from Hibba to auto-populate UI fields
 - [ ] Quick action chips updated with Islamic-friendly language where appropriate
+
+## Next Steps: Extend Hibba Form-Filling (May 13 2026)
+- [ ] Integrate useHibbaFormFill into Payroll page
+- [ ] Integrate useHibbaFormFill into Loans page
+- [ ] Integrate useHibbaFormFill into Student Accommodation page
+- [ ] Add confirmation step — Hibba reads back extracted data before submitting the form

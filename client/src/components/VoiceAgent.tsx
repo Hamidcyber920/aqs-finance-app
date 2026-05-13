@@ -277,6 +277,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
   const [emailSummaryLoading, setEmailSummaryLoading] = useState(false);
   const [showEditActions, setShowEditActions] = useState(false);
+  const [pendingFormFill, setPendingFormFill] = useState<{ fields: Record<string, any>; page: string; summary: string } | null>(null);
   const [editActionsInput, setEditActionsInput] = useState("");
   const [customActions, setCustomActions] = useState<string[] | null>(null);
   const [savingActions, setSavingActions] = useState(false);
@@ -443,17 +444,34 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         // Hibba is filling a form with extracted data
         const { fields, page, action: fillAction } = msg;
         if (fields && typeof fields === "object") {
+          const isConfirm = fillAction === "fill_and_confirm";
           // Dispatch a custom event that page components can listen to
           const event = new CustomEvent("hibba:fill_form", {
             detail: { fields, page: page || screenContext, action: fillAction || "fill" }
           });
           window.dispatchEvent(event);
           const fieldCount = Object.keys(fields).length;
-          toast.success(`Bismillah — Hibba filled ${fieldCount} field${fieldCount > 1 ? "s" : ""}`, { duration: 3000 });
+          if (isConfirm) {
+            // Show confirmation banner with field summary
+            const summary = Object.entries(fields)
+              .filter(([, v]) => v)
+              .map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()}: ${v}`)
+              .join(" \u2022 ");
+            setPendingFormFill({ fields, page: page || screenContext, summary });
+            toast("Bismillah \u2014 please review the form and confirm", {
+              duration: 6000,
+              icon: "\u270d\ufe0f",
+              description: summary.slice(0, 100) + (summary.length > 100 ? "..." : ""),
+            });
+          } else {
+            toast.success(`Bismillah \u2014 Hibba filled ${fieldCount} field${fieldCount > 1 ? "s" : ""}`, { duration: 3000 });
+          }
           setTranscript((prev) => [...prev, {
             id: `form-fill-${Date.now()}`,
             speaker: "agent",
-            text: `✍️ Form filled: ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(", ")}`,
+            text: isConfirm
+              ? `\u270d\ufe0f Form filled (awaiting confirmation): ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(", ")}`
+              : `\u270d\ufe0f Form filled: ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(", ")}`,
             timestamp: new Date()
           }]);
         }
@@ -827,6 +845,37 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                   <br />
                   <button onClick={connect} className="text-emerald-400 hover:underline mt-1">Try again</button>
                 </p>
+              </div>
+            )}
+
+            {/* ── Form Fill Confirmation Banner ── */}
+            {pendingFormFill && (
+              <div className="mx-1 mb-2 rounded-xl border border-emerald-500/30 bg-emerald-950/50 p-3 backdrop-blur-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-emerald-400 text-sm font-semibold">✍️ Hibba filled the form — please review</span>
+                </div>
+                <p className="text-xs text-zinc-300 mb-3 leading-relaxed">{pendingFormFill.summary}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("hibba:confirm_form_fill", { detail: pendingFormFill }));
+                      toast.success("Alhamdulillah — form confirmed!");
+                      setPendingFormFill(null);
+                    }}
+                    className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-3 transition-colors"
+                  >
+                    ✓ Confirm & Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPendingFormFill(null);
+                      toast("Form fill cancelled — tell Hibba what to change", { icon: "↩️" });
+                    }}
+                    className="flex-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold py-2 px-3 transition-colors"
+                  >
+                    ✗ Change
+                  </button>
+                </div>
               </div>
             )}
 

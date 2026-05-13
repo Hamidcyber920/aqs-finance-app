@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -112,6 +113,25 @@ function AddTenantDialog({ open, onClose, onSuccess }: { open: boolean; onClose:
       emergencyContactName: "", emergencyContactPhone: "", notes: "",
     },
   });
+  // Listen for Hibba voice fill events forwarded from parent
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const fields = (e as CustomEvent).detail as Record<string, any>;
+      if (fields.fullName || fields.name) setValue("fullName", fields.fullName || fields.name);
+      if (fields.email) setValue("email", fields.email);
+      if (fields.phone) setValue("phone", fields.phone);
+      if (fields.roomNumber || fields.room) setValue("roomNumber", fields.roomNumber || fields.room);
+      if (fields.contractStartDate || fields.startDate) setValue("contractStartDate", fields.contractStartDate || fields.startDate);
+      if (fields.contractEndDate || fields.endDate) setValue("contractEndDate", fields.contractEndDate || fields.endDate);
+      if (fields.rentAmount || fields.rent) setValue("rentAmount", String(fields.rentAmount || fields.rent));
+      if (fields.rentFrequency) setValue("rentFrequency", fields.rentFrequency);
+      if (fields.depositAmount || fields.deposit) setValue("depositAmount", String(fields.depositAmount || fields.deposit));
+      if (fields.notes) setValue("notes", fields.notes);
+    };
+    window.addEventListener("hibba:fill_tenant_form", handler);
+    return () => window.removeEventListener("hibba:fill_tenant_form", handler);
+  }, [setValue]);
+
 
   const handleExtractFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -868,6 +888,15 @@ export default function StudentAccommodationPage() {
   const { user } = useAuth();
   const { canEdit, canAdd } = usePermissions();
   const [addTenantOpen, setAddTenantOpen] = useState(false);
+  // Listen for Hibba voice form-fill commands — opens the Add Tenant dialog
+  useHibbaFormFill("/accommodation", useCallback((fields: Record<string, any>) => {
+    setAddTenantOpen(true);
+    // Dispatch a secondary event for the AddTenantDialog to pick up
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("hibba:fill_tenant_form", { detail: fields }));
+    }, 300);
+  }, []));
+
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");

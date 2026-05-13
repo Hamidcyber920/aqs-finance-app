@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect , useCallback} from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -146,6 +146,17 @@ export default function PayrollPage() {
   const updateMutation = trpc.payroll.update.useMutation();
 
   const { register, handleSubmit, reset, setValue } = useForm<any>();
+  // Listen for Hibba voice form-fill commands
+  useHibbaFormFill("/payroll", useCallback((fields: Record<string, any>) => {
+    if (fields.employeeName) setValue("employeeName", fields.employeeName);
+    if (fields.niNumber) setValue("niNumber", fields.niNumber);
+    if (fields.taxCode) setValue("taxCode", fields.taxCode);
+    if (fields.grossPay || fields.amount) setValue("grossPay", String(fields.grossPay || fields.amount));
+    if (fields.incomeTax || fields.tax) setValue("incomeTax", String(fields.incomeTax || fields.tax));
+    if (fields.netPay) setValue("netPay", String(fields.netPay));
+    if (fields.paymentMethod) setValue("paymentMethod", fields.paymentMethod);
+  }, [setValue]));
+
 
   const records: any[] = Array.isArray(data) ? data : [];
   const totalGross = records.reduce((s: number, r: any) => s + Number(r.grossPay ?? 0), 0);
