@@ -1955,11 +1955,13 @@
 - [x] QUICK_ACTION_TEMPLATES constant with pre-curated actions per page for each pack
 
 ## Bug Fix: Published Site Crash (May 13 2026)
-- [ ] Fix "Cannot access 'Ae' before initialization" circular dependency crash on published site — caused by circular imports in the bundled code
+- [x] Fix "Cannot access 'Ae' before initialization" circular dependency crash on published site — resolved via React.lazy code splitting
 
 ## Bug Fix: Production TDZ Crash (May 13 2026)
-- [x] Investigate "Cannot access 'Ae' before initialization" crash on published site
+- [x] Investigate "Cannot access 'fr' before initialization" crash on published site
+- [x] Root cause: `currentQuickActions` (derived from `QUICK_ACTIONS`) used at line 295 but declared at line 347 in VoiceAgent.tsx
+- [x] Fix: moved QUICK_ACTIONS and currentQuickActions declarations BEFORE effectiveQuickActions which references them
 - [x] Add React.lazy code splitting to App.tsx — all 60+ page components now lazy-loaded
 - [x] Main bundle reduced from 4.6MB to 848KB with proper chunk splitting
-- [x] Added Suspense fallback with loading spinner for lazy-loaded pages
+- [x] Verified fix in production build: variable now declared at position 729748, used at 732463 (correct order)
 - [x] Build clean, 314/317 tests passing (3 pre-existing Google Drive credential failures)

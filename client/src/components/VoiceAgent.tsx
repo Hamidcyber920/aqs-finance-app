@@ -291,30 +291,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     { pageKey: screenContext || "/" },
     { enabled: !!screenContext && !savedActions }
   );
-  // Merge priority: user custom > user saved > admin shared > built-in defaults
-  const effectiveQuickActions = (customActions ?? (savedActions as string[] | null | undefined) ?? (adminSharedActions as string[] | null | undefined)) ?? currentQuickActions;
-  const SECTION_NAMES: Record<string, string> = {
-    "/dashboard":"Dashboard","/receipts":"Receipts","/reports":"Reports",
-    "/fundraising":"Fundraising","/loans":"Loans","/income":"Income",
-    "/payroll":"Payroll","/monthly-expenses":"Monthly Expenses",
-    "/reconciliation":"Reconciliation","/donors":"Donors","/campaigns":"Campaigns",
-    "/communications":"Communications","/comms-hub":"Comms Hub",
-    "/comms-inbox":"Master Inbox","/admin":"Admin Panel",
-    "/trustees":"Trustees & Staff Contacts","/accommodation":"Accommodation",
-    "/compliance":"Compliance Cockpit","/decisions":"Decisions Register",
-    "/gift-aid":"Gift Aid","/meetings":"Meetings & Onboarding",
-    "/audit-trail":"Audit Trail","/system-health":"System Health",
-    "/pledges":"Pledges","/donor-pipeline":"Cultivation Pipeline",
-    "/major-donor":"Major Donor DD","/bulk-approvals":"Bulk Approvals",
-    "/conflicts-register":"Conflicts Register","/recognition-tiers":"Recognition Tiers",
-    "/qr-codes":"QR Codes","/saved-views":"Saved Views",
-    "/bills-utilities":"Bills & Utilities","/training-tracker":"Training Tracker",
-    "/lbmw-correspondence":"LBMW Correspondence","/trustee-dashboard":"Trustee Dashboard",
-    "/facilities":"Facilities & Bookings","/bistro87":"Bistro 87",
-    "/donate":"Donation Page","/voice-history":"Voice History",
-    "/profile":"Profile","/settings":"Settings",
-  };
-  // Context-aware quick action chips per page
+  // Context-aware quick action chips per page (MUST be declared before effectiveQuickActions)
   const QUICK_ACTIONS: Record<string, string[]> = {
     "/dashboard": ["Summarise today's dashboard", "Any urgent items?", "What needs my attention?"],
     "/receipts": ["Summarise my expenses", "Any pending approvals?", "Show this month's receipts"],
@@ -345,6 +322,29 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     "/system-health": ["Is everything healthy?", "Any errors or warnings?", "What's the server status?"],
   };
   const currentQuickActions = QUICK_ACTIONS[screenContext] || ["Summarise this page", "What can I help with?", "Show recent activity"];
+  // Merge priority: user custom > user saved > admin shared > built-in defaults
+  const effectiveQuickActions = (customActions ?? (savedActions as string[] | null | undefined) ?? (adminSharedActions as string[] | null | undefined)) ?? currentQuickActions;
+  const SECTION_NAMES: Record<string, string> = {
+    "/dashboard":"Dashboard","/receipts":"Receipts","/reports":"Reports",
+    "/fundraising":"Fundraising","/loans":"Loans","/income":"Income",
+    "/payroll":"Payroll","/monthly-expenses":"Monthly Expenses",
+    "/reconciliation":"Reconciliation","/donors":"Donors","/campaigns":"Campaigns",
+    "/communications":"Communications","/comms-hub":"Comms Hub",
+    "/comms-inbox":"Master Inbox","/admin":"Admin Panel",
+    "/trustees":"Trustees & Staff Contacts","/accommodation":"Accommodation",
+    "/compliance":"Compliance Cockpit","/decisions":"Decisions Register",
+    "/gift-aid":"Gift Aid","/meetings":"Meetings & Onboarding",
+    "/audit-trail":"Audit Trail","/system-health":"System Health",
+    "/pledges":"Pledges","/donor-pipeline":"Cultivation Pipeline",
+    "/major-donor":"Major Donor DD","/bulk-approvals":"Bulk Approvals",
+    "/conflicts-register":"Conflicts Register","/recognition-tiers":"Recognition Tiers",
+    "/qr-codes":"QR Codes","/saved-views":"Saved Views",
+    "/bills-utilities":"Bills & Utilities","/training-tracker":"Training Tracker",
+    "/lbmw-correspondence":"LBMW Correspondence","/trustee-dashboard":"Trustee Dashboard",
+    "/facilities":"Facilities & Bookings","/bistro87":"Bistro 87",
+    "/donate":"Donation Page","/voice-history":"Voice History",
+    "/profile":"Profile","/settings":"Settings",
+  };
 
 
   // Keep isSpeakingRef in sync with isSpeaking state
