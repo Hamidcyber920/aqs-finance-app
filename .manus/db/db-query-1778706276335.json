@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE users SET email = 'fariddixy@gmail.com' WHERE id = 600004;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute UPDATE users SET email = 'fariddixy@gmail.com' WHERE id = 600004;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 353
+}

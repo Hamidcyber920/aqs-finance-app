@@ -21,6 +21,7 @@ import {
   voiceFeatureFlags,
   voiceReviewQueue,
   users,
+  trustees,
 } from "../drizzle/schema";
 import { sdk } from "./_core/sdk";
 
@@ -415,12 +416,34 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
     case "get_screen_context":
       return { screen: client.screenContext, entity: client.entityContext };
     case "get_staff_directory": {
-      const staffRows = await db.select({ id: users.id, name: users.name, role: users.role, email: users.email }).from(users).where(eq(users.isActive, true));
+      // Read from the trustees/staff contact directory (source of truth for people)
+      const staffRows = await db.select({
+        id: trustees.id,
+        name: trustees.fullName,
+        role: trustees.role,
+        email: trustees.email,
+        phone: trustees.phone,
+      }).from(trustees).where(eq(trustees.isActive, true));
       return staffRows;
     }
     case "get_trustees": {
-      const trustees = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(eq(users.role, "trustee"));
-      return trustees;
+      // Read from the trustees contact directory — filter for trustee/chair roles
+      const trusteeRows = await db.select({
+        id: trustees.id,
+        name: trustees.fullName,
+        role: trustees.role,
+        email: trustees.email,
+        phone: trustees.phone,
+      }).from(trustees).where(
+        and(
+          eq(trustees.isActive, true),
+          or(
+            like(trustees.role, "%Trustee%"),
+            like(trustees.role, "%Chair%")
+          )
+        )
+      );
+      return trusteeRows;
     }
     case "get_donor": {
       const { donors } = await import("../drizzle/schema");

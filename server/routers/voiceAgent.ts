@@ -189,12 +189,13 @@ export const voiceAgentRouter = router({
       requireRole(ctx.user.role, ADMIN_ROLES);
       const start = Date.now();
       const staff = await db.select({
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        role: users.role,
-        isActive: users.isActive,
-      }).from(users).where(eq(users.isActive, true));
+        id: trustees.id,
+        name: trustees.fullName,
+        email: trustees.email,
+        phone: trustees.phone,
+        role: trustees.role,
+        isActive: trustees.isActive,
+      }).from(trustees).where(eq(trustees.isActive, true));
       await logToolCall(db, input.sessionId, "getStaffDirectory", {}, { count: staff.length }, true, undefined, Date.now() - start);
       return staff;
     }),

@@ -2032,3 +2032,7 @@
 - [x] Fix 6: Reduce session token expiry from 1 year to 30 days
 - [x] Fix 7: Document vulnerable dependencies and remediation plan
 - [x] Write regression tests for all critical fixes (5 new tests added)
+
+## Bug Fixes — Hibba Data Access & Staff Emails
+- [x] Fix Hibba's inability to read app data (trustees, staff, sections)
+- [x] Fix all incorrect staff emails in the system

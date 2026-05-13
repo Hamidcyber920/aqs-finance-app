@@ -1,0 +1,74 @@
+{
+  "query": "SELECT id, fullName, role, phone, email, isActive FROM trustees ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, fullName, role, phone, email, isActive FROM trustees ORDER BY id;",
+  "rows": [
+    {
+      "id": "30001",
+      "fullName": "Dr Abdul Hamid",
+      "role": "Chair / Trustee",
+      "phone": "07958465328",
+      "email": "ahamid4@gmail.com",
+      "isActive": "1"
+    },
+    {
+      "id": "30002",
+      "fullName": "Mr Galib Khan",
+      "role": "Trustee",
+      "phone": "07900413038",
+      "email": "khan.galib@gmail.com",
+      "isActive": "1"
+    },
+    {
+      "id": "30003",
+      "fullName": "AJMAL MASROOR",
+      "role": "Trustee",
+      "phone": "07956987398",
+      "email": "ajmalmasroor40@gmail.com",
+      "isActive": "1"
+    },
+    {
+      "id": "30004",
+      "fullName": "Dr Altaf Khattak",
+      "role": "Trustee",
+      "phone": "07740930779",
+      "email": "altafqadir901@yahoo.com",
+      "isActive": "1"
+    },
+    {
+      "id": "30005",
+      "fullName": "Mumin Khan",
+      "role": "Senior Manager",
+      "phone": "+447503008997",
+      "email": "meds.mumin@gmail.com",
+      "isActive": "1"
+    },
+    {
+      "id": "30006",
+      "fullName": "Mr Farid Ahmed",
+      "role": "Deputy Manager",
+      "phone": "07477163761",
+      "email": "fariddixy@gmail.com",
+      "isActive": "1"
+    },
+    {
+      "id": "30007",
+      "fullName": "Mr Atik Rahman",
+      "role": "Deputy Manager",
+      "phone": "07742962565",
+      "email": "",
+      "isActive": "1"
+    },
+    {
+      "id": "60001",
+      "fullName": "Micky mouse ",
+      "role": "Staff",
+      "phone": "07958465328",
+      "email": "ahamid4@gmail.com",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tfullName\trole\tphone\temail\tisActive\n30001\tDr Abdul Hamid\tChair / Trustee\t07958465328\tahamid4@gmail.com\t1\n30002\tMr Galib Khan\tTrustee\t07900413038\tkhan.galib@gmail.com\t1\n30003\tAJMAL MASROOR\tTrustee\t07956987398\tajmalmasroor40@gmail.com\t1\n30004\tDr Altaf Khattak\tTrustee\t07740930779\taltafqadir901@yahoo.com\t1\n30005\tMumin Khan\tSenior Manager\t+447503008997\tmeds.mumin@gmail.com\t1\n30006\tMr Farid Ahmed\tDeputy Manager\t07477163761\tfariddixy@gmail.com\t1\n30007\tMr Atik Rahman\tDeputy Manager\t07742962565\t\t1\n60001\tMicky mouse \tStaff\t07958465328\tahamid4@gmail.com\t1\n",
+  "stderr": "",
+  "execution_time_ms": 256
+}

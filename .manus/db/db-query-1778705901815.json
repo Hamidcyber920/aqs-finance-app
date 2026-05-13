@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, name, email, role, isActive FROM users WHERE isActive = 1 ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, name, email, role, isActive FROM users WHERE isActive = 1 ORDER BY id;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "ahamid4",
+      "email": "ahamid4@gmail.com",
+      "role": "superadmin",
+      "isActive": "1"
+    },
+    {
+      "id": "150017",
+      "name": "Test User",
+      "email": "test@test.com",
+      "role": "assistant",
+      "isActive": "1"
+    },
+    {
+      "id": "600003",
+      "name": "Mumin Khan",
+      "email": "mumin.khan@aqs.org.uk",
+      "role": "manager",
+      "isActive": "1"
+    },
+    {
+      "id": "600004",
+      "name": "Farid Ahmed",
+      "email": "farid.ahmed@aqs.org.uk",
+      "role": "deputy",
+      "isActive": "1"
+    },
+    {
+      "id": "840001",
+      "name": "Manus Scheduled Task",
+      "email": "NULL",
+      "role": "assistant",
+      "isActive": "1"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\trole\tisActive\n1\tahamid4\tahamid4@gmail.com\tsuperadmin\t1\n150017\tTest User\ttest@test.com\tassistant\t1\n600003\tMumin Khan\tmumin.khan@aqs.org.uk\tmanager\t1\n600004\tFarid Ahmed\tfarid.ahmed@aqs.org.uk\tdeputy\t1\n840001\tManus Scheduled Task\tNULL\tassistant\t1\n",
+  "stderr": "",
+  "execution_time_ms": 372
+}
