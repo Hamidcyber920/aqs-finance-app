@@ -1903,3 +1903,10 @@
 - [x] WhatsApp message action: queued via commsOutbox with wa.me fallback link
 - [x] Email action: compose and send via existing Gmail API integration with personalized greeting
 - [x] Notes action: create/save notes to donorNotes table
+
+### Voice Navigation Wiring (May 13 2026)
+- [x] Wire navigate_to tool: voiceGateway sends {type:"navigate", path:"/path"} to frontend WebSocket client — already implemented
+- [x] VoiceAgent frontend handles navigate message and calls wouter's navigate() to push route — already implemented
+- [x] Improved navigation UX: human-readable section names in toast + green banner in VoiceAgent UI
+- [x] Updated command reference card with navigation/actions/data query examples
+- [x] Test: 314/317 passing (unchanged)

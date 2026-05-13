@@ -261,6 +261,28 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [showCommandRef, setShowCommandRef] = useState(false);
+  const [lastNavigation, setLastNavigation] = useState<string | null>(null);
+  const SECTION_NAMES: Record<string, string> = {
+    "/dashboard":"Dashboard","/receipts":"Receipts","/reports":"Reports",
+    "/fundraising":"Fundraising","/loans":"Loans","/income":"Income",
+    "/payroll":"Payroll","/monthly-expenses":"Monthly Expenses",
+    "/reconciliation":"Reconciliation","/donors":"Donors","/campaigns":"Campaigns",
+    "/communications":"Communications","/comms-hub":"Comms Hub",
+    "/comms-inbox":"Master Inbox","/admin":"Admin Panel",
+    "/trustees":"Trustees & Staff Contacts","/accommodation":"Accommodation",
+    "/compliance":"Compliance Cockpit","/decisions":"Decisions Register",
+    "/gift-aid":"Gift Aid","/meetings":"Meetings & Onboarding",
+    "/audit-trail":"Audit Trail","/system-health":"System Health",
+    "/pledges":"Pledges","/donor-pipeline":"Cultivation Pipeline",
+    "/major-donor":"Major Donor DD","/bulk-approvals":"Bulk Approvals",
+    "/conflicts-register":"Conflicts Register","/recognition-tiers":"Recognition Tiers",
+    "/qr-codes":"QR Codes","/saved-views":"Saved Views",
+    "/bills-utilities":"Bills & Utilities","/training-tracker":"Training Tracker",
+    "/lbmw-correspondence":"LBMW Correspondence","/trustee-dashboard":"Trustee Dashboard",
+    "/facilities":"Facilities & Bookings","/bistro87":"Bistro 87",
+    "/donate":"Donation Page","/voice-history":"Voice History",
+    "/profile":"Profile","/settings":"Settings",
+  };
 
   // Keep isSpeakingRef in sync with isSpeaking state
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
@@ -345,7 +367,10 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
       case "navigate":
         if (msg.path) {
           navigate(msg.path);
-          toast.success(`Navigating to ${msg.path}`);
+          const sn = SECTION_NAMES[msg.path as string] || (msg.path as string).replace(/^\//, "").replace(/-/g, " ");
+          setLastNavigation(sn);
+          toast.success("Navigated to " + sn, { duration: 2500 });
+          setTimeout(() => setLastNavigation(null), 4000);
         }
         break;
       case "session_ended":
@@ -589,21 +614,29 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
           {showCommandRef && (
             <div className="px-4 py-3 bg-zinc-800/50 border-b border-zinc-700/50 max-h-[200px] overflow-y-auto">
               <p className="text-xs font-semibold text-zinc-300 mb-2">Example voice commands:</p>
-              <div className="space-y-1.5 text-xs text-zinc-400">
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Find donor Ahmed" or "Search for donor by email"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"What's the prayer time for Maghrib?"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"How can someone donate?" or "Give me the bank details"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Show me this month's expenses" or "What's our income?"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Create a task for Farid to check the accounts"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Schedule a meeting for Monday at 2pm"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Send an email to info@example.com"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Navigate to donors" or "Take me to payroll"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"What's the time?" or "What day is it?"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Tell me about the mosque" or "What's our charity number?"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"How many pledges are outstanding?"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"What meetings are coming up?"</p>
+              <div className="space-y-2 text-xs text-zinc-400">
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Navigation</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Take me to Donors" / "Open Training Tracker" / "Go to Bistro 87"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Show me the Trustee Dashboard" / "Open Compliance Cockpit"</p>
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mt-1.5">Actions</p>
+                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Send an email to Ahmed about the meeting"</p>
+                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Send a WhatsApp to the trustees"</p>
+                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Add a note to donor Khalid's profile"</p>
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mt-1.5">Data & Queries</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"Find donor Ahmed" / "Show this month's expenses"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What's the prayer time for Maghrib?"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"How many pledges are outstanding?" / "Show training records"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What decisions are pending?" / "Show LBMW correspondence"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What's today's Bistro summary?" / "Show conflicts register"</p>
               </div>
-              <p className="text-[10px] text-zinc-500 mt-2 italic">Tip: You can interrupt Hibba by speaking while she's talking.</p>
+              <p className="text-[10px] text-zinc-500 mt-2 italic">Tip: Interrupt Hibba by speaking while she's talking. She responds without hesitation.</p>
+            </div>
+          )}
+          {/* Navigation banner */}
+          {lastNavigation && (
+            <div className="mx-4 mt-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-2 text-xs text-emerald-300 animate-in slide-in-from-top-2 duration-300">
+              <span>🧭</span>
+              <span>Navigated to <strong>{lastNavigation}</strong></span>
             </div>
           )}
           {/* Transcript area */}
