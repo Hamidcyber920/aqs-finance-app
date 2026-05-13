@@ -1924,7 +1924,7 @@
 - [x] Fix Hibba getting cut off mid-sentence: investigate VAD sensitivity, audio queue, and interruption handling
 - [x] Barge-in: only interrupt Hibba when user is clearly speaking (raise VAD threshold)
 - [x] Extend entity context: Loan detail (LoanDetail.tsx), Receipt detail (ReceiptDetail.tsx) with useVoiceContext
-- [ ] Proactive page summaries: when Hibba navigates, auto-call data tool and speak a 1-sentence summary
+- [x] Proactive page summaries: when Hibba navigates, auto-call data tool and speak a 1-sentence summary — implemented via realtimeInput.text context note to Gemini after navigate_to tool call
 
 - [x] Fix AudioPlaybackQueue.stop() to hard-stop all active AudioBufferSourceNode instances
 - [x] Raise VAD threshold 0.015→0.04, require 5 consecutive frames for barge-in, silence timeout 800ms→1200ms
