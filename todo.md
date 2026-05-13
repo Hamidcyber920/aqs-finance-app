@@ -2046,3 +2046,9 @@
 - [x] Add global CSS fix to prevent horizontal overflow on all pages
 - [x] Fix additional pages: ConflictsRegister, QRCodes, RecognitionTiers, SavedViews, BulkApprovals, GiftAid
 - [x] Add overflow-x-hidden to DashboardLayout main content area
+
+## Feature — Hibba WhatsApp Sending via Voice
+- [x] Investigate current WhatsApp integration (API, credentials, existing send functions)
+- [x] Update send_whatsapp to generate wa.me deep link and send open_url to frontend
+- [x] Add open_url message handler to VoiceAgent frontend component
+- [x] Update system prompt to instruct Hibba to look up phone from staff directory first

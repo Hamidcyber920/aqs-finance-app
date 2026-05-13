@@ -153,6 +153,7 @@ AQS INFO:
 CAPABILITIES — You can:
 - Read/search ALL data: donors, finances, campaigns, staff, facilities, expenses, payroll, income, loans, accommodation, compliance, meetings, communications, bills, utilities, reconciliation, gift aid, pledges, training records, bistro orders, conflicts, decisions, org chart, backups, LBMW correspondence, recognition tiers, QR codes, saved views, donor notes.
 - Take actions: send emails, send WhatsApp messages, create donor notes, create tasks, schedule meetings, record donations, generate reports, create payment links, flag items for review.
+- WhatsApp: When asked to send a WhatsApp, FIRST use get_staff_directory or get_trustees to look up the recipient's phone number by name. Then use send_whatsapp with that phone number. This will open WhatsApp directly on the user's device with the message pre-filled — they just tap Send.
 - Fill forms: extract data from voice and populate any form on the user's current page using fill_form tool.
 - Navigate users to any section instantly.
 - Provide prayer times, mosque info, donation guidance.
@@ -889,14 +890,23 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       const to = String(args.to || "").trim();
       const body = String(args.body || "").trim();
       if (!to || !body) return { error: "Phone number and message body are required" };
+      // Normalize phone number for wa.me link
+      let waPhone = to.replace(/[^0-9+]/g, "");
+      if (waPhone.startsWith("0")) waPhone = "44" + waPhone.slice(1);
+      if (waPhone.startsWith("+")) waPhone = waPhone.slice(1);
+      const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(body)}`;
+      // Send open_url command to frontend so WhatsApp opens directly on user's device
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify({ type: "open_url", url: waUrl, label: `WhatsApp to ${args.recipientName || to}` }));
+      }
       // Save to outbox as SMS/WhatsApp
-      await db.insert(commsOutbox).values({ recipientGroup: "individual", recipientIds: [Number(args.donorId) || 0], subject: `WhatsApp to ${args.recipientName || to}`, body, type: "sms", status: "queued", sentByUserId: client.userId, createdAt: new Date() });
+      await db.insert(commsOutbox).values({ recipientGroup: "individual", recipientIds: [Number(args.donorId) || 0], subject: `WhatsApp to ${args.recipientName || to}`, body, type: "sms", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
       // Log to donor comms if donorId provided
       if (args.donorId) {
         const { donorCommsLog } = await import("../drizzle/schema");
         await db.insert(donorCommsLog).values({ donorId: Number(args.donorId), type: "whatsapp_sent", channel: "whatsapp", subject: `WhatsApp message`, notes: body, sentByUserId: client.userId, createdAt: new Date() });
       }
-      return { success: true, message: `WhatsApp message queued for ${args.recipientName || to}` };
+      return { success: true, message: `WhatsApp opened for ${args.recipientName || to}. Just tap Send!` };
     }
     case "get_recognition_tiers": {
       try {

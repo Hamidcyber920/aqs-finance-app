@@ -478,6 +478,19 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         break;
       }
 
+      case "open_url":
+        if (msg.url) {
+          window.open(msg.url, "_blank");
+          const label = msg.label || "Link opened";
+          toast.success(label, { duration: 4000, icon: "\uD83D\uDCE8" });
+          setTranscript((prev) => [...prev, {
+            id: `open-url-${Date.now()}`,
+            speaker: "agent" as const,
+            text: `\uD83D\uDCE8 ${label}`,
+            timestamp: new Date()
+          }]);
+        }
+        break;
       case "session_ended":
         setStatus("disconnected");
         setIsProcessing(false);
