@@ -31,9 +31,10 @@ const DAILY_TOKEN_CAP = 200_000;
 const MONTHLY_COST_CAP_PENCE = 50_000; // £500
 
 async function checkCostCap(db: any, userId: number) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
   const [todayUsage] = await db.select({ total: sql<number>`COALESCE(SUM(tokenCount), 0)` })
-    .from(voiceCostTracking).where(and(eq(voiceCostTracking.userId, userId), eq(voiceCostTracking.date, today)));
+    .from(voiceCostTracking).where(and(eq(voiceCostTracking.userId, userId), sql`DATE(${voiceCostTracking.date}) = ${todayStr}`));
   if (todayUsage && todayUsage.total >= DAILY_TOKEN_CAP) {
     throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Daily voice token cap (${DAILY_TOKEN_CAP}) reached. Try again tomorrow.` });
   }
@@ -198,7 +199,7 @@ export const voiceAgentRouter = router({
       if (!donor) throw new TRPCError({ code: "NOT_FOUND", message: "Donor not found" });
       // Reception can't see lifetime value or Gift Aid
       let filtered: any = { ...donor };
-      if (ctx.user.role === "reception") {
+      if (ctx.user.role === "volunteer") {
         delete filtered.totalGiven;
         delete filtered.giftAidStatus;
         delete filtered.rfmSegment;
@@ -232,14 +233,14 @@ export const voiceAgentRouter = router({
       if (input.query) {
         conditions.push(or(
           like(receipts.vendor, `%${input.query}%`),
-          like(receipts.description, `%${input.query}%`),
+          like(receipts.notes, `%${input.query}%`),
         ));
       }
-      if (input.dateFrom) conditions.push(gte(receipts.date, input.dateFrom));
-      if (input.dateTo) conditions.push(lte(receipts.date, input.dateTo));
+      if (input.dateFrom) conditions.push(gte(receipts.receiptDate, new Date(input.dateFrom)));
+      if (input.dateTo) conditions.push(lte(receipts.receiptDate, new Date(input.dateTo)));
       const where = conditions.length > 0 ? and(...conditions) : undefined;
       const results = await db.select().from(receipts).where(where)
-        .orderBy(desc(receipts.date)).limit(input.limit).offset(input.offset);
+        .orderBy(desc(receipts.receiptDate)).limit(input.limit).offset(input.offset);
       await logToolCall(db, input.sessionId, "searchTransactions", input, { count: results.length }, true, undefined, Date.now() - start);
       return results;
     }),
@@ -294,8 +295,10 @@ export const voiceAgentRouter = router({
       requireRole(ctx.user.role, [...SENIOR_ROLES, "admin"]);
       const start = Date.now();
       if (input.donorId) {
+        // giftAidDeclarations doesn't have donorId; search by donorName via donors table
+        const [donor] = await db.select({ name: donors.name }).from(donors).where(eq(donors.id, input.donorId)).limit(1);
         const declarations = await db.select().from(giftAidDeclarations)
-          .where(eq(giftAidDeclarations.donorId, input.donorId));
+          .where(donor ? like(giftAidDeclarations.donorName, `%${donor.name}%`) : sql`1=0`);
         await logToolCall(db, input.sessionId, "getGiftAidStatus", input, { count: declarations.length }, true, undefined, Date.now() - start);
         return declarations;
       }
@@ -346,26 +349,25 @@ export const voiceAgentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-      requireRole(ctx.user.role, [...SENIOR_ROLES, "admin", "reception"]);
+      requireRole(ctx.user.role, [...SENIOR_ROLES, "admin", "volunteer"]);
       const start = Date.now();
       // Amount edge cases (from QA hardening)
       if (input.amount <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Amount must be positive" });
       if (input.amount < 0.01) throw new TRPCError({ code: "BAD_REQUEST", message: "Minimum donation is £0.01" });
       const [result] = await db.insert(fundraisingDonations).values({
-        donorId: input.donorId,
         campaignId: input.campaignId,
+        donorName: ctx.user.name ?? "Voice Agent",
         amount: input.amount.toFixed(2),
-        method: input.method,
+        paymentMethod: (input.method ?? "cash") as any,
         notes: input.notes,
-        recordedByUserId: ctx.user.id,
       }).$returningId();
       // Log comms
       await db.insert(donorCommsLog).values({
         donorId: input.donorId,
+        type: "manual_note",
         channel: "system",
-        direction: "outbound",
         subject: "Donation recorded via voice agent",
-        body: `£${input.amount.toFixed(2)} donation recorded to campaign #${input.campaignId} by ${ctx.user.name} via voice agent`,
+        notes: `£${input.amount.toFixed(2)} donation recorded to campaign #${input.campaignId} by ${ctx.user.name} via voice agent`,
         sentByUserId: ctx.user.id,
       });
       await logToolCall(db, input.sessionId, "createDonation", input, { donationId: result.id }, true, undefined, Date.now() - start);
@@ -389,10 +391,10 @@ export const voiceAgentRouter = router({
       const [result] = await db.insert(receipts).values({
         userId: ctx.user.id,
         vendor: input.vendor,
-        total: input.amount.toFixed(2),
-        category: input.category ?? "Uncategorised",
-        description: input.description,
-        date: input.date ?? new Date().toISOString().slice(0, 10),
+        amount: input.amount.toFixed(2),
+        categoryName: input.category ?? "Uncategorised",
+        notes: input.description,
+        receiptDate: input.date ? new Date(input.date) : new Date(),
       }).$returningId();
       await logToolCall(db, input.sessionId, "createExpense", input, { receiptId: result.id }, true, undefined, Date.now() - start);
       return { receiptId: result.id };
@@ -411,7 +413,7 @@ export const voiceAgentRouter = router({
       const start = Date.now();
       // Field-level permissions: reception cannot update financial fields
       const RESTRICTED_FIELDS = ["totalGiven", "giftAidStatus", "rfmSegment", "status"];
-      if (ctx.user.role === "reception") {
+      if (ctx.user.role === "volunteer") {
         for (const field of Object.keys(input.updates)) {
           if (RESTRICTED_FIELDS.includes(field)) {
             throw new TRPCError({ code: "FORBIDDEN", message: `Reception cannot update field: ${field}` });
@@ -438,10 +440,10 @@ export const voiceAgentRouter = router({
       const start = Date.now();
       await db.insert(donorCommsLog).values({
         donorId: input.donorId,
-        channel: input.channel,
-        direction: input.direction,
+        type: "manual_note",
+        channel: (["email","whatsapp","sms","system"].includes(input.channel) ? input.channel : "system") as any,
         subject: input.subject,
-        body: input.body,
+        notes: input.body,
         sentByUserId: ctx.user.id,
       });
       await logToolCall(db, input.sessionId, "logCommunication", input, { logged: true }, true, undefined, Date.now() - start);
@@ -467,12 +469,12 @@ export const voiceAgentRouter = router({
       const start = Date.now();
       // Write to comms outbox as draft
       const [result] = await db.insert(commsOutbox).values({
-        userId: ctx.user.id,
-        recipientDonorId: input.donorId,
-        channel: input.channel,
+        sentByUserId: ctx.user.id,
+        recipientGroup: "custom",
+        type: (input.channel === "sms" ? "sms" : "email") as any,
         subject: input.subject ?? "(Voice draft)",
         body: input.body,
-        status: "draft",
+        status: "queued",
       }).$returningId();
       await logToolCall(db, input.sessionId, "draftMessage", input, { draftId: result.id }, true, undefined, Date.now() - start);
       return { draftId: result.id, status: "draft" };
@@ -508,8 +510,8 @@ export const voiceAgentRouter = router({
 
       // Recent expenses
       const recentExpenses = await db.select().from(receipts)
-        .where(gte(receipts.date, yesterday))
-        .orderBy(desc(receipts.date)).limit(5);
+        .where(gte(receipts.receiptDate, new Date(Date.now() - 86400000)))
+        .orderBy(desc(receipts.receiptDate)).limit(5);
 
       // Use LLM to compose the briefing
       const briefingData = {
@@ -528,7 +530,7 @@ export const voiceAgentRouter = router({
         ],
       });
 
-      const briefingText = llmResponse.choices?.[0]?.message?.content ?? "No briefing data available.";
+      const briefingText = String(llmResponse.choices?.[0]?.message?.content ?? "No briefing data available.");
       // Save transcript
       await db.insert(voiceTranscripts).values({
         sessionId: input.sessionId,
@@ -613,7 +615,7 @@ export const voiceAgentRouter = router({
         tokens: sql<number>`SUM(tokenCount)`,
         costPence: sql<number>`SUM(estimatedCostPence)`,
       }).from(voiceCostTracking)
-        .where(gte(voiceCostTracking.date, since))
+        .where(sql`DATE(${voiceCostTracking.date}) >= ${since}`)
         .groupBy(voiceCostTracking.date)
         .orderBy(desc(voiceCostTracking.date));
       const totalTokens = costs.reduce((sum: number, c: any) => sum + (c.tokens ?? 0), 0);
@@ -626,10 +628,9 @@ export const voiceAgentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-      const today = new Date().toISOString().slice(0, 10);
       await db.insert(voiceCostTracking).values({
         userId: ctx.user.id,
-        date: today,
+        date: new Date(),
         tokenCount: input.tokenCount,
         estimatedCostPence: input.estimatedCostPence,
       });
@@ -736,7 +737,7 @@ export const voiceAgentRouter = router({
         })),
       ];
       const llmResponse = await invokeLLM({ messages });
-      const assistantMessage = llmResponse.choices?.[0]?.message?.content ?? "I'm sorry, I couldn't process that request.";
+      const assistantMessage = String(llmResponse.choices?.[0]?.message?.content ?? "I'm sorry, I couldn't process that request.");
       // Save assistant response
       await db.insert(voiceTranscripts).values({
         sessionId: input.sessionId,
@@ -745,10 +746,9 @@ export const voiceAgentRouter = router({
       });
       // Track token usage
       const tokensUsed = llmResponse.usage?.total_tokens ?? 500;
-      const today = new Date().toISOString().slice(0, 10);
       await db.insert(voiceCostTracking).values({
         userId: ctx.user.id,
-        date: today,
+        date: new Date(),
         tokenCount: tokensUsed,
         estimatedCostPence: Math.ceil(tokensUsed * 0.003), // rough Gemini pricing
       });

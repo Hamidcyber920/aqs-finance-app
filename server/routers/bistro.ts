@@ -18,7 +18,7 @@ export const bistroRouter = router({
   listMenuItems: protectedProcedure
     .input(z.object({ category: z.string().optional(), availableOnly: z.boolean().optional() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) return [];
       let q = db.select().from(bistroMenuItems);
       const conditions = [];
@@ -40,7 +40,7 @@ export const bistroRouter = router({
       sortOrder: z.number().default(0),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       await db.insert(bistroMenuItems).values({
         name: input.name,
@@ -70,7 +70,7 @@ export const bistroRouter = router({
       sortOrder: z.number().optional(),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       const { id, price, costPrice, ...rest } = input;
       const updates: any = { ...rest };
@@ -83,7 +83,7 @@ export const bistroRouter = router({
   deleteMenuItem: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       await db.delete(bistroMenuItems).where(eq(bistroMenuItems.id, input.id));
       return { success: true };
@@ -98,7 +98,7 @@ export const bistroRouter = router({
       limit: z.number().default(100),
     }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) return [];
       const conditions: any[] = [];
       if (input.status) conditions.push(eq(bistroOrders.status as any, input.status));
@@ -112,7 +112,7 @@ export const bistroRouter = router({
   getOrderWithItems: protectedProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) return null;
       const [order] = await db.select().from(bistroOrders).where(eq(bistroOrders.id, input.id));
       if (!order) return null;
@@ -135,7 +135,7 @@ export const bistroRouter = router({
       })),
     }))
     .mutation(async ({ input, ctx }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       const orderRef = `B87-${Date.now().toString(36).toUpperCase()}`;
       const subtotal = input.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
@@ -177,7 +177,7 @@ export const bistroRouter = router({
       paymentStatus: z.enum(["unpaid", "paid", "refunded"]).optional(),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       const updates: any = { status: input.status };
       if (input.paymentMethod) updates.paymentMethod = input.paymentMethod;
@@ -190,12 +190,12 @@ export const bistroRouter = router({
   getDailyTotals: protectedProcedure
     .input(z.object({ dateFrom: z.string(), dateTo: z.string() }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) return [];
       return db.select().from(bistroDailyTotals)
         .where(and(
-          gte(bistroDailyTotals.date, input.dateFrom),
-          lte(bistroDailyTotals.date, input.dateTo)
+          sql`DATE(${bistroDailyTotals.date}) >= ${input.dateFrom}`,
+          sql`DATE(${bistroDailyTotals.date}) <= ${input.dateTo}`
         ))
         .orderBy(bistroDailyTotals.date);
     }),
@@ -208,7 +208,7 @@ export const bistroRouter = router({
       notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) throw new Error("DB unavailable");
       // Count orders for the day
       const start = new Date(input.date);
@@ -225,7 +225,7 @@ export const bistroRouter = router({
       const takeaway = orders.filter((o: any) => o.orderType === "takeaway").length;
       const catering = orders.filter((o: any) => o.orderType === "event_catering").length;
       await db.insert(bistroDailyTotals).values({
-        date: input.date,
+        date: new Date(input.date),
         totalOrders: orders.length,
         totalRevenue: String(totalRevenue),
         cashRevenue: String(input.cashRevenue),
@@ -241,7 +241,7 @@ export const bistroRouter = router({
   getRevenueStats: protectedProcedure
     .input(z.object({ days: z.number().default(30) }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) return { totalRevenue: 0, totalOrders: 0, avgOrderValue: 0, topItems: [] };
       const since = new Date(Date.now() - input.days * 24 * 60 * 60 * 1000);
       const orders = await db.select().from(bistroOrders)

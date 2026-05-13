@@ -1289,9 +1289,9 @@ export async function sendContractRenewalReminders() {
 
     const accounts = await db.select().from(utilityAccounts)
       .where(and(
-        isNotNull((utilityAccounts as any).contractEndDate),
-        lte((utilityAccounts as any).contractEndDate, in60Days),
-        gte((utilityAccounts as any).contractEndDate, now)
+        isNotNull(utilityAccounts.contractEndDate),
+        lte(utilityAccounts.contractEndDate, in60Days),
+        gte(utilityAccounts.contractEndDate, now)
       ));
 
     if (accounts.length === 0) {
@@ -1304,7 +1304,7 @@ export async function sendContractRenewalReminders() {
       let contact = null;
       if (acc.supplierContactId) {
         const contacts = await db.select().from(supplierContacts)
-          .where((supplierContacts as any).id === acc.supplierContactId)
+          .where(eq(supplierContacts.id, acc.supplierContactId))
           .limit(1);
         contact = contacts[0] ?? null;
       }
@@ -1560,7 +1560,7 @@ export async function generateMorningBriefing() {
       const pendingApprovals = await db
         .select({ count: sql<number>`count(*)` })
         .from(invoices)
-        .where(eq(invoices.status, "pending"));
+        .where(eq(invoices.paymentStatus, "pending"));
       pendingApprovalCount = pendingApprovals[0]?.count ?? 0;
     } catch {
       // expenses may not have status field
@@ -1588,14 +1588,12 @@ export async function generateMorningBriefing() {
     // Store the briefing in the voice_sessions table as a system-generated briefing
     await db.insert(voiceSessions).values({
       userId: 1, // System-generated briefing for the primary admin
+      conversationId: `briefing-${Date.now()}`,
       startedAt: new Date(),
       endedAt: new Date(),
-      sessionType: "morning_briefing",
       screenContext: "dashboard",
-      totalTokensUsed: 0,
-      totalCostUsd: "0",
-      turnCount: 1,
-      summary: briefingText,
+      tokenCount: 0,
+      status: "completed",
     });
 
     console.log(`[Scheduled] Morning briefing generated: ${briefingText.substring(0, 100)}...`);

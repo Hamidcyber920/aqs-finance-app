@@ -938,7 +938,7 @@ export const appRouter = router({
       const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
       const [incomeRows, expenseRows] = await Promise.all([
         db.select({ total: sql<number>`COALESCE(SUM(CAST(${incomeRecords.amount} AS DECIMAL(12,2))), 0)` })
-          .from(incomeRecords).where(sql`${incomeRecords.date} >= ${thirtyDaysAgo.toISOString().split('T')[0]}`),
+          .from(incomeRecords).where(sql`${incomeRecords.createdAt} >= ${thirtyDaysAgo}`),
         db.select({ total: sql<number>`COALESCE(SUM(CAST(${receiptsTable.amount} AS DECIMAL(12,2))), 0)` })
           .from(receiptsTable).where(sql`${receiptsTable.createdAt} >= ${sixtyDaysAgo} AND ${receiptsTable.status} = 'approved'`),
       ]);
@@ -963,7 +963,7 @@ export const appRouter = router({
         db.select({ n: sql<number>`count(*)` }).from(complianceActions)
           .where(sql`${complianceActions.dueDate} BETWEEN ${todayStr} AND ${nextWeekStr} AND ${complianceActions.status} != 'completed'`),
         db.select({ n: sql<number>`count(*)` }).from(trainingRecords)
-          .where(sql`${trainingRecords.expiryDate} BETWEEN ${todayStr} AND ${nextWeekStr}`),
+          .where(sql`${trainingRecords.expiresAt} BETWEEN ${todayStr} AND ${nextWeekStr}`),
         db.select({ n: sql<number>`count(*)` }).from(accommodationTenants)
           .where(sql`DAY(CURDATE()) BETWEEN 1 AND 7 AND ${accommodationTenants.status} = 'active'`),
       ]);

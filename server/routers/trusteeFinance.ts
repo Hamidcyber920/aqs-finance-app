@@ -91,16 +91,18 @@ export const trusteeFinanceRouter = router({
         ));
 
       // ── Bills paid this month
-      const billRows = await db.select({
+      const billRows = (await db.select({
         amount: utilityBills.amount,
-        supplier: utilityBills.supplier,
-        building: utilityBills.building,
-        category: utilityBills.category,
+        billDate: utilityBills.billDate,
+        supplier: utilityAccounts.supplier,
+        building: utilityAccounts.building,
+        category: utilityAccounts.category,
       }).from(utilityBills)
+        .leftJoin(utilityAccounts, eq(utilityBills.accountId, utilityAccounts.id))
         .where(and(
           gte(utilityBills.billDate, from),
           lte(utilityBills.billDate, to),
-        ));
+        ))) as Array<{ amount: string; billDate: Date | null; supplier: string | null; building: string | null; category: string | null }>;
 
       // ── Scheduled payments this month
       const schedRows = await db.select({
@@ -306,8 +308,17 @@ export const trusteeFinanceRouter = router({
         .where(and(gte(receipts.receiptDate, from), lte(receipts.receiptDate, to)))
         .orderBy(desc(receipts.receiptDate));
 
-      const billRows = await db.select().from(utilityBills)
-        .where(and(gte(utilityBills.billDate, from), lte(utilityBills.billDate, to)));
+      const billRows = (await db.select({
+        id: utilityBills.id,
+        amount: utilityBills.amount,
+        billDate: utilityBills.billDate,
+        accountId: utilityBills.accountId,
+        supplier: utilityAccounts.supplier,
+        building: utilityAccounts.building,
+        category: utilityAccounts.category,
+      }).from(utilityBills)
+        .leftJoin(utilityAccounts, eq(utilityBills.accountId, utilityAccounts.id))
+        .where(and(gte(utilityBills.billDate, from), lte(utilityBills.billDate, to)))) as Array<{ id: number; amount: string; billDate: Date; accountId: number; supplier: string | null; building: string | null; category: string | null }>;
 
       const schedRows = await db.select().from(scheduledPayments)
         .where(and(gte(scheduledPayments.dueDate, from), lte(scheduledPayments.dueDate, to)));
@@ -565,15 +576,15 @@ export const trusteeFinanceRouter = router({
       expenseVariance: z.number().default(0.1),
     }))
     .query(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) return { weeks: [] };
       const now = new Date();
       // Pull scheduled payments for next 13 weeks
       const endDate = new Date(now.getTime() + 13 * 7 * 24 * 60 * 60 * 1000);
       const scheduled = await db.select().from(scheduledPayments)
         .where(and(
-          gte(scheduledPayments.dueDate, now.toISOString().split("T")[0]),
-          lte(scheduledPayments.dueDate, endDate.toISOString().split("T")[0])
+          gte(scheduledPayments.dueDate, now),
+          lte(scheduledPayments.dueDate, endDate)
         ));
       // Pull income records for last 3 months to estimate weekly income
       const threeMonthsAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);

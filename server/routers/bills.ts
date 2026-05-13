@@ -682,7 +682,7 @@ export const billsRouter = router({
   detectAnomalies: protectedProcedure
     .input(z.object({ buildingFilter: z.string().optional() }))
     .mutation(async ({ input }) => {
-      const db = getDb();
+      const db = await getDb();
       if (!db) return { anomalies: [] };
       const bills = await db.select().from(utilityBills).orderBy(desc(utilityBills.billDate)).limit(500);
       const accounts = await db.select().from(utilityAccounts);

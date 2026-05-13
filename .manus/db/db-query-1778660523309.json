@@ -1,0 +1,31 @@
+{
+  "query": "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('donor_comms_log', 'utility_accounts', 'utility_bills', 'utility_buildings', 'utility_categories', 'supplier_contacts', 'scheduled_payments');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('donor_comms_log', 'utility_accounts', 'utility_bills', 'utility_buildings', 'utility_categories', 'supplier_contacts', 'scheduled_payments');",
+  "rows": [
+    {
+      "TABLE_NAME": "utility_categories"
+    },
+    {
+      "TABLE_NAME": "utility_buildings"
+    },
+    {
+      "TABLE_NAME": "utility_bills"
+    },
+    {
+      "TABLE_NAME": "utility_accounts"
+    },
+    {
+      "TABLE_NAME": "supplier_contacts"
+    },
+    {
+      "TABLE_NAME": "scheduled_payments"
+    },
+    {
+      "TABLE_NAME": "donor_comms_log"
+    }
+  ],
+  "messages": [],
+  "stdout": "TABLE_NAME\nutility_categories\nutility_buildings\nutility_bills\nutility_accounts\nsupplier_contacts\nscheduled_payments\ndonor_comms_log\n",
+  "stderr": "",
+  "execution_time_ms": 281
+}

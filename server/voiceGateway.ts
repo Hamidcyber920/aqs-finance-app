@@ -218,7 +218,7 @@ async function getDailyTokenUsage(userId: number): Promise<number> {
   const result = await db
     .select({ total: sql<number>`COALESCE(SUM(${voiceCostTracking.tokenCount}), 0)` })
     .from(voiceCostTracking)
-    .where(and(eq(voiceCostTracking.userId, userId), eq(voiceCostTracking.date, todayStr)));
+    .where(and(eq(voiceCostTracking.userId, userId), sql`DATE(${voiceCostTracking.date}) = ${todayStr}`));
   return Number(result[0]?.total ?? 0);
 }
 
@@ -229,7 +229,7 @@ async function logTokenUsage(userId: number, tokensUsed: number, estimatedCostPe
   const todayStr = new Date().toISOString().split("T")[0]!;
   await db.insert(voiceCostTracking).values({
     userId,
-    date: todayStr,
+    date: new Date(),
     tokenCount: tokensUsed,
     estimatedCostPence,
     createdAt: new Date(),
@@ -340,12 +340,12 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
     case "get_fund_balance": {
       const { fundraisingCampaigns } = await import("../drizzle/schema");
       const campaigns = await db.select().from(fundraisingCampaigns).where(eq(fundraisingCampaigns.isActive, true));
-      return { activeFunds: campaigns.length, campaigns: campaigns.map(c => ({ id: c.id, name: c.name, goal: c.goalAmount, raised: c.raisedAmount })) };
+      return { activeFunds: campaigns.length, campaigns: campaigns.map(c => ({ id: c.id, name: c.name, goal: c.targetAmount, raised: c.currentAmount })) };
     }
     case "get_campaign_status": {
       const { fundraisingCampaigns } = await import("../drizzle/schema");
       const campaigns = await db.select().from(fundraisingCampaigns);
-      return campaigns.map(c => ({ id: c.id, name: c.name, goal: c.goalAmount, raised: c.raisedAmount, isActive: c.isActive }));
+      return campaigns.map(c => ({ id: c.id, name: c.name, goal: c.targetAmount, raised: c.currentAmount, isActive: c.isActive }));
     }
     case "get_priorities": {
       const { receipts } = await import("../drizzle/schema");
@@ -359,7 +359,7 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       if (!donorId || !amount) return { error: "donorId and amount required" };
       if (amount <= 0) return { error: "Amount must be positive" };
       if (amount >= 100000) return { error: "Amount exceeds limit - requires manual confirmation" };
-      await db.insert(fundraisingDonations).values({ donorId, campaignId: args.campaignId ? Number(args.campaignId) : null, amount: String(amount), paymentMethod: String(args.paymentMethod || "cash"), donatedAt: new Date(), createdAt: new Date() });
+      await db.insert(fundraisingDonations).values({ donorLeadId: donorId, campaignId: args.campaignId ? Number(args.campaignId) : null, donorName: "Voice Agent", amount: String(amount), paymentMethod: (args.paymentMethod || "cash") as any, donatedAt: new Date(), createdAt: new Date() });
       return { success: true, donorId, amount };
     }
     case "update_donor_profile": {
@@ -431,7 +431,7 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
       const recentReceipts = await db.select().from(receipts).where(gte(receipts.createdAt, yesterday)).limit(10);
       const activeCampaigns = await db.select().from(fundraisingCampaigns).where(eq(fundraisingCampaigns.isActive, true));
-      return { date: new Date().toLocaleDateString("en-GB"), recentTransactions: recentReceipts.length, activeCampaigns: activeCampaigns.map(c => ({ name: c.name, raised: c.raisedAmount, goal: c.goalAmount })) };
+      return { date: new Date().toLocaleDateString("en-GB"), recentTransactions: recentReceipts.length, activeCampaigns: activeCampaigns.map(c => ({ name: c.name, raised: c.currentAmount, goal: c.targetAmount })) };
     }
     case "flag_for_review": {
       await db.insert(voiceReviewQueue).values({ sessionId: client.dbSessionId, transcriptId: args.transcriptId ? Number(args.transcriptId) : null, flaggedByUserId: client.userId, agentStatement: String(args.note || "Flagged by user via voice"), status: "pending", createdAt: new Date() });
@@ -499,7 +499,7 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       const expenseRows = await db.select().from(receipts).where(and(gte(receipts.createdAt, from))).limit(100);
       const activeCampaigns = await db.select().from(fundraisingCampaigns).where(eq(fundraisingCampaigns.isActive, true));
       const totalExpenses = expenseRows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
-      const totalRaised = activeCampaigns.reduce((sum, c) => sum + Number(c.raisedAmount || 0), 0);
+      const totalRaised = activeCampaigns.reduce((sum, c) => sum + Number(c.currentAmount || 0), 0);
       // Navigate user to reports page
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(JSON.stringify({ type: "navigate", path: "/reports" }));
@@ -512,7 +512,7 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
           transactionCount: expenseRows.length,
           activeCampaigns: activeCampaigns.length,
           totalRaised: `£${totalRaised.toFixed(2)}`,
-          campaigns: activeCampaigns.map(c => ({ name: c.name, raised: `£${Number(c.raisedAmount || 0).toFixed(2)}`, goal: `£${Number(c.goalAmount || 0).toFixed(2)}` })),
+          campaigns: activeCampaigns.map(c => ({ name: c.name, raised: `£${Number(c.currentAmount || 0).toFixed(2)}`, goal: `£${Number(c.targetAmount || 0).toFixed(2)}` })),
         },
         note: "For a full PDF report, please use the Reports page.",
       };
@@ -957,7 +957,7 @@ export function attachVoiceGateway(server: HttpServer) {
             const response = await invokeLLM({ messages: [{ role: "system", content: `${SYSTEM_PROMPT}\n\nContext: ${contextInfo}` }, { role: "user", content: msg.text }] });
             const agentText = response.choices?.[0]?.message?.content || "I couldn't process that.";
             ws.send(JSON.stringify({ type: "agent_response", text: agentText }));
-            await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: agentText, createdAt: new Date() });
+            if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: typeof agentText === "string" ? agentText : JSON.stringify(agentText), createdAt: new Date() });
           } catch { ws.send(JSON.stringify({ type: "error", error: "Failed to process text input." })); }
         }
         return;
@@ -965,14 +965,14 @@ export function attachVoiceGateway(server: HttpServer) {
 
       if (msg.type === "correct_this") {
         const db = await getDb();
-        await db.insert(voiceReviewQueue).values({ sessionId: client.dbSessionId, transcriptId: msg.transcriptId ? Number(msg.transcriptId) : null, flaggedByUserId: client.userId, agentStatement: msg.correctionNote || "User flagged this response", status: "pending", createdAt: new Date() });
+        if (db) await db.insert(voiceReviewQueue).values({ sessionId: client.dbSessionId, transcriptId: msg.transcriptId ? Number(msg.transcriptId) : null, flaggedByUserId: client.userId, agentStatement: msg.correctionNote || "User flagged this response", status: "pending", createdAt: new Date() });
         ws.send(JSON.stringify({ type: "agent_response", text: "Thank you, I've flagged that for Dr. Hamid to review." }));
         return;
       }
 
       if (msg.type === "end_session") {
         const db = await getDb();
-        await db.update(voiceSessions).set({ endedAt: new Date(), status: "completed" }).where(eq(voiceSessions.id, client.dbSessionId));
+        if (db) await db.update(voiceSessions).set({ endedAt: new Date(), status: "completed" }).where(eq(voiceSessions.id, client.dbSessionId));
         ws.send(JSON.stringify({ type: "session_ended", text: "Session ended. Goodbye!" }));
         if (client.geminiWs) client.geminiWs.close();
         activeClients.delete(connectionId);
@@ -991,7 +991,7 @@ export function attachVoiceGateway(server: HttpServer) {
       const client = activeClients.get(connectionId);
       if (client) {
         const db = await getDb();
-        await db.update(voiceSessions).set({ endedAt: new Date(), status: "completed" }).where(eq(voiceSessions.id, client.dbSessionId));
+        if (db) await db.update(voiceSessions).set({ endedAt: new Date(), status: "completed" }).where(eq(voiceSessions.id, client.dbSessionId));
         if (client.geminiWs) client.geminiWs.close();
         activeClients.delete(connectionId);
       }

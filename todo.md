@@ -1885,3 +1885,11 @@
 - [x] Fix garbled audio playback: RESOLVED — model name needed `models/` prefix; text input changed from clientContent to realtimeInput.text per Gemini 3.1 migration guide
 - [x] Verify sample rate: Gemini outputs audio/pcm;rate=24000, AudioPlaybackQueue uses sampleRate=24000 — correct
 - [x] Verify base64 decoding and PCM-to-Float32 conversion in AudioPlaybackQueue — correct implementation confirmed
+### TypeScript Error Fixes (May 13 2026)
+- [x] Fix 17 server-side TypeScript errors: date type mismatches (string vs Date), missing await getDb(), wrong field names (donorId→donorLeadId, channel→type, goalAmount→targetAmount), missing null checks on db, type casts for leftJoin results in trusteeFinance.ts, voiceTranscripts content cast to string
+- [x] Fix bistro.ts: getDailyTotals date comparison + closeDailyTill date insert
+- [x] Fix scheduledJobs.ts: supplierContacts.id comparison (boolean → eq())
+- [x] Fix voiceGateway.ts: voiceCostTracking.date (string→Date), fundraisingDonations insert fields, voiceTranscripts content type
+- [x] Fix voiceAgent.ts: receipts.receiptDate date comparison, donorName field, commsOutbox channel→type, briefingText/assistantMessage cast to string
+- [x] Fix trusteeFinance.ts: billRows leftJoin type annotation, second billRows query with utilityAccounts join
+- [x] 314/317 tests passing (3 pre-existing Google Drive credential failures)
