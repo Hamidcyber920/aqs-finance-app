@@ -65,60 +65,127 @@ const GEMINI_MODEL = "models/gemini-3.1-flash-live-preview";
 
 const activeClients = new Map<string, VoiceClient>();
 
-const SYSTEM_PROMPT = `You are Hibba, the AI voice assistant for a UK charity management platform.
+const SYSTEM_PROMPT = `You are Hibba, the AI voice assistant for Abdullah Quilliam Society — a UK Islamic charity managing Britain's first mosque at Brougham Terrace, Liverpool.
+
 IDENTITY:
-- You are helpful, professional, and warm
-- You speak in British English
-- You address users by their first name
-- You are aware of Islamic charity terminology (Sadaqah, Zakat, Waqf, Qard Hasan, JazakAllah)
+- You are helpful, professional, and warm. You speak in British English.
+- You address users by their first name.
+- You are aware of Islamic charity terminology (Sadaqah, Zakat, Waqf, Qard Hasan, JazakAllah).
+- You represent Abdullah Quilliam Mosque & National Heritage Centre (Charity no: 1194942).
+- Chair: Galib Khan. The mosque was founded by Abdullah Quilliam in 1887.
+
+TIMEZONE — CRITICAL:
+- You are based in Liverpool, UK. ALL times MUST be in UK time (Europe/London timezone).
+- The current timezone is BST (British Summer Time, UTC+1) from late March to late October, and GMT (UTC+0) the rest of the year.
+- When reporting times, always say them in UK local time. Never use UTC.
+- When scheduling meetings or tasks, interpret user times as UK local time unless they specify otherwise.
+- Use 12-hour format with am/pm for spoken times (e.g. "half past two in the afternoon" not "14:30").
+
+ANTI-HALLUCINATION GUARDRAILS — CRITICAL:
+- ONLY report information that comes directly from tool call results. NEVER invent, guess, or fabricate data.
+- If a tool returns no results or an error, say so honestly: "I couldn't find that" or "I don't have that information right now."
+- NEVER claim a feature exists unless you have a tool for it. If asked about something you can't do, say "I don't have access to that yet" rather than making something up.
+- NEVER invent donor names, amounts, dates, email addresses, or any other data.
+- If you're unsure about something, say "I'm not certain about that — let me check" and use the appropriate tool.
+- Do NOT reference modules or pages that don't exist. The real app sections are: Dashboard, Receipts/Expenses, Reports, Fundraising, Loans, Income, Payroll, Monthly Expenses, Reconciliation, Donors, Campaigns, Communications, Comms Hub, Master Inbox, Trustees, Accommodation, Fintech, Donor CRM, Compliance, Decisions, Gift Aid, Meetings, Audit Trail, System Health, Pledges, Donor Pipeline, Major Donor, Bulk Approvals, Conflicts Register, Recognition Tiers, QR Codes, Saved Views, Bills & Utilities, Training Tracker, LBMW Correspondence, Trustee Dashboard, Facilities, Bistro87, Profile, Settings.
+
+AQS ORGANISATION INFO:
+- Full name: Abdullah Quilliam Society
+- Charity number: 1194942
+- Address: Brougham Terrace, Liverpool
+- Phone: 0151 260 3986 (or +44 151 260 3986)
+- Website: abdullahquilliam.org (heritage/history) and theaqs.org (operations/donations)
+- Chair: Galib Khan
+
+DONATION INFO:
+- Online donations: Donorbox via theaqs.org — for regular monthly donations, direct users to theaqs.org
+- Bank transfer (reduces fees): Account Name: Abdullah Quilliam Society, Account Number: 01158945, Sort Code: 40-29-28
+- After bank transfer, donors should call 0151 260 3986 to confirm their donation.
+- "Friends of AQS" programme: 100+ monthly supporters. Encourage joining.
+- Payment links can be generated via Stripe for one-off donations.
+
+PRAYER TIMES:
+- Use the get_prayer_times tool to fetch today's prayer times for Liverpool.
+- Report both start times and jamaat times when available.
+- Jamaat times are set by the mosque and may differ from calculated start times.
+
 CAPABILITIES:
-- Answer queries about donors, finances, campaigns, staff, facilities
-- Help fill forms by voice (QuickCapture, expense entry, donor updates)
-- Compose communications (WhatsApp, email drafts)
-- Generate morning briefings
-- Create payment links
-- Search transactions and documents
+- Search and retrieve ANY data in the system: donors, finances, campaigns, staff, facilities, expenses, payroll, income, loans, accommodation, compliance, meetings, communications, bills, utilities, reconciliation, gift aid, pledges, reports.
+- Help fill forms by voice (QuickCapture, expense entry, donor updates).
+- Send emails and draft WhatsApp messages.
+- Generate morning briefings and financial reports.
+- Create payment links and record donations.
+- Schedule meetings and create tasks.
+- Navigate users to any page in the app.
+- Provide prayer times, mosque info, and donation guidance.
+
 BOUNDARIES:
-- Never authenticate users — the system handles that
-- Never handle card data — generate Stripe payment links instead
-- Never read out sensitive data (full addresses, bank details, NI numbers)
-- For amounts over £1,000, always confirm before proceeding
-- For any destructive action, require explicit confirmation
+- Never authenticate users — the system handles that.
+- Never handle card data — generate Stripe payment links instead.
+- Never read out sensitive data (full addresses, bank details, NI numbers) unless the user explicitly asks.
+- For amounts over £1,000, always confirm before proceeding.
+- For any destructive action, require explicit confirmation.
+- Never invent information. Only speak from tool results.
+
 PERMISSIONS:
 - Respect the user's role. If a tool returns FORBIDDEN, explain politely that they don't have access.
-- Reception staff can only use QuickCapture and basic lookups
-- Donors can only access their own data
-- Auditors have read-only access
+- Reception staff can only use QuickCapture and basic lookups.
+- Donors can only access their own data.
+- Auditors have read-only access.
+
 STYLE:
-- Keep responses concise for voice (2-3 sentences max unless asked for detail)
-- Use natural speech patterns, not bullet points
-- Confirm actions before executing writes
-- If unsure, say so and offer to escalate to Dr. Hamid`;
+- Keep responses concise for voice (2-3 sentences max unless asked for detail).
+- Use natural speech patterns, not bullet points.
+- Confirm actions before executing writes.
+- If unsure, say so and offer to escalate to Dr. Hamid.
+- When giving times, use natural UK speech: "quarter past four" not "16:15".`;
 
 const TOOL_DECLARATIONS = [
+  // --- Core context ---
   { name: "get_current_user", description: "Get the current user's profile, role, and permissions", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_screen_context", description: "Get the current page/screen context", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_staff_directory", description: "Get the staff directory", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_screen_context", description: "Get the current page/screen context the user is viewing", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_current_time", description: "Get the current date and time in UK timezone (Europe/London). Use this before reporting any time or scheduling anything.", parameters: { type: "object", properties: {}, required: [] } },
+  // --- People ---
+  { name: "get_staff_directory", description: "Get all active staff members with their roles and contact info", parameters: { type: "object", properties: {}, required: [] } },
   { name: "get_trustees", description: "Get the list of trustees", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_donor", description: "Get donor details by ID", parameters: { type: "object", properties: { donorId: { type: "number", description: "Donor ID" } }, required: ["donorId"] } },
+  { name: "get_donor", description: "Get full donor details by ID including giving history", parameters: { type: "object", properties: { donorId: { type: "number", description: "Donor ID" } }, required: ["donorId"] } },
   { name: "search_donors", description: "Search donors by name, email, or phone. Use this when the user mentions a donor by name or wants to find someone.", parameters: { type: "object", properties: { query: { type: "string", description: "Name, email, or phone to search for" }, limit: { type: "number", description: "Max results (default 10)" } }, required: ["query"] } },
-  { name: "search_transactions", description: "Search recent transactions", parameters: { type: "object", properties: { limit: { type: "number", description: "Max results" } }, required: [] } },
-  { name: "get_fund_balance", description: "Get fund/campaign balance", parameters: { type: "object", properties: { campaignId: { type: "number" } }, required: [] } },
-  { name: "get_campaign_status", description: "Get all campaign statuses", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_priorities", description: "Get pending approvals and flagged items", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "compose_briefing", description: "Compose a morning briefing summary", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Finance & Transactions ---
+  { name: "search_transactions", description: "Search recent expense transactions/receipts", parameters: { type: "object", properties: { limit: { type: "number", description: "Max results" }, category: { type: "string", description: "Filter by category" }, status: { type: "string", description: "Filter by status: pending, approved, rejected" } }, required: [] } },
+  { name: "get_income_summary", description: "Get income records summary (Friday collections, donations, rent, etc.)", parameters: { type: "object", properties: { period: { type: "string", description: "Period: today, this_week, this_month, last_month" } }, required: [] } },
+  { name: "get_expenses_summary", description: "Get expenses summary for a period", parameters: { type: "object", properties: { period: { type: "string", description: "Period: today, this_week, this_month, last_month" } }, required: [] } },
+  { name: "get_loans_summary", description: "Get Qard Hasan (interest-free loans) summary", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_payroll_summary", description: "Get payroll information and scheduled payments", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_bills_utilities", description: "Get utility bills and scheduled payments", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Fundraising ---
+  { name: "get_fund_balance", description: "Get fund/campaign balance for active campaigns", parameters: { type: "object", properties: { campaignId: { type: "number" } }, required: [] } },
+  { name: "get_campaign_status", description: "Get all campaign statuses with amounts raised vs goals", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_pledges", description: "Get pledge commitments and their fulfilment status", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Operations ---
+  { name: "get_priorities", description: "Get pending approvals, flagged items, and urgent matters", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "compose_briefing", description: "Compose a morning briefing with recent activity, pending items, and upcoming events", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_meetings", description: "Get upcoming and recent meetings", parameters: { type: "object", properties: { upcoming: { type: "boolean", description: "True for upcoming, false for past" } }, required: [] } },
+  { name: "get_compliance_status", description: "Get compliance actions and their status", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_accommodation", description: "Get student accommodation status, tenants, and rent tracking", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_facilities", description: "Get facilities bookings and status", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Actions ---
   { name: "create_donation", description: "Record a new donation", parameters: { type: "object", properties: { donorId: { type: "number" }, amount: { type: "number" }, campaignId: { type: "number" }, paymentMethod: { type: "string" } }, required: ["donorId", "amount"] } },
   { name: "update_donor_profile", description: "Update donor profile fields", parameters: { type: "object", properties: { donorId: { type: "number" }, phone: { type: "string" }, email: { type: "string" }, addressLine1: { type: "string" }, postcode: { type: "string" } }, required: ["donorId"] } },
   { name: "log_communication", description: "Log a communication with a donor", parameters: { type: "object", properties: { donorId: { type: "number" }, channel: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["donorId"] } },
-  { name: "create_payment_link", description: "Generate a Stripe payment link", parameters: { type: "object", properties: { donorId: { type: "number" }, amount: { type: "number" } }, required: ["donorId", "amount"] } },
-  { name: "send_email", description: "Send an email to a donor or staff member immediately. Use this when the user explicitly asks to send (not just draft) an email.", parameters: { type: "object", properties: { to: { type: "string", description: "Recipient email address" }, recipientName: { type: "string", description: "Recipient name" }, subject: { type: "string", description: "Email subject" }, body: { type: "string", description: "Email body (plain text or HTML)" }, donorId: { type: "number", description: "Optional donor ID for logging" } }, required: ["to", "subject", "body"] } },
+  { name: "create_payment_link", description: "Generate a Stripe payment link for a one-off donation", parameters: { type: "object", properties: { donorId: { type: "number" }, amount: { type: "number" } }, required: ["donorId", "amount"] } },
+  { name: "send_email", description: "Send an email immediately. Use this when the user explicitly asks to send (not just draft) an email.", parameters: { type: "object", properties: { to: { type: "string", description: "Recipient email address" }, recipientName: { type: "string", description: "Recipient name" }, subject: { type: "string", description: "Email subject" }, body: { type: "string", description: "Email body (plain text or HTML)" }, donorId: { type: "number", description: "Optional donor ID for logging" } }, required: ["to", "subject", "body"] } },
   { name: "draft_whatsapp", description: "Draft a WhatsApp message (saves to outbox for review)", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
   { name: "draft_email", description: "Save an email draft to the outbox for later review (does NOT send immediately)", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
-  { name: "navigate_to", description: "Navigate the user to a specific page in the app. Use this when the user asks to go to a page, view something, or open a section.", parameters: { type: "object", properties: { page: { type: "string", description: "Page path e.g. /donors, /donors/123, /campaigns, /comms-v3, /dashboard, /reports, /receipts, /payroll, /loans, /gift-aid, /meetings, /trustees, /compliance, /facilities" } }, required: ["page"] } },
+  { name: "create_task", description: "Create a task or action item for a staff member", parameters: { type: "object", properties: { title: { type: "string", description: "Task title/description" }, owner: { type: "string", description: "Person responsible (name)" }, dueDate: { type: "string", description: "Due date in YYYY-MM-DD format" }, priority: { type: "string", description: "low, medium, high, or critical" }, notes: { type: "string", description: "Additional notes" }, source: { type: "string", description: "Where this task came from" } }, required: ["title"] } },
+  { name: "schedule_meeting", description: "Schedule a meeting with attendees", parameters: { type: "object", properties: { title: { type: "string", description: "Meeting title" }, meetingType: { type: "string", description: "Type: trustee_board, finance_committee, safeguarding_committee, building_committee, agm, extraordinary, or staff" }, scheduledAt: { type: "string", description: "Date and time in ISO format (YYYY-MM-DDTHH:mm:ss) in UK time" }, location: { type: "string", description: "Meeting location" }, notes: { type: "string", description: "Meeting notes or agenda summary" }, attendees: { type: "array", items: { type: "number" }, description: "Array of user IDs for attendees" } }, required: ["title", "scheduledAt"] } },
+  { name: "generate_report", description: "Generate a financial summary report for a given month", parameters: { type: "object", properties: { year: { type: "number", description: "Year (e.g. 2026)" }, month: { type: "number", description: "Month number (1-12)" }, sendToTrustees: { type: "boolean", description: "Whether to email the report to trustees" } }, required: [] } },
   { name: "flag_for_review", description: "Flag something for Dr. Hamid's review", parameters: { type: "object", properties: { transcriptId: { type: "number" }, note: { type: "string" } }, required: [] } },
-  { name: "create_task", description: "Create a task or action item for a staff member. Use this when the user asks to create a task, reminder, action item, or to-do.", parameters: { type: "object", properties: { title: { type: "string", description: "Task title/description" }, owner: { type: "string", description: "Person responsible (name)" }, dueDate: { type: "string", description: "Due date in YYYY-MM-DD format" }, priority: { type: "string", description: "low, medium, high, or critical" }, notes: { type: "string", description: "Additional notes" }, source: { type: "string", description: "Where this task came from, e.g. 'voice agent', 'meeting', 'email'" } }, required: ["title"] } },
-  { name: "schedule_meeting", description: "Schedule a meeting. Use this when the user asks to schedule, book, or arrange a meeting.", parameters: { type: "object", properties: { title: { type: "string", description: "Meeting title" }, meetingType: { type: "string", description: "Type: trustee_board, finance_committee, safeguarding_committee, building_committee, agm, extraordinary, or staff" }, scheduledAt: { type: "string", description: "Date and time in ISO format (YYYY-MM-DDTHH:mm:ss)" }, location: { type: "string", description: "Meeting location" }, notes: { type: "string", description: "Meeting notes or agenda summary" }, attendees: { type: "array", items: { type: "number" }, description: "Array of user IDs for attendees" } }, required: ["title", "scheduledAt"] } },
-  { name: "generate_report", description: "Generate a financial summary report for a given month. Use this when the user asks for a report, summary, or financial overview.", parameters: { type: "object", properties: { year: { type: "number", description: "Year (e.g. 2026)" }, month: { type: "number", description: "Month number (1-12)" }, sendToTrustees: { type: "boolean", description: "Whether to email the report to trustees" } }, required: [] } },
+  // --- Navigation ---
+  { name: "navigate_to", description: "Navigate the user to a specific page in the app. ONLY use paths from this list: /dashboard, /receipts, /reports, /fundraising, /loans, /income, /payroll, /monthly-expenses, /reconciliation, /donors, /donors/:id, /campaigns, /communications, /comms-hub, /comms-inbox, /admin, /trustees, /accommodation, /fintech, /donor-crm, /compliance, /decisions, /gift-aid, /payroll-v3, /meetings, /audit-trail, /system-health, /pledges, /donor-pipeline, /major-donor, /bulk-approvals, /conflicts-register, /recognition-tiers, /qr-codes, /saved-views, /bills-utilities, /training-tracker, /lbmw-correspondence, /trustee-dashboard, /facilities, /bistro87, /profile, /settings", parameters: { type: "object", properties: { page: { type: "string", description: "Page path from the allowed list above" } }, required: ["page"] } },
+  // --- Mosque & Community ---
+  { name: "get_prayer_times", description: "Get today's prayer times for Liverpool (Abdullah Quilliam Mosque). Returns Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha start times and jamaat times.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_donation_info", description: "Get donation methods and bank transfer details for the mosque. Use when someone asks how to donate or about bank transfers.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_mosque_info", description: "Get general information about Abdullah Quilliam Mosque and Society", parameters: { type: "object", properties: {}, required: [] } },
 ];
 
 // --- Auth helper ---
@@ -448,6 +515,157 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
           campaigns: activeCampaigns.map(c => ({ name: c.name, raised: `£${Number(c.raisedAmount || 0).toFixed(2)}`, goal: `£${Number(c.goalAmount || 0).toFixed(2)}` })),
         },
         note: "For a full PDF report, please use the Reports page.",
+      };
+    }
+    case "get_current_time": {
+      const now = new Date();
+      const ukTime = now.toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const ukDate = now.toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+      const isDST = now.toLocaleString("en-GB", { timeZone: "Europe/London", timeZoneName: "short" }).includes("BST");
+      return { currentTime: ukTime, date: ukDate, timezone: isDST ? "BST (UTC+1)" : "GMT (UTC+0)", isoUk: now.toISOString() };
+    }
+    case "get_income_summary": {
+      const { incomeRecords } = await import("../drizzle/schema");
+      const period = String(args.period || "this_month");
+      const now = new Date();
+      let from: Date;
+      if (period === "today") { from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); }
+      else if (period === "this_week") { from = new Date(now); from.setDate(from.getDate() - 7); }
+      else if (period === "last_month") { from = new Date(now.getFullYear(), now.getMonth() - 1, 1); }
+      else { from = new Date(now.getFullYear(), now.getMonth(), 1); }
+      const rows = await db.select().from(incomeRecords).where(gte(incomeRecords.createdAt, from)).orderBy(desc(incomeRecords.createdAt)).limit(50);
+      const total = rows.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+      return { period, recordCount: rows.length, totalIncome: `£${total.toFixed(2)}`, records: rows.slice(0, 20).map(r => ({ id: r.id, category: (r as any).category || "general", amount: `£${Number(r.amount || 0).toFixed(2)}`, date: r.createdAt })) };
+    }
+    case "get_expenses_summary": {
+      const { receipts } = await import("../drizzle/schema");
+      const period = String(args.period || "this_month");
+      const now = new Date();
+      let from: Date;
+      if (period === "today") { from = new Date(now.getFullYear(), now.getMonth(), now.getDate()); }
+      else if (period === "this_week") { from = new Date(now); from.setDate(from.getDate() - 7); }
+      else if (period === "last_month") { from = new Date(now.getFullYear(), now.getMonth() - 1, 1); }
+      else { from = new Date(now.getFullYear(), now.getMonth(), 1); }
+      const rows = await db.select().from(receipts).where(gte(receipts.createdAt, from)).orderBy(desc(receipts.createdAt)).limit(50);
+      const total = rows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
+      const pending = rows.filter(r => r.status === "pending").length;
+      const approved = rows.filter(r => r.status === "approved").length;
+      return { period, recordCount: rows.length, totalExpenses: `£${total.toFixed(2)}`, pending, approved, recentExpenses: rows.slice(0, 10).map(r => ({ id: r.id, vendor: r.vendor, amount: `£${Number(r.totalAmount || 0).toFixed(2)}`, status: r.status, date: r.createdAt })) };
+    }
+    case "get_loans_summary": {
+      const { loanApplications } = await import("../drizzle/schema");
+      const rows = await db.select().from(loanApplications).orderBy(desc(loanApplications.createdAt)).limit(30);
+      const active = rows.filter(r => r.status === "active" || r.status === "approved");
+      const totalOutstanding = active.reduce((sum, r) => sum + Number((r as any).remainingBalance || (r as any).amount || 0), 0);
+      return { totalLoans: rows.length, activeLoans: active.length, totalOutstanding: `£${totalOutstanding.toFixed(2)}`, loans: active.slice(0, 10).map(l => ({ id: l.id, applicant: (l as any).applicantName || "Unknown", amount: `£${Number((l as any).amount || 0).toFixed(2)}`, status: l.status })) };
+    }
+    case "get_payroll_summary": {
+      const { payrollV2 } = await import("../drizzle/schema");
+      const rows = await db.select().from(payrollV2).orderBy(desc(payrollV2.createdAt)).limit(30);
+      const totalMonthly = rows.filter(r => r.status === "approved" || r.status === "paid").reduce((sum, r) => sum + Number((r as any).netPay || (r as any).grossPay || 0), 0);
+      return { staffCount: rows.length, totalMonthlyPayroll: `£${totalMonthly.toFixed(2)}`, entries: rows.slice(0, 10).map(p => ({ id: p.id, employee: (p as any).employeeName || "Staff", grossPay: `£${Number((p as any).grossPay || 0).toFixed(2)}`, status: p.status })) };
+    }
+    case "get_bills_utilities": {
+      const { utilityBills, scheduledPayments } = await import("../drizzle/schema");
+      const bills = await db.select().from(utilityBills).orderBy(desc(utilityBills.createdAt)).limit(20);
+      const scheduled = await db.select().from(scheduledPayments).limit(20);
+      return { billCount: bills.length, scheduledPaymentCount: scheduled.length, recentBills: bills.slice(0, 10).map(b => ({ id: b.id, provider: (b as any).provider || (b as any).accountName || "Unknown", amount: `£${Number((b as any).amount || 0).toFixed(2)}`, status: (b as any).status || "pending", dueDate: (b as any).dueDate })), scheduledPayments: scheduled.slice(0, 10).map(s => ({ id: s.id, description: (s as any).description || (s as any).payee || "Payment", amount: `£${Number((s as any).amount || 0).toFixed(2)}`, nextDate: (s as any).nextPaymentDate })) };
+    }
+    case "get_pledges": {
+      const { pledges } = await import("../drizzle/schema");
+      const rows = await db.select().from(pledges).orderBy(desc(pledges.createdAt)).limit(30);
+      const totalPledged = rows.reduce((sum, r) => sum + Number((r as any).amount || 0), 0);
+      const totalPaid = rows.reduce((sum, r) => sum + Number((r as any).paidAmount || 0), 0);
+      return { totalPledges: rows.length, totalPledged: `£${totalPledged.toFixed(2)}`, totalPaid: `£${totalPaid.toFixed(2)}`, outstanding: `£${(totalPledged - totalPaid).toFixed(2)}`, pledges: rows.slice(0, 10).map(p => ({ id: p.id, donor: (p as any).donorName || "Anonymous", amount: `£${Number((p as any).amount || 0).toFixed(2)}`, paid: `£${Number((p as any).paidAmount || 0).toFixed(2)}`, status: (p as any).status })) };
+    }
+    case "get_meetings": {
+      const { trusteeMeetings } = await import("../drizzle/schema");
+      const upcoming = args.upcoming !== false;
+      const now = new Date();
+      let rows;
+      if (upcoming) {
+        rows = await db.select().from(trusteeMeetings).where(gte(trusteeMeetings.scheduledAt, now)).orderBy(trusteeMeetings.scheduledAt).limit(10);
+      } else {
+        rows = await db.select().from(trusteeMeetings).orderBy(desc(trusteeMeetings.scheduledAt)).limit(10);
+      }
+      return { type: upcoming ? "upcoming" : "recent", count: rows.length, meetings: rows.map(m => ({ id: m.id, title: m.title, type: m.meetingType, date: m.scheduledAt?.toLocaleString("en-GB", { timeZone: "Europe/London" }), location: m.location, status: m.status })) };
+    }
+    case "get_compliance_status": {
+      const { complianceActions } = await import("../drizzle/schema");
+      const rows = await db.select().from(complianceActions).orderBy(desc(complianceActions.createdAt)).limit(30);
+      const open = rows.filter(r => r.status === "open");
+      const overdue = open.filter(r => r.dueDate && new Date(r.dueDate) < new Date());
+      return { total: rows.length, open: open.length, overdue: overdue.length, actions: open.slice(0, 10).map(a => ({ id: a.id, title: a.title, owner: a.owner, priority: a.priority, dueDate: a.dueDate, status: a.status })) };
+    }
+    case "get_accommodation": {
+      try {
+        const { facilityRooms, facilityBookings } = await import("../drizzle/schema");
+        const rooms = await db.select().from(facilityRooms).limit(30);
+        const bookings = await db.select().from(facilityBookings).orderBy(desc(facilityBookings.createdAt)).limit(20);
+        return { roomCount: rooms.length, bookingCount: bookings.length, rooms: rooms.slice(0, 10).map(r => ({ id: r.id, name: (r as any).name || "Room", status: (r as any).status || "available" })), recentBookings: bookings.slice(0, 5).map(b => ({ id: b.id, room: (b as any).roomName || "Room", tenant: (b as any).tenantName || "Tenant", status: (b as any).status })) };
+      } catch { return { error: "Accommodation data not available" }; }
+    }
+    case "get_facilities": {
+      try {
+        const { facilityRooms, facilityBookings } = await import("../drizzle/schema");
+        const rooms = await db.select().from(facilityRooms).limit(30);
+        const bookings = await db.select().from(facilityBookings).where(gte(facilityBookings.createdAt, new Date(Date.now() - 30 * 86400000))).limit(20);
+        return { totalRooms: rooms.length, recentBookings: bookings.length, rooms: rooms.map(r => ({ id: r.id, name: (r as any).name || "Room", capacity: (r as any).capacity, hourlyRate: (r as any).hourlyRate })) };
+      } catch { return { error: "Facilities data not available" }; }
+    }
+    case "get_prayer_times": {
+      try {
+        const today = new Date();
+        const dateStr = `${String(today.getDate()).padStart(2, "0")}-${String(today.getMonth() + 1).padStart(2, "0")}-${today.getFullYear()}`;
+        const resp = await fetch(`https://api.aladhan.com/v1/timingsByCity/${dateStr}?city=Liverpool&country=United+Kingdom&method=15`);
+        const data = await resp.json();
+        if (data.code === 200 && data.data?.timings) {
+          const t = data.data.timings;
+          return {
+            date: data.data.date?.readable || dateStr,
+            startTimes: { fajr: t.Fajr, sunrise: t.Sunrise, dhuhr: t.Dhuhr, asr: t.Asr, maghrib: t.Maghrib, isha: t.Isha },
+            jamaatTimes: {
+              fajr: "Check mosque notice board (typically 15-20 min after start)",
+              dhuhr: "1:30 PM (fixed)",
+              asr: "Check mosque notice board (typically 30 min after start)",
+              maghrib: "At start time (or 5 min after)",
+              isha: "Check mosque notice board (typically 15-30 min after start)",
+            },
+            note: "Jamaat times are set by the mosque and may vary. Call 0151 260 3986 for confirmation.",
+            hijriDate: data.data.date?.hijri ? `${data.data.date.hijri.day} ${data.data.date.hijri.month?.en} ${data.data.date.hijri.year}` : null,
+          };
+        }
+        return { error: "Could not fetch prayer times. Please try again later." };
+      } catch (err: any) {
+        return { error: `Prayer times unavailable: ${err.message}` };
+      }
+    }
+    case "get_donation_info": {
+      return {
+        methods: [
+          { method: "Online (Donorbox)", description: "Set up regular monthly donations via theaqs.org", url: "https://theaqs.org", note: "Best for recurring donations. Supports card payments." },
+          { method: "Bank Transfer (reduces fees)", details: { accountName: "Abdullah Quilliam Society", accountNumber: "01158945", sortCode: "40-29-28" }, note: "After transferring, call 0151 260 3986 to confirm your donation." },
+          { method: "Stripe Payment Link", description: "One-off donations via payment link. Ask me to generate one.", note: "Suitable for one-time gifts." },
+          { method: "Cash", description: "Donate in person at the mosque", note: "A receipt will be provided." },
+        ],
+        friendsOfAQS: { description: "Join 100+ monthly supporters helping preserve Britain's first mosque", url: "https://theaqs.org" },
+        charityNumber: "1194942",
+        phone: "0151 260 3986",
+      };
+    }
+    case "get_mosque_info": {
+      return {
+        name: "Abdullah Quilliam Mosque & National Heritage Centre",
+        fullName: "Abdullah Quilliam Society",
+        charityNumber: "1194942",
+        address: "Brougham Terrace, Liverpool",
+        phone: "0151 260 3986",
+        internationalPhone: "+44 151 260 3986",
+        websites: { heritage: "abdullahquilliam.org", operations: "theaqs.org" },
+        chair: "Galib Khan",
+        history: "Founded by Abdullah Quilliam in 1887. Britain's first mosque. Originally established by William Henry Quilliam, a Liverpool solicitor who embraced Islam after visiting Morocco.",
+        services: ["Daily prayers (5 times)", "Jummah (Friday prayer)", "Islamic education", "Heritage tours", "Community events", "Student accommodation", "Bistro87 cafe"],
+        bankDetails: { accountName: "Abdullah Quilliam Society", accountNumber: "01158945", sortCode: "40-29-28" },
       };
     }
     default:

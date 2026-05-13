@@ -9,7 +9,7 @@
  * - Result: natural, real-time conversation like a phone call
  */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff } from "lucide-react";
+import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -257,9 +257,13 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const playbackRef = useRef<AudioPlaybackQueue>(new AudioPlaybackQueue());
+  const isSpeakingRef = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [showCommandRef, setShowCommandRef] = useState(false);
 
+  // Keep isSpeakingRef in sync with isSpeaking state
+  useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
   // Auto-scroll transcript
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -297,6 +301,11 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
       case "audio_response":
         setIsSpeaking(true);
         playbackRef.current.enqueue(msg.audio);
+        break;
+      case "interrupted":
+        // Barge-in acknowledged by server
+        setIsSpeaking(false);
+        playbackRef.current.stop();
         break;
       case "turn_complete":
         setIsSpeaking(false);
@@ -401,6 +410,11 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
           setVolumeLevel(vol);
           if (vol > VAD_THRESHOLD) {
             setUserSpeaking(true);
+            // Barge-in: if Hibba is speaking and user starts talking, interrupt her
+            if (playbackRef.current && isSpeakingRef.current) {
+              playbackRef.current.stop();
+              setIsSpeaking(false);
+            }
             if (silenceTimerRef.current) {
               clearTimeout(silenceTimerRef.current);
               silenceTimerRef.current = null;
@@ -536,6 +550,13 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
             </div>
             <div className="flex items-center gap-1">
               <button
+                onClick={() => setShowCommandRef(!showCommandRef)}
+                className={`p-1.5 rounded-lg transition-colors ${showCommandRef ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
+                title="Voice command examples"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+              <button
                 onClick={() => setIsTextMode(!isTextMode)}
                 className={`p-1.5 rounded-lg transition-colors ${isTextMode ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
                 title={isTextMode ? "Switch to voice mode" : "Switch to text mode"}
@@ -564,6 +585,27 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
             </div>
           )}
 
+          {/* Command reference card */}
+          {showCommandRef && (
+            <div className="px-4 py-3 bg-zinc-800/50 border-b border-zinc-700/50 max-h-[200px] overflow-y-auto">
+              <p className="text-xs font-semibold text-zinc-300 mb-2">Example voice commands:</p>
+              <div className="space-y-1.5 text-xs text-zinc-400">
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Find donor Ahmed" or "Search for donor by email"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"What's the prayer time for Maghrib?"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"How can someone donate?" or "Give me the bank details"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Show me this month's expenses" or "What's our income?"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Create a task for Farid to check the accounts"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Schedule a meeting for Monday at 2pm"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Send an email to info@example.com"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Navigate to donors" or "Take me to payroll"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"What's the time?" or "What day is it?"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Tell me about the mosque" or "What's our charity number?"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"How many pledges are outstanding?"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"What meetings are coming up?"</p>
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-2 italic">Tip: You can interrupt Hibba by speaking while she's talking.</p>
+            </div>
+          )}
           {/* Transcript area */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {status === "connecting" && (

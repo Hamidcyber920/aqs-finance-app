@@ -1850,3 +1850,18 @@
 - [x] Add feature flags for create_task, schedule_meeting, generate_report in DB
 - [x] Visual feedback: mic button pulses with ring animation when user is speaking
 - [x] Status text changes: "Hearing you..." when speaking, "Listening..." when silent
+
+### Voice Agent Major Overhaul (May 13 2026)
+- [x] Fix timezone: enforce UK timezone (Europe/London) for all time-related responses — get_current_time tool + system prompt
+- [x] Add anti-hallucination guardrails: only report data from tool results, never invent information — strict system prompt rules
+- [x] Remove false references: system prompt lists ALL real app modules, navigate_to only allows valid paths
+- [x] Full data visibility: 30+ tools covering all modules (expenses, payroll, income, loans, fundraising, accommodation, reconciliation, compliance, pledges, meetings, bills, facilities, etc.)
+- [x] Add AQS website info tool: get_mosque_info returns full details from abdullahquilliam.org and theaqs.org
+- [x] Add prayer times tool: get_prayer_times fetches live data from Aladhan API for Liverpool (start + jamaat)
+- [x] Add donation/bank transfer info: get_donation_info returns bank details, Donorbox link, phone number
+- [x] Navigate to Donorbox for regular donation setup — included in get_donation_info response
+- [x] Add voice command reference card ("?" icon showing 12 example commands)
+- [x] Add interrupt/barge-in support (VAD detects user speaking → stops Hibba's audio playback)
+- [x] Charity info: Abdullah Quilliam Mosque & National Heritage Centre, Charity no: 1194942 — in get_mosque_info
+- [x] Bank details: Account Name: Abdullah Quilliam Society, Account Number: 01158945, Sort Code: 40-29-28 — in get_donation_info
+- [x] Phone: +441512603986 / 0151 260 3986 — in get_donation_info and get_mosque_info
