@@ -1953,3 +1953,13 @@
 - [x] TTS voice selector: voice dropdown in Voice History replay bar, loads browser voices, defaults to UK English, filters to English voices
 - [x] Bulk quick action templates: 4 packs (Finance, Trustee, Fundraising, Operations) in Admin Panel Hibba AI tab, each applies to 4 pages at once
 - [x] QUICK_ACTION_TEMPLATES constant with pre-curated actions per page for each pack
+
+## Bug Fix: Published Site Crash (May 13 2026)
+- [ ] Fix "Cannot access 'Ae' before initialization" circular dependency crash on published site — caused by circular imports in the bundled code
+
+## Bug Fix: Production TDZ Crash (May 13 2026)
+- [x] Investigate "Cannot access 'Ae' before initialization" crash on published site
+- [x] Add React.lazy code splitting to App.tsx — all 60+ page components now lazy-loaded
+- [x] Main bundle reduced from 4.6MB to 848KB with proper chunk splitting
+- [x] Added Suspense fallback with loading spinner for lazy-loaded pages
+- [x] Build clean, 314/317 tests passing (3 pre-existing Google Drive credential failures)
