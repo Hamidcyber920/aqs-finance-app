@@ -1910,3 +1910,12 @@
 - [x] Improved navigation UX: human-readable section names in toast + green banner in VoiceAgent UI
 - [x] Updated command reference card with navigation/actions/data query examples
 - [x] Test: 314/317 passing (unchanged)
+
+### Context-Aware Hibba (May 13 2026)
+- [x] Pass current page route + title as screenContext from App.tsx to VoiceAgent — already implemented
+- [x] voiceGateway buildScreenDescription() maps paths to rich descriptions injected into system prompt
+- [x] Hibba knows what page user is on and answers contextually (e.g. on /donors she knows to talk about donors)
+- [x] Pass entity context (e.g. donor name/ID when on a donor profile page) — VoiceContextProvider + DonorProfile useEffect
+- [x] DashboardLayout reads entityContext from VoiceContextProvider and passes to VoiceAgent
+- [x] Mid-session context updates: screen_context message sends silent system note to Gemini via realtimeInput.text
+- [x] 314/317 tests passing (unchanged)

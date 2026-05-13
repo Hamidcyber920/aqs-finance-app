@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
 import VoiceAgent from "@/components/VoiceAgent";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import {
   BarChart3, BookOpen, Building2, Camera, ClipboardList, Scale,
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
@@ -181,6 +182,7 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const role = user?.role as Role | undefined;
+  const { entityContext } = useVoiceContext();
 
   const showFinance = isAdmin(role) || perms?.canManageFundraising || perms?.canManageLoans || perms?.canManageIncome;
   const showOrg = isAdmin(role) || perms?.canManageDonors || perms?.canSendCampaigns || perms?.canExportReports;
@@ -507,7 +509,7 @@ function DashboardLayoutContent({
           </nav>
         )}
       </SidebarInset>
-      <VoiceAgent screenContext={location.split("?")[0]} />
+      <VoiceAgent screenContext={location.split("?")[0]} entityContext={entityContext ?? undefined} />
     </>
   );
 }

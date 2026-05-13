@@ -209,6 +209,69 @@ const TOOL_DECLARATIONS = [
   { name: "get_mosque_info", description: "Get general information about Abdullah Quilliam Mosque and Society", parameters: { type: "object", properties: {}, required: [] } },
 ];
 
+// --- Screen context helper ---
+function buildScreenDescription(path: string, entityContext?: string | null): string {
+  const SCREEN_DESCRIPTIONS: Record<string, string> = {
+    "/": "Scan Receipt — user is scanning or uploading a receipt",
+    "/dashboard": "Dashboard — overview of finances, recent activity, and key metrics",
+    "/receipts": "My Expenses — personal expense receipts and claims",
+    "/reports": "Reports — financial reports and analytics charts",
+    "/fundraising": "Fundraising — donation campaigns, fundraising events, and targets",
+    "/loans": "Qard Hasan Loans — interest-free Islamic loan applications and repayments",
+    "/income": "Income & Rentals — Friday collections, rental income, and other income streams",
+    "/accommodation": "Student Accommodation — tenant management, rent tracking, and room assignments",
+    "/fintech": "Payment Hub — Stripe payments, bank transfers, and financial integrations",
+    "/donor-crm": "Donor CRM — full donor relationship management with history and notes",
+    "/gift-aid": "Gift Aid & CRM+ — Gift Aid declarations, HMRC claims, and enhanced CRM features",
+    "/pledges": "Pledges — outstanding pledge commitments and fulfilment tracking",
+    "/donor-pipeline": "Cultivation Pipeline — major donor prospect pipeline and engagement stages",
+    "/major-donor": "Major Donor DD — due diligence records for major donors",
+    "/saved-views": "Saved Views — custom saved filters and views across the system",
+    "/qr-codes": "QR Codes — donation QR codes for campaigns and events",
+    "/recognition-tiers": "Recognition Tiers — donor recognition levels and thresholds",
+    "/donors-wall": "Donors Wall — public recognition wall for donors",
+    "/payroll": "Payroll — staff payroll management and salary records",
+    "/monthly-expenses": "Monthly Expenses — monthly expense tracking and budget management",
+    "/reconciliation": "Reconciliation — bank reconciliation and transaction matching",
+    "/org-chart": "Org Chart — organisational structure and staff hierarchy",
+    "/communications": "Communications — email and messaging centre",
+    "/comms-hub": "Comms Hub — centralised communications management",
+    "/comms-inbox": "Master Inbox — all incoming communications in one place",
+    "/meetings": "Meetings & Onboarding — meeting schedule, minutes, and staff onboarding",
+    "/donors": "Donors — full donor database with search, profiles, and history",
+    "/campaigns": "Campaigns — fundraising campaign management and tracking",
+    "/admin": "Admin Panel — system administration and user management",
+    "/trustees": "Trustees & Staff Contacts — trustee board and staff contact directory",
+    "/compliance": "Compliance Cockpit — regulatory compliance actions and deadlines",
+    "/conflicts-register": "Conflicts Register — trustee conflicts of interest declarations",
+    "/decisions": "Decisions Register — trustee meeting decisions and action items",
+    "/bulk-approvals": "Bulk Approvals — batch approval queue for pending items",
+    "/bills-utilities": "Bills & Utilities — utility bills, supplier contracts, and payment schedules",
+    "/training-tracker": "Training Tracker — staff training certificates, expiry dates, and compliance",
+    "/lbmw-correspondence": "LBMW Correspondence — Listed Building Maintenance Works planning correspondence",
+    "/trustee-dashboard": "Trustee Dashboard — trustee-specific view of governance and finances",
+    "/facilities": "Facilities & Bookings — room bookings, hall hire, and facility management",
+    "/bistro87": "Bistro 87 — cafe/bistro orders, daily revenue, and menu management",
+    "/merge-history": "Merge History — record of merged donor and contact records",
+    "/backups": "Backups — system backup history and data export",
+    "/audit-trail": "Audit Trail — full log of all system actions and changes",
+    "/voice-history": "Voice History — Hibba voice session logs and analytics",
+    "/system-health": "System Health — server status, API health, and performance metrics",
+    "/settings": "Settings — application settings and preferences",
+    "/profile": "Profile — user profile and account settings",
+    "/donate": "Donation Page — public-facing donation form",
+  };
+  let desc = SCREEN_DESCRIPTIONS[path];
+  if (!desc) {
+    for (const [key, val] of Object.entries(SCREEN_DESCRIPTIONS)) {
+      if (path.startsWith(key + "/")) { desc = val; break; }
+    }
+  }
+  if (!desc) desc = "Page: " + path;
+  if (entityContext) desc += " | Context: " + entityContext;
+  return desc;
+}
+
 // --- Auth helper ---
 async function authenticateFromRequest(req: IncomingMessage): Promise<{ userId: number; role: string; name: string } | null> {
   try {
@@ -818,7 +881,7 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
         },
       },
       systemInstruction: {
-        parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent user: ${client.userName} (role: ${client.userRole}). Screen: ${client.screenContext}. Language: ${client.language}.` }]
+        parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent user: ${client.userName} (role: ${client.userRole}). Current screen: ${buildScreenDescription(client.screenContext, client.entityContext)}. Language: ${client.language}. Answer questions about the current section directly without asking where the user is.` }]
       },
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
       outputAudioTranscription: {},
@@ -1048,8 +1111,13 @@ export function attachVoiceGateway(server: HttpServer) {
       client.lastActivity = Date.now();
 
       if (msg.type === "screen_context") {
+        const prevScreen = client.screenContext;
         client.screenContext = msg.screenContext || client.screenContext;
         client.entityContext = msg.entityContext || client.entityContext;
+        if (client.geminiWs && client.geminiWs.readyState === 1 && client.isGeminiReady && prevScreen !== client.screenContext) {
+          const ctxNote = `[SYSTEM CONTEXT UPDATE] User navigated to: ${buildScreenDescription(client.screenContext, client.entityContext)}. Adjust your responses to be relevant to this section.`;
+          client.geminiWs.send(JSON.stringify({ realtimeInput: { text: ctxNote } }));
+        }
         return;
       }
 
@@ -1073,7 +1141,7 @@ export function attachVoiceGateway(server: HttpServer) {
         } else {
           try {
             const { invokeLLM } = await import("./_core/llm");
-            const contextInfo = `Current user: ${client.userName} (${client.userRole}). Screen: ${client.screenContext}.`;
+            const contextInfo = `Current user: ${client.userName} (${client.userRole}). Current screen: ${buildScreenDescription(client.screenContext, client.entityContext)}.`;
             const response = await invokeLLM({ messages: [{ role: "system", content: `${SYSTEM_PROMPT}\n\nContext: ${contextInfo}` }, { role: "user", content: msg.text }] });
             const agentText = response.choices?.[0]?.message?.content || "I couldn't process that.";
             ws.send(JSON.stringify({ type: "agent_response", text: agentText }));

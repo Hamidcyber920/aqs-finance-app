@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -220,6 +221,15 @@ export default function DonorProfile() {
     },
     onError: (e: any) => toast.error(e.message ?? "Failed to send statement"),
   });
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    if (donor) {
+      const name = donor.fullName || donor.name || `Donor #${donorId}`;
+      setEntityContext(`Viewing donor profile: ${name} (ID ${donorId})`);
+    }
+    return () => setEntityContext(null);
+  }, [donor, donorId, setEntityContext]);
 
   const donorName = donor?.fullName || donor?.name || "Donor";
   const donorFirstName = donorName.split(" ")[0];
