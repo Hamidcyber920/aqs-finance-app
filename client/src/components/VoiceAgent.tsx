@@ -74,7 +74,8 @@ class AudioPlaybackQueue {
   private isPlaying = false;
   private nextStartTime = 0;
   private sampleRate = 24000;
-
+  // Track active source nodes so we can hard-stop them on barge-in
+  private activeSources: AudioBufferSourceNode[] = [];
   init() {
     if (!this.audioContext) {
       this.audioContext = new AudioContext({ sampleRate: this.sampleRate });
@@ -83,7 +84,6 @@ class AudioPlaybackQueue {
       this.audioContext.resume();
     }
   }
-
   enqueue(pcmBase64: string) {
     if (!this.audioContext) this.init();
     const binaryStr = atob(pcmBase64);
@@ -101,10 +101,10 @@ class AudioPlaybackQueue {
       this.playNext();
     }
   }
-
   private playNext() {
     if (!this.audioContext || this.queue.length === 0) {
       this.isPlaying = false;
+      this.activeSources = [];
       return;
     }
     this.isPlaying = true;
@@ -118,15 +118,23 @@ class AudioPlaybackQueue {
     const startTime = Math.max(currentTime, this.nextStartTime);
     source.start(startTime);
     this.nextStartTime = startTime + buffer.duration;
-    source.onended = () => this.playNext();
+    this.activeSources.push(source);
+    source.onended = () => {
+      this.activeSources = this.activeSources.filter(s => s !== source);
+      this.playNext();
+    };
   }
-
   stop() {
+    // Hard-stop all currently-playing source nodes immediately
+    for (const src of this.activeSources) {
+      try { src.stop(); } catch (_) { /* already stopped */ }
+    }
+    this.activeSources = [];
     this.queue = [];
     this.isPlaying = false;
     this.nextStartTime = 0;
   }
-
+  get playing() { return this.isPlaying; }
   destroy() {
     this.stop();
     this.audioContext?.close();
@@ -249,8 +257,9 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const [userSpeaking, setUserSpeaking] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
   const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const VAD_THRESHOLD = 0.015; // RMS threshold for speech detection
-  const SILENCE_TIMEOUT_MS = 800; // ms of silence before marking as not speaking
+  const VAD_THRESHOLD = 0.04; // RMS threshold for speech detection (raised to avoid false barge-in from mic noise)
+  const BARGE_IN_FRAMES = 5; // consecutive frames above threshold before triggering barge-in
+  const SILENCE_TIMEOUT_MS = 1200; // ms of silence before marking as not speaking
 
   const connectionRef = useRef<VoiceConnection | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -258,6 +267,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const streamRef = useRef<MediaStream | null>(null);
   const playbackRef = useRef<AudioPlaybackQueue>(new AudioPlaybackQueue());
   const isSpeakingRef = useRef(false);
+  const bargeInFramesRef = useRef(0); // consecutive frames above VAD threshold
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [showCommandRef, setShowCommandRef] = useState(false);
@@ -434,21 +444,26 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
           const vol = event.data.volume as number;
           setVolumeLevel(vol);
           if (vol > VAD_THRESHOLD) {
+            bargeInFramesRef.current += 1;
             setUserSpeaking(true);
-            // Barge-in: if Hibba is speaking and user starts talking, interrupt her
-            if (playbackRef.current && isSpeakingRef.current) {
+            // Barge-in: require sustained speech (BARGE_IN_FRAMES consecutive frames) to avoid false triggers
+            if (bargeInFramesRef.current >= BARGE_IN_FRAMES && playbackRef.current && isSpeakingRef.current) {
               playbackRef.current.stop();
               setIsSpeaking(false);
+              bargeInFramesRef.current = 0;
             }
             if (silenceTimerRef.current) {
               clearTimeout(silenceTimerRef.current);
               silenceTimerRef.current = null;
             }
-          } else if (!silenceTimerRef.current) {
-            silenceTimerRef.current = setTimeout(() => {
-              setUserSpeaking(false);
-              silenceTimerRef.current = null;
-            }, SILENCE_TIMEOUT_MS);
+          } else {
+            bargeInFramesRef.current = 0; // reset on silence
+            if (!silenceTimerRef.current) {
+              silenceTimerRef.current = setTimeout(() => {
+                setUserSpeaking(false);
+                silenceTimerRef.current = null;
+              }, SILENCE_TIMEOUT_MS);
+            }
           }
           return;
         }

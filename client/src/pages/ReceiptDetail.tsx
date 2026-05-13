@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import { useParams, useLocation } from "wouter";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -27,6 +28,13 @@ export default function ReceiptDetailPage() {
   const id = parseInt(params.id ?? "0");
 
   const { data: receipt, isLoading } = trpc.receipts.get.useQuery({ id }, { enabled: !!id });
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    if (receipt) {
+      setEntityContext(`Viewing receipt: ${receipt.vendor ?? "Unknown Vendor"}, Amount £${Number(receipt.amount ?? 0).toLocaleString("en-GB", { minimumFractionDigits: 2 })}, Category: ${receipt.categoryName ?? "Uncategorized"} (Receipt ID ${id})`);
+    }
+    return () => setEntityContext(null);
+  }, [receipt, id, setEntityContext]);
   const { data: categories } = trpc.categories.list.useQuery();
   const { data: linkedEmails = [] } = (trpc as any).commsInbox.getLinkedEmailsForReceipt.useQuery(
     { receiptId: id },

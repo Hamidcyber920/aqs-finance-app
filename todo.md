@@ -1919,3 +1919,14 @@
 - [x] DashboardLayout reads entityContext from VoiceContextProvider and passes to VoiceAgent
 - [x] Mid-session context updates: screen_context message sends silent system note to Gemini via realtimeInput.text
 - [x] 314/317 tests passing (unchanged)
+
+### Hibba Cut-off Fix + Proactive Summaries (May 13 2026)
+- [x] Fix Hibba getting cut off mid-sentence: investigate VAD sensitivity, audio queue, and interruption handling
+- [x] Barge-in: only interrupt Hibba when user is clearly speaking (raise VAD threshold)
+- [x] Extend entity context: Loan detail (LoanDetail.tsx), Receipt detail (ReceiptDetail.tsx) with useVoiceContext
+- [ ] Proactive page summaries: when Hibba navigates, auto-call data tool and speak a 1-sentence summary
+
+- [x] Fix AudioPlaybackQueue.stop() to hard-stop all active AudioBufferSourceNode instances
+- [x] Raise VAD threshold 0.015→0.04, require 5 consecutive frames for barge-in, silence timeout 800ms→1200ms
+- [x] Add Gemini server-side VAD config: activityHandling=NO_INTERRUPTION, END_SENSITIVITY_LOW, silenceDurationMs=1500
+- [x] Add proactive page summaries: navigate_to handler sends context note to Gemini after navigation

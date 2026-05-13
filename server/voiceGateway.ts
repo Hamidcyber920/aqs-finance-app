@@ -502,6 +502,19 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(JSON.stringify({ type: "navigate", path: page }));
       }
+      // Update client's screen context so future responses are contextually relevant
+      client.screenContext = page;
+      // Send a proactive context note to Gemini so she can give a brief spoken summary
+      // after the tool response is processed
+      if (client.geminiWs && client.geminiWs.readyState === WebSocket.OPEN) {
+        const screenDesc = buildScreenDescription(page, null);
+        const proactiveNote = `[NAVIGATION COMPLETE] You just navigated the user to: ${screenDesc}. In your next spoken response, give a very brief 1-sentence summary of what this section is for and offer to help. Keep it under 20 words. Do not say "I navigated you" — just describe the section naturally.`;
+        setTimeout(() => {
+          if (client.geminiWs && client.geminiWs.readyState === WebSocket.OPEN) {
+            client.geminiWs.send(JSON.stringify({ realtimeInput: { text: proactiveNote } }));
+          }
+        }, 500); // small delay to let the tool response be processed first
+      }
       return { success: true, message: `Navigating to ${page}` };
     }
     case "draft_whatsapp":
@@ -886,6 +899,18 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
       outputAudioTranscription: {},
       inputAudioTranscription: {},
+      realtimeInputConfig: {
+        // Configure server-side VAD to be less aggressive about interrupting Hibba
+        // This prevents Gemini from cutting off its own audio mid-sentence
+        automaticActivityDetection: {
+          disabled: false,
+          startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
+          endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+          prefixPaddingMs: 300,
+          silenceDurationMs: 1500,
+        },
+        activityHandling: "NO_INTERRUPTION",
+      },
       sessionResumption: { handle: client.resumptionHandle || undefined },
     };
     // Remove undefined sessionResumption handle on first connect

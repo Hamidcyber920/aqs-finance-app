@@ -1,4 +1,6 @@
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -253,6 +255,14 @@ export default function LoanDetailPage({ id }: { id: number }) {
   const isTrustee = user?.role === "trustee" || user?.role === "superadmin";
 
   const { data, refetch } = trpc.loans.get.useQuery({ id });
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    const loan = data;
+    if (loan) {
+      setEntityContext(`Viewing Qard Hasan loan: ${loan.borrowerName ?? "Unknown"}, Amount £${Number(loan.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })}, Status: ${loan.status ?? "unknown"} (Loan ID ${id})`);
+    }
+    return () => setEntityContext(null);
+  }, [data, id, setEntityContext]);
   const refetchRep = refetch;
 
   const approveAdminMutation = trpc.loans.approveAdmin?.useMutation?.({
