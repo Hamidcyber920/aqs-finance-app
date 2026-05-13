@@ -155,6 +155,7 @@ CAPABILITIES — You can:
 - Take actions: send emails, send WhatsApp messages, create donor notes, create tasks, schedule meetings, record donations, generate reports, create payment links, flag items for review.
 - WhatsApp: When asked to send a WhatsApp, FIRST use get_staff_directory or get_trustees to look up the recipient's phone number by name. Then use send_whatsapp with that phone number. This will open WhatsApp directly on the user's device with the message pre-filled — they just tap Send.
 - Email: When asked to send an email, FIRST use get_staff_directory or get_trustees to look up the recipient's email address by name. Then use send_email with that email. The email is sent directly via Gmail API — no user action needed. Always include a personalised greeting (Dear [Name], Assalamu Alaikum) and sign off (JazakAllah Khair).
+- Bulk Messaging: When asked to email or WhatsApp ALL trustees, ALL staff, or everyone, use bulk_send_email or bulk_send_whatsapp with the group name. Available groups: trustees, staff, managers, all. You can also apply templates: friday_comms, urgent, trustee_update, staff_announcement.
 - Fill forms: extract data from voice and populate any form on the user's current page using fill_form tool.
 - Navigate users to any section instantly.
 - Provide prayer times, mosque info, donation guidance.
@@ -240,6 +241,10 @@ const TOOL_DECLARATIONS = [
   { name: "get_prayer_times", description: "Get today's prayer times for Liverpool (Abdullah Quilliam Mosque). Returns Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha start times and jamaat times.", parameters: { type: "object", properties: {}, required: [] } },
   { name: "get_donation_info", description: "Get donation methods and bank transfer details for the mosque. Use when someone asks how to donate or about bank transfers.", parameters: { type: "object", properties: {}, required: [] } },
   { name: "get_mosque_info", description: "Get general information about Abdullah Quilliam Mosque and Society", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Bulk Messaging ---
+  { name: "bulk_send_email", description: "Send the same email to a group of people (all trustees, all staff, or specific names). Emails are personalised with each recipient's name. Use when user says 'email all trustees' or 'send to all staff'.", parameters: { type: "object", properties: { group: { type: "string", description: "Target group: 'trustees', 'staff', 'managers', or 'all'" }, subject: { type: "string", description: "Email subject line" }, body: { type: "string", description: "Email body (plain text). Each email will be personalised with Dear [Name]" }, template: { type: "string", description: "Optional template name: 'friday_comms', 'urgent', 'trustee_update', 'staff_announcement'. If provided, body is inserted into the template." } }, required: ["group", "subject", "body"] } },
+  { name: "bulk_send_whatsapp", description: "Prepare WhatsApp messages for a group. Opens WhatsApp links one by one for the user to send. Use when user says 'WhatsApp all trustees' or 'message all staff on WhatsApp'.", parameters: { type: "object", properties: { group: { type: "string", description: "Target group: 'trustees', 'staff', 'managers', or 'all'" }, body: { type: "string", description: "Message text (same for all recipients, personalised with name)" } }, required: ["group", "body"] } },
+  { name: "get_email_templates", description: "Get available email templates. Use when user asks about templates or wants to send a formatted communication.", parameters: { type: "object", properties: {}, required: [] } },
   // --- Form Filling ---
   { name: "fill_form", description: "Fill a form on the user's current page with extracted data. Use this when the user verbally describes data that should go into a form (expense, donation, income, bill, loan, etc). Extract all relevant fields from their speech and pass them as key-value pairs. The frontend will populate the form fields accordingly.", parameters: { type: "object", properties: { fields: { type: "object", description: "Key-value pairs of form field names and their values. Use field names matching the current page context: for receipts use vendor/amount/date/category/paymentMethod/description/department; for income use source/amount/date/type/reference; for donors use name/email/phone/address; for loans use borrowerName/amount/purpose; for bills use supplier/amount/dueDate/category/reference; for monthly-expenses use payee/amount/date/category/reference" }, page: { type: "string", description: "The page the form is on (e.g. /receipts, /income, /donors). If not specified, uses current screen context." }, action: { type: "string", description: "What to do: 'fill' (default, just populate fields) or 'fill_and_confirm' (populate and show confirmation dialog)" } }, required: ["fields"] } },
 ];
@@ -985,6 +990,140 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       }));
       const fieldSummary = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join(", ");
       return { success: true, message: `Form populated with: ${fieldSummary}. Awaiting user confirmation.` };
+    }
+    case "get_email_templates": {
+      const templates = [
+        { name: "friday_comms", label: "Friday Comms", description: "Weekly Friday update to all staff and trustees", subject: "Friday Comms — [DATE]", bodyTemplate: "Bismillah ir-Rahman ir-Rahim\n\nAssalamu Alaikum,\n\n[BODY]\n\nPlease remember us in your Dua.\n\nJazakAllah Khair,\nAbdullah Quilliam Society" },
+        { name: "urgent", label: "Urgent", description: "Urgent notice requiring immediate attention", subject: "URGENT: [SUBJECT]", bodyTemplate: "Dear [NAME],\n\nAssalamu Alaikum,\n\nURGENT NOTICE:\n\n[BODY]\n\nPlease respond at your earliest convenience.\n\nJazakAllah Khair" },
+        { name: "trustee_update", label: "Trustee Update", description: "Formal update to the board of trustees", subject: "Trustee Update — [SUBJECT]", bodyTemplate: "Dear [NAME],\n\nAssalamu Alaikum wa Rahmatullahi wa Barakatuh,\n\n[BODY]\n\nMay Allah bless your continued service to the Ummah.\n\nJazakAllah Khair,\nAbdullah Quilliam Society" },
+        { name: "staff_announcement", label: "Staff Announcement", description: "Internal announcement for all staff members", subject: "Staff Announcement: [SUBJECT]", bodyTemplate: "Dear [NAME],\n\nAssalamu Alaikum,\n\n[BODY]\n\nIf you have any questions, please speak to your line manager.\n\nJazakAllah Khair,\nManagement Team" },
+      ];
+      return { templates };
+    }
+    case "bulk_send_email": {
+      const group = String(args.group || "").toLowerCase();
+      const subject = String(args.subject || "").trim();
+      const body = String(args.body || "").trim();
+      const templateName = String(args.template || "").trim();
+      if (!group || !subject || !body) return { error: "group, subject, and body are required" };
+      try {
+        // Resolve recipients from trustees table
+        const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
+        let recipients: Array<{ name: string; email: string }> = [];
+        if (group === "trustees") {
+          recipients = allTrustees.filter(t => (t.role || "").toLowerCase().includes("trustee") && t.email).map(t => ({ name: t.name, email: t.email! }));
+        } else if (group === "staff" || group === "managers") {
+          recipients = allTrustees.filter(t => !(t.role || "").toLowerCase().includes("trustee") && t.email).map(t => ({ name: t.name, email: t.email! }));
+        } else if (group === "all") {
+          recipients = allTrustees.filter(t => t.email).map(t => ({ name: t.name, email: t.email! }));
+        } else {
+          return { error: `Unknown group '${group}'. Use: trustees, staff, managers, or all` };
+        }
+        if (recipients.length === 0) return { error: `No recipients found in group '${group}' with email addresses` };
+        // Get Gmail access token
+        const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+        const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+        const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+        const GMAIL_FROM_EMAIL = process.env.GMAIL_FROM_EMAIL;
+        if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN || !GMAIL_FROM_EMAIL) {
+          return { error: "Gmail credentials not configured." };
+        }
+        const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ client_id: GMAIL_CLIENT_ID, client_secret: GMAIL_CLIENT_SECRET, refresh_token: GMAIL_REFRESH_TOKEN, grant_type: "refresh_token" }),
+        });
+        if (!tokenRes.ok) return { error: "Failed to refresh Gmail access token." };
+        const { access_token } = await tokenRes.json() as { access_token: string };
+        // Apply template if specified
+        const TEMPLATES: Record<string, { subject: string; bodyTemplate: string }> = {
+          friday_comms: { subject: `Friday Comms \u2014 ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, bodyTemplate: "Bismillah ir-Rahman ir-Rahim\n\nAssalamu Alaikum,\n\n[BODY]\n\nPlease remember us in your Dua.\n\nJazakAllah Khair,\nAbdullah Quilliam Society" },
+          urgent: { subject: `URGENT: ${subject}`, bodyTemplate: "URGENT NOTICE:\n\n[BODY]\n\nPlease respond at your earliest convenience.\n\nJazakAllah Khair" },
+          trustee_update: { subject: `Trustee Update \u2014 ${subject}`, bodyTemplate: "[BODY]\n\nMay Allah bless your continued service to the Ummah.\n\nJazakAllah Khair,\nAbdullah Quilliam Society" },
+          staff_announcement: { subject: `Staff Announcement: ${subject}`, bodyTemplate: "[BODY]\n\nIf you have any questions, please speak to your line manager.\n\nJazakAllah Khair,\nManagement Team" },
+        };
+        const tpl = templateName && TEMPLATES[templateName] ? TEMPLATES[templateName] : null;
+        const finalSubject = tpl ? tpl.subject : subject;
+        // Send to each recipient
+        let sentCount = 0;
+        let failCount = 0;
+        for (const r of recipients) {
+          try {
+            const personalBody = tpl
+              ? tpl.bodyTemplate.replace("[BODY]", body).replace(/\[NAME\]/g, r.name)
+              : body;
+            const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+              <p>Dear ${r.name},</p>
+              <p>Assalamu Alaikum,</p>
+              ${personalBody.includes("<") ? personalBody : `<p>${personalBody.replace(/\n/g, "</p><p>")}</p>`}
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+              <p style="font-size:12px;color:#888">Sent via Hibba Voice Assistant on behalf of ${client.userName} &middot; Abdullah Quilliam Society</p>
+            </div>`;
+            const rawMessage = [
+              `From: "Abdullah Quilliam Society" <${GMAIL_FROM_EMAIL}>`,
+              `To: ${r.name} <${r.email}>`,
+              `Subject: =?UTF-8?B?${Buffer.from(finalSubject).toString("base64")}?=`,
+              `MIME-Version: 1.0`,
+              `Content-Type: text/html; charset=UTF-8`,
+              ``,
+              htmlBody,
+            ].join("\r\n");
+            const encodedMessage = Buffer.from(rawMessage).toString("base64url");
+            const sendRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/send`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ raw: encodedMessage }),
+            });
+            if (sendRes.ok) sentCount++; else failCount++;
+          } catch { failCount++; }
+        }
+        // Log to outbox
+        const { commsOutbox } = await import("../drizzle/schema");
+        await db.insert(commsOutbox).values({ recipientGroup: group, recipientIds: [], subject: finalSubject, body, type: "email", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
+        return { success: true, message: `Alhamdulillah, emails sent to ${sentCount} ${group}${failCount > 0 ? ` (${failCount} failed)` : ""}` };
+      } catch (err: any) {
+        return { error: `Bulk email failed: ${err.message}` };
+      }
+    }
+    case "bulk_send_whatsapp": {
+      const group = String(args.group || "").toLowerCase();
+      const body = String(args.body || "").trim();
+      if (!group || !body) return { error: "group and body are required" };
+      try {
+        // Resolve recipients from trustees table
+        const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
+        let recipients: Array<{ name: string; phone: string }> = [];
+        if (group === "trustees") {
+          recipients = allTrustees.filter(t => (t.role || "").toLowerCase().includes("trustee") && t.phone).map(t => ({ name: t.name, phone: t.phone! }));
+        } else if (group === "staff" || group === "managers") {
+          recipients = allTrustees.filter(t => !(t.role || "").toLowerCase().includes("trustee") && t.phone).map(t => ({ name: t.name, phone: t.phone! }));
+        } else if (group === "all") {
+          recipients = allTrustees.filter(t => t.phone).map(t => ({ name: t.name, phone: t.phone! }));
+        } else {
+          return { error: `Unknown group '${group}'. Use: trustees, staff, managers, or all` };
+        }
+        if (recipients.length === 0) return { error: `No recipients found in group '${group}' with phone numbers` };
+        // Send open_url for each recipient's WhatsApp link
+        const links: string[] = [];
+        for (const r of recipients) {
+          let waPhone = r.phone.replace(/[^0-9+]/g, "");
+          if (waPhone.startsWith("0")) waPhone = "44" + waPhone.slice(1);
+          if (waPhone.startsWith("+")) waPhone = waPhone.slice(1);
+          const personalMsg = `Assalamu Alaikum ${r.name.split(" ")[0]},\n\n${body}`;
+          const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(personalMsg)}`;
+          links.push(waUrl);
+        }
+        // Send all links to frontend — it will show them as a list of buttons
+        if (client.ws.readyState === WebSocket.OPEN) {
+          client.ws.send(JSON.stringify({ type: "open_url_batch", urls: links.map((url, i) => ({ url, label: `WhatsApp ${recipients[i].name}` })) }));
+        }
+        // Log to outbox
+        const { commsOutbox } = await import("../drizzle/schema");
+        await db.insert(commsOutbox).values({ recipientGroup: group, recipientIds: [], subject: `Bulk WhatsApp to ${group}`, body, type: "sms", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
+        return { success: true, message: `${recipients.length} WhatsApp links ready. Tap each button to send to: ${recipients.map(r => r.name).join(", ")}` };
+      } catch (err: any) {
+        return { error: `Bulk WhatsApp failed: ${err.message}` };
+      }
     }
     default:
       return { error: `Unknown tool: ${toolName}` };

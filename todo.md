@@ -2065,3 +2065,10 @@
 - [x] Add personalised greeting (Dear Name, Assalamu Alaikum) and sign-off (JazakAllah Khair)
 - [x] Add system prompt instruction for Hibba to look up email from staff directory first
 - [x] Log sent emails to comms outbox for record-keeping
+
+## Feature — Bulk Messaging & Email Templates
+- [x] Add bulk_send_email tool (send same email to all trustees / all staff / custom group)
+- [x] Add bulk_send_whatsapp tool (open WhatsApp for each person in sequence)
+- [x] Add email templates (Friday Comms, Urgent, Trustee Update, Staff Announcement)
+- [x] Add open_url_batch handler to VoiceAgent frontend for multiple WhatsApp buttons
+- [x] Update system prompt with bulk messaging and template instructions
