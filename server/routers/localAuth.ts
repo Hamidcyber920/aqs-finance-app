@@ -24,6 +24,55 @@ import {
 } from "../db";
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// ── Brute-force protection ──────────────────────────────────────────────────
+export const MAX_LOGIN_ATTEMPTS = 5;
+export const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+interface LoginAttemptRecord {
+  attempts: number;
+  lockedUntil: number | null; // epoch ms
+}
+
+/** In-memory store of failed login attempts per email. Exported for testing. */
+export const loginAttempts = new Map<string, LoginAttemptRecord>();
+
+/** Clean up expired lockout entries every 30 minutes */
+const _cleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of loginAttempts) {
+    if (record.lockedUntil && record.lockedUntil < now) {
+      loginAttempts.delete(key);
+    }
+  }
+}, 30 * 60 * 1000);
+if (_cleanupInterval.unref) _cleanupInterval.unref();
+
+function checkAndRecordFailedAttempt(email: string): void {
+  const key = email.toLowerCase();
+  const record = loginAttempts.get(key) || { attempts: 0, lockedUntil: null };
+  record.attempts += 1;
+  if (record.attempts >= MAX_LOGIN_ATTEMPTS) {
+    record.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+  }
+  loginAttempts.set(key, record);
+}
+
+function isLockedOut(email: string): boolean {
+  const key = email.toLowerCase();
+  const record = loginAttempts.get(key);
+  if (!record || !record.lockedUntil) return false;
+  if (Date.now() > record.lockedUntil) {
+    loginAttempts.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function clearLoginAttempts(email: string): void {
+  loginAttempts.delete(email.toLowerCase());
+}
 
 async function createLocalSession(userId: number, email: string, name: string): Promise<string> {
   // We reuse the existing JWT infrastructure but store userId in the openId field
@@ -32,7 +81,7 @@ async function createLocalSession(userId: number, email: string, name: string): 
     openId: `local:${userId}`,
     appId: ENV.appId,
     name: name || email,
-  }, { expiresInMs: ONE_YEAR_MS });
+  }, { expiresInMs: SESSION_MAX_AGE_MS });
 }
 
 export const localAuthRouter = router({
@@ -63,7 +112,7 @@ export const localAuthRouter = router({
       if (user.status === "active" && user.isActive) {
         const token = await createLocalSession(user.id, user.email!, user.name ?? "");
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
       } else {
         // Notify owner of new registration needing approval
         await notifyOwner({
@@ -87,8 +136,17 @@ export const localAuthRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      // ── Brute-force check ──────────────────────────────────────────────
+      if (isLockedOut(input.email)) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many failed login attempts. Please try again in 15 minutes.",
+        });
+      }
+
       const user = await getUserByEmail(input.email.toLowerCase());
       if (!user || !user.passwordHash) {
+        checkAndRecordFailedAttempt(input.email);
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
       }
       // Check account status
@@ -101,14 +159,17 @@ export const localAuthRouter = router({
 
       const valid = await bcrypt.compare(input.password, user.passwordHash);
       if (!valid) {
+        checkAndRecordFailedAttempt(input.email);
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
       }
 
+      // Successful login — clear any failed attempt records
+      clearLoginAttempts(input.email);
       await updateLastSignedIn(user.id);
 
       const token = await createLocalSession(user.id, user.email!, user.name ?? "");
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
 
       return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
     }),

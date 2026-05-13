@@ -42,9 +42,23 @@ async function startServer() {
   const server = createServer(app);
 
   // ── Security headers (Helmet) ──────────────────────────────────────────────
+  const isDev = process.env.NODE_ENV === "development";
   app.use(
     helmet({
-      contentSecurityPolicy: false, // Vite injects inline scripts in dev; CSP managed at CDN/proxy layer
+      contentSecurityPolicy: isDev ? false : {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://js.stripe.com", "https://donorbox.org"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          imgSrc: ["'self'", "data:", "blob:", "https:"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          connectSrc: ["'self'", "wss:", "ws:", "https://api.manus.im", "https://api.stripe.com", "https://api.aladhan.com", "https://*.manus.computer", "https://*.manus.space"],
+          frameSrc: ["'self'", "https://js.stripe.com", "https://donorbox.org"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      },
       crossOriginEmbedderPolicy: false, // Allow embedding for Manus OAuth portal
     })
   );
@@ -67,7 +81,17 @@ async function startServer() {
     legacyHeaders: false,
     message: { error: "Webhook rate limit exceeded." },
   });
+  // Auth-specific rate limiter: 10 requests per minute per IP on login
+  const authLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many login attempts. Please try again later." },
+  });
   app.use("/api/stripe/webhook", webhookLimiter);
+  app.use("/api/trpc/localAuth.login", authLimiter);
+  app.use("/api/trpc/localAuth.register", authLimiter);
   app.use("/api", apiLimiter);
 
   // Raw body parser for Stripe webhook signature verification (must be before express.json)

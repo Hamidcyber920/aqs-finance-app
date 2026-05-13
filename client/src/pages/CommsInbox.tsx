@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
+import DOMPurify from "dompurify";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -814,7 +815,7 @@ export default function CommsInboxPage() {
                 <TabsContent value="body" className="p-4">
                   {(selectedEmail as any).bodyHtml ? (
                     <div className="bg-white rounded-lg p-4 text-sm text-gray-900 max-h-[60vh] overflow-y-auto"
-                      dangerouslySetInnerHTML={{ __html: (selectedEmail as any).bodyHtml }} />
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize((selectedEmail as any).bodyHtml, { ALLOWED_TAGS: ['p','br','div','span','a','b','strong','i','em','u','ul','ol','li','h1','h2','h3','h4','h5','h6','table','thead','tbody','tr','td','th','img','blockquote','pre','code','hr','sub','sup','small','font','center'], ALLOWED_ATTR: ['href','src','alt','style','class','width','height','target','color','size','face','align','valign','bgcolor','border','cellpadding','cellspacing'], ALLOW_DATA_ATTR: false }) }} />
                   ) : (
                     <pre className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed max-h-[60vh] overflow-y-auto">
                       {(selectedEmail as any).bodyText || "(No body)"}

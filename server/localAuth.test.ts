@@ -194,3 +194,109 @@ describe("admin procedures", () => {
     expect(result.success).toBe(true);
   });
 });
+
+describe("localAuth.login — brute-force protection", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Clear the in-memory lockout map between tests
+    const { loginAttempts } = await import("./routers/localAuth");
+    loginAttempts.clear();
+  });
+
+  it("locks out after 5 failed attempts", async () => {
+    vi.mocked(db.getUserByEmail).mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(makeCtx());
+
+    // Attempt 5 failed logins
+    for (let i = 0; i < 5; i++) {
+      await expect(
+        caller.localAuth.login({ email: "victim@aq.org", password: "wrong" })
+      ).rejects.toThrow(TRPCError);
+    }
+
+    // 6th attempt should be rate-limited (TOO_MANY_REQUESTS)
+    try {
+      await caller.localAuth.login({ email: "victim@aq.org", password: "wrong" });
+      expect.fail("Should have thrown");
+    } catch (err: any) {
+      expect(err.code).toBe("TOO_MANY_REQUESTS");
+      expect(err.message).toContain("Too many failed login attempts");
+    }
+  });
+
+  it("clears lockout after successful login", async () => {
+    const bcrypt = await import("bcryptjs");
+    const hash = await bcrypt.hash("correct", 12);
+    const user = { ...regularUser, passwordHash: hash, status: "active", isActive: true } as any;
+
+    // First, cause 3 failed attempts (below lockout threshold)
+    vi.mocked(db.getUserByEmail).mockResolvedValue(undefined);
+    const caller = appRouter.createCaller(makeCtx());
+    for (let i = 0; i < 3; i++) {
+      await expect(
+        caller.localAuth.login({ email: "user@aq.org", password: "wrong" })
+      ).rejects.toThrow(TRPCError);
+    }
+
+    // Now provide valid credentials
+    vi.mocked(db.getUserByEmail).mockResolvedValue(user);
+    vi.mocked(db.updateLastSignedIn).mockResolvedValue(undefined);
+    const ctx = makeCtx();
+    const caller2 = appRouter.createCaller(ctx);
+    const result = await caller2.localAuth.login({ email: "user@aq.org", password: "correct" });
+    expect(result.success).toBe(true);
+
+    // After successful login, counter should be reset — another bad attempt should NOT immediately lock
+    vi.mocked(db.getUserByEmail).mockResolvedValue(undefined);
+    const caller3 = appRouter.createCaller(makeCtx());
+    await expect(
+      caller3.localAuth.login({ email: "user@aq.org", password: "wrong" })
+    ).rejects.toThrow(TRPCError);
+    // Should be UNAUTHORIZED, not TOO_MANY_REQUESTS (only 1 attempt after reset)
+    try {
+      await caller3.localAuth.login({ email: "user@aq.org", password: "wrong" });
+    } catch (err: any) {
+      expect(err.code).toBe("UNAUTHORIZED");
+    }
+  });
+});
+
+describe("receipts.create — amount validation", () => {
+  it("rejects negative amounts", async () => {
+    const caller = appRouter.createCaller(makeCtx(regularUser));
+    await expect(
+      caller.receipts.create({
+        amount: "-10.50",
+        vendor: "Test",
+        description: "Test",
+      } as any)
+    ).rejects.toThrow();
+  });
+
+  it("rejects zero amount", async () => {
+    const caller = appRouter.createCaller(makeCtx(regularUser));
+    await expect(
+      caller.receipts.create({
+        amount: "0",
+        vendor: "Test",
+        description: "Test",
+      } as any)
+    ).rejects.toThrow();
+  });
+
+  it("accepts positive amounts", async () => {
+    // This will fail at DB level (mocked to null), but should pass Zod validation
+    const caller = appRouter.createCaller(makeCtx(regularUser));
+    // We just verify it doesn't throw a validation error for positive amounts
+    try {
+      await caller.receipts.create({
+        amount: "25.99",
+        vendor: "Tesco",
+        description: "Groceries",
+      } as any);
+    } catch (err: any) {
+      // Should NOT be a Zod validation error
+      expect(err.code).not.toBe("BAD_REQUEST");
+    }
+  });
+});

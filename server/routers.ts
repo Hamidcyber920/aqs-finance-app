@@ -578,7 +578,7 @@ export const appRouter = router({
 
     create: protectedProcedure
       .input(z.object({
-        amount: z.union([z.string(), z.number()]).transform(v => String(v)),
+        amount: z.union([z.string(), z.number()]).transform(v => String(v)).refine(v => { const n = parseFloat(v); return !isNaN(n) && n > 0; }, { message: "Amount must be a positive number" }),
         description: z.string().optional(),
         vendor: z.string().optional(),
         date: z.string().optional(),
@@ -3694,6 +3694,14 @@ export const appRouter = router({
         const { and: andFn2 } = await import('drizzle-orm');
         const db = await import('./db').then(m => m.getDb());
         if (!db) return { success: true };
+        // Check if session is already finalised — block edits after finalisation
+        const existing = await db.select({ status: reconciliationSessions.status })
+          .from(reconciliationSessions)
+          .where(andFn2(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)))
+          .limit(1);
+        if (existing[0]?.status === 'finalised') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Cannot update bank balance after reconciliation has been finalised.' });
+        }
         await db.update(reconciliationSessions)
           .set({ bankBalance: input.bankBalance })
           .where(andFn2(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));

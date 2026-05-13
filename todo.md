@@ -1967,14 +1967,68 @@
 - [x] Build clean, 314/317 tests passing (3 pre-existing Google Drive credential failures)
 
 ## Hibba Islamic Identity & Form-Filling (May 13 2026)
-- [ ] Update Hibba's system prompt with Islamic identity (Assalamu Alaikum greetings, Bismillah, warm Muslim personality, Islamic etiquette)
-- [ ] Add data extraction capability: Hibba can parse voice descriptions into structured data (amount, payee, category, date, department)
-- [ ] Add form-filling capability: Hibba can populate forms on any page based on voice commands
-- [ ] Frontend: handle form-fill tool call responses from Hibba to auto-populate UI fields
-- [ ] Quick action chips updated with Islamic-friendly language where appropriate
+- [x] Update Hibba's system prompt with Islamic identity (Assalamu Alaikum greetings, Bismillah, warm Muslim personality, Islamic etiquette)
+- [x] Add data extraction capability: Hibba can parse voice descriptions into structured data (amount, payee, category, date, department)
+- [x] Add form-filling capability: Hibba can populate forms on any page based on voice commands
+- [x] Frontend: handle form-fill tool call responses from Hibba to auto-populate UI fields
+- [x] Quick action chips updated with Islamic-friendly language where appropriate
 
 ## Next Steps: Extend Hibba Form-Filling (May 13 2026)
-- [ ] Integrate useHibbaFormFill into Payroll page
-- [ ] Integrate useHibbaFormFill into Loans page
-- [ ] Integrate useHibbaFormFill into Student Accommodation page
-- [ ] Add confirmation step — Hibba reads back extracted data before submitting the form
+- [x] Integrate useHibbaFormFill into Payroll page
+- [x] Integrate useHibbaFormFill into Loans page
+- [x] Integrate useHibbaFormFill into Student Accommodation page
+- [x] Add confirmation step — Hibba reads back extracted data before submitting the form
+
+## QA & Hardening Brief Implementation
+
+### Phase 1 — Truth Audit
+- [ ] Run full test suite with coverage report and capture output
+- [ ] Spot-check 10 tests for meaningful assertions
+- [ ] Document spec coverage for all 11 modules
+- [ ] Identify any features added that weren't in the original brief
+
+### Phase 2 — Data Integrity
+- [ ] Audit schema constraints: FKs, NOT NULL, unique constraints, check constraints
+- [ ] Verify monetary values stored as integers (pence), not floats
+- [ ] Verify audit log has no UPDATE/DELETE permissions
+- [ ] Add missing database constraints where needed
+
+### Phase 3 — Money & Compliance
+- [ ] Verify Stripe webhook idempotency (same event processed only once)
+- [ ] Verify webhook signature verification rejects invalid signatures
+- [ ] Verify Gift Aid calculation accuracy (25p per £1)
+- [ ] Test edge amounts (£0.00 rejected, negative rejected, £0.01 flagged)
+
+### Phase 4 — Failure Mode Hunt
+- [ ] Verify double-click protection on donation/form submissions
+- [ ] Verify optimistic locking or conflict detection on concurrent edits
+- [ ] Verify OCR handles blank/garbage input gracefully
+- [ ] Verify SQL injection in OCR input is treated as text
+
+### Phase 5 — Performance & UX
+- [ ] Run Lighthouse audit on primary screens
+- [ ] Run axe-core accessibility check on primary screens
+- [ ] Verify all form inputs have font-size >= 16px for mobile
+- [ ] Verify error messages are human-readable, not technical
+
+### Phase 6 — Security & Launch Readiness
+- [ ] Run npm audit and document results
+- [ ] Pin all production dependencies to exact versions
+- [ ] Run secrets scanner against repo
+- [ ] Verify authorization bypass protection (role-based access)
+- [ ] Verify rate limiting is in place
+- [ ] Verify file upload validates type and size
+- [ ] Document backup and restore procedure
+
+### Deliverable
+- [x] Produce comprehensive QA report document with evidence (QA-REPORT.md)
+
+### Critical Fixes (QA Hardening)
+- [x] Fix 1: Add login brute-force protection (5 failed attempts → 15-min lockout)
+- [x] Fix 2: Add DOMPurify sanitization to CommsInbox email HTML rendering (XSS)
+- [x] Fix 3: Add server-side positive amount validation on receipt creation
+- [x] Fix 4: Reconciliation lock — block updateBankBalance after session is finalised
+- [x] Fix 5: Enable CSP in helmet with appropriate directives
+- [x] Fix 6: Reduce session token expiry from 1 year to 30 days
+- [x] Fix 7: Document vulnerable dependencies and remediation plan
+- [x] Write regression tests for all critical fixes (5 new tests added)
