@@ -154,6 +154,7 @@ CAPABILITIES — You can:
 - Read/search ALL data: donors, finances, campaigns, staff, facilities, expenses, payroll, income, loans, accommodation, compliance, meetings, communications, bills, utilities, reconciliation, gift aid, pledges, training records, bistro orders, conflicts, decisions, org chart, backups, LBMW correspondence, recognition tiers, QR codes, saved views, donor notes.
 - Take actions: send emails, send WhatsApp messages, create donor notes, create tasks, schedule meetings, record donations, generate reports, create payment links, flag items for review.
 - WhatsApp: When asked to send a WhatsApp, FIRST use get_staff_directory or get_trustees to look up the recipient's phone number by name. Then use send_whatsapp with that phone number. This will open WhatsApp directly on the user's device with the message pre-filled — they just tap Send.
+- Email: When asked to send an email, FIRST use get_staff_directory or get_trustees to look up the recipient's email address by name. Then use send_email with that email. The email is sent directly via Gmail API — no user action needed. Always include a personalised greeting (Dear [Name], Assalamu Alaikum) and sign off (JazakAllah Khair).
 - Fill forms: extract data from voice and populate any form on the user's current page using fill_form tool.
 - Navigate users to any section instantly.
 - Provide prayer times, mosque info, donation guidance.
@@ -528,26 +529,68 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       const recipientName = String(args.recipientName || "Recipient");
       if (!toEmail || !subject || !body) return { error: "to, subject, and body are all required" };
       try {
-        const nodemailer = await import("nodemailer");
-        const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
-        const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
-        const envPass = process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || "";
-        const smtpPass = envPass && envPass.length >= 8 ? envPass : "";
-        if (!smtpPass) return { error: "Email service not configured. SMTP credentials missing." };
-        const transporter = nodemailer.createTransport({ host: process.env.SMTP_HOST || "smtp.gmail.com", port: 465, secure: true, auth: { user: smtpUser, pass: smtpPass } });
+        // Use Gmail API with OAuth2 (same pattern as commsInbox)
+        const GMAIL_CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+        const GMAIL_CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+        const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+        const GMAIL_FROM_EMAIL = process.env.GMAIL_FROM_EMAIL;
+        if (!GMAIL_CLIENT_ID || !GMAIL_CLIENT_SECRET || !GMAIL_REFRESH_TOKEN || !GMAIL_FROM_EMAIL) {
+          return { error: "Gmail credentials not configured. Please set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, and GMAIL_FROM_EMAIL in Settings > Secrets." };
+        }
+        // Get access token via refresh
+        const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: GMAIL_CLIENT_ID,
+            client_secret: GMAIL_CLIENT_SECRET,
+            refresh_token: GMAIL_REFRESH_TOKEN,
+            grant_type: "refresh_token",
+          }),
+        });
+        if (!tokenRes.ok) return { error: "Failed to refresh Gmail access token. Please check credentials." };
+        const { access_token } = await tokenRes.json() as { access_token: string };
+        // Build RFC 2822 email with HTML body
         const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
           <p>Dear ${recipientName},</p>
+          <p>Assalamu Alaikum,</p>
           ${body.includes("<") ? body : `<p>${body.replace(/\n/g, "</p><p>")}</p>`}
+          <p>JazakAllah Khair</p>
           <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
           <p style="font-size:12px;color:#888">Sent via Hibba Voice Assistant on behalf of ${client.userName} &middot; Abdullah Quilliam Society</p>
         </div>`;
-        await transporter.sendMail({ from: `"Abdullah Quilliam Society" <${fromEmail}>`, to: toEmail, subject, html: htmlBody });
+        const rawMessage = [
+          `From: "Abdullah Quilliam Society" <${GMAIL_FROM_EMAIL}>`,
+          `To: ${recipientName} <${toEmail}>`,
+          `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+          `MIME-Version: 1.0`,
+          `Content-Type: text/html; charset=UTF-8`,
+          ``,
+          htmlBody,
+        ].join("\r\n");
+        const encodedMessage = Buffer.from(rawMessage).toString("base64url");
+        // Send via Gmail API
+        const sendRes = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/send`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${access_token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ raw: encodedMessage }),
+          }
+        );
+        if (!sendRes.ok) {
+          const errBody = await sendRes.text();
+          return { error: `Gmail API error: ${errBody}` };
+        }
         // Log to donor comms if donorId provided
         if (args.donorId) {
           const { donorCommsLog } = await import("../drizzle/schema");
-          await db.insert(donorCommsLog).values({ donorId: Number(args.donorId), type: "email_sent", channel: "email", subject, notes: `Sent via voice agent by ${client.userName}`, sentByUserId: client.userId, createdAt: new Date() });
+          await db.insert(donorCommsLog).values({ donorId: Number(args.donorId), type: "email_sent", channel: "email", subject, notes: `Sent via voice agent to ${toEmail} by ${client.userName}`, sentByUserId: client.userId, createdAt: new Date() });
         }
-        return { success: true, message: `Email sent successfully to ${toEmail}` };
+        // Save to comms outbox for record
+        const { commsOutbox } = await import("../drizzle/schema");
+        await db.insert(commsOutbox).values({ recipientGroup: "individual", recipientIds: [Number(args.donorId) || 0], subject, body: htmlBody, type: "email", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
+        return { success: true, message: `Email sent successfully to ${recipientName} (${toEmail})` };
       } catch (err: any) {
         return { error: `Failed to send email: ${err.message}` };
       }

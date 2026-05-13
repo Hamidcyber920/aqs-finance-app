@@ -2058,3 +2058,10 @@
 
 ## Bug Fix — WhatsApp Not Opening from Hibba
 - [x] Fix WhatsApp link not opening on device — added persistent green "Open WhatsApp" button + anchor click fallback
+
+## Feature — Hibba Direct Email Sending
+- [x] Investigate current send_email tool in voice gateway
+- [x] Enhance send_email to send via Gmail API with OAuth2 token refresh
+- [x] Add personalised greeting (Dear Name, Assalamu Alaikum) and sign-off (JazakAllah Khair)
+- [x] Add system prompt instruction for Hibba to look up email from staff directory first
+- [x] Log sent emails to comms outbox for record-keeping
