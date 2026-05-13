@@ -754,4 +754,78 @@ export const voiceAgentRouter = router({
       });
       return { response: assistantMessage, tokensUsed };
     }),
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ANALYTICS
+  // ═══════════════════════════════════════════════════════════════════════════
+  getAnalytics: protectedProcedure
+    .input(z.object({ days: z.number().min(1).max(90).default(30) }))
+    .query(async ({ ctx, input }) => {
+      requireRole(ctx.user.role, [...ADMIN_ROLES, "deputy", "assistant"]);
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      const since = new Date(Date.now() - input.days * 86400000);
+
+      // Daily session counts
+      const dailySessions = await db.select({
+        date: sql<string>`DATE(${voiceSessions.startedAt})`,
+        count: sql<number>`COUNT(*)`,
+      }).from(voiceSessions)
+        .where(gte(voiceSessions.startedAt, since))
+        .groupBy(sql`DATE(${voiceSessions.startedAt})`)
+        .orderBy(sql`DATE(${voiceSessions.startedAt})`);
+
+      // Top tool calls
+      const topTools = await db.select({
+        toolName: voiceToolCalls.toolName,
+        count: sql<number>`COUNT(*)`,
+        avgLatency: sql<number>`ROUND(AVG(${voiceToolCalls.latencyMs}))`,
+        successRate: sql<number>`ROUND(SUM(CASE WHEN ${voiceToolCalls.success} = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1)`,
+      }).from(voiceToolCalls)
+        .innerJoin(voiceSessions, eq(voiceToolCalls.sessionId, voiceSessions.id))
+        .where(gte(voiceSessions.startedAt, since))
+        .groupBy(voiceToolCalls.toolName)
+        .orderBy(sql`COUNT(*) DESC`)
+        .limit(15);
+
+      // Daily token cost
+      const dailyCost = await db.select({
+        date: sql<string>`DATE(${voiceCostTracking.date})`,
+        tokens: sql<number>`SUM(${voiceCostTracking.tokenCount})`,
+        costPence: sql<number>`SUM(${voiceCostTracking.estimatedCostPence})`,
+      }).from(voiceCostTracking)
+        .where(gte(voiceCostTracking.date, since))
+        .groupBy(sql`DATE(${voiceCostTracking.date})`)
+        .orderBy(sql`DATE(${voiceCostTracking.date})`);
+
+      // Summary stats
+      const [totals] = await db.select({
+        totalSessions: sql<number>`COUNT(*)`,
+        avgDuration: sql<number>`ROUND(AVG(TIMESTAMPDIFF(SECOND, ${voiceSessions.startedAt}, ${voiceSessions.endedAt})))`,
+      }).from(voiceSessions).where(gte(voiceSessions.startedAt, since));
+
+      const [toolTotals] = await db.select({
+        totalToolCalls: sql<number>`COUNT(*)`,
+      }).from(voiceToolCalls)
+        .innerJoin(voiceSessions, eq(voiceToolCalls.sessionId, voiceSessions.id))
+        .where(gte(voiceSessions.startedAt, since));
+
+      const [costTotals] = await db.select({
+        totalTokens: sql<number>`COALESCE(SUM(${voiceCostTracking.tokenCount}), 0)`,
+        totalCostPence: sql<number>`COALESCE(SUM(${voiceCostTracking.estimatedCostPence}), 0)`,
+      }).from(voiceCostTracking).where(gte(voiceCostTracking.date, since));
+
+      return {
+        summary: {
+          totalSessions: totals?.totalSessions ?? 0,
+          avgDurationSecs: totals?.avgDuration ?? 0,
+          totalToolCalls: toolTotals?.totalToolCalls ?? 0,
+          totalTokens: costTotals?.totalTokens ?? 0,
+          totalCostPence: costTotals?.totalCostPence ?? 0,
+        },
+        dailySessions,
+        topTools,
+        dailyCost,
+      };
+    }),
 });

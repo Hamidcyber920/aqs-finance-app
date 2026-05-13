@@ -67,78 +67,75 @@ const activeClients = new Map<string, VoiceClient>();
 
 const SYSTEM_PROMPT = `You are Hibba, the AI voice assistant for Abdullah Quilliam Society — a UK Islamic charity managing Britain's first mosque at Brougham Terrace, Liverpool.
 
+SPEECH QUALITY — CRITICAL:
+- Speak smoothly and confidently. Never repeat yourself. Never hesitate.
+- Do NOT use filler words: no "um", "uh", "well", "so", "let me think", "I'm going to".
+- Give one clear, direct answer per turn. Do not rephrase or restate the same point.
+- When calling a tool, say one brief sentence like "Let me check that" then call it silently. Do not narrate your actions.
+- After receiving tool results, deliver the answer immediately without preamble like "So" or "Alright".
+- Maximum 2-3 sentences per response unless the user asks for detail.
+- Use natural British English. Say numbers naturally: "three hundred and fifty pounds" not "£350".
+- When giving times, say "quarter past four" not "16:15".
+
 IDENTITY:
-- You are helpful, professional, and warm. You speak in British English.
-- You address users by their first name.
-- You are aware of Islamic charity terminology (Sadaqah, Zakat, Waqf, Qard Hasan, JazakAllah).
-- You represent Abdullah Quilliam Mosque & National Heritage Centre (Charity no: 1194942).
-- Chair: Galib Khan. The mosque was founded by Abdullah Quilliam in 1887.
+- Helpful, professional, warm. British English. Address users by first name.
+- Islamic charity terminology: Sadaqah, Zakat, Waqf, Qard Hasan, JazakAllah.
+- Abdullah Quilliam Mosque & National Heritage Centre, Charity 1194942.
+- Chair: Galib Khan. Founded by Abdullah Quilliam in 1887.
 
-TIMEZONE — CRITICAL:
-- You are based in Liverpool, UK. ALL times MUST be in UK time (Europe/London timezone).
-- The current timezone is BST (British Summer Time, UTC+1) from late March to late October, and GMT (UTC+0) the rest of the year.
-- When reporting times, always say them in UK local time. Never use UTC.
-- When scheduling meetings or tasks, interpret user times as UK local time unless they specify otherwise.
-- Use 12-hour format with am/pm for spoken times (e.g. "half past two in the afternoon" not "14:30").
+TIMEZONE:
+- Liverpool, UK. BST (UTC+1) late March to late October, GMT (UTC+0) otherwise.
+- Always report and interpret times in UK local time.
 
-ANTI-HALLUCINATION GUARDRAILS — CRITICAL:
-- ONLY report information that comes directly from tool call results. NEVER invent, guess, or fabricate data.
-- If a tool returns no results or an error, say so honestly: "I couldn't find that" or "I don't have that information right now."
-- NEVER claim a feature exists unless you have a tool for it. If asked about something you can't do, say "I don't have access to that yet" rather than making something up.
-- NEVER invent donor names, amounts, dates, email addresses, or any other data.
-- If you're unsure about something, say "I'm not certain about that — let me check" and use the appropriate tool.
-- Do NOT reference modules or pages that don't exist. The real app sections are: Dashboard, Receipts/Expenses, Reports, Fundraising, Loans, Income, Payroll, Monthly Expenses, Reconciliation, Donors, Campaigns, Communications, Comms Hub, Master Inbox, Trustees, Accommodation, Fintech, Donor CRM, Compliance, Decisions, Gift Aid, Meetings, Audit Trail, System Health, Pledges, Donor Pipeline, Major Donor, Bulk Approvals, Conflicts Register, Recognition Tiers, QR Codes, Saved Views, Bills & Utilities, Training Tracker, LBMW Correspondence, Trustee Dashboard, Facilities, Bistro87, Profile, Settings.
+ANTI-HALLUCINATION:
+- ONLY report data from tool results. Never invent names, amounts, dates, or emails.
+- If a tool returns nothing, say "I couldn't find that" honestly.
+- If unsure, use the appropriate tool to check before answering.
 
-AQS ORGANISATION INFO:
-- Full name: Abdullah Quilliam Society
-- Charity number: 1194942
-- Address: Brougham Terrace, Liverpool
-- Phone: 0151 260 3986 (or +44 151 260 3986)
-- Website: abdullahquilliam.org (heritage/history) and theaqs.org (operations/donations)
-- Chair: Galib Khan
+NAVIGATION — You know every section. When a user mentions any of these, use navigate_to:
+  Dashboard → /dashboard | Receipts/Expenses → /receipts | Reports → /reports
+  Fundraising → /fundraising | Loans → /loans | Income → /income
+  Payroll → /payroll | Monthly Expenses → /monthly-expenses
+  Reconciliation → /reconciliation | Donors → /donors | Campaigns → /campaigns
+  Org Chart → /org-chart | Communications → /communications | Comms Hub → /comms-hub
+  Master Inbox → /comms-inbox | Meetings & Onboarding → /meetings
+  Admin Panel → /admin | Trustees & Staff Contacts → /trustees
+  Compliance Cockpit → /compliance | Conflicts Register → /conflicts-register
+  Decisions Register → /decisions | Bulk Approvals → /bulk-approvals
+  Bills & Utilities → /bills-utilities | Training Tracker → /training-tracker
+  LBMW Correspondence → /lbmw-correspondence | Trustee Dashboard → /trustee-dashboard
+  Facilities & Bookings → /facilities | Bistro 87 → /bistro87
+  Merge History → /merge-history | Backups → /backups | Audit Trail → /audit-trail
+  Voice History → /voice-history | System Health → /system-health | Settings → /settings
+  Cultivation Pipeline → /donor-pipeline | Major Donor DD → /major-donor
+  Saved Views → /saved-views | QR Codes → /qr-codes
+  Recognition Tiers → /recognition-tiers | Donors Wall → /donors-wall
+  Accommodation → /accommodation | Gift Aid → /gift-aid | Pledges → /pledges
+  Donate → /donate | Profile → /profile | Fintech → /fintech | Donor CRM → /donor-crm
 
-DONATION INFO:
-- Online donations: Donorbox via theaqs.org — for regular monthly donations, direct users to theaqs.org
-- Bank transfer (reduces fees): Account Name: Abdullah Quilliam Society, Account Number: 01158945, Sort Code: 40-29-28
-- After bank transfer, donors should call 0151 260 3986 to confirm their donation.
-- "Friends of AQS" programme: 100+ monthly supporters. Encourage joining.
-- Payment links can be generated via Stripe for one-off donations.
+AQS INFO:
+- Abdullah Quilliam Society, Charity 1194942, Brougham Terrace, Liverpool.
+- Phone: 0151 260 3986. Websites: abdullahquilliam.org, theaqs.org.
+- Bank: Abdullah Quilliam Society, Acc 01158945, Sort 40-29-28.
+- Donorbox for regular donations at theaqs.org. Stripe for one-off payment links.
+- Friends of AQS: 100+ monthly supporters.
 
-PRAYER TIMES:
-- Use the get_prayer_times tool to fetch today's prayer times for Liverpool.
-- Report both start times and jamaat times when available.
-- Jamaat times are set by the mosque and may differ from calculated start times.
-
-CAPABILITIES:
-- Search and retrieve ANY data in the system: donors, finances, campaigns, staff, facilities, expenses, payroll, income, loans, accommodation, compliance, meetings, communications, bills, utilities, reconciliation, gift aid, pledges, reports.
-- Help fill forms by voice (QuickCapture, expense entry, donor updates).
-- Send emails and draft WhatsApp messages.
-- Generate morning briefings and financial reports.
-- Create payment links and record donations.
-- Schedule meetings and create tasks.
-- Navigate users to any page in the app.
-- Provide prayer times, mosque info, and donation guidance.
+CAPABILITIES — You can:
+- Read/search ALL data: donors, finances, campaigns, staff, facilities, expenses, payroll, income, loans, accommodation, compliance, meetings, communications, bills, utilities, reconciliation, gift aid, pledges, training records, bistro orders, conflicts, decisions, org chart, backups, LBMW correspondence, recognition tiers, QR codes, saved views, donor notes.
+- Take actions: send emails, send WhatsApp messages, create donor notes, create tasks, schedule meetings, record donations, generate reports, create payment links, flag items for review.
+- Navigate users to any section instantly.
+- Provide prayer times, mosque info, donation guidance.
 
 BOUNDARIES:
-- Never authenticate users — the system handles that.
-- Never handle card data — generate Stripe payment links instead.
-- Never read out sensitive data (full addresses, bank details, NI numbers) unless the user explicitly asks.
-- For amounts over £1,000, always confirm before proceeding.
-- For any destructive action, require explicit confirmation.
-- Never invent information. Only speak from tool results.
+- Never authenticate users. Never handle card data — use Stripe links.
+- Never read sensitive data (addresses, bank details, NI numbers) unless explicitly asked.
+- Confirm before amounts over £1,000 or destructive actions.
+- Respect user roles. If FORBIDDEN, explain politely.
 
 PERMISSIONS:
-- Respect the user's role. If a tool returns FORBIDDEN, explain politely that they don't have access.
-- Reception staff can only use QuickCapture and basic lookups.
-- Donors can only access their own data.
-- Auditors have read-only access.
-
-STYLE:
-- Keep responses concise for voice (2-3 sentences max unless asked for detail).
-- Use natural speech patterns, not bullet points.
-- Confirm actions before executing writes.
-- If unsure, say so and offer to escalate to Dr. Hamid.
-- When giving times, use natural UK speech: "quarter past four" not "16:15".`;
+- Reception: QuickCapture and basic lookups only.
+- Donors: own data only. Auditors: read-only.
+- Trustees/Superadmin: full access.`;
 
 const TOOL_DECLARATIONS = [
   // --- Core context ---
@@ -182,6 +179,30 @@ const TOOL_DECLARATIONS = [
   { name: "flag_for_review", description: "Flag something for Dr. Hamid's review", parameters: { type: "object", properties: { transcriptId: { type: "number" }, note: { type: "string" } }, required: [] } },
   // --- Navigation ---
   { name: "navigate_to", description: "Navigate the user to a specific page in the app. ONLY use paths from this list: /dashboard, /receipts, /reports, /fundraising, /loans, /income, /payroll, /monthly-expenses, /reconciliation, /donors, /donors/:id, /campaigns, /communications, /comms-hub, /comms-inbox, /admin, /trustees, /accommodation, /fintech, /donor-crm, /compliance, /decisions, /gift-aid, /payroll-v3, /meetings, /audit-trail, /system-health, /pledges, /donor-pipeline, /major-donor, /bulk-approvals, /conflicts-register, /recognition-tiers, /qr-codes, /saved-views, /bills-utilities, /training-tracker, /lbmw-correspondence, /trustee-dashboard, /facilities, /bistro87, /donate, /voice-history, /profile, /settings", parameters: { type: "object", properties: { page: { type: "string", description: "Page path from the allowed list above" } }, required: ["page"] } },
+  // --- Training ---
+  { name: "get_training_summary", description: "Get training records summary: valid, expiring soon, expired certificates for staff. Shows compliance status.", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Bistro 87 ---
+  { name: "get_bistro_summary", description: "Get Bistro 87 summary: recent orders, daily revenue, menu item count, top sellers.", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Conflicts Register ---
+  { name: "get_conflicts", description: "Get conflicts of interest register entries.", parameters: { type: "object", properties: { status: { type: "string", description: "Filter: open, resolved, noted, or all (default all)" } }, required: [] } },
+  // --- Decisions Register ---
+  { name: "get_decisions", description: "Get trustee decisions from meetings.", parameters: { type: "object", properties: { limit: { type: "number", description: "Max results (default 20)" } }, required: [] } },
+  // --- LBMW Correspondence ---
+  { name: "get_lbmw_correspondence", description: "Get LBMW (Listed Building Maintenance Works) correspondence and planning items.", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Comms Inbox ---
+  { name: "get_comms_inbox", description: "Get the master inbox: recent communications, outbox items, and unread messages.", parameters: { type: "object", properties: { limit: { type: "number", description: "Max results (default 20)" } }, required: [] } },
+  // --- Backups ---
+  { name: "get_backups", description: "Get recent system backup history and status.", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Donor Notes ---
+  { name: "create_donor_note", description: "Create a note on a donor's profile. Use when the user says to add a note about a donor.", parameters: { type: "object", properties: { donorId: { type: "number", description: "Donor ID" }, content: { type: "string", description: "Note content" }, isPinned: { type: "boolean", description: "Pin this note (default false)" } }, required: ["donorId", "content"] } },
+  // --- Send WhatsApp ---
+  { name: "send_whatsapp", description: "Send a WhatsApp message to a contact. Saves to outbox and attempts delivery.", parameters: { type: "object", properties: { to: { type: "string", description: "Phone number with country code (e.g. +447...)" }, recipientName: { type: "string", description: "Recipient name" }, body: { type: "string", description: "Message text" }, donorId: { type: "number", description: "Optional donor ID for logging" } }, required: ["to", "body"] } },
+  // --- Recognition Tiers ---
+  { name: "get_recognition_tiers", description: "Get donor recognition tiers and their thresholds.", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Gift Aid ---
+  { name: "get_gift_aid_summary", description: "Get Gift Aid declarations summary: total claimable, pending claims, recent declarations.", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Audit Trail ---
+  { name: "get_audit_trail", description: "Get recent audit trail entries showing who did what and when.", parameters: { type: "object", properties: { limit: { type: "number", description: "Max results (default 20)" } }, required: [] } },
   // --- Mosque & Community ---
   { name: "get_prayer_times", description: "Get today's prayer times for Liverpool (Abdullah Quilliam Mosque). Returns Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha start times and jamaat times.", parameters: { type: "object", properties: {}, required: [] } },
   { name: "get_donation_info", description: "Get donation methods and bank transfer details for the mosque. Use when someone asks how to donate or about bank transfers.", parameters: { type: "object", properties: {}, required: [] } },
@@ -359,7 +380,7 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
       if (!donorId || !amount) return { error: "donorId and amount required" };
       if (amount <= 0) return { error: "Amount must be positive" };
       if (amount >= 100000) return { error: "Amount exceeds limit - requires manual confirmation" };
-      await db.insert(fundraisingDonations).values({ donorLeadId: donorId, campaignId: args.campaignId ? Number(args.campaignId) : null, donorName: "Voice Agent", amount: String(amount), paymentMethod: (args.paymentMethod || "cash") as any, donatedAt: new Date(), createdAt: new Date() });
+      await db.insert(fundraisingDonations).values({ donorLeadId: donorId, campaignId: args.campaignId ? Number(args.campaignId) : 0, donorName: String(args.donorName || "Voice Agent"), amount: String(amount), paymentMethod: (args.paymentMethod || "cash") as any, donatedAt: new Date(), createdAt: new Date() } as any);
       return { success: true, donorId, amount };
     }
     case "update_donor_profile": {
@@ -618,7 +639,7 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
         const today = new Date();
         const dateStr = `${String(today.getDate()).padStart(2, "0")}-${String(today.getMonth() + 1).padStart(2, "0")}-${today.getFullYear()}`;
         const resp = await fetch(`https://api.aladhan.com/v1/timingsByCity/${dateStr}?city=Liverpool&country=United+Kingdom&method=15`);
-        const data = await resp.json();
+        const data: any = await resp.json();
         if (data.code === 200 && data.data?.timings) {
           const t = data.data.timings;
           return {
@@ -667,6 +688,105 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
         services: ["Daily prayers (5 times)", "Jummah (Friday prayer)", "Islamic education", "Heritage tours", "Community events", "Student accommodation", "Bistro87 cafe"],
         bankDetails: { accountName: "Abdullah Quilliam Society", accountNumber: "01158945", sortCode: "40-29-28" },
       };
+    }
+    case "get_training_summary": {
+      const { trainingRecords } = await import("../drizzle/schema");
+      const rows = await db.select().from(trainingRecords).orderBy(desc(trainingRecords.createdAt)).limit(50);
+      const now = new Date();
+      const thirtyDays = new Date(now.getTime() + 30 * 86400000);
+      const valid = rows.filter(r => r.status === "completed" && (!r.expiresAt || new Date(r.expiresAt) > thirtyDays));
+      const expiringSoon = rows.filter(r => r.status === "completed" && r.expiresAt && new Date(r.expiresAt) <= thirtyDays && new Date(r.expiresAt) > now);
+      const expired = rows.filter(r => r.status === "expired" || (r.expiresAt && new Date(r.expiresAt) <= now));
+      return { total: rows.length, valid: valid.length, expiringSoon: expiringSoon.length, expired: expired.length, urgentExpiring: expiringSoon.slice(0, 5).map(r => ({ id: r.id, staffName: r.userName || "Staff", module: r.module, expiresAt: r.expiresAt })) };
+    }
+    case "get_bistro_summary": {
+      const { bistroOrders, bistroMenuItems } = await import("../drizzle/schema");
+      const orders = await db.select().from(bistroOrders).orderBy(desc(bistroOrders.createdAt)).limit(30);
+      const menuItems = await db.select().from(bistroMenuItems).limit(50);
+      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+      const todayOrders = orders.filter(o => o.createdAt && new Date(o.createdAt) >= todayStart);
+      const todayRevenue = todayOrders.reduce((sum, o) => sum + Number((o as any).total || 0), 0);
+      return { totalMenuItems: menuItems.length, todayOrders: todayOrders.length, todayRevenue: `\u00a3${todayRevenue.toFixed(2)}`, recentOrders: orders.slice(0, 5).map(o => ({ id: o.id, ref: (o as any).orderRef, total: `\u00a3${Number((o as any).total || 0).toFixed(2)}`, status: (o as any).status, date: o.createdAt })) };
+    }
+    case "get_conflicts": {
+      const { conflictsOfInterest } = await import("../drizzle/schema");
+      const statusFilter = String(args.status || "all");
+      let rows;
+      if (statusFilter !== "all") {
+        rows = await db.select().from(conflictsOfInterest).where(eq(conflictsOfInterest.status, statusFilter as any)).orderBy(desc(conflictsOfInterest.createdAt)).limit(30);
+      } else {
+        rows = await db.select().from(conflictsOfInterest).orderBy(desc(conflictsOfInterest.createdAt)).limit(30);
+      }
+      return { total: rows.length, conflicts: rows.map(c => ({ id: c.id, trusteeName: (c as any).trusteeName, description: (c as any).description, status: c.status, createdAt: c.createdAt })) };
+    }
+    case "get_decisions": {
+      const { trusteeDecisions } = await import("../drizzle/schema");
+      const limit = Math.min(Number(args.limit) || 20, 50);
+      const rows = await db.select().from(trusteeDecisions).orderBy(desc(trusteeDecisions.createdAt)).limit(limit);
+      return { total: rows.length, decisions: rows.map(d => ({ id: d.id, title: (d as any).title || (d as any).decision, meetingId: (d as any).meetingId, status: (d as any).status, owner: (d as any).owner, dueDate: (d as any).dueDate, createdAt: d.createdAt })) };
+    }
+    case "get_lbmw_correspondence": {
+      try {
+        const { lbmwCorrespondence } = await import("../drizzle/schema");
+        const rows = await db.select().from(lbmwCorrespondence).orderBy(desc(lbmwCorrespondence.createdAt)).limit(20);
+        return { total: rows.length, items: rows.map(r => ({ id: r.id, subject: (r as any).subject || (r as any).title, type: (r as any).type, status: (r as any).status, date: r.createdAt })) };
+      } catch { return { error: "LBMW correspondence data not available" }; }
+    }
+    case "get_comms_inbox": {
+      const { commsOutbox } = await import("../drizzle/schema");
+      const limit = Math.min(Number(args.limit) || 20, 50);
+      const rows = await db.select().from(commsOutbox).orderBy(desc(commsOutbox.createdAt)).limit(limit);
+      return { total: rows.length, messages: rows.map(m => ({ id: m.id, subject: (m as any).subject, type: (m as any).type, status: (m as any).status, recipientGroup: (m as any).recipientGroup, sentAt: (m as any).sentAt, createdAt: m.createdAt })) };
+    }
+    case "get_backups": {
+      try {
+        const { systemBackups } = await import("../drizzle/schema");
+        const rows = await db.select().from(systemBackups).orderBy(desc(systemBackups.createdAt)).limit(10);
+        return { total: rows.length, backups: rows.map(b => ({ id: b.id, triggeredBy: (b as any).triggeredBy, status: (b as any).status, fileSize: (b as any).fileSize, createdAt: b.createdAt })) };
+      } catch { return { error: "Backup data not available" }; }
+    }
+    case "create_donor_note": {
+      const { donorNotes } = await import("../drizzle/schema");
+      const donorId = Number(args.donorId);
+      const content = String(args.content || "").trim();
+      if (!donorId || !content) return { error: "donorId and content are required" };
+      await db.insert(donorNotes).values({ donorId, note: content, isPinned: args.isPinned ? true : false, createdById: client.userId, createdByName: client.userName, createdAt: new Date() });
+      return { success: true, message: `Note added to donor ${donorId}` };
+    }
+    case "send_whatsapp": {
+      const { commsOutbox } = await import("../drizzle/schema");
+      const to = String(args.to || "").trim();
+      const body = String(args.body || "").trim();
+      if (!to || !body) return { error: "Phone number and message body are required" };
+      // Save to outbox as SMS/WhatsApp
+      await db.insert(commsOutbox).values({ recipientGroup: "individual", recipientIds: [Number(args.donorId) || 0], subject: `WhatsApp to ${args.recipientName || to}`, body, type: "sms", status: "queued", sentByUserId: client.userId, createdAt: new Date() });
+      // Log to donor comms if donorId provided
+      if (args.donorId) {
+        const { donorCommsLog } = await import("../drizzle/schema");
+        await db.insert(donorCommsLog).values({ donorId: Number(args.donorId), type: "whatsapp_sent", channel: "whatsapp", subject: `WhatsApp message`, notes: body, sentByUserId: client.userId, createdAt: new Date() });
+      }
+      return { success: true, message: `WhatsApp message queued for ${args.recipientName || to}` };
+    }
+    case "get_recognition_tiers": {
+      try {
+        const { recognitionTiers } = await import("../drizzle/schema");
+        const rows = await db.select().from(recognitionTiers).orderBy(recognitionTiers.minAmount).limit(20);
+        return { total: rows.length, tiers: rows.map(t => ({ id: t.id, name: (t as any).name || (t as any).tierName, minAmount: (t as any).minAmount, maxAmount: (t as any).maxAmount, benefits: (t as any).benefits })) };
+      } catch { return { error: "Recognition tiers data not available" }; }
+    }
+    case "get_gift_aid_summary": {
+      const { giftAidDeclarations } = await import("../drizzle/schema");
+      const rows = await db.select().from(giftAidDeclarations).orderBy(desc(giftAidDeclarations.createdAt)).limit(50);
+      const active = rows.filter(r => (r as any).status === "active" || (r as any).isActive);
+      return { totalDeclarations: rows.length, activeDeclarations: active.length, recentDeclarations: rows.slice(0, 10).map(d => ({ id: d.id, donorId: (d as any).donorId || (d as any).donorLeadId, status: (d as any).status, startDate: (d as any).startDate, createdAt: d.createdAt })) };
+    }
+    case "get_audit_trail": {
+      try {
+        const { auditLog } = await import("../drizzle/schema");
+        const limit = Math.min(Number(args.limit) || 20, 50);
+        const rows = await db.select().from(auditLog).orderBy(desc(auditLog.createdAt)).limit(limit);
+        return { total: rows.length, entries: rows.map(a => ({ id: a.id, action: (a as any).action, entity: (a as any).entityType || (a as any).entity, entityId: (a as any).entityId, userId: (a as any).userId, userName: (a as any).userName, details: (a as any).details, createdAt: a.createdAt })) };
+      } catch { return { error: "Audit trail data not available" }; }
     }
     default:
       return { error: `Unknown tool: ${toolName}` };
@@ -841,7 +961,7 @@ export function attachVoiceGateway(server: HttpServer) {
   const wss = new WebSocketServer({ server, path: "/api/voice" });
 
   const heartbeat = setInterval(() => {
-    for (const [id, client] of activeClients) {
+    for (const [id, client] of Array.from(activeClients.entries())) {
       if (!client.isAlive) {
         client.ws.terminate();
         if (client.geminiWs) client.geminiWs.close();

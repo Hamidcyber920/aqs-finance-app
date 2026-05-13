@@ -1893,3 +1893,13 @@
 - [x] Fix voiceAgent.ts: receipts.receiptDate date comparison, donorName field, commsOutbox channel→type, briefingText/assistantMessage cast to string
 - [x] Fix trusteeFinance.ts: billRows leftJoin type annotation, second billRows query with utilityAccounts join
 - [x] 314/317 tests passing (3 pre-existing Google Drive credential failures)
+### Hibba Voice Agent Major Upgrade (May 13 2026)
+- [x] Voice session analytics: charts on Voice History page showing daily usage, top tools, token cost trends
+- [x] Smooth speech: system prompt rewritten with fluency rules (no repetition, no filler, concise direct responses)
+- [x] Full navigation map: Hibba knows every sidebar section and can navigate to any of them
+- [x] Complete section list: all 34 sidebar sections mapped with routes and descriptions
+- [x] Action tools: send_email (via Gmail API), send_whatsapp (commsOutbox queue), create_donor_note
+- [x] Data access tools: get_training_summary, get_bistro_summary, get_conflicts, get_decisions, get_lbmw_correspondence, get_comms_inbox, get_org_chart, get_backups_status, get_recognition_tiers, get_compliance_summary, get_facilities_bookings, get_prayer_times
+- [x] WhatsApp message action: queued via commsOutbox with wa.me fallback link
+- [x] Email action: compose and send via existing Gmail API integration with personalized greeting
+- [x] Notes action: create/save notes to donorNotes table

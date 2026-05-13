@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { MessageSquare, Mic, Bot, Wrench, Clock, ChevronRight, ArrowLeft, User } from "lucide-react";
+import { MessageSquare, Mic, Bot, Wrench, Clock, ChevronRight, ArrowLeft, User, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import VoiceAnalytics from "@/components/VoiceAnalytics";
 
 function formatDate(d: string | Date) {
   return new Date(d).toLocaleString("en-GB", {
@@ -11,7 +12,6 @@ function formatDate(d: string | Date) {
     hour: "2-digit", minute: "2-digit",
   });
 }
-
 function formatDuration(start: string | Date, end?: string | Date | null) {
   if (!end) return "In progress";
   const ms = new Date(end).getTime() - new Date(start).getTime();
@@ -23,7 +23,6 @@ function formatDuration(start: string | Date, end?: string | Date | null) {
 
 function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () => void }) {
   const { data, isLoading } = trpc.voiceAgent.getSessionTranscript.useQuery({ sessionId });
-
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -38,12 +37,8 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
       </div>
     );
   }
-
   if (!data) return null;
-
   const { session, transcripts, toolCalls } = data;
-
-  // Merge transcripts and tool calls into a timeline
   type TimelineItem =
     | { type: "message"; role: string; content: string; time: Date }
     | { type: "tool"; name: string; params: string; result: string; success: boolean; time: Date; latencyMs?: number | null };
@@ -148,6 +143,7 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
 
 export default function VoiceHistoryPage() {
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
+  const [tab, setTab] = useState<"sessions" | "analytics">("sessions");
   const { data: sessions, isLoading } = trpc.voiceAgent.listSessions.useQuery({ limit: 50 });
 
   if (selectedSession !== null) {
@@ -170,7 +166,31 @@ export default function VoiceHistoryPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {/* Tab switcher */}
+      <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-1 w-fit">
+        <Button
+          variant={tab === "sessions" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setTab("sessions")}
+          className="gap-1.5 text-xs"
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          Sessions
+        </Button>
+        <Button
+          variant={tab === "analytics" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setTab("analytics")}
+          className="gap-1.5 text-xs"
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          Analytics
+        </Button>
+      </div>
+
+      {tab === "analytics" ? (
+        <VoiceAnalytics />
+      ) : isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="h-20 bg-zinc-800 rounded-lg animate-pulse" />
