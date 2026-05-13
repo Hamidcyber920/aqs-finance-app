@@ -2055,3 +2055,6 @@
 
 ## Bug Fix — Settings Page Crash
 - [x] Fix "Cannot access 'n' before initialization" error in ProfileSettings page (moved useState before useEffect)
+
+## Bug Fix — WhatsApp Not Opening from Hibba
+- [x] Fix WhatsApp link not opening on device — added persistent green "Open WhatsApp" button + anchor click fallback

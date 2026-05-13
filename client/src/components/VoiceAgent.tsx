@@ -278,6 +278,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const [emailSummaryLoading, setEmailSummaryLoading] = useState(false);
   const [showEditActions, setShowEditActions] = useState(false);
   const [pendingFormFill, setPendingFormFill] = useState<{ fields: Record<string, any>; page: string; summary: string } | null>(null);
+  const [pendingWhatsApp, setPendingWhatsApp] = useState<{ url: string; label: string } | null>(null);
   const [editActionsInput, setEditActionsInput] = useState("");
   const [customActions, setCustomActions] = useState<string[] | null>(null);
   const [savingActions, setSavingActions] = useState(false);
@@ -480,9 +481,24 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
 
       case "open_url":
         if (msg.url) {
-          window.open(msg.url, "_blank");
           const label = msg.label || "Link opened";
-          toast.success(label, { duration: 4000, icon: "\uD83D\uDCE8" });
+          // Store the URL so we can show a persistent clickable button
+          setPendingWhatsApp({ url: msg.url, label });
+          // Also try programmatic open via anchor click
+          try {
+            const linkEl = document.createElement("a");
+            linkEl.href = msg.url;
+            linkEl.target = "_blank";
+            linkEl.rel = "noopener noreferrer";
+            document.body.appendChild(linkEl);
+            linkEl.click();
+            setTimeout(() => document.body.removeChild(linkEl), 100);
+          } catch {}
+          toast.success(label, {
+            duration: 10000,
+            icon: "\uD83D\uDCE8",
+            description: "Tap the green button below to open WhatsApp",
+          });
           setTranscript((prev) => [...prev, {
             id: `open-url-${Date.now()}`,
             speaker: "agent" as const,
@@ -687,6 +703,24 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         )}
       </button>
 
+      {/* WhatsApp pending button — always visible when there's a link to open */}
+      {pendingWhatsApp && (
+        <a
+          href={pendingWhatsApp.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => setPendingWhatsApp(null)}
+          className="fixed bottom-24 right-6 z-[60] flex items-center gap-2 px-4 py-3 rounded-full bg-green-500 hover:bg-green-600 text-white font-semibold shadow-lg animate-bounce"
+          style={{ animationDuration: "1.5s", animationIterationCount: "3" }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 01-4.243-1.212l-.252-.149-2.868.852.852-2.868-.149-.252A8 8 0 1112 20z"/></svg>
+          Open WhatsApp
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPendingWhatsApp(null); }}
+            className="ml-1 w-5 h-5 rounded-full bg-green-700 flex items-center justify-center text-xs"
+          >✕</button>
+        </a>
+      )}
       {/* Chat panel */}
       {isOpen && (
         <div className={`fixed bottom-24 right-6 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl flex flex-col transition-all duration-300 ${
