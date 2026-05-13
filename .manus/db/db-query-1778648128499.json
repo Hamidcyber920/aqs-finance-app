@@ -1,0 +1,28 @@
+{
+  "query": "SHOW TABLES LIKE 'voice%';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SHOW TABLES LIKE 'voice%';",
+  "rows": [
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ (voice%)": "voice_cost_tracking"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ (voice%)": "voice_feature_flags"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ (voice%)": "voice_review_queue"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ (voice%)": "voice_sessions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ (voice%)": "voice_tool_calls"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ (voice%)": "voice_transcripts"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_ExcMToduGVqDRtQnvUsVkJ (voice%)\nvoice_cost_tracking\nvoice_feature_flags\nvoice_review_queue\nvoice_sessions\nvoice_tool_calls\nvoice_transcripts\n",
+  "stderr": "",
+  "execution_time_ms": 280
+}

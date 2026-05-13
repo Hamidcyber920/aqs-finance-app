@@ -64,8 +64,10 @@ import LbmwCorrespondencePage from "./pages/LbmwCorrespondence";
 import TrusteeDashboardPage from "./pages/TrusteeDashboard";
 import FacilitiesPage from "./pages/Facilities";
 import Bistro87Page from "./pages/Bistro87";
+import DonatePage from "./pages/DonatePage";
+import VoiceHistoryPage from "./pages/VoiceHistory";
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay", "/give", "/donors-wall"];
+const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay", "/give", "/donors-wall", "/donate"];
 
 function Router() {
   const path = window.location.pathname;
@@ -81,6 +83,7 @@ function Router() {
         <Route path="/pay" component={PayPage} />
         <Route path="/give/:token" component={DonorPortalPage} />
         <Route path="/donors-wall" component={DonorsWallPage} />
+        <Route path="/donate" component={DonatePage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route component={NotFound} />
@@ -140,6 +143,8 @@ function Router() {
         <Route path="/trustee-dashboard" component={TrusteeDashboardPage} />
         <Route path="/facilities" component={FacilitiesPage} />
         <Route path="/bistro87" component={Bistro87Page} />
+        <Route path="/donate" component={DonatePage} />
+        <Route path="/voice-history" component={VoiceHistoryPage} />
         <Route path="/payment/success" component={PaymentSuccessPage} />
         <Route path="/payment/cancelled" component={PaymentCancelledPage} />
         <Route path="/pending-approval" component={PendingApprovalPage} />

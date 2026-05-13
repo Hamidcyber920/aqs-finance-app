@@ -29,7 +29,7 @@ import {
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
-  Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity,
+  Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity, Mic,
   TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark, Zap, GraduationCap, MailSearch, UtensilsCrossed, Globe,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -94,6 +94,7 @@ const adminItems = [
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Shield, label: "Audit Trail", path: "/audit-trail" },
+  { icon: Mic, label: "Voice History", path: "/voice-history" },
   { icon: Activity, label: "System Health", path: "/system-health" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ];

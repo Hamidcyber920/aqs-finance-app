@@ -1865,3 +1865,16 @@
 - [x] Charity info: Abdullah Quilliam Mosque & National Heritage Centre, Charity no: 1194942 — in get_mosque_info
 - [x] Bank details: Account Name: Abdullah Quilliam Society, Account Number: 01158945, Sort Code: 40-29-28 — in get_donation_info
 - [x] Phone: +441512603986 / 0151 260 3986 — in get_donation_info and get_mosque_info
+### Donorbox + Conversation History + Live Testing (May 13 2026)
+- [x] Create Donorbox donation page with embedded recurring donation widget — DonatePage.tsx with Donorbox embed, bank details, and phone
+- [x] Add route /donate in App.tsx (public route, no login required) and /voice-history (dashboard route)
+- [x] Update navigate_to tool to include /donate and /voice-history paths
+- [x] Update get_donation_info tool to reference in-app /donate page
+- [x] Voice conversations already stored in existing voiceSessions table (schema already had it)
+- [x] Voice messages already stored in existing voiceTranscripts table (schema already had it)
+- [x] DB helpers already existed in voiceGateway.ts (storeTranscript, logToolCall)
+- [x] tRPC procedures already existed: voiceAgent.listSessions, voiceAgent.getSessionTranscript
+- [x] Create Voice History UI page — VoiceHistory.tsx with session list + detail view with timeline
+- [x] Voice gateway already stores transcripts in real-time via storeTranscript calls
+- [x] Tool calls and results already stored in voiceToolCalls table for full audit trail
+- [x] Added Voice History link to DashboardLayout sidebar (Mic icon, near Audit Trail)
