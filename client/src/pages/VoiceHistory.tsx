@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { MessageSquare, Mic, Bot, Wrench, Clock, ChevronRight, ArrowLeft, User, BarChart3 } from "lucide-react";
+import { MessageSquare, Mic, Bot, Wrench, Clock, ChevronRight, ArrowLeft, User, BarChart3, Play, Pause, Square, Volume2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,74 @@ function formatDuration(start: string | Date, end?: string | Date | null) {
 
 function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () => void }) {
   const { data, isLoading } = trpc.voiceAgent.getSessionTranscript.useQuery({ sessionId });
+  // TTS replay state
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [replayIndex, setReplayIndex] = useState<number | null>(null);
+  const [replaySpeed, setReplaySpeed] = useState(1);
+  const utteranceRef = React.useRef<SpeechSynthesisUtterance | null>(null);
+  const replayQueueRef = React.useRef<string[]>([]);
+  const replayIdxRef = React.useRef(0);
+
+  const stopReplay = React.useCallback(() => {
+    window.speechSynthesis.cancel();
+    setIsReplaying(false);
+    setIsPaused(false);
+    setReplayIndex(null);
+    replayQueueRef.current = [];
+    replayIdxRef.current = 0;
+  }, []);
+
+  const speakNext = React.useCallback((queue: string[], idx: number, speed: number) => {
+    if (idx >= queue.length) {
+      setIsReplaying(false);
+      setIsPaused(false);
+      setReplayIndex(null);
+      return;
+    }
+    setReplayIndex(idx);
+    const utterance = new SpeechSynthesisUtterance(queue[idx]);
+    utterance.rate = speed;
+    utterance.pitch = 1.05;
+    // Try to use a female voice
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(v => v.name.toLowerCase().includes("female") || v.name.includes("Samantha") || v.name.includes("Karen") || v.name.includes("Moira") || v.name.includes("Victoria") || v.name.includes("Fiona"));
+    if (femaleVoice) utterance.voice = femaleVoice;
+    utterance.onend = () => {
+      replayIdxRef.current = idx + 1;
+      speakNext(queue, idx + 1, speed);
+    };
+    utterance.onerror = () => {
+      replayIdxRef.current = idx + 1;
+      speakNext(queue, idx + 1, speed);
+    };
+    utteranceRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  const startReplay = React.useCallback((assistantMessages: string[]) => {
+    window.speechSynthesis.cancel();
+    replayQueueRef.current = assistantMessages;
+    replayIdxRef.current = 0;
+    setIsReplaying(true);
+    setIsPaused(false);
+    speakNext(assistantMessages, 0, replaySpeed);
+  }, [replaySpeed, speakNext]);
+
+  const togglePause = React.useCallback(() => {
+    if (isPaused) {
+      window.speechSynthesis.resume();
+      setIsPaused(false);
+    } else {
+      window.speechSynthesis.pause();
+      setIsPaused(true);
+    }
+  }, [isPaused]);
+
+  // Clean up on unmount
+  React.useEffect(() => {
+    return () => { window.speechSynthesis.cancel(); };
+  }, []);
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -81,6 +149,47 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
         </Badge>
       </div>
 
+      {/* TTS Replay controls */}
+      {(() => {
+        const assistantMessages = timeline
+          .filter(item => item.type === "message" && (item as any).role === "assistant")
+          .map(item => (item as any).content as string);
+        if (assistantMessages.length === 0) return null;
+        return (
+          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+            <Volume2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span className="text-xs text-emerald-300 font-medium flex-1">
+              {isReplaying ? (isPaused ? "Paused" : `Speaking message ${(replayIndex ?? 0) + 1} of ${assistantMessages.length}`) : "Replay Hibba's responses"}
+            </span>
+            <select
+              value={replaySpeed}
+              onChange={e => setReplaySpeed(Number(e.target.value))}
+              disabled={isReplaying}
+              className="text-xs bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-zinc-300"
+            >
+              <option value={0.8}>0.8×</option>
+              <option value={1}>1×</option>
+              <option value={1.25}>1.25×</option>
+              <option value={1.5}>1.5×</option>
+            </select>
+            {!isReplaying ? (
+              <Button size="sm" variant="ghost" onClick={() => startReplay(assistantMessages)} className="h-7 px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
+                <Play className="w-3.5 h-3.5 mr-1" /> Play
+              </Button>
+            ) : (
+              <>
+                <Button size="sm" variant="ghost" onClick={togglePause} className="h-7 px-2 text-zinc-300 hover:bg-zinc-700">
+                  {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={stopReplay} className="h-7 px-2 text-red-400 hover:bg-red-500/10">
+                  <Square className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
+        );
+      })()}
+
       <div className="space-y-2">
         {timeline.length === 0 && (
           <p className="text-sm text-zinc-500 text-center py-8">No transcript recorded for this session.</p>
@@ -111,9 +220,17 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
             </div>
             <div className="flex-1 min-w-0">
               {item.type === "message" ? (
-                <div className={`rounded-lg px-3 py-2 text-sm ${
+                <div className={`rounded-lg px-3 py-2 text-sm transition-all ${
                   item.role === "user" ? "bg-blue-500/10 border border-blue-500/20" :
-                  item.role === "assistant" ? "bg-emerald-500/10 border border-emerald-500/20" :
+                  item.role === "assistant" ? (
+                    isReplaying && replayIndex !== null && (() => {
+                      const assistantMsgs = timeline.filter(t => t.type === "message" && (t as any).role === "assistant");
+                      const myIdx = assistantMsgs.indexOf(item as any);
+                      return myIdx === replayIndex;
+                    })()
+                    ? "bg-emerald-500/30 border border-emerald-400/60 shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-400/40"
+                    : "bg-emerald-500/10 border border-emerald-500/20"
+                  ) :
                   "bg-zinc-800 border border-zinc-700"
                 }`}>
                   <p className="text-xs font-medium mb-0.5 capitalize text-zinc-400">{item.role}</p>

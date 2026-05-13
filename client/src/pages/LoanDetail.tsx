@@ -4,7 +4,6 @@ import { useVoiceContext } from "@/contexts/VoiceContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { useState, useRef } from "react";
 import {
   ArrowLeft, CheckCircle2, Clock, XCircle, Download,
   Upload, MessageCircle, Mail, Calendar, DollarSign, User, FileText

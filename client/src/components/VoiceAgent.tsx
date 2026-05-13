@@ -286,8 +286,13 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     { pageKey: screenContext || "/" },
     { enabled: !!screenContext }
   );
-  // Merge: custom actions override defaults when set
-  const effectiveQuickActions = (customActions ?? (savedActions as string[] | null | undefined)) ?? currentQuickActions;
+  // Load admin-shared actions as fallback (only when user has no saved actions)
+  const { data: adminSharedActions } = (trpc as any).voiceAgent.getAdminSharedActions.useQuery(
+    { pageKey: screenContext || "/" },
+    { enabled: !!screenContext && !savedActions }
+  );
+  // Merge priority: user custom > user saved > admin shared > built-in defaults
+  const effectiveQuickActions = (customActions ?? (savedActions as string[] | null | undefined) ?? (adminSharedActions as string[] | null | undefined)) ?? currentQuickActions;
   const SECTION_NAMES: Record<string, string> = {
     "/dashboard":"Dashboard","/receipts":"Receipts","/reports":"Reports",
     "/fundraising":"Fundraising","/loans":"Loans","/income":"Income",

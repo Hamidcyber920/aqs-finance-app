@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import {
   ShieldCheck, Users, UserPlus, Check, X, Settings,
-  Eye, EyeOff, Lock, Unlock, Badge as BadgeIcon
+  Eye, EyeOff, Lock, Unlock, Badge as BadgeIcon, Mic, Trash2, Share2, Sun
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,14 @@ export default function AdminPanelPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [permOpen, setPermOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [tab, setTab] = useState<"users"|"pending"|"succession">("users");
+  const [tab, setTab] = useState<"users"|"pending"|"succession"|"hibba">("users");
+  const [qaPageKey, setQaPageKey] = useState("/loans");
+  const [qaActions, setQaActions] = useState<string[]>(["Show overdue loans", "Summarise active loans", "Any loans due this month?"]);
+  const [qaInput, setQaInput] = useState("");
+  const sharedActionsList = (trpc.voiceAgent as any).listAdminSharedActions?.useQuery?.() ?? { data: [], refetch: () => {} };
+  const shareActionsMut = (trpc.voiceAgent as any).adminShareQuickActions?.useMutation?.({ onSuccess: () => { toast.success("Quick actions pushed to all users"); sharedActionsList.refetch?.(); }, onError: (e: any) => toast.error(e.message) }) ?? { mutate: () => {}, isPending: false };
+  const deleteSharedMut = (trpc.voiceAgent as any).deleteAdminSharedActions?.useMutation?.({ onSuccess: () => { toast.success("Removed shared actions"); sharedActionsList.refetch?.(); }, onError: (e: any) => toast.error(e.message) }) ?? { mutate: () => {}, isPending: false };
+  const triggerBriefingMut = (trpc.voiceAgent as any).triggerMorningBriefing?.useMutation?.({ onSuccess: () => toast.success("Morning briefing triggered and sent!"), onError: (e: any) => toast.error(e.message) }) ?? { mutate: () => {}, isPending: false };
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
@@ -156,12 +163,13 @@ export default function AdminPanelPage() {
 
         {/* Tabs */}
         <div style={{ display:"flex",gap:4,marginBottom:20,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:4,width:"fit-content" }}>
-          {(["users","pending","succession"] as const).map(t => (
+          {(["users","pending","succession","hibba"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               style={{ padding:"8px 20px",borderRadius:10,fontSize:13,fontWeight:600,border:"none",cursor:"pointer",transition:"all 0.2s",
                 background:tab===t?"rgba(99,91,255,0.3)":"transparent",
                 color:tab===t?T.white:T.muted }}>
-              {t==="users"?"All Users":t==="pending"?`Pending${pendingUsers.length>0?` (${pendingUsers.length})`:""}`:"Succession"}
+              {t==="users"?"All Users":t==="pending"?`Pending${pendingUsers.length>0?` (${pendingUsers.length})`:""}`:
+               t==="succession"?"Succession":"Hibba AI"}
             </button>
           ))}
         </div>
@@ -355,6 +363,98 @@ export default function AdminPanelPage() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Hibba AI Management tab */}
+        {tab === "hibba" && (
+          <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+            {/* Morning Briefing Card */}
+            <div style={{ background:"rgba(13,34,64,0.8)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"20px 24px" }}>
+              <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+                <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+                  <Sun size={18} style={{ color:"#fbbf24" }}/>
+                  <p style={{ fontSize:14,fontWeight:700,color:"#FFFFFF",margin:0 }}>Morning Briefing</p>
+                </div>
+                <button
+                  onClick={() => triggerBriefingMut?.mutate?.({})}
+                  disabled={triggerBriefingMut?.isPending}
+                  style={{ padding:"8px 18px",borderRadius:10,background:"linear-gradient(135deg,#fbbf24,#f59e0b)",border:"none",color:"#0A192F",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,opacity:triggerBriefingMut?.isPending?0.6:1 }}>
+                  <Sun size={13}/> {triggerBriefingMut?.isPending ? "Sending..." : "Send Now"}
+                </button>
+              </div>
+              <p style={{ fontSize:13,color:"rgba(255,255,255,0.5)",margin:0 }}>
+                Hibba sends a daily morning briefing email to all trustees and key staff at 7:30am. Click "Send Now" to trigger it immediately for testing.
+              </p>
+            </div>
+
+            {/* Quick Actions Sharing Card */}
+            <div style={{ background:"rgba(13,34,64,0.8)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"20px 24px" }}>
+              <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
+                <Share2 size={18} style={{ color:"#635BFF" }}/>
+                <p style={{ fontSize:14,fontWeight:700,color:"#FFFFFF",margin:0 }}>Push Quick Actions to All Users</p>
+              </div>
+              <p style={{ fontSize:13,color:"rgba(255,255,255,0.5)",margin:"0 0 16px" }}>
+                Set the default Hibba quick action chips for any page. These appear for all users who haven't customised their own actions.
+              </p>
+              <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+                <div>
+                  <label style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.08em" }}>Page Path</label>
+                  <input
+                    value={qaPageKey}
+                    onChange={e => setQaPageKey(e.target.value)}
+                    placeholder="/loans"
+                    style={{ marginTop:6,width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,color:"#FFFFFF",height:44,padding:"0 14px",fontSize:14,boxSizing:"border-box" }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.08em" }}>Actions (one per line, max 6)</label>
+                  <textarea
+                    value={qaActions.join("\n")}
+                    onChange={e => setQaActions(e.target.value.split("\n").slice(0,6))}
+                    rows={4}
+                    style={{ marginTop:6,width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,color:"#FFFFFF",padding:"10px 14px",fontSize:13,resize:"vertical",fontFamily:"inherit",boxSizing:"border-box" }}
+                  />
+                </div>
+                <button
+                  onClick={() => shareActionsMut?.mutate?.({ pageKey: qaPageKey, actions: qaActions.filter(a => a.trim()) })}
+                  disabled={shareActionsMut?.isPending || !qaPageKey.trim() || qaActions.filter(a=>a.trim()).length === 0}
+                  style={{ padding:"10px 20px",borderRadius:10,background:"linear-gradient(135deg,#635BFF,#4f46e5)",border:"none",color:"#FFFFFF",fontSize:13,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,width:"fit-content",opacity:(shareActionsMut?.isPending || !qaPageKey.trim())?0.6:1 }}>
+                  <Share2 size={13}/> {shareActionsMut?.isPending ? "Pushing..." : "Push to All Users"}
+                </button>
+              </div>
+            </div>
+
+            {/* Currently Shared Actions */}
+            <div style={{ background:"rgba(13,34,64,0.8)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"20px 24px" }}>
+              <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:16 }}>
+                <Mic size={18} style={{ color:"#00FFC2" }}/>
+                <p style={{ fontSize:14,fontWeight:700,color:"#FFFFFF",margin:0 }}>Currently Shared Actions</p>
+              </div>
+              {(!sharedActionsList.data || sharedActionsList.data.length === 0) ? (
+                <p style={{ fontSize:13,color:"rgba(255,255,255,0.4)",margin:0 }}>No shared actions configured yet.</p>
+              ) : (
+                <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+                  {(sharedActionsList.data ?? []).map((row: any) => (
+                    <div key={row.pageKey} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"12px 16px" }}>
+                      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8 }}>
+                        <span style={{ fontSize:13,fontWeight:700,color:"#00FFC2",fontFamily:"monospace" }}>{row.pageKey}</span>
+                        <button
+                          onClick={() => deleteSharedMut?.mutate?.({ pageKey: row.pageKey })}
+                          style={{ padding:"4px 10px",borderRadius:8,background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.25)",color:"#ff5050",fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",gap:4 }}>
+                          <Trash2 size={11}/> Remove
+                        </button>
+                      </div>
+                      <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+                        {row.actions.map((a: string, i: number) => (
+                          <span key={i} style={{ padding:"4px 10px",borderRadius:8,background:"rgba(99,91,255,0.15)",border:"1px solid rgba(99,91,255,0.25)",color:"rgba(255,255,255,0.8)",fontSize:12 }}>{a}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
         {/* Create staff dialog */}

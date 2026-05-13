@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, router, adminProcedure } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
 import { eq, and, sql, desc, gte, lte, like, or } from "drizzle-orm";
 import {
@@ -992,4 +992,74 @@ ${transcriptText || "No transcript recorded."}
 
       return { sent: true, to: recipientEmail };
     }),
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ADMIN QUICK ACTION SHARING
+  // Admins can push a set of quick actions to ALL users on a specific page.
+  // These become the default for users who haven't set their own custom actions.
+  // ═══════════════════════════════════════════════════════════════════════════
+  adminShareQuickActions: adminProcedure
+    .input(z.object({
+      pageKey: z.string(),
+      actions: z.array(z.string().max(120)).max(6),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const actionsJson = JSON.stringify(input.actions);
+      // userId = 0 is the "shared/admin default" sentinel value
+      await db.execute(
+        sql`INSERT INTO voice_quick_actions (userId, pageKey, actions, updatedAt)
+            VALUES (0, ${input.pageKey}, ${actionsJson}, NOW())
+            ON DUPLICATE KEY UPDATE actions = ${actionsJson}, updatedAt = NOW()`
+      );
+      console.log(`[Admin] Shared quick actions for ${input.pageKey}: ${actionsJson}`);
+      return { shared: true, pageKey: input.pageKey, count: input.actions.length };
+    }),
+
+  getAdminSharedActions: protectedProcedure
+    .input(z.object({ pageKey: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [row] = await db.select().from(voiceQuickActions)
+        .where(and(eq(voiceQuickActions.userId, 0), eq(voiceQuickActions.pageKey, input.pageKey)));
+      if (!row) return null;
+      try {
+        return JSON.parse(row.actions) as string[];
+      } catch {
+        return null;
+      }
+    }),
+
+  listAdminSharedActions: adminProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db.select().from(voiceQuickActions)
+        .where(eq(voiceQuickActions.userId, 0))
+        .orderBy(voiceQuickActions.pageKey);
+      return rows.map(r => ({
+        pageKey: r.pageKey,
+        actions: (() => { try { return JSON.parse(r.actions) as string[]; } catch { return []; } })(),
+        updatedAt: r.updatedAt,
+      }));
+    }),
+
+  deleteAdminSharedActions: adminProcedure
+    .input(z.object({ pageKey: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.delete(voiceQuickActions)
+        .where(and(eq(voiceQuickActions.userId, 0), eq(voiceQuickActions.pageKey, input.pageKey)));
+      return { deleted: true };
+    }),
+
+  triggerMorningBriefing: adminProcedure
+    .mutation(async () => {
+      const { generateMorningBriefing } = await import("../scheduledJobs");
+      await generateMorningBriefing();
+      return { triggered: true };
+    }),
+
 });

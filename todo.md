@@ -1941,3 +1941,10 @@
 - [x] Undo navigation chip: 5-second Undo button appears in navigation banner after Hibba navigates
 - [x] Session summary email: Mail button in VoiceAgent header sends LLM-generated session summary to user
 - [x] Persistent quick action customisation: pencil icon opens edit modal, saves per-page actions to DB (voice_quick_actions table)
+
+- [x] Voice session replay: TTS playback in Voice History page using Web Speech API
+- [x] Morning briefing email: upgraded generateMorningBriefing to send rich HTML email to all trustees + key staff
+- [x] Admin quick action sharing: adminShareQuickActions, listAdminSharedActions, deleteAdminSharedActions, triggerMorningBriefing procedures
+- [x] Admin Hibba AI tab in AdminPanel: push quick actions to all users, trigger morning briefing, view/remove shared actions
+- [x] VoiceAgent admin fallback: getAdminSharedActions query as fallback when user has no saved actions
+- [x] Unique constraint on voice_quick_actions (userId, pageKey) for ON DUPLICATE KEY UPDATE

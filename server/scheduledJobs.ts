@@ -1527,67 +1527,103 @@ export async function generateMorningBriefing() {
   try {
     const db = await getDb();
     if (!db) return;
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    // Count new donations since yesterday
     const newDonations = await db
       .select({ count: sql<number>`count(*)` })
       .from(fundraisingDonations)
       .where(gte(fundraisingDonations.createdAt, yesterday));
-    const donationCount = newDonations[0]?.count ?? 0;
+    const donationCount = Number(newDonations[0]?.count ?? 0);
 
-    // Count overdue rents (tenants with unpaid rent past due date)
-    let overdueRentCount = 0;
+    let overdueLoansCount = 0;
     try {
-      const overdueRents = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(accommodationTenants)
-        .where(
-          eq(accommodationTenants.status, "active")
-        );
-      overdueRentCount = overdueRents[0]?.count ?? 0;
-    } catch {
-      // tenants table may not have rentDueDate
-    }
+      const { loanApplications } = await import("../drizzle/schema");
+      const overdue = await db.select({ count: sql<number>`count(*)` })
+        .from(loanApplications)
+        .where(eq(loanApplications.status, "active"));
+      overdueLoansCount = Number(overdue[0]?.count ?? 0);
+    } catch { /* skip */ }
 
-    // Count pending approvals (invoices needing sign-off)
     let pendingApprovalCount = 0;
     try {
-      const pendingApprovals = await db
-        .select({ count: sql<number>`count(*)` })
+      const pending = await db.select({ count: sql<number>`count(*)` })
         .from(invoices)
         .where(eq(invoices.paymentStatus, "pending"));
-      pendingApprovalCount = pendingApprovals[0]?.count ?? 0;
-    } catch {
-      // expenses may not have status field
+      pendingApprovalCount = Number(pending[0]?.count ?? 0);
+    } catch { /* skip */ }
+
+    let activePledgeCount = 0;
+    try {
+      const activePledges = await db.select({ count: sql<number>`count(*)` })
+        .from(pledges)
+        .where(eq((pledges as any).status, "active"));
+      activePledgeCount = Number(activePledges[0]?.count ?? 0);
+    } catch { /* skip */ }
+
+    let activeTenantCount = 0;
+    try {
+      const tenants = await db.select({ count: sql<number>`count(*)` })
+        .from(accommodationTenants)
+        .where(eq(accommodationTenants.status, "active"));
+      activeTenantCount = Number(tenants[0]?.count ?? 0);
+    } catch { /* skip */ }
+
+    const dateStr = today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const urgentItems: string[] = [];
+    const infoItems: string[] = [];
+
+    if (pendingApprovalCount > 0) urgentItems.push(`${pendingApprovalCount} invoice${pendingApprovalCount > 1 ? "s" : ""} pending approval`);
+    if (overdueLoansCount > 0) infoItems.push(`${overdueLoansCount} active Qarde Hasan loan${overdueLoansCount > 1 ? "s" : ""}`);
+    if (donationCount > 0) infoItems.push(`${donationCount} new donation${donationCount > 1 ? "s" : ""} received since yesterday`);
+    if (activePledgeCount > 0) infoItems.push(`${activePledgeCount} active pledge${activePledgeCount > 1 ? "s" : ""} on record`);
+    if (activeTenantCount > 0) infoItems.push(`${activeTenantCount} active tenant${activeTenantCount > 1 ? "s" : ""} in accommodation`);
+
+    const hasUrgent = urgentItems.length > 0;
+
+    const urgentHtml = hasUrgent
+      ? `<div style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;"><p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#dc2626;">Requires Attention</p><ul style="margin:0;padding-left:18px;color:#374151;font-size:13px;">${urgentItems.map(i => `<li style="margin:4px 0;">${i}</li>`).join("")}</ul></div>`
+      : "";
+
+    const infoHtml = infoItems.length > 0
+      ? `<div style="background:#f0fdf4;border-left:4px solid #22c55e;padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;"><p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#16a34a;">Today Overview</p><ul style="margin:0;padding-left:18px;color:#374151;font-size:13px;">${infoItems.map(i => `<li style="margin:4px 0;">${i}</li>`).join("")}</ul></div>`
+      : "";
+
+    const noItemsHtml = (!hasUrgent && infoItems.length === 0)
+      ? `<p style="color:#6b7280;font-size:13px;">No urgent items today. Have a productive day, insha Allah.</p>`
+      : "";
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,sans-serif;"><div style="max-width:560px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;"><div style="background:linear-gradient(135deg,#0A192F,#0d2a4a);padding:24px 28px;"><p style="margin:0;font-size:18px;font-weight:700;color:#ffffff;">Good Morning from Hibba</p><p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.6);">Daily Briefing - ${dateStr}</p></div><div style="padding:24px 28px;"><p style="color:#374151;font-size:14px;margin:0 0 16px;">AssalamuAlaikum,</p><p style="color:#374151;font-size:14px;margin:0 0 16px;">Here is your morning briefing for the Abdullah Quilliam Society.</p>${urgentHtml}${infoHtml}${noItemsHtml}<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;"><p style="font-size:12px;color:#9ca3af;margin:0;">Generated by Hibba, your AQ Society AI assistant.</p></div></div><div style="background:#f3f4f6;padding:14px 28px;text-align:center;"><p style="margin:0;font-size:11px;color:#9ca3af;">Abdullah Quilliam Society - Liverpool - JazakAllahu Khayran</p></div></div></body></html>`;
+
+    const recipients: { name: string; email: string }[] = [...WEEKLY_ALERT_RECIPIENTS];
+    try {
+      const activeTrustees = await getActiveTrustees();
+      for (const t of activeTrustees) {
+        if ((t as any).email && !recipients.find(r => r.email === (t as any).email)) {
+          recipients.push({ name: (t as any).name ?? "Trustee", email: (t as any).email });
+        }
+      }
+    } catch { /* skip */ }
+
+    for (const r of recipients) {
+      try {
+        await sendEmail(r.email, r.name, `Morning Briefing - ${dateStr}`, html);
+        console.log(`[Scheduled] Morning briefing sent to ${r.name} <${r.email}>`);
+      } catch (emailErr) {
+        console.error(`[Scheduled] Failed to send briefing to ${r.email}:`, emailErr);
+      }
     }
 
-    // Build briefing text
-    const parts: string[] = [];
-    parts.push(`Good morning. Here is your briefing for ${today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}.`);
+    const briefingText = [
+      `Morning briefing for ${dateStr}.`,
+      ...urgentItems.map(i => `URGENT: ${i}.`),
+      ...infoItems.map(i => `INFO: ${i}.`),
+    ].join(" ") || "No items today.";
 
-    if (donationCount > 0) {
-      parts.push(`${donationCount} new donation${donationCount > 1 ? "s" : ""} received since yesterday.`);
-    }
-    if (overdueRentCount > 0) {
-      parts.push(`${overdueRentCount} overdue rent payment${overdueRentCount > 1 ? "s" : ""} require attention.`);
-    }
-    if (pendingApprovalCount > 0) {
-      parts.push(`${pendingApprovalCount} expense${pendingApprovalCount > 1 ? "s" : ""} pending approval.`);
-    }
-    if (donationCount === 0 && overdueRentCount === 0 && pendingApprovalCount === 0) {
-      parts.push("No urgent items requiring your attention. Have a productive day.");
-    }
-
-    const briefingText = parts.join(" ");
-
-    // Store the briefing in the voice_sessions table as a system-generated briefing
     await db.insert(voiceSessions).values({
-      userId: 1, // System-generated briefing for the primary admin
+      userId: 1,
       conversationId: `briefing-${Date.now()}`,
       startedAt: new Date(),
       endedAt: new Date(),
@@ -1595,7 +1631,6 @@ export async function generateMorningBriefing() {
       tokenCount: 0,
       status: "completed",
     });
-
     console.log(`[Scheduled] Morning briefing generated: ${briefingText.substring(0, 100)}...`);
   } catch (e) {
     console.error("[Scheduled] Morning briefing generation failed:", e);
