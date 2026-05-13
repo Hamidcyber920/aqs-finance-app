@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Send, Plus, Eye, Edit2, Trash2, Clock, AlertCircle, Sparkles } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const CATEGORIES = [
   { value: "trustee_meeting", label: "Trustee Meeting" },
@@ -74,6 +75,12 @@ const EMPTY_BULK = {
 
 export default function CommsV3Page() {
   useAuth();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Communications Hub — template library and outbox log");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const utils = trpc.useUtils();
 
   const [tab, setTab] = useState("templates");

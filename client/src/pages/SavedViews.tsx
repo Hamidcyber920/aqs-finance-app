@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Bookmark, Plus, Trash2, Star } from "lucide-react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const MODULE_LABELS: Record<string, string> = {
   donors: "Donors",
@@ -21,6 +22,12 @@ export default function SavedViews() {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedModule, setSelectedModule] = useState("donors");
   const [form, setForm] = useState({ name: "", module: "donors", isDefault: false });
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Saved Views — custom saved filters and views across the system");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data: views, refetch } = (trpc as any).savedViews.list.useQuery({ module: selectedModule || undefined });
 

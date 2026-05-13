@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Building2, CalendarDays, Plus, Users, PoundSterling, CheckCircle2, Clock, XCircle, RefreshCw, Edit2 } from "lucide-react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const STATUS_COLORS: Record<string, string> = {
   enquiry: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
@@ -175,6 +176,12 @@ export default function Facilities() {
   const [showNewBooking, setShowNewBooking] = useState(false);
   const [showNewRoom, setShowNewRoom] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Facilities & Bookings — room bookings, hall hire and facility management");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const utils = trpc.useUtils();
   const stats = trpc.facilities.stats.useQuery();

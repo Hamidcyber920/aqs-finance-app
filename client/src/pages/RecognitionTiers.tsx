@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Trophy, Star, Sparkles, Users } from "lucide-react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const TIER_COLORS: Record<string, string> = {
   Foundation: "bg-amber-100 text-amber-800",
@@ -21,6 +22,12 @@ export default function RecognitionTiers() {
   const [selectedCampaign, setSelectedCampaign] = useState<number | null>(null);
   const [activeView, setActiveView] = useState<"tiers" | "leaderboard">("tiers");
   const [form, setForm] = useState({ name: "Foundation", minAmount: "", maxAmount: "", description: "", benefitDescription: "", color: "#4CAF50" });
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Recognition Tiers — donor recognition levels, thresholds and leaderboard");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data: campaigns } = (trpc as any).fundraising.getCampaigns.useQuery();
   const { data: tiers, refetch } = (trpc as any).recognitionTiers.list.useQuery(

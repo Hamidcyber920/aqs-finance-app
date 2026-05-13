@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+import { useVoiceContext } from "@/contexts/VoiceContext";
   Shield, Search, ChevronLeft, ChevronRight, RefreshCw,
   Clock, User, Database, Activity, AlertCircle,
 } from "lucide-react";
@@ -35,6 +36,12 @@ export default function AuditTrailPage() {
   const [entityFilter, setEntityFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
   const PAGE_SIZE = 50;
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Audit Trail — full history of all system actions and changes");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data: statsData } = trpc.auditTrail.stats.useQuery();
   const { data: entityTypes } = trpc.auditTrail.getEntityTypes.useQuery();

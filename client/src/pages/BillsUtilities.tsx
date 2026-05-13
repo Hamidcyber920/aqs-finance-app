@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const FALLBACK_BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"];
 const FALLBACK_CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"];
@@ -597,6 +598,12 @@ export default function BillsUtilities() {
   });
 
   const utils = trpc.useUtils();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Bills & Utilities — supplier bills, utility contracts and payment schedules");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const { data: summary } = trpc.bills.summary.useQuery();
   const { data: allBuildings = [] } = trpc.bills.listBuildings.useQuery();
   const { data: allCategories = [] } = trpc.bills.listCategories.useQuery();

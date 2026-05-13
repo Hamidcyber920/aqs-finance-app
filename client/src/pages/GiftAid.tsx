@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Gift, Users, Heart, Clock, Download, CheckCircle, AlertCircle, RefreshCw, Send, Tag } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const TAX_YEARS = Array.from({ length: 4 }, (_, i) => {
@@ -31,6 +32,12 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function GiftAidPage() {
   const { user } = useAuth();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Gift Aid & CRM+ — Gift Aid declarations, HMRC claims and enhanced CRM");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const utils = trpc.useUtils();
 
   const [tab, setTab] = useState("gift-aid");

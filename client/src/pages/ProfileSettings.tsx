@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import { User, Lock, Bell, Shield, Eye, EyeOff, Save, LogOut } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -18,6 +19,12 @@ const TABS = [
 
 export default function ProfileSettingsPage() {
   const { user, logout } = useAuth();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Profile & Settings — user profile, account settings and preferences");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const [tab, setTab] = useState("profile");
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Upload, Plus, CheckCircle, DollarSign, Users, FileText, AlertCircle, ChevronRight } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -35,6 +36,12 @@ const EMPTY_FORM = {
 
 export default function PayrollV3Page() {
   const { user } = useAuth();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Payroll V3 — enhanced payroll dashboard with approval workflow");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const utils = trpc.useUtils();
   const isAdmin = ["superadmin", "trustee", "manager", "admin"].includes(user?.role ?? "");
 

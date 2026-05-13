@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Calendar, Plus, Sparkles, FileText, CheckSquare, ChevronRight, UserPlus } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -52,6 +53,12 @@ const EMPTY_PIPELINE = {
 
 export default function MeetingsV3Page() {
   useAuth();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Meetings & Onboarding — meeting schedule, minutes and staff onboarding");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const utils = trpc.useUtils();
 
   const [tab, setTab] = useState("meetings");

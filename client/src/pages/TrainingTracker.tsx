@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactElement } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, CheckCircle, AlertTriangle, XCircle, Clock, Search, Trash2, Edit2, Award, Users, BookOpen, Grid3X3, UserPlus } from "lucide-react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const STATUS_COLORS: Record<string, string> = {
   valid: "bg-green-100 text-green-800",
@@ -75,6 +76,12 @@ export default function TrainingTracker() {
   const [selectedStaff, setSelectedStaff] = useState<string[]>([]);
 
   const utils = trpc.useUtils();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Training Tracker — staff training certificates, expiry dates and compliance");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const { data: summary } = trpc.training.summary.useQuery();
   const { data: records = [], isLoading } = trpc.training.list.useQuery({
     staffName: search || undefined,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Clock, ChevronRight, FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
 import SmartDocumentUpload from "@/components/SmartDocumentUpload";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const OUTCOME_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   passed: { label: "Passed", color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
@@ -50,6 +51,12 @@ export default function Decisions() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Decisions Register — official record of all trustee motions and votes");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const { data: decisions = [], isLoading } = (trpc as any).decisions.list.useQuery({ limit: 200 });
 
   const upsert = (trpc as any).decisions.upsert.useMutation({

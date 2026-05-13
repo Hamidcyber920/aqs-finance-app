@@ -7,6 +7,7 @@ import {
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from "recharts";
 import {
+import { useVoiceContext } from "@/contexts/VoiceContext";
   TrendingUp, TrendingDown, DollarSign, Users, AlertCircle,
   CheckCircle2, Clock, ArrowUpRight, ArrowDownRight, RefreshCw,
   Receipt, CreditCard, HandHeart, BookOpen, Wallet, Zap, GraduationCap
@@ -137,6 +138,12 @@ export default function DashboardPage() {
   const [userFilter, setUserFilter] = useState<number | "all">("all");
 
   /* tRPC queries */
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Dashboard — overview of society operations, compliance and finances");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const { data: receipts } = trpc.receipts.list.useQuery({ limit: 5 });
   const { data: loans } = trpc.loans.list.useQuery({});
   const { data: allExpenses } = trpc.receipts.adminList.useQuery(

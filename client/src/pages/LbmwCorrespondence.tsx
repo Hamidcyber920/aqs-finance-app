@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -122,6 +123,12 @@ export default function LbmwCorrespondence() {
   });
 
   const utils = trpc.useUtils();
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing LBMW Correspondence — Listed Building Maintenance Works planning correspondence");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const { data: items = [], isLoading, refetch } = trpc.lbmw.list.useQuery({ status: statusFilter || undefined });
 
   const allItemIds = (items as any[]).map((i: any) => i.id);

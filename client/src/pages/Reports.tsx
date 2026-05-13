@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -6,6 +6,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { FileText, Download, TrendingUp, DollarSign, Receipt, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SmartUpload } from "@/components/SmartUpload";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -29,6 +30,12 @@ export default function ReportsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
   const [generating, setGenerating] = useState(false);
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Financial Reports — monthly income and expense summaries and analytics");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data: reportData } = trpc.expenses.monthlySummary.useQuery({ month, year });
 

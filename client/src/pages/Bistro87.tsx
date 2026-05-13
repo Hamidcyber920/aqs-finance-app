@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
+import { useVoiceContext } from "@/contexts/VoiceContext";
   UtensilsCrossed, Plus, Edit, Trash2, ShoppingCart, CheckCircle,
   TrendingUp, Clock, ChefHat, BarChart3, X, RefreshCw
 } from "lucide-react";
@@ -55,6 +56,12 @@ export default function Bistro87() {
   const [cart, setCart] = useState<Array<{ menuItemId: number; itemName: string; quantity: number; unitPrice: number; notes: string }>>([]);
 
   // --- Queries ---
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Bistro 87 — cafe orders, daily revenue and menu management");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const { data: menuItems = [], refetch: refetchMenu } = trpc.bistro.listMenuItems.useQuery({});
   const { data: orders = [], refetch: refetchOrders } = trpc.bistro.listOrders.useQuery({ status: orderFilter === "all" ? undefined : orderFilter, limit: 100 });
   const { data: stats } = trpc.bistro.getRevenueStats.useQuery({ days: 30 });

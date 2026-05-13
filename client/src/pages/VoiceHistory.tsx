@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { MessageSquare, Mic, Bot, Wrench, Clock, ChevronRight, ArrowLeft, User, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import VoiceAnalytics from "@/components/VoiceAnalytics";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 function formatDate(d: string | Date) {
   return new Date(d).toLocaleString("en-GB", {
@@ -144,6 +145,12 @@ function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () =>
 export default function VoiceHistoryPage() {
   const [selectedSession, setSelectedSession] = useState<number | null>(null);
   const [tab, setTab] = useState<"sessions" | "analytics">("sessions");
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Voice History — Hibba voice session logs, transcripts and analytics");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const { data: sessions, isLoading } = trpc.voiceAgent.listSessions.useQuery({ limit: 50 });
 
   if (selectedSession !== null) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Search, Filter, Receipt, CheckCircle2, Clock, XCircle, Camera, ShieldAlert, ThumbsUp, CheckSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -34,6 +35,12 @@ export default function ReceiptsPage() {
   const [deptFilter, setDeptFilter] = useState("All");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkApproving, setBulkApproving] = useState(false);
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing My Expenses — personal expense receipts and claims");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data, refetch } = trpc.receipts.list.useQuery({ limit: 100 });
   const deleteMutation = trpc.receipts.delete?.useMutation?.({

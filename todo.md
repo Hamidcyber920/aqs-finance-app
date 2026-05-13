@@ -1930,3 +1930,5 @@
 - [x] Raise VAD threshold 0.015→0.04, require 5 consecutive frames for barge-in, silence timeout 800ms→1200ms
 - [x] Add Gemini server-side VAD config: activityHandling=NO_INTERRUPTION, END_SENSITIVITY_LOW, silenceDurationMs=1500
 - [x] Add proactive page summaries: navigate_to handler sends context note to Gemini after navigation
+
+- [x] Extend entity context to ALL 50 dashboard pages (47 new + 3 already done): AdminPanel, AuditTrail, Backups, BillsUtilities, Bistro87, BulkApprovals, Campaigns, CommHub, CommsInbox, CommsV3, Communications, ComplianceCockpit, ConflictsRegister, Dashboard, Decisions, DonorCRM, DonorPipeline, Donors, DonorsWall, Facilities, Fintech, Fundraising, GiftAid, Income, LbmwCorrespondence, Loans, MajorDonor, MeetingsV3, MergeHistory, MonthlyExpenses, OrgChart, Payroll, PayrollV3, Pledges, ProfileSettings, QRCodes, Receipts, RecognitionTiers, Reconciliation, Reports, SavedViews, StudentAccommodation, SystemHealth, TrainingTracker, TrusteeDashboard, Trustees, VoiceHistory, DonorProfile, LoanDetail, ReceiptDetail

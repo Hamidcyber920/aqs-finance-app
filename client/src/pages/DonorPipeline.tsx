@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy: "#0A192F", purple: "#635BFF", mint: "#00FFC2", white: "#FFFFFF", muted: "rgba(255,255,255,0.5)", border: "rgba(255,255,255,0.08)", glass: "rgba(255,255,255,0.04)", card: "rgba(13,34,64,0.8)" };
 
@@ -34,6 +35,12 @@ export default function DonorPipelinePage() {
   const [showMove, setShowMove] = useState<any>(null);
   const [showNotes, setShowNotes] = useState<any>(null);
   const [moveStage, setMoveStage] = useState<Stage>("qualification");
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Cultivation Pipeline — major donor prospect pipeline and engagement stages");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data: kanban, refetch } = trpc.donorPipeline.kanban.useQuery();
   const { data: notes, refetch: refetchNotes } = trpc.donorPipeline.listNotes.useQuery(

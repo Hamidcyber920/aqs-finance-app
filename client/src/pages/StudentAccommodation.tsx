@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+import { useVoiceContext } from "@/contexts/VoiceContext";
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
@@ -870,6 +871,12 @@ export default function StudentAccommodationPage() {
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Student Accommodation — tenant management, rent tracking and room assignments");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data: tenants, refetch: refetchTenants } = trpc.accommodation.listTenants.useQuery();
   const { data: upcomingRent } = trpc.accommodation.upcomingRent.useQuery({ daysAhead: 7 });

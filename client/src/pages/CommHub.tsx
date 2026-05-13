@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useIsMobile } from "@/hooks/useMobile";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -23,6 +23,7 @@ import {
   ArrowLeft, MoreHorizontal, Edit3, Zap, Tag,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -716,6 +717,12 @@ export default function CommHub() {
   const [mobilePanel, setMobilePanel] = useState<"sections" | "messages" | "detail">("sections");
   const isMobile = useIsMobile();
   const utils = trpc.useUtils();
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Comms Hub — centralised communications management centre");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data: stats = [], isLoading: statsLoading } = trpc.commsHub.getStats.useQuery(undefined, {
     refetchInterval: 30000,

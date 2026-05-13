@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
+import { useVoiceContext } from "@/contexts/VoiceContext";
   Mail, MailOpen, AlertTriangle, RefreshCw, Plus, Search, Zap, FileText,
   MoveRight, UserCheck, Archive, CheckCircle, ChevronRight, ChevronLeft, Inbox, Loader2,
   Upload, Eye, Clock, Tag, X, Paperclip, Filter, CalendarDays, ChevronDown,
@@ -92,6 +93,12 @@ export default function CommsInboxPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
 
   // ── Queries ───────────────────────────────────────────────────────────────
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Comms Inbox — all incoming communications in one place");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
+
   const { data: sections = [], refetch: refetchSections } = trpc.commsInbox.listSections.useQuery();
   const { data: stats } = trpc.commsInbox.getInboxStats.useQuery(undefined, { refetchInterval: 30000 });
   const { data: unreadCounts } = trpc.commsInbox.getSectionUnreadCounts.useQuery(undefined, { refetchInterval: 30000 });

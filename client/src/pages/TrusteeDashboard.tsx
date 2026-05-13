@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   Building2, Tag, ShieldCheck,
 } from "lucide-react";
 import {
+import { useVoiceContext } from "@/contexts/VoiceContext";
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from "recharts";
 
@@ -44,6 +45,12 @@ export default function TrusteeDashboard() {
   const [approveNote, setApproveNote] = useState("");
 
   const utils = trpc.useUtils();
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Trustee Dashboard — governance overview with finance approvals and compliance status");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data, isLoading, error } = trpc.trusteeFinance.dashboard.useQuery(
     { year, month },

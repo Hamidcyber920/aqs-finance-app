@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -18,6 +18,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+import { useVoiceContext } from "@/contexts/VoiceContext";
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
@@ -79,6 +80,12 @@ export default function LoansPage() {
   const [termUnit, setTermUnit] = useState<"months" | "years">("months");
   const [forecastDrilldown, setForecastDrilldown] = useState<{ label: string; donors: { name: string; email: string; amount: number; dueDate: Date }[] } | null>(null);
   const [tableFilter, setTableFilter] = useState<"all" | "active" | "pending" | "donors">("all");
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Qard Hasan Loans — interest-free Islamic loan applications and repayments");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data, refetch } = trpc.loans.listWithSummary.useQuery({});
 

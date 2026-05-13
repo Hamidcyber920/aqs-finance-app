@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { History, Download, ChevronLeft, ChevronRight, Eye, RotateCcw } from "lucide-react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const trpcAny = trpc as any;
@@ -138,6 +139,12 @@ export default function MergeHistoryPage() {
   const [page, setPage] = useState(0);
   const [selectedRow, setSelectedRow] = useState<HistoryRow | null>(null);
   const LIMIT = 25;
+
+  const { setEntityContext } = useVoiceContext();
+  useEffect(() => {
+    setEntityContext("Viewing Merge History — record of merged donor and contact records");
+    return () => setEntityContext(null);
+  }, [setEntityContext]);
 
   const { data, isLoading } = trpcAny.scanMerge.listHistory.useQuery({
     tableName: tableFilter === "all" ? undefined : tableFilter,
