@@ -1840,3 +1840,13 @@
 - [x] Add feature flags for new tools (search_donors, send_email, navigate_to)
 - [x] Merge consecutive transcript messages from same speaker in frontend
 - [x] Test end-to-end: "send email to X" → tool call → email sent → Hibba confirms (SMTP configured, password length check fixed from >=16 to >=8)
+
+### Voice Agent Next Steps (May 13 2026)
+- [x] Add create_task agentic tool (create tasks/reminders for staff via voice) — verified via end-to-end test
+- [x] Add schedule_meeting agentic tool (schedule meetings with attendees via trusteeMeetings table)
+- [x] Add generate_report agentic tool (generate summary reports on demand via monthly close report)
+- [x] Implement Voice Activity Detection (VAD) on frontend — RMS-based silence detection with 800ms threshold
+- [x] Verify full audio loop works in browser (create_task test: tool called, 34 audio chunks, 14 transcripts)
+- [x] Add feature flags for create_task, schedule_meeting, generate_report in DB
+- [x] Visual feedback: mic button pulses with ring animation when user is speaking
+- [x] Status text changes: "Hearing you..." when speaking, "Listening..." when silent

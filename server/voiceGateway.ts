@@ -116,6 +116,9 @@ const TOOL_DECLARATIONS = [
   { name: "draft_email", description: "Save an email draft to the outbox for later review (does NOT send immediately)", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
   { name: "navigate_to", description: "Navigate the user to a specific page in the app. Use this when the user asks to go to a page, view something, or open a section.", parameters: { type: "object", properties: { page: { type: "string", description: "Page path e.g. /donors, /donors/123, /campaigns, /comms-v3, /dashboard, /reports, /receipts, /payroll, /loans, /gift-aid, /meetings, /trustees, /compliance, /facilities" } }, required: ["page"] } },
   { name: "flag_for_review", description: "Flag something for Dr. Hamid's review", parameters: { type: "object", properties: { transcriptId: { type: "number" }, note: { type: "string" } }, required: [] } },
+  { name: "create_task", description: "Create a task or action item for a staff member. Use this when the user asks to create a task, reminder, action item, or to-do.", parameters: { type: "object", properties: { title: { type: "string", description: "Task title/description" }, owner: { type: "string", description: "Person responsible (name)" }, dueDate: { type: "string", description: "Due date in YYYY-MM-DD format" }, priority: { type: "string", description: "low, medium, high, or critical" }, notes: { type: "string", description: "Additional notes" }, source: { type: "string", description: "Where this task came from, e.g. 'voice agent', 'meeting', 'email'" } }, required: ["title"] } },
+  { name: "schedule_meeting", description: "Schedule a meeting. Use this when the user asks to schedule, book, or arrange a meeting.", parameters: { type: "object", properties: { title: { type: "string", description: "Meeting title" }, meetingType: { type: "string", description: "Type: trustee_board, finance_committee, safeguarding_committee, building_committee, agm, extraordinary, or staff" }, scheduledAt: { type: "string", description: "Date and time in ISO format (YYYY-MM-DDTHH:mm:ss)" }, location: { type: "string", description: "Meeting location" }, notes: { type: "string", description: "Meeting notes or agenda summary" }, attendees: { type: "array", items: { type: "number" }, description: "Array of user IDs for attendees" } }, required: ["title", "scheduledAt"] } },
+  { name: "generate_report", description: "Generate a financial summary report for a given month. Use this when the user asks for a report, summary, or financial overview.", parameters: { type: "object", properties: { year: { type: "number", description: "Year (e.g. 2026)" }, month: { type: "number", description: "Month number (1-12)" }, sendToTrustees: { type: "boolean", description: "Whether to email the report to trustees" } }, required: [] } },
 ];
 
 // --- Auth helper ---
@@ -366,6 +369,86 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
     case "flag_for_review": {
       await db.insert(voiceReviewQueue).values({ sessionId: client.dbSessionId, transcriptId: args.transcriptId ? Number(args.transcriptId) : null, flaggedByUserId: client.userId, agentStatement: String(args.note || "Flagged by user via voice"), status: "pending", createdAt: new Date() });
       return { success: true, note: "Flagged for Dr. Hamid's review" };
+    }
+    case "create_task": {
+      const { complianceActions } = await import("../drizzle/schema");
+      const title = String(args.title || "").trim();
+      if (!title) return { error: "Task title is required" };
+      const owner = String(args.owner || client.userName).trim();
+      const priority = ["low", "medium", "high", "critical"].includes(String(args.priority || "")) ? String(args.priority) : "medium";
+      const dueDate = args.dueDate ? new Date(String(args.dueDate)) : null;
+      const insertResult = await db.insert(complianceActions).values({
+        title,
+        owner,
+        source: String(args.source || "voice agent"),
+        priority,
+        dueDate: dueDate && !isNaN(dueDate.getTime()) ? dueDate : null,
+        notes: args.notes ? String(args.notes) : `Created via voice by ${client.userName}`,
+        status: "open",
+        createdByUserId: client.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      const taskId = Number(insertResult[0].insertId);
+      return { success: true, taskId, title, owner, priority, dueDate: dueDate?.toISOString() || null };
+    }
+    case "schedule_meeting": {
+      const { trusteeMeetings } = await import("../drizzle/schema");
+      const title = String(args.title || "").trim();
+      if (!title) return { error: "Meeting title is required" };
+      const scheduledAt = new Date(String(args.scheduledAt || ""));
+      if (isNaN(scheduledAt.getTime())) return { error: "Valid date/time is required for scheduledAt" };
+      const validTypes = ["trustee_board", "finance_committee", "safeguarding_committee", "building_committee", "agm", "extraordinary", "staff"];
+      const meetingType = validTypes.includes(String(args.meetingType || "")) ? String(args.meetingType) as any : "staff";
+      const insertResult = await db.insert(trusteeMeetings).values({
+        title,
+        meetingType,
+        scheduledAt,
+        location: args.location ? String(args.location) : null,
+        notes: args.notes ? String(args.notes) : null,
+        attendees: args.attendees || null,
+        status: "scheduled",
+        createdByUserId: client.userId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      const meetingId = Number(insertResult[0].insertId);
+      // Navigate user to meetings page
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify({ type: "navigate", path: "/meetings" }));
+      }
+      return { success: true, meetingId, title, scheduledAt: scheduledAt.toISOString(), meetingType, location: args.location || null };
+    }
+    case "generate_report": {
+      const { receipts, fundraisingCampaigns } = await import("../drizzle/schema");
+      // Default to current month if not specified
+      const now = new Date();
+      const year = Number(args.year) || now.getFullYear();
+      const month = Number(args.month) || (now.getMonth() + 1);
+      const monthName = new Date(year, month - 1, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+      // Gather summary data
+      const from = new Date(year, month - 1, 1);
+      const to = new Date(year, month, 0, 23, 59, 59);
+      const expenseRows = await db.select().from(receipts).where(and(gte(receipts.createdAt, from))).limit(100);
+      const activeCampaigns = await db.select().from(fundraisingCampaigns).where(eq(fundraisingCampaigns.isActive, true));
+      const totalExpenses = expenseRows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
+      const totalRaised = activeCampaigns.reduce((sum, c) => sum + Number(c.raisedAmount || 0), 0);
+      // Navigate user to reports page
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify({ type: "navigate", path: "/reports" }));
+      }
+      return {
+        success: true,
+        period: monthName,
+        summary: {
+          totalExpenses: `£${totalExpenses.toFixed(2)}`,
+          transactionCount: expenseRows.length,
+          activeCampaigns: activeCampaigns.length,
+          totalRaised: `£${totalRaised.toFixed(2)}`,
+          campaigns: activeCampaigns.map(c => ({ name: c.name, raised: `£${Number(c.raisedAmount || 0).toFixed(2)}`, goal: `£${Number(c.goalAmount || 0).toFixed(2)}` })),
+        },
+        note: "For a full PDF report, please use the Reports page.",
+      };
     }
     default:
       return { error: `Unknown tool: ${toolName}` };

@@ -1,0 +1,9 @@
+{
+  "query": "INSERT INTO voice_feature_flags (toolName, enabled, enabledRoles, phase) VALUES ('create_task', 1, '[\"superadmin\",\"trustee\",\"manager\"]', 1), ('schedule_meeting', 1, '[\"superadmin\",\"trustee\",\"manager\"]', 1), ('generate_report', 1, '[\"superadmin\",\"trustee\",\"manager\"]', 1) ON DUPLICATE KEY UPDATE enabled = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute INSERT INTO voice_feature_flags (toolName, enabled, enabledRoles, phase) VALUES ('create_task', 1, '[\"superadmin\",\"trustee\",\"manager\"]', 1), ('schedule_meeting', 1, '[\"superadmin\",\"trustee\",\"manager\"]', 1), ('generate_report', 1, '[\"superadmin\",\"trustee\",\"manager\"]', 1) ON DUPLICATE KEY UPDATE enabled = 1;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 382
+}

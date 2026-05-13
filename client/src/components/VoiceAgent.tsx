@@ -43,7 +43,10 @@ class PCMCaptureProcessor extends AudioWorkletProcessor {
     const input = inputs[0];
     if (!input || !input[0]) return true;
     const channelData = input[0];
+    // Calculate RMS volume for VAD
+    let sumSquares = 0;
     for (let i = 0; i < channelData.length; i++) {
+      sumSquares += channelData[i] * channelData[i];
       this.buffer[this.bufferIndex++] = channelData[i];
       if (this.bufferIndex >= this.bufferSize) {
         const int16 = new Int16Array(this.bufferSize);
@@ -56,6 +59,8 @@ class PCMCaptureProcessor extends AudioWorkletProcessor {
         this.bufferIndex = 0;
       }
     }
+    const rms = Math.sqrt(sumSquares / channelData.length);
+    this.port.postMessage({ vad: true, volume: rms });
     return true;
   }
 }
@@ -241,6 +246,11 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
+  const [userSpeaking, setUserSpeaking] = useState(false);
+  const [volumeLevel, setVolumeLevel] = useState(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const VAD_THRESHOLD = 0.015; // RMS threshold for speech detection
+  const SILENCE_TIMEOUT_MS = 800; // ms of silence before marking as not speaking
 
   const connectionRef = useRef<VoiceConnection | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -383,8 +393,26 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
       const workletNode = new AudioWorkletNode(audioContext, "pcm-capture-processor");
       workletNodeRef.current = workletNode;
 
-      // Send PCM chunks to server as base64
+      // Send PCM chunks to server as base64 + VAD
       workletNode.port.onmessage = (event) => {
+        if (event.data.vad) {
+          // Voice Activity Detection: update volume and speaking state
+          const vol = event.data.volume as number;
+          setVolumeLevel(vol);
+          if (vol > VAD_THRESHOLD) {
+            setUserSpeaking(true);
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = null;
+            }
+          } else if (!silenceTimerRef.current) {
+            silenceTimerRef.current = setTimeout(() => {
+              setUserSpeaking(false);
+              silenceTimerRef.current = null;
+            }, SILENCE_TIMEOUT_MS);
+          }
+          return;
+        }
         if (event.data.pcm) {
           const pcmBuffer = new Uint8Array(event.data.pcm);
           let binary = "";
@@ -403,6 +431,12 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
       toast.error("Microphone access denied. Please allow microphone permission.");
     }
   }, [isGeminiReady]);
+  // Cleanup silence timer on unmount
+  useEffect(() => {
+    return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    };
+  }, []);
 
   // Stop streaming mic
   const stopMic = useCallback(() => {
@@ -631,14 +665,23 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                           onClick={toggleMic}
                           className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
                             isLive
-                              ? "bg-red-500 scale-110 shadow-lg shadow-red-500/30"
+                              ? (userSpeaking ? "bg-red-500 scale-110 shadow-lg shadow-red-500/30 ring-4 ring-red-400/40" : "bg-red-500 scale-105 shadow-lg shadow-red-500/20")
                               : "bg-emerald-600 hover:bg-emerald-500 hover:scale-105"
                           }`}
                         >
                           {isLive ? <PhoneOff className="w-6 h-6 text-white" /> : <Phone className="w-6 h-6 text-white" />}
+                          {isLive && userSpeaking && (
+                            <span className="absolute inset-0 rounded-full border-2 border-red-300 animate-ping opacity-40" />
+                          )}
                         </button>
                         <p className="text-[11px] text-zinc-500">
-                          {isLive ? (isSpeaking ? "Hibba is speaking..." : "Listening... tap to mute") : "Tap to start speaking"}
+                          {isLive
+                            ? (isSpeaking
+                              ? "Hibba is speaking..."
+                              : userSpeaking
+                                ? "Hearing you..."
+                                : "Listening... tap to mute")
+                            : "Tap to start speaking"}
                         </p>
                       </>
                     )}
