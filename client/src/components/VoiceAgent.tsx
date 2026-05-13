@@ -379,6 +379,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
       case "session_started":
         setTranscript((prev) => [...prev, { id: `welcome-${Date.now()}`, speaker: "agent", text: msg.text || "Hello! How can I help you today?", timestamp: new Date() }]);
         setIsProcessing(false);
+        if ((msg as any).dbSessionId) setCurrentSessionId((msg as any).dbSessionId);
         break;
       case "gemini_ready":
         setIsGeminiReady(true);
@@ -438,9 +439,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
           setTimeout(() => { setLastNavigation(null); setPrevLocation(null); }, 5000);
         }
         break;
-      case "session_started":
-        if ((msg as any).dbSessionId) setCurrentSessionId((msg as any).dbSessionId);
-        break;
+
       case "session_ended":
         setStatus("disconnected");
         setIsProcessing(false);
