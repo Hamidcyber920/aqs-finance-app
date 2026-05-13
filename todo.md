@@ -2052,3 +2052,6 @@
 - [x] Update send_whatsapp to generate wa.me deep link and send open_url to frontend
 - [x] Add open_url message handler to VoiceAgent frontend component
 - [x] Update system prompt to instruct Hibba to look up phone from staff directory first
+
+## Bug Fix — Settings Page Crash
+- [x] Fix "Cannot access 'n' before initialization" error in ProfileSettings page (moved useState before useEffect)

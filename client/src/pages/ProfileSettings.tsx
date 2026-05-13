@@ -20,12 +20,12 @@ const TABS = [
 export default function ProfileSettingsPage() {
   const { user, logout } = useAuth();
   const { setEntityContext } = useVoiceContext();
+  const [tab, setTab] = useState("profile");
+
   useEffect(() => {
     setEntityContext(`Viewing Profile & Settings — ${tab} tab`);
     return () => setEntityContext(null);
   }, [setEntityContext, tab]);
-
-  const [tab, setTab] = useState("profile");
   const { data: briefingPrefs } = (trpc as any).voiceAgent.getBriefingPrefs.useQuery();
   const saveBriefingPrefsMut = (trpc as any).voiceAgent.saveBriefingPrefs.useMutation({
     onSuccess: () => toast.success("Briefing preferences saved"),
