@@ -142,9 +142,9 @@ export default function MergeHistoryPage() {
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Merge History — record of merged donor and contact records");
+    setEntityContext(`Viewing Merge History — table filter: ${tableFilter}`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, tableFilter]);
 
   const { data, isLoading } = trpcAny.scanMerge.listHistory.useQuery({
     tableName: tableFilter === "all" ? undefined : tableFilter,

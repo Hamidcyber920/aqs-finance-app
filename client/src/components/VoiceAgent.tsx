@@ -9,7 +9,7 @@
  * - Result: natural, real-time conversation like a phone call
  */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff, HelpCircle } from "lucide-react";
+import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff, HelpCircle, Sparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -293,6 +293,38 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     "/donate":"Donation Page","/voice-history":"Voice History",
     "/profile":"Profile","/settings":"Settings",
   };
+  // Context-aware quick action chips per page
+  const QUICK_ACTIONS: Record<string, string[]> = {
+    "/dashboard": ["Summarise today's dashboard", "Any urgent items?", "What needs my attention?"],
+    "/receipts": ["Summarise my expenses", "Any pending approvals?", "Show this month's receipts"],
+    "/reports": ["Summarise this month's report", "What's the income vs expenses?", "Any anomalies?"],
+    "/fundraising": ["Summarise all campaigns", "Which campaign is closest to target?", "Total donations this month?"],
+    "/loans": ["Show overdue loans", "Summarise active loans", "Any loans due this month?"],
+    "/income": ["Summarise this month's income", "Any outstanding payments?", "Compare to last month"],
+    "/payroll": ["Summarise this month's payroll", "Any pending approvals?", "Total payroll cost?"],
+    "/monthly-expenses": ["Summarise this month's expenses", "What's the available balance?", "Any withheld payments?"],
+    "/reconciliation": ["Summarise this month's reconciliation", "Any unmatched transactions?", "What's the closing balance?"],
+    "/donors": ["Find top donors this month", "Any lapsed donors?", "Summarise donor stats"],
+    "/campaigns": ["Summarise all campaigns", "Which is performing best?", "Total raised this month?"],
+    "/trustees": ["Who are the current trustees?", "Any pending actions?", "Show trustee contacts"],
+    "/trustee-dashboard": ["Summarise pending approvals", "Any compliance issues?", "What needs sign-off?"],
+    "/payroll-v3": ["Summarise payroll run", "Any pending approvals?", "Total net pay this month?"],
+    "/training": ["Who has overdue training?", "Summarise training compliance", "Any expiring certificates?"],
+    "/student-accommodation": ["Any overdue rent?", "Summarise tenancy status", "Who moves out this month?"],
+    "/facilities": ["Any bookings today?", "Summarise this week's bookings", "What rooms are available?"],
+    "/compliance": ["Any overdue actions?", "Summarise compliance status", "What policies need review?"],
+    "/meetings": ["What meetings are coming up?", "Summarise recent decisions", "Any outstanding actions?"],
+    "/pledges": ["Show outstanding pledges", "Summarise pledge totals", "Any overdue pledges?"],
+    "/gift-aid": ["Summarise Gift Aid claims", "Any pending declarations?", "Total Gift Aid this year?"],
+    "/bistro": ["Today's Bistro summary", "What's selling well?", "Any pending orders?"],
+    "/bills-utilities": ["Any bills due soon?", "Summarise utility costs", "Any overdue payments?"],
+    "/major-donor": ["Summarise major donor pipeline", "Any prospects to follow up?", "Who's in cultivation?"],
+    "/donor-crm": ["Summarise CRM activity", "Any donors to follow up?", "Recent communications?"],
+    "/voice-history": ["Summarise recent sessions", "How many sessions this week?", "Any flagged responses?"],
+    "/system-health": ["Is everything healthy?", "Any errors or warnings?", "What's the server status?"],
+  };
+  const currentQuickActions = QUICK_ACTIONS[screenContext] || ["Summarise this page", "What can I help with?", "Show recent activity"];
+
 
   // Keep isSpeakingRef in sync with isSpeaking state
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
@@ -521,6 +553,13 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     setTranscript((prev) => [...prev, { id: `user-${Date.now()}`, speaker: "user", text, timestamp: new Date() }]);
     connectionRef.current.sendText(text);
   }, [textInput]);
+  // Send a quick action text without needing the input field
+  const sendQuickText = useCallback((text: string) => {
+    if (!connectionRef.current?.isConnected) return;
+    setIsProcessing(true);
+    setTranscript((prev) => [...prev, { id: `user-${Date.now()}`, speaker: "user", text, timestamp: new Date() }]);
+    connectionRef.current.sendText(text);
+  }, []);
 
   // Flag response
   const flagResponse = useCallback((entryId: string) => {
@@ -589,6 +628,19 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
               {isSpeaking && <WaveformAnimation isActive={true} />}
             </div>
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  if (status === "connected") {
+                    sendQuickText("Please give me a brief spoken summary of what I am currently viewing on this page.");
+                  } else {
+                    toast.info("Connect to Hibba first to get a page summary");
+                  }
+                }}
+                title="Ask Hibba to summarise this page"
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-emerald-400 transition-colors"
+              >
+                <Sparkles className="w-4 h-4" />
+              </button>
               <button
                 onClick={() => setShowCommandRef(!showCommandRef)}
                 className={`p-1.5 rounded-lg transition-colors ${showCommandRef ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
@@ -676,6 +728,27 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
               </div>
             )}
 
+            {/* Quick action chips — shown when transcript is empty and connected */}
+            {transcript.length === 0 && status === "connected" && (
+              <div className="flex flex-col gap-2 py-4">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-semibold px-1 flex items-center gap-1.5">
+                  <Zap className="w-3 h-3 text-emerald-500" />
+                  Quick actions
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {currentQuickActions.map((action) => (
+                    <button
+                      key={action}
+                      onClick={() => sendQuickText(action)}
+                      disabled={isProcessing}
+                      className="text-xs px-3 py-1.5 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-emerald-500/50 text-zinc-300 hover:text-emerald-300 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {action}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             {transcript.map((entry) => (
               <div key={entry.id} className={`flex ${entry.speaker === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${

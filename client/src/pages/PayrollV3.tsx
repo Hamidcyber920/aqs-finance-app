@@ -38,9 +38,9 @@ export default function PayrollV3Page() {
   const { user } = useAuth();
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Payroll V3 — enhanced payroll dashboard with approval workflow");
+    setEntityContext(`Viewing Payroll V3 — ${tab} tab, month: ${month}/${year}`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, month, year, tab]);
 
   const utils = trpc.useUtils();
   const isAdmin = ["superadmin", "trustee", "manager", "admin"].includes(user?.role ?? "");

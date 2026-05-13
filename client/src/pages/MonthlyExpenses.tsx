@@ -455,9 +455,9 @@ export default function MonthlyExpenses() {
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Monthly Expenses — monthly expense tracking, budget management and payments");
+    setEntityContext(`Viewing Monthly Expenses — ${activeTab} tab, month: ${month}/${year}`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, month, year, activeTab]);
 
   const { data, refetch } = trpc.expenses.allItems.useQuery({ month, year });
 

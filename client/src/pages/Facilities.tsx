@@ -179,9 +179,9 @@ export default function Facilities() {
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Facilities & Bookings — room bookings, hall hire and facility management");
+    setEntityContext(`Viewing Facilities & Bookings — ${tab} tab`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, tab]);
 
   const utils = trpc.useUtils();
   const stats = trpc.facilities.stats.useQuery();

@@ -34,9 +34,9 @@ export default function GiftAidPage() {
   const { user } = useAuth();
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Gift Aid & CRM+ — Gift Aid declarations, HMRC claims and enhanced CRM");
+    setEntityContext(`Viewing Gift Aid & CRM+ — ${tab} tab`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, tab]);
 
   const utils = trpc.useUtils();
 

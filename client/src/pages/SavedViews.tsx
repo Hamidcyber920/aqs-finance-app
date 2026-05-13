@@ -25,9 +25,9 @@ export default function SavedViews() {
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Saved Views — custom saved filters and views across the system");
+    setEntityContext(`Viewing Saved Views — module: ${selectedModule}`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, selectedModule]);
 
   const { data: views, refetch } = (trpc as any).savedViews.list.useQuery({ module: selectedModule || undefined });
 

@@ -376,9 +376,9 @@ export default function IncomePage() {
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Income & Rentals — Friday collections, rental income and other income streams");
+    setEntityContext(`Viewing Income & Rentals — month: ${month}/${year}`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, month, year]);
 
   const { data, refetch } = trpc.income.list.useQuery(showAll ? {} : { month, year });
   const { data: cats } = trpc.income.categories?.useQuery?.() ?? { data: null };

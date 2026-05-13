@@ -21,9 +21,9 @@ export default function ProfileSettingsPage() {
   const { user, logout } = useAuth();
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Profile & Settings — user profile, account settings and preferences");
+    setEntityContext(`Viewing Profile & Settings — ${tab} tab`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, tab]);
 
   const [tab, setTab] = useState("profile");
   const [showOld, setShowOld] = useState(false);

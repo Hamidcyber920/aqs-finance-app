@@ -58,9 +58,9 @@ export default function Bistro87() {
   // --- Queries ---
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Bistro 87 — cafe orders, daily revenue and menu management");
+    setEntityContext(`Viewing Bistro 87 — ${activeTab} tab`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, activeTab]);
 
   const { data: menuItems = [], refetch: refetchMenu } = trpc.bistro.listMenuItems.useQuery({});
   const { data: orders = [], refetch: refetchOrders } = trpc.bistro.listOrders.useQuery({ status: orderFilter === "all" ? undefined : orderFilter, limit: 100 });

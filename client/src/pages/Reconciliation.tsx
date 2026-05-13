@@ -41,9 +41,9 @@ export default function ReconciliationPage() {
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Month-End Reconciliation — bank reconciliation and transaction matching");
+    setEntityContext(`Viewing Month-End Reconciliation — month: ${month}/${year}`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, month, year]);
 
   const { data, refetch } = trpc.reconciliation.fullStatement.useQuery({ month, year });
 

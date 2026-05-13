@@ -33,9 +33,9 @@ export default function ReportsPage() {
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Financial Reports — monthly income and expense summaries and analytics");
+    setEntityContext(`Viewing Financial Reports — month: ${month}/${year}`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, month, year]);
 
   const { data: reportData } = trpc.expenses.monthlySummary.useQuery({ month, year });
 

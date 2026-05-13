@@ -123,9 +123,9 @@ export default function PayrollPage() {
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Payroll — staff payroll management, salary records and payslips");
+    setEntityContext(`Viewing Payroll — ${activeTab} tab, month: ${month}/${year}`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, month, year, activeTab]);
 
   const { data, refetch } = trpc.payroll.list.useQuery({ month, year });
   // Approval workflow queries/mutations

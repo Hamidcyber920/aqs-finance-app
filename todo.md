@@ -1932,3 +1932,8 @@
 - [x] Add proactive page summaries: navigate_to handler sends context note to Gemini after navigation
 
 - [x] Extend entity context to ALL 50 dashboard pages (47 new + 3 already done): AdminPanel, AuditTrail, Backups, BillsUtilities, Bistro87, BulkApprovals, Campaigns, CommHub, CommsInbox, CommsV3, Communications, ComplianceCockpit, ConflictsRegister, Dashboard, Decisions, DonorCRM, DonorPipeline, Donors, DonorsWall, Facilities, Fintech, Fundraising, GiftAid, Income, LbmwCorrespondence, Loans, MajorDonor, MeetingsV3, MergeHistory, MonthlyExpenses, OrgChart, Payroll, PayrollV3, Pledges, ProfileSettings, QRCodes, Receipts, RecognitionTiers, Reconciliation, Reports, SavedViews, StudentAccommodation, SystemHealth, TrainingTracker, TrusteeDashboard, Trustees, VoiceHistory, DonorProfile, LoanDetail, ReceiptDetail
+
+## Hibba Voice Agent — Three Enhancements (May 2026)
+- [x] Dynamic entity context: 13 pages updated with tab/filter deps (Payroll, PayrollV3, GiftAid, Income, Reconciliation, Reports, MonthlyExpenses, Bistro87, Facilities, MeetingsV3, MergeHistory, SavedViews, ProfileSettings)
+- [x] Summarise This Page button (✨ Sparkles icon) in VoiceAgent header — sends spoken summary request to Hibba
+- [x] Context-aware quick action chips: 30 pages mapped with 3 relevant quick actions each, shown in empty transcript state

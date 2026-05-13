@@ -55,9 +55,9 @@ export default function MeetingsV3Page() {
   useAuth();
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Meetings & Onboarding — meeting schedule, minutes and staff onboarding");
+    setEntityContext(`Viewing Meetings & Onboarding — ${tab} tab`);
     return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, [setEntityContext, tab]);
 
   const utils = trpc.useUtils();
 
