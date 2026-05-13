@@ -9,9 +9,10 @@
  * - Result: natural, real-time conversation like a phone call
  */
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff, HelpCircle, Sparkles, Zap } from "lucide-react";
+import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff, HelpCircle, Sparkles, Zap, Undo2, Mail, Pencil, Plus, Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -272,6 +273,21 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const inputRef = useRef<HTMLInputElement>(null);
   const [showCommandRef, setShowCommandRef] = useState(false);
   const [lastNavigation, setLastNavigation] = useState<string | null>(null);
+  const [prevLocation, setPrevLocation] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+  const [emailSummaryLoading, setEmailSummaryLoading] = useState(false);
+  const [showEditActions, setShowEditActions] = useState(false);
+  const [editActionsInput, setEditActionsInput] = useState("");
+  const [customActions, setCustomActions] = useState<string[] | null>(null);
+  const [savingActions, setSavingActions] = useState(false);
+
+  // Load user's custom quick actions for current page
+  const { data: savedActions, refetch: refetchActions } = (trpc as any).voiceAgent.getQuickActions.useQuery(
+    { pageKey: screenContext || "/" },
+    { enabled: !!screenContext }
+  );
+  // Merge: custom actions override defaults when set
+  const effectiveQuickActions = (customActions ?? (savedActions as string[] | null | undefined)) ?? currentQuickActions;
   const SECTION_NAMES: Record<string, string> = {
     "/dashboard":"Dashboard","/receipts":"Receipts","/reports":"Reports",
     "/fundraising":"Fundraising","/loans":"Loans","/income":"Income",
@@ -408,12 +424,17 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         break;
       case "navigate":
         if (msg.path) {
+          // Save current location so user can undo
+          setPrevLocation(window.location.pathname);
           navigate(msg.path);
           const sn = SECTION_NAMES[msg.path as string] || (msg.path as string).replace(/^\//, "").replace(/-/g, " ");
           setLastNavigation(sn);
           toast.success("Navigated to " + sn, { duration: 2500 });
-          setTimeout(() => setLastNavigation(null), 4000);
+          setTimeout(() => { setLastNavigation(null); setPrevLocation(null); }, 5000);
         }
+        break;
+      case "session_started":
+        if ((msg as any).dbSessionId) setCurrentSessionId((msg as any).dbSessionId);
         break;
       case "session_ended":
         setStatus("disconnected");
@@ -642,6 +663,43 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                 <Sparkles className="w-4 h-4" />
               </button>
               <button
+                onClick={async () => {
+                  if (!currentSessionId) {
+                    toast.info("No active session to email — start a session first");
+                    return;
+                  }
+                  setEmailSummaryLoading(true);
+                  try {
+                    // Use fetch directly since we need to call trpc mutation imperatively
+                    const res = await fetch("/api/trpc/voiceAgent.emailSessionSummary", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ json: { sessionId: currentSessionId } }),
+                      credentials: "include",
+                    });
+                    const data = await res.json();
+                    if (data?.result?.data?.json?.sent) {
+                      toast.success("Session summary emailed to you!");
+                    } else {
+                      toast.error("Could not send email — please try again");
+                    }
+                  } catch {
+                    toast.error("Email failed — please check your connection");
+                  } finally {
+                    setEmailSummaryLoading(false);
+                  }
+                }}
+                title="Email session summary"
+                disabled={emailSummaryLoading || !currentSessionId}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-400 transition-colors disabled:opacity-30"
+              >
+                {emailSummaryLoading ? (
+                  <div className="w-4 h-4 border-2 border-zinc-500 border-t-blue-400 rounded-full animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4" />
+                )}
+              </button>
+              <button
                 onClick={() => setShowCommandRef(!showCommandRef)}
                 className={`p-1.5 rounded-lg transition-colors ${showCommandRef ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
                 title="Voice command examples"
@@ -699,11 +757,27 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
               <p className="text-[10px] text-zinc-500 mt-2 italic">Tip: Interrupt Hibba by speaking while she's talking. She responds without hesitation.</p>
             </div>
           )}
-          {/* Navigation banner */}
+          {/* Navigation banner with undo */}
           {lastNavigation && (
-            <div className="mx-4 mt-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center gap-2 text-xs text-emerald-300 animate-in slide-in-from-top-2 duration-300">
-              <span>🧭</span>
-              <span>Navigated to <strong>{lastNavigation}</strong></span>
+            <div className="mx-4 mt-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-between gap-2 text-xs text-emerald-300 animate-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center gap-2">
+                <span>🧭</span>
+                <span>Navigated to <strong>{lastNavigation}</strong></span>
+              </div>
+              {prevLocation && (
+                <button
+                  onClick={() => {
+                    navigate(prevLocation);
+                    setLastNavigation(null);
+                    setPrevLocation(null);
+                    toast.info("Navigation undone");
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/40 text-emerald-200 transition-colors"
+                >
+                  <Undo2 className="w-3 h-3" />
+                  Undo
+                </button>
+              )}
             </div>
           )}
           {/* Transcript area */}
@@ -731,12 +805,24 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
             {/* Quick action chips — shown when transcript is empty and connected */}
             {transcript.length === 0 && status === "connected" && (
               <div className="flex flex-col gap-2 py-4">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-semibold px-1 flex items-center gap-1.5">
-                  <Zap className="w-3 h-3 text-emerald-500" />
-                  Quick actions
-                </p>
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide font-semibold flex items-center gap-1.5">
+                    <Zap className="w-3 h-3 text-emerald-500" />
+                    Quick actions
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEditActionsInput(effectiveQuickActions.join("\n"));
+                      setShowEditActions(true);
+                    }}
+                    title="Customise quick actions for this page"
+                    className="p-1 rounded text-zinc-600 hover:text-zinc-400 transition-colors"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {currentQuickActions.map((action) => (
+                  {effectiveQuickActions.map((action) => (
                     <button
                       key={action}
                       onClick={() => sendQuickText(action)}
@@ -746,6 +832,73 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                       {action}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Quick actions edit modal */}
+            {showEditActions && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-80 p-5 flex flex-col gap-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                      <Pencil className="w-4 h-4 text-emerald-400" />
+                      Customise Quick Actions
+                    </h3>
+                    <button onClick={() => setShowEditActions(false)} className="text-zinc-500 hover:text-zinc-300">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-zinc-500">One action per line. Up to 6 actions. These will be saved for this page.</p>
+                  <textarea
+                    value={editActionsInput}
+                    onChange={(e) => setEditActionsInput(e.target.value)}
+                    rows={6}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 resize-none focus:outline-none focus:border-emerald-500"
+                    placeholder={"Summarise this page\nShow recent activity\nWhat needs my attention?"}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const defaults = currentQuickActions;
+                        setEditActionsInput(defaults.join("\n"));
+                      }}
+                      className="flex-1 text-xs px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 transition-colors"
+                    >
+                      Reset to defaults
+                    </button>
+                    <button
+                      disabled={savingActions}
+                      onClick={async () => {
+                        const lines = editActionsInput.split("\n").map(l => l.trim()).filter(Boolean).slice(0, 6);
+                        setSavingActions(true);
+                        try {
+                          const res = await fetch("/api/trpc/voiceAgent.saveQuickActions", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ json: { pageKey: screenContext || "/", actions: lines } }),
+                            credentials: "include",
+                          });
+                          const data = await res.json();
+                          if (data?.result?.data?.json?.saved) {
+                            setCustomActions(lines);
+                            setShowEditActions(false);
+                            toast.success("Quick actions saved!");
+                            refetchActions();
+                          } else {
+                            toast.error("Could not save — please try again");
+                          }
+                        } catch {
+                          toast.error("Save failed");
+                        } finally {
+                          setSavingActions(false);
+                        }
+                      }}
+                      className="flex-1 text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors disabled:opacity-50"
+                    >
+                      {savingActions ? "Saving…" : "Save"}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

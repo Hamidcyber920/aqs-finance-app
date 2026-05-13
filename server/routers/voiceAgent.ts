@@ -10,12 +10,34 @@ import { invokeLLM } from "../_core/llm";
 import { eq, and, sql, desc, gte, lte, like, or } from "drizzle-orm";
 import {
   voiceSessions, voiceToolCalls, voiceTranscripts, voiceCostTracking,
-  voiceFeatureFlags, voiceReviewQueue,
+  voiceFeatureFlags, voiceReviewQueue, voiceQuickActions,
   users, donors, fundraisingDonations, fundraisingCampaigns,
   receipts, trustees, donorCommsLog, pledges, pledgePayments,
   giftAidDeclarations, donorLeads, commsOutbox,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
+import nodemailer from "nodemailer";
+
+// ─── Email helper (session summaries) ────────────────────────────────────────
+async function sendSessionSummaryEmail(to: string, name: string, subject: string, htmlBody: string) {
+  const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
+  const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
+  const envPass = process.env.SMTP_PASSWORD;
+  const smtpPass = (envPass && envPass.length === 16) ? envPass : "njvigzynhdcxusik";
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.SMTP_PORT || "587"),
+    secure: parseInt(process.env.SMTP_PORT || "587") === 465,
+    auth: { user: smtpUser, pass: smtpPass },
+    tls: { rejectUnauthorized: false },
+  });
+  await transporter.sendMail({
+    from: `"Abdullah Quilliam Society" <${fromEmail}>`,
+    to: name ? `"${name}" <${to}>` : to,
+    subject,
+    html: htmlBody,
+  });
+}
 
 // ─── Role helpers ────────────────────────────────────────────────────────────
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
@@ -827,5 +849,147 @@ export const voiceAgentRouter = router({
         topTools,
         dailyCost,
       };
+    }),
+  // ═══════════════════════════════════════════════════════════════════════════
+  // QUICK ACTION CUSTOMISATION
+  // ═══════════════════════════════════════════════════════════════════════════
+  getQuickActions: protectedProcedure
+    .input(z.object({ pageKey: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [row] = await db.select().from(voiceQuickActions)
+        .where(and(eq(voiceQuickActions.userId, ctx.user.id), eq(voiceQuickActions.pageKey, input.pageKey)));
+      if (!row) return null;
+      try {
+        return JSON.parse(row.actions) as string[];
+      } catch {
+        return null;
+      }
+    }),
+
+  saveQuickActions: protectedProcedure
+    .input(z.object({
+      pageKey: z.string(),
+      actions: z.array(z.string().max(120)).max(6),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const actionsJson = JSON.stringify(input.actions);
+      // Upsert: insert or update on duplicate key
+      await db.execute(
+        sql`INSERT INTO voice_quick_actions (userId, pageKey, actions, updatedAt)
+            VALUES (${ctx.user.id}, ${input.pageKey}, ${actionsJson}, NOW())
+            ON DUPLICATE KEY UPDATE actions = ${actionsJson}, updatedAt = NOW()`
+      );
+      return { saved: true };
+    }),
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SESSION SUMMARY EMAIL
+  // ═══════════════════════════════════════════════════════════════════════════
+  emailSessionSummary: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+      email: z.string().email().optional(), // override recipient email
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      // Fetch session + transcripts
+      const [session] = await db.select().from(voiceSessions)
+        .where(and(eq(voiceSessions.id, input.sessionId), eq(voiceSessions.userId, ctx.user.id)));
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" });
+
+      const transcripts = await db.select().from(voiceTranscripts)
+        .where(eq(voiceTranscripts.sessionId, input.sessionId))
+        .orderBy(voiceTranscripts.createdAt);
+
+      const toolCalls = await db.select().from(voiceToolCalls)
+        .where(eq(voiceToolCalls.sessionId, input.sessionId))
+        .orderBy(voiceToolCalls.createdAt);
+
+      // Build plain-text transcript
+      const transcriptText = transcripts.map((t: any) => {
+        const speaker = t.speaker === "user" ? "You" : "Hibba";
+        return `${speaker}: ${t.text}`;
+      }).join("\n");
+
+      // Use LLM to generate a concise summary
+      let summaryText = "No summary available.";
+      try {
+        const llmRes = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: "You are a helpful assistant. Summarise the following voice session transcript in 3-5 bullet points. Focus on what was discussed, any actions taken, and any important data retrieved. Be concise and professional.",
+            },
+            {
+              role: "user",
+              content: transcriptText || "No transcript available.",
+            },
+          ],
+        });
+        summaryText = (llmRes as any)?.choices?.[0]?.message?.content || summaryText;
+      } catch (_) {
+        // Fall back to raw transcript if LLM fails
+        summaryText = transcriptText || "No transcript available.";
+      }
+
+      // Format tool calls
+      const toolCallsHtml = toolCalls.length > 0
+        ? `<ul>${toolCalls.map((tc: any) => `<li><strong>${tc.toolName}</strong> — ${tc.success ? "✓ Success" : "✗ Failed"} (${tc.latencyMs ?? 0}ms)</li>`).join("")}</ul>`
+        : "<p>No tool calls in this session.</p>";
+
+      const sessionDate = new Date(session.startedAt).toLocaleString("en-GB", { timeZone: "Europe/London" });
+      const durationSecs = session.endedAt
+        ? Math.round((new Date(session.endedAt).getTime() - new Date(session.startedAt).getTime()) / 1000)
+        : null;
+      const durationStr = durationSecs ? `${Math.floor(durationSecs / 60)}m ${durationSecs % 60}s` : "In progress";
+
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a2e;">
+          <div style="background: #0A192F; padding: 24px; border-radius: 8px 8px 0 0;">
+            <h1 style="color: #10b981; margin: 0; font-size: 20px;">Hibba Voice Session Summary</h1>
+            <p style="color: #94a3b8; margin: 8px 0 0; font-size: 14px;">${sessionDate} · Duration: ${durationStr}</p>
+          </div>
+          <div style="background: #f8fafc; padding: 24px; border: 1px solid #e2e8f0; border-top: none;">
+            <p>Dear ${ctx.user.name || "Team Member"},</p>
+            <p>AssalamuAlaikum. Here is a summary of your recent Hibba voice session.</p>
+
+            <h2 style="color: #0A192F; font-size: 16px; margin-top: 24px;">Session Summary</h2>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; white-space: pre-wrap; font-size: 14px; line-height: 1.6;">
+${summaryText}
+            </div>
+
+            <h2 style="color: #0A192F; font-size: 16px; margin-top: 24px;">Actions Taken by Hibba</h2>
+            ${toolCallsHtml}
+
+            <h2 style="color: #0A192F; font-size: 16px; margin-top: 24px;">Full Transcript</h2>
+            <div style="background: #1e293b; color: #e2e8f0; border-radius: 6px; padding: 16px; font-family: monospace; font-size: 12px; white-space: pre-wrap; max-height: 400px; overflow-y: auto;">
+${transcriptText || "No transcript recorded."}
+            </div>
+
+            <p style="margin-top: 24px; font-size: 12px; color: #94a3b8;">
+              This email was generated automatically by the Hibba Voice Assistant system.<br>
+              Abdullah Quilliam Society · Liverpool
+            </p>
+          </div>
+        </div>
+      `;
+
+      const recipientEmail = input.email || ctx.user.email;
+      const recipientName = ctx.user.name || "Team Member";
+
+      await sendSessionSummaryEmail(
+        recipientEmail,
+        recipientName,
+        `Hibba Session Summary — ${sessionDate}`,
+        htmlBody,
+      );
+
+      return { sent: true, to: recipientEmail };
     }),
 });

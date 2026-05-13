@@ -2396,3 +2396,15 @@ export const voiceReviewQueue = mysqlTable("voice_review_queue", {
 });
 export type VoiceReviewQueueItem = typeof voiceReviewQueue.$inferSelect;
 export type InsertVoiceReviewQueueItem = typeof voiceReviewQueue.$inferInsert;
+
+// ─── VOICE QUICK ACTIONS (per-user customisation) ───────────────────────────
+// Users can pin/unpin quick action chips per page
+export const voiceQuickActions = mysqlTable("voice_quick_actions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  pageKey: varchar("pageKey", { length: 100 }).notNull(), // e.g. "/loans", "/donors"
+  actions: text("actions").notNull().default("[]"), // JSON array of action strings
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type VoiceQuickAction = typeof voiceQuickActions.$inferSelect;
+export type InsertVoiceQuickAction = typeof voiceQuickActions.$inferInsert;

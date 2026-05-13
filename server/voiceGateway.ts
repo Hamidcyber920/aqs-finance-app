@@ -1127,7 +1127,7 @@ export function attachVoiceGateway(server: HttpServer) {
         const geminiWs = connectToGeminiLive(client, connectionId);
         client.geminiWs = geminiWs;
 
-        ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, text: `Hello ${auth.name}, how can I help you today?` }));
+        ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, dbSessionId, text: `Hello ${auth.name}, how can I help you today?` }));
         return;
       }
 

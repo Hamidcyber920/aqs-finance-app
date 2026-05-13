@@ -12,12 +12,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
-import { useVoiceContext } from "@/contexts/VoiceContext";
   Mail, MailOpen, AlertTriangle, RefreshCw, Plus, Search, Zap, FileText,
   MoveRight, UserCheck, Archive, CheckCircle, ChevronRight, ChevronLeft, Inbox, Loader2,
   Upload, Eye, Clock, Tag, X, Paperclip, Filter, CalendarDays, ChevronDown,
   SquareCheck, Trash2, Flag
 } from "lucide-react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: "bg-red-500/20 text-red-400 border-red-500/30",

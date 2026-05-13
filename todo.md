@@ -1937,3 +1937,7 @@
 - [x] Dynamic entity context: 13 pages updated with tab/filter deps (Payroll, PayrollV3, GiftAid, Income, Reconciliation, Reports, MonthlyExpenses, Bistro87, Facilities, MeetingsV3, MergeHistory, SavedViews, ProfileSettings)
 - [x] Summarise This Page button (✨ Sparkles icon) in VoiceAgent header — sends spoken summary request to Hibba
 - [x] Context-aware quick action chips: 30 pages mapped with 3 relevant quick actions each, shown in empty transcript state
+- [x] Fix build-breaking syntax errors: em-dash inserted into import statements by entity context script (8 files fixed)
+- [x] Undo navigation chip: 5-second Undo button appears in navigation banner after Hibba navigates
+- [x] Session summary email: Mail button in VoiceAgent header sends LLM-generated session summary to user
+- [x] Persistent quick action customisation: pencil icon opens edit modal, saves per-page actions to DB (voice_quick_actions table)

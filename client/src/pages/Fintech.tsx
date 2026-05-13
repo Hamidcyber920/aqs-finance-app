@@ -17,11 +17,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
-import { useVoiceContext } from "@/contexts/VoiceContext";
   CreditCard, Zap, Building2, FileText, CheckCircle2, Clock, XCircle,
   Copy, MessageCircle, ExternalLink, Download, RefreshCw, Plus, Send,
   Smartphone, Globe, Landmark, QrCode, ScanLine, Banknote, Loader2
 } from "lucide-react";
+import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // Stripe publishable key — loaded once outside any component
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string);
