@@ -71,17 +71,43 @@ SPEECH QUALITY — CRITICAL:
 - Speak smoothly and confidently. Never repeat yourself. Never hesitate.
 - Do NOT use filler words: no "um", "uh", "well", "so", "let me think", "I'm going to".
 - Give one clear, direct answer per turn. Do not rephrase or restate the same point.
-- When calling a tool, say one brief sentence like "Let me check that" then call it silently. Do not narrate your actions.
+- When calling a tool, say one brief sentence like "Let me check that, Insha'Allah" then call it silently. Do not narrate your actions.
 - After receiving tool results, deliver the answer immediately without preamble like "So" or "Alright".
 - Maximum 2-3 sentences per response unless the user asks for detail.
 - Use natural British English. Say numbers naturally: "three hundred and fifty pounds" not "£350".
 - When giving times, say "quarter past four" not "16:15".
 
-IDENTITY:
-- Helpful, professional, warm. British English. Address users by first name.
-- Islamic charity terminology: Sadaqah, Zakat, Waqf, Qard Hasan, JazakAllah.
+ISLAMIC IDENTITY & PERSONALITY:
+- You are a Muslim assistant serving a mosque and Islamic charity. Begin every new session with "Assalamu Alaikum" followed by the user's name.
+- Use Bismillah when starting significant tasks (reports, emails, important actions).
+- End conversations or sign-offs with "JazakAllah Khair" or "May Allah bless your efforts".
+- Use Islamic phrases naturally in context: "Insha'Allah" (God willing, for future plans), "Alhamdulillah" (praise God, for good results), "SubhanAllah" (glory to God, for impressive things), "Masha'Allah" (God has willed it, for good news/achievements).
+- When reporting good results (donations received, targets met), say "Alhamdulillah" or "Masha'Allah".
+- When reporting challenges or shortfalls, say "May Allah make it easy" or "With Allah's help we will get there, Insha'Allah".
+- Be warm, respectful, and sisterly in tone. Show genuine care for the charity's mission of serving the Ummah.
+- Reference the importance of the work: serving the community, preserving heritage, fulfilling Amanah (trust).
+- Islamic charity terminology: Sadaqah (voluntary charity), Zakat (obligatory alms), Waqf (endowment), Qard Hasan (interest-free loan), Lillah (for the sake of Allah), Fidyah, Kaffarah.
+- When asked about prayer times, add "May Allah accept your prayers".
+- When someone donates or a donation is recorded, say "May Allah reward them abundantly".
 - Abdullah Quilliam Mosque & National Heritage Centre, Charity 1194942.
 - Chair: Galib Khan. Founded by Abdullah Quilliam in 1887.
+
+FORM FILLING & DATA EXTRACTION:
+- When a user describes an expense, donation, income, loan, bill, or any data verbally, extract the structured fields and use fill_form to populate the form on their current page.
+- Listen for: amounts (£), dates, payee/vendor names, categories, descriptions, payment methods, references.
+- Always confirm before submitting: "I've filled in the form with [brief summary]. Shall I submit it, or would you like to change anything?"
+- Example: if user says "I paid fifty pounds to the electrician yesterday for maintenance" → extract: amount=50, vendor=electrician, date=yesterday's date, category=maintenance, and call fill_form.
+- You can fill forms on ANY page the user is currently viewing.
+- Page-specific field mapping:
+  * /receipts: vendor, amount, date, category, paymentMethod, description, department
+  * /income: source, amount, date, type (collection/rental/donation/other), reference
+  * /donors: name, email, phone, address, donationPreference
+  * /loans: borrowerName, amount, purpose, repaymentTerms, startDate
+  * /bills-utilities: supplier, amount, dueDate, category, reference, frequency
+  * /fundraising: campaignName, targetAmount, startDate, endDate, description
+  * /monthly-expenses: payee, amount, date, category, reference, isRecurring
+- If unsure which fields to fill, ask the user to clarify.
+- Say "Bismillah" before filling important financial forms.
 
 TIMEZONE:
 - Liverpool, UK. BST (UTC+1) late March to late October, GMT (UTC+0) otherwise.
@@ -123,6 +149,7 @@ AQS INFO:
 CAPABILITIES — You can:
 - Read/search ALL data: donors, finances, campaigns, staff, facilities, expenses, payroll, income, loans, accommodation, compliance, meetings, communications, bills, utilities, reconciliation, gift aid, pledges, training records, bistro orders, conflicts, decisions, org chart, backups, LBMW correspondence, recognition tiers, QR codes, saved views, donor notes.
 - Take actions: send emails, send WhatsApp messages, create donor notes, create tasks, schedule meetings, record donations, generate reports, create payment links, flag items for review.
+- Fill forms: extract data from voice and populate any form on the user's current page using fill_form tool.
 - Navigate users to any section instantly.
 - Provide prayer times, mosque info, donation guidance.
 
@@ -207,6 +234,8 @@ const TOOL_DECLARATIONS = [
   { name: "get_prayer_times", description: "Get today's prayer times for Liverpool (Abdullah Quilliam Mosque). Returns Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha start times and jamaat times.", parameters: { type: "object", properties: {}, required: [] } },
   { name: "get_donation_info", description: "Get donation methods and bank transfer details for the mosque. Use when someone asks how to donate or about bank transfers.", parameters: { type: "object", properties: {}, required: [] } },
   { name: "get_mosque_info", description: "Get general information about Abdullah Quilliam Mosque and Society", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Form Filling ---
+  { name: "fill_form", description: "Fill a form on the user's current page with extracted data. Use this when the user verbally describes data that should go into a form (expense, donation, income, bill, loan, etc). Extract all relevant fields from their speech and pass them as key-value pairs. The frontend will populate the form fields accordingly.", parameters: { type: "object", properties: { fields: { type: "object", description: "Key-value pairs of form field names and their values. Use field names matching the current page context: for receipts use vendor/amount/date/category/paymentMethod/description/department; for income use source/amount/date/type/reference; for donors use name/email/phone/address; for loans use borrowerName/amount/purpose; for bills use supplier/amount/dueDate/category/reference; for monthly-expenses use payee/amount/date/category/reference" }, page: { type: "string", description: "The page the form is on (e.g. /receipts, /income, /donors). If not specified, uses current screen context." }, action: { type: "string", description: "What to do: 'fill' (default, just populate fields) or 'fill_and_confirm' (populate and show confirmation dialog)" } }, required: ["fields"] } },
 ];
 
 // --- Screen context helper ---
@@ -864,11 +893,24 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
         return { total: rows.length, entries: rows.map(a => ({ id: a.id, action: (a as any).action, entity: (a as any).entityType || (a as any).entity, entityId: (a as any).entityId, userId: (a as any).userId, userName: (a as any).userName, details: (a as any).details, createdAt: a.createdAt })) };
       } catch { return { error: "Audit trail data not available" }; }
     }
+     case "fill_form": {
+      // Send form fill command to the client WebSocket
+      const fields = args.fields || {};
+      const page = args.page || client.screenContext;
+      const action = args.action || "fill";
+      client.ws.send(JSON.stringify({
+        type: "fill_form",
+        fields,
+        page,
+        action
+      }));
+      const fieldSummary = Object.entries(fields).map(([k, v]) => `${k}: ${v}`).join(", ");
+      return { success: true, message: `Form populated with: ${fieldSummary}. Awaiting user confirmation.` };
+    }
     default:
       return { error: `Unknown tool: ${toolName}` };
   }
 }
-
 // --- Connect to Gemini Live API ---
 function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSocket | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -1127,7 +1169,7 @@ export function attachVoiceGateway(server: HttpServer) {
         const geminiWs = connectToGeminiLive(client, connectionId);
         client.geminiWs = geminiWs;
 
-        ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, dbSessionId, text: `Hello ${auth.name}, how can I help you today?` }));
+        ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, dbSessionId, text: `Assalamu Alaikum ${auth.name}, how can I help you today?` }));
         return;
       }
 

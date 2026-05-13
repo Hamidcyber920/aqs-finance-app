@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect , useCallback} from "react";
+import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -596,6 +597,16 @@ export default function BillsUtilities() {
     unitType: "",
     notes: "",
   });
+  // Listen for Hibba voice form-fill commands
+  useHibbaFormFill("/bills-utilities", useCallback((fields: Record<string, any>) => {
+    if (fields.amount) setBillForm(f => ({ ...f, amount: String(fields.amount) }));
+    if (fields.dueDate || fields.billDate) setBillForm(f => ({ ...f, billDate: fields.dueDate || fields.billDate }));
+    if (fields.notes || fields.description) setBillForm(f => ({ ...f, notes: fields.notes || fields.description }));
+    if (fields.periodStart) setBillForm(f => ({ ...f, periodStart: fields.periodStart }));
+    if (fields.periodEnd) setBillForm(f => ({ ...f, periodEnd: fields.periodEnd }));
+    setShowAddBill(true);
+  }, [setBillForm]));
+
 
   const utils = trpc.useUtils();
   const { setEntityContext } = useVoiceContext();

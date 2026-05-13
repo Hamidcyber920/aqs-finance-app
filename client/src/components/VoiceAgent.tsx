@@ -293,12 +293,12 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   );
   // Context-aware quick action chips per page (MUST be declared before effectiveQuickActions)
   const QUICK_ACTIONS: Record<string, string[]> = {
-    "/dashboard": ["Summarise today's dashboard", "Any urgent items?", "What needs my attention?"],
-    "/receipts": ["Summarise my expenses", "Any pending approvals?", "Show this month's receipts"],
+    "/dashboard": ["Bismillah, summarise today", "Any urgent items?", "What needs my attention?"],
+    "/receipts": ["Summarise my expenses", "Any pending approvals?", "Record an expense for me"],
     "/reports": ["Summarise this month's report", "What's the income vs expenses?", "Any anomalies?"],
     "/fundraising": ["Summarise all campaigns", "Which campaign is closest to target?", "Total donations this month?"],
     "/loans": ["Show overdue loans", "Summarise active loans", "Any loans due this month?"],
-    "/income": ["Summarise this month's income", "Any outstanding payments?", "Compare to last month"],
+    "/income": ["Summarise this month's income", "Record a donation", "Compare to last month"],
     "/payroll": ["Summarise this month's payroll", "Any pending approvals?", "Total payroll cost?"],
     "/monthly-expenses": ["Summarise this month's expenses", "What's the available balance?", "Any withheld payments?"],
     "/reconciliation": ["Summarise this month's reconciliation", "Any unmatched transactions?", "What's the closing balance?"],
@@ -315,7 +315,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     "/pledges": ["Show outstanding pledges", "Summarise pledge totals", "Any overdue pledges?"],
     "/gift-aid": ["Summarise Gift Aid claims", "Any pending declarations?", "Total Gift Aid this year?"],
     "/bistro": ["Today's Bistro summary", "What's selling well?", "Any pending orders?"],
-    "/bills-utilities": ["Any bills due soon?", "Summarise utility costs", "Any overdue payments?"],
+    "/bills-utilities": ["Any bills due soon?", "Add a new bill for me", "Any overdue payments?"],
     "/major-donor": ["Summarise major donor pipeline", "Any prospects to follow up?", "Who's in cultivation?"],
     "/donor-crm": ["Summarise CRM activity", "Any donors to follow up?", "Recent communications?"],
     "/voice-history": ["Summarise recent sessions", "How many sessions this week?", "Any flagged responses?"],
@@ -377,7 +377,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
   const handleMessage = useCallback((msg: any) => {
     switch (msg.type) {
       case "session_started":
-        setTranscript((prev) => [...prev, { id: `welcome-${Date.now()}`, speaker: "agent", text: msg.text || "Hello! How can I help you today?", timestamp: new Date() }]);
+        setTranscript((prev) => [...prev, { id: `welcome-${Date.now()}`, speaker: "agent", text: msg.text || "Assalamu Alaikum! How can I help you today?", timestamp: new Date() }]);
         setIsProcessing(false);
         if ((msg as any).dbSessionId) setCurrentSessionId((msg as any).dbSessionId);
         break;
@@ -439,6 +439,26 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
           setTimeout(() => { setLastNavigation(null); setPrevLocation(null); }, 5000);
         }
         break;
+      case "fill_form": {
+        // Hibba is filling a form with extracted data
+        const { fields, page, action: fillAction } = msg;
+        if (fields && typeof fields === "object") {
+          // Dispatch a custom event that page components can listen to
+          const event = new CustomEvent("hibba:fill_form", {
+            detail: { fields, page: page || screenContext, action: fillAction || "fill" }
+          });
+          window.dispatchEvent(event);
+          const fieldCount = Object.keys(fields).length;
+          toast.success(`Bismillah — Hibba filled ${fieldCount} field${fieldCount > 1 ? "s" : ""}`, { duration: 3000 });
+          setTranscript((prev) => [...prev, {
+            id: `form-fill-${Date.now()}`,
+            speaker: "agent",
+            text: `✍️ Form filled: ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(", ")}`,
+            timestamp: new Date()
+          }]);
+        }
+        break;
+      }
 
       case "session_ended":
         setStatus("disconnected");
@@ -447,7 +467,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         setIsGeminiReady(false);
         break;
     }
-  }, [navigate]);
+  }, [navigate, screenContext]);
 
   // Connect to voice gateway
   const connect = useCallback(() => {
@@ -649,7 +669,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                 : status === "connecting" ? "bg-amber-400 animate-pulse"
                 : "bg-zinc-500"
               }`} />
-              <span className="text-sm font-medium text-zinc-200">Hibba Voice Assistant</span>
+              <span className="text-sm font-medium text-zinc-200">Hibba — المساعدة</span>
               {isSpeaking && <WaveformAnimation isActive={true} />}
             </div>
             <div className="flex items-center gap-1">
@@ -751,6 +771,10 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                 <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Send an email to Ahmed about the meeting"</p>
                 <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Send a WhatsApp to the trustees"</p>
                 <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Add a note to donor Khalid's profile"</p>
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mt-1.5">Form Filling</p>
+                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">•</span>"I paid £50 to the electrician yesterday for maintenance"</p>
+                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">•</span>"Record a Sadaqah of £100 from Brother Ahmed"</p>
+                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">•</span>"Add a bill: BT broadband, £45, due 20th May"</p>
                 <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mt-1.5">Data & Queries</p>
                 <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"Find donor Ahmed" / "Show this month's expenses"</p>
                 <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What's the prayer time for Maghrib?"</p>
@@ -758,7 +782,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                 <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What decisions are pending?" / "Show LBMW correspondence"</p>
                 <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What's today's Bistro summary?" / "Show conflicts register"</p>
               </div>
-              <p className="text-[10px] text-zinc-500 mt-2 italic">Tip: Interrupt Hibba by speaking while she's talking. She responds without hesitation.</p>
+              <p className="text-[10px] text-zinc-500 mt-2 italic">Tip: Interrupt Hibba anytime — she listens without hesitation. Say "Bismillah" to start a new task.</p>
             </div>
           )}
           {/* Navigation banner with undo */}
@@ -997,7 +1021,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                         <p className="text-[11px] text-zinc-500">
                           {isLive
                             ? (isSpeaking
-                              ? "Hibba is speaking..."
+                              ? "Hibba is speaking... بسم الله"
                               : userSpeaking
                                 ? "Hearing you..."
                                 : "Listening... tap to mute")

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -74,6 +75,17 @@ export default function CapturePage() {
     defaultValues: { department: "Mosque" }
   })
   const watchedAmount = watch("amount");
+
+  // Listen for Hibba voice form-fill commands
+  useHibbaFormFill("/", useCallback((fields: Record<string, any>) => {
+    if (fields.amount) setValue("amount", String(fields.amount));
+    if (fields.date) setValue("date", fields.date);
+    if (fields.description) setValue("description", fields.description);
+    if (fields.vendor) setValue("vendor", fields.vendor);
+    if (fields.category) setValue("category", fields.category);
+    if (fields.paymentMethod) setValue("paymentMethod", fields.paymentMethod);
+    toast.success("Hibba filled the form — please review and submit, Insha'Allah");
+  }, [setValue]));
 
   const checkCrmByPhone = useCallback(async (phone: string) => {
     if (!phone || phone.length < 7) return;

@@ -1965,3 +1965,10 @@
 - [x] Main bundle reduced from 4.6MB to 848KB with proper chunk splitting
 - [x] Verified fix in production build: variable now declared at position 729748, used at 732463 (correct order)
 - [x] Build clean, 314/317 tests passing (3 pre-existing Google Drive credential failures)
+
+## Hibba Islamic Identity & Form-Filling (May 13 2026)
+- [ ] Update Hibba's system prompt with Islamic identity (Assalamu Alaikum greetings, Bismillah, warm Muslim personality, Islamic etiquette)
+- [ ] Add data extraction capability: Hibba can parse voice descriptions into structured data (amount, payee, category, date, department)
+- [ ] Add form-filling capability: Hibba can populate forms on any page based on voice commands
+- [ ] Frontend: handle form-fill tool call responses from Hibba to auto-populate UI fields
+- [ ] Quick action chips updated with Islamic-friendly language where appropriate
