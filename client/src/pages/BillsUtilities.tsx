@@ -693,12 +693,12 @@ export default function BillsUtilities() {
       <>
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Bills & Utilities</h1>
             <p className="text-muted-foreground text-sm mt-1">Track utility accounts and bills across all AQS buildings</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setBillScannerOpen(true)} className="gap-2">
               <ScanLine className="w-4 h-4" /> Scan Bill
             </Button>

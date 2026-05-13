@@ -2036,3 +2036,13 @@
 ## Bug Fixes — Hibba Data Access & Staff Emails
 - [x] Fix Hibba's inability to read app data (trustees, staff, sections)
 - [x] Fix all incorrect staff emails in the system
+
+## Bug Fix — Mobile Overflow (Right-side content cut off)
+- [x] Fix page header overflow on mobile: Trustee Financial Dashboard
+- [x] Fix page header overflow on mobile: LBMW Correspondence Tracker
+- [x] Fix page header overflow on mobile: Training Tracker
+- [x] Fix page header overflow on mobile: Bills & Utilities
+- [x] Fix page header overflow on mobile: Decisions Register
+- [x] Add global CSS fix to prevent horizontal overflow on all pages
+- [x] Fix additional pages: ConflictsRegister, QRCodes, RecognitionTiers, SavedViews, BulkApprovals, GiftAid
+- [x] Add overflow-x-hidden to DashboardLayout main content area

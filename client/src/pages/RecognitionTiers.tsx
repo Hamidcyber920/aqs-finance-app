@@ -57,12 +57,12 @@ export default function RecognitionTiers() {
   return (
       <>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Recognition Tiers</h1>
             <p className="text-muted-foreground text-sm mt-1">Manage donor recognition tiers per campaign (Foundation, Wall, Roof, Mihrab)</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {selectedCampaign && activeView === "tiers" && (
               <Button variant="outline" onClick={() => seedMut.mutate({ campaignId: selectedCampaign })} disabled={seedMut.isPending}>
                 <Sparkles className="w-4 h-4 mr-2" /> Seed Defaults

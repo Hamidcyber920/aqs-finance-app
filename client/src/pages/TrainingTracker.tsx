@@ -165,12 +165,12 @@ export default function TrainingTracker() {
       <>
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Training Tracker</h1>
             <p className="text-muted-foreground text-sm mt-1">Track mandatory and optional training completions for all staff, volunteers, and trustees</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={() => setShowBulkEnrol(true)} className="gap-2">
               <UserPlus className="w-4 h-4" /> Bulk Enrol
             </Button>

@@ -120,13 +120,13 @@ export default function Decisions() {
       <>
       <div className="page-enter space-y-6 p-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Decisions Register</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Official record of all trustee motions and votes</p>
           </div>
           {canEdit && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button variant="outline" size="sm" onClick={() => setShowOcr(true)}>
                 <Upload className="w-4 h-4 mr-2" /> Scan Minutes
               </Button>

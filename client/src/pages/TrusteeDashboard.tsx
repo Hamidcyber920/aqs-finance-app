@@ -142,17 +142,17 @@ export default function TrusteeDashboard() {
               <p className="text-sm text-gray-500">Budget vs actuals, income, expenses, approval queue</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button variant="outline" size="icon" onClick={prevMonth}><ChevronLeft className="w-4 h-4" /></Button>
-            <span className="font-semibold text-gray-800 min-w-[140px] text-center">
+            <span className="font-semibold text-gray-800 min-w-[120px] text-center">
               {getMonthName(month)} {year}
             </span>
             <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="w-4 h-4" /></Button>
             <Button
-              className="ml-2 bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
+              className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white text-xs sm:text-sm"
               onClick={() => setCloseReportOpen(true)}
             >
-              <FileText className="w-4 h-4 mr-2" />
+              <FileText className="w-4 h-4 mr-1 sm:mr-2" />
               Monthly Close Report
             </Button>
           </div>

@@ -56,12 +56,12 @@ export default function ConflictsRegister() {
   return (
       <>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Conflicts of Interest Register</h1>
             <p className="text-muted-foreground text-sm mt-1">Charity Commission requirement — record and manage trustee conflicts of interest</p>
           </div>
-          <Button onClick={() => setShowAdd(true)}>
+          <Button onClick={() => setShowAdd(true)} className="self-start sm:self-auto">
             <Plus className="w-4 h-4 mr-2" /> Declare Conflict
           </Button>
         </div>

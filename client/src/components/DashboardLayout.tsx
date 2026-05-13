@@ -432,7 +432,7 @@ function DashboardLayoutContent({
       </div>
 
       {/* ── Main content ── */}
-      <SidebarInset className={`${isMobile ? "pb-[72px]" : ""} overflow-y-auto`} style={{ WebkitOverflowScrolling: "touch", paddingBottom: isMobile ? "calc(72px + env(safe-area-inset-bottom, 0px))" : undefined } as React.CSSProperties}>
+      <SidebarInset className={`${isMobile ? "pb-[72px]" : ""} overflow-y-auto overflow-x-hidden`} style={{ WebkitOverflowScrolling: "touch", paddingBottom: isMobile ? "calc(72px + env(safe-area-inset-bottom, 0px))" : undefined } as React.CSSProperties}>
         {/* Mobile top bar */}
         {isMobile && (
           <div

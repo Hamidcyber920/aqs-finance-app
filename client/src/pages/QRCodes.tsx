@@ -98,7 +98,7 @@ export default function QRCodes() {
   return (
       <>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">QR Code Generator</h1>
             <p className="text-muted-foreground text-sm mt-1">Generate trackable QR codes for campaigns with UTM attribution</p>
