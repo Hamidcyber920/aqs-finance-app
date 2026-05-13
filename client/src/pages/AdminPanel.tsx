@@ -90,10 +90,11 @@ export default function AdminPanelPage() {
   const [qaPageKey, setQaPageKey] = useState("/loans");
   const [qaActions, setQaActions] = useState<string[]>(["Show overdue loans", "Summarise active loans", "Any loans due this month?"]);
   const [qaInput, setQaInput] = useState("");
-  const sharedActionsList = (trpc.voiceAgent as any).listAdminSharedActions?.useQuery?.() ?? { data: [], refetch: () => {} };
-  const shareActionsMut = (trpc.voiceAgent as any).adminShareQuickActions?.useMutation?.({ onSuccess: () => { toast.success("Quick actions pushed to all users"); sharedActionsList.refetch?.(); }, onError: (e: any) => toast.error(e.message) }) ?? { mutate: () => {}, isPending: false };
-  const deleteSharedMut = (trpc.voiceAgent as any).deleteAdminSharedActions?.useMutation?.({ onSuccess: () => { toast.success("Removed shared actions"); sharedActionsList.refetch?.(); }, onError: (e: any) => toast.error(e.message) }) ?? { mutate: () => {}, isPending: false };
-  const triggerBriefingMut = (trpc.voiceAgent as any).triggerMorningBriefing?.useMutation?.({ onSuccess: () => toast.success("Morning briefing triggered and sent!"), onError: (e: any) => toast.error(e.message) }) ?? { mutate: () => {}, isPending: false };
+  const { data: sharedActionsData, refetch: refetchSharedActions } = trpc.voiceAgent.listAdminSharedActions.useQuery();
+  const shareActionsMut = trpc.voiceAgent.adminShareQuickActions.useMutation({ onSuccess: () => { toast.success("Quick actions pushed to all users"); refetchSharedActions(); }, onError: (e: any) => toast.error(e.message) });
+  const deleteSharedMut = trpc.voiceAgent.deleteAdminSharedActions.useMutation({ onSuccess: () => { toast.success("Removed shared actions"); refetchSharedActions(); }, onError: (e: any) => toast.error(e.message) });
+  const triggerBriefingMut = trpc.voiceAgent.triggerMorningBriefing.useMutation({ onSuccess: () => toast.success("Morning briefing triggered and sent!"), onError: (e: any) => toast.error(e.message) });
+  const sharedActionsList = { data: sharedActionsData ?? [], refetch: refetchSharedActions };
 
   const { setEntityContext } = useVoiceContext();
   useEffect(() => {
