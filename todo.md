@@ -1982,43 +1982,43 @@
 ## QA & Hardening Brief Implementation
 
 ### Phase 1 — Truth Audit
-- [ ] Run full test suite with coverage report and capture output
-- [ ] Spot-check 10 tests for meaningful assertions
-- [ ] Document spec coverage for all 11 modules
-- [ ] Identify any features added that weren't in the original brief
+- [x] Run full test suite with coverage report and capture output
+- [x] Spot-check 10 tests for meaningful assertions
+- [x] Document spec coverage for all 11 modules
+- [x] Identify any features added that weren't in the original brief
 
 ### Phase 2 — Data Integrity
-- [ ] Audit schema constraints: FKs, NOT NULL, unique constraints, check constraints
-- [ ] Verify monetary values stored as integers (pence), not floats
-- [ ] Verify audit log has no UPDATE/DELETE permissions
-- [ ] Add missing database constraints where needed
+- [x] Audit schema constraints: FKs, NOT NULL, unique constraints, check constraints
+- [x] Verify monetary values stored as integers (pence), not floats
+- [x] Verify audit log has no UPDATE/DELETE permissions
+- [x] Add missing database constraints where needed
 
 ### Phase 3 — Money & Compliance
-- [ ] Verify Stripe webhook idempotency (same event processed only once)
-- [ ] Verify webhook signature verification rejects invalid signatures
-- [ ] Verify Gift Aid calculation accuracy (25p per £1)
-- [ ] Test edge amounts (£0.00 rejected, negative rejected, £0.01 flagged)
+- [x] Verify Stripe webhook idempotency (same event processed only once)
+- [x] Verify webhook signature verification rejects invalid signatures
+- [x] Verify Gift Aid calculation accuracy (25p per £1)
+- [x] Test edge amounts (£0.00 rejected, negative rejected, £0.01 flagged)
 
 ### Phase 4 — Failure Mode Hunt
-- [ ] Verify double-click protection on donation/form submissions
-- [ ] Verify optimistic locking or conflict detection on concurrent edits
-- [ ] Verify OCR handles blank/garbage input gracefully
-- [ ] Verify SQL injection in OCR input is treated as text
+- [x] Verify double-click protection on donation/form submissions
+- [x] Verify optimistic locking or conflict detection on concurrent edits
+- [x] Verify OCR handles blank/garbage input gracefully
+- [x] Verify SQL injection in OCR input is treated as text
 
 ### Phase 5 — Performance & UX
-- [ ] Run Lighthouse audit on primary screens
-- [ ] Run axe-core accessibility check on primary screens
-- [ ] Verify all form inputs have font-size >= 16px for mobile
-- [ ] Verify error messages are human-readable, not technical
+- [x] Run Lighthouse audit on primary screens
+- [x] Run axe-core accessibility check on primary screens
+- [x] Verify all form inputs have font-size >= 16px for mobile
+- [x] Verify error messages are human-readable, not technical
 
 ### Phase 6 — Security & Launch Readiness
-- [ ] Run npm audit and document results
-- [ ] Pin all production dependencies to exact versions
-- [ ] Run secrets scanner against repo
-- [ ] Verify authorization bypass protection (role-based access)
-- [ ] Verify rate limiting is in place
-- [ ] Verify file upload validates type and size
-- [ ] Document backup and restore procedure
+- [x] Run npm audit and document results
+- [x] Pin all production dependencies to exact versions
+- [x] Run secrets scanner against repo
+- [x] Verify authorization bypass protection (role-based access)
+- [x] Verify rate limiting is in place
+- [x] Verify file upload validates type and size
+- [x] Document backup and restore procedure
 
 ### Deliverable
 - [x] Produce comprehensive QA report document with evidence (QA-REPORT.md)
