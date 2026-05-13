@@ -1878,3 +1878,10 @@
 - [x] Voice gateway already stores transcripts in real-time via storeTranscript calls
 - [x] Tool calls and results already stored in voiceToolCalls table for full audit trail
 - [x] Added Voice History link to DashboardLayout sidebar (Mic icon, near Audit Trail)
+
+### Voice Agent Bug Fix (May 13 2026)
+- [x] Voice Agent not showing welcome message or responding to interaction on deployed site — RESOLVED: connection works, Gemini API key valid
+- [x] Investigate WebSocket connection, Gemini API key, and server logs — all working
+- [x] Fix garbled audio playback: RESOLVED — model name needed `models/` prefix; text input changed from clientContent to realtimeInput.text per Gemini 3.1 migration guide
+- [x] Verify sample rate: Gemini outputs audio/pcm;rate=24000, AudioPlaybackQueue uses sampleRate=24000 — correct
+- [x] Verify base64 decoding and PCM-to-Float32 conversion in AudioPlaybackQueue — correct implementation confirmed

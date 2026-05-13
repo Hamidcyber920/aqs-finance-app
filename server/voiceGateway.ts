@@ -948,8 +948,8 @@ export function attachVoiceGateway(server: HttpServer) {
         const db = await getDb();
         if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "user", content: msg.text, createdAt: new Date() });
         if (client.geminiWs && client.geminiWs.readyState === WebSocket.OPEN && client.isGeminiReady) {
-          // For Gemini 3.1 Flash Live, use realtimeInput for text during conversation
-          client.geminiWs.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text: msg.text }] }], turnComplete: true } }));
+          // Gemini 3.1 Flash Live: use realtimeInput.text for text during conversation (clientContent only for initial history)
+          client.geminiWs.send(JSON.stringify({ realtimeInput: { text: msg.text } }));
         } else {
           try {
             const { invokeLLM } = await import("./_core/llm");
