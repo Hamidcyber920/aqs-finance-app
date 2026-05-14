@@ -2099,3 +2099,15 @@
 - [x] Send initial greeting prompt to Gemini after setup completes (auto-trigger greeting without user speaking first)
 - [x] Fix Gmail OAuth error handling: detect invalid_grant and provide clear reconnection guidance
 - [x] Ensure greeting sentence is not cut off (audio plays fully before listening starts)
+
+## Google Drive / Gmail Labels / Sheets Integration
+- [x] Update Google Drive credentials (Client ID, Secret, Refresh Token) to match new OAuth project (608725271076)
+- [x] Implement Google Drive service: read files and save files to folder 1qyR0sy_I1FYv45YjZYUIksPr7_ZLNCYT
+- [x] Implement Gmail label fetching: read all labels and fetch emails by label (especially "hibba" label)
+- [x] Add email summarization and action creation from fetched emails (via AI in voice gateway)
+- [x] Implement communications sorting UI for emails by label/category (tRPC router added)
+- [x] Implement Google Sheets service: create expense sheets and monthly income/expense breakdowns
+- [x] Add bulk email capability for trustees, staff, donors, and utility companies
+- [x] Wire Hibba voice agent with Google Drive tools (read/save files)
+- [x] Wire Hibba voice agent with Gmail label tools (fetch, sort, summarize emails)
+- [x] Wire Hibba voice agent with Sheets tools (create expense/income reports)

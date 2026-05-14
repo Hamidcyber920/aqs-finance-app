@@ -22,8 +22,23 @@ import {
   voiceReviewQueue,
   users,
   trustees,
+  donors,
+  supplierContacts,
+  receipts,
+  incomeRecords,
 } from "../drizzle/schema";
 import { sdk } from "./_core/sdk";
+import {
+  listDriveFiles,
+  getDriveFile,
+  uploadToDrive,
+  createExpenseSheet,
+  createMonthlyBreakdownSheet,
+  listGmailLabels,
+  fetchEmailsByLabel,
+  fetchRecentEmails,
+  sendBulkGmail,
+} from "./googleServices";
 
 // --- Types ---
 interface VoiceClient {
@@ -169,6 +184,11 @@ CAPABILITIES — You can:
 - WhatsApp: When asked to send a WhatsApp, FIRST use get_staff_directory or get_trustees to look up the recipient's phone number by name. Then use send_whatsapp with that phone number. This will open WhatsApp directly on the user's device with the message pre-filled — they just tap Send.
 - Email: When asked to send an email, FIRST use get_staff_directory or get_trustees to look up the recipient's email address by name. Then use send_email with that email. The email is sent directly via Gmail API — no user action needed. Always include a personalised greeting (Dear [Name], Assalamu Alaikum) and sign off (JazakAllah Khair).
 - Bulk Messaging: When asked to email or WhatsApp ALL trustees, ALL staff, or everyone, use bulk_send_email or bulk_send_whatsapp with the group name. Available groups: trustees, staff, managers, all. You can also apply templates: friday_comms, urgent, trustee_update, staff_announcement.
+- Email Donors: Use send_to_donors with group (all/major/regular/active) to email donors. Always personalise with Islamic greeting.
+- Email Suppliers/Utilities: Use send_to_suppliers to email utility companies and suppliers.
+- Google Drive: You can list files (list_drive_files), read files (read_drive_file), and save files (save_to_drive) in the AQS Google Drive folder.
+- Google Sheets: Create expense reports (create_expense_sheet) or monthly income vs expense breakdowns (create_monthly_breakdown). These are saved to Google Drive and a link is provided.
+- Gmail Labels: List all Gmail labels (list_gmail_labels), fetch emails by label (fetch_emails_by_label), fetch new/unread emails (fetch_new_emails), and summarise emails with AI action extraction (summarise_and_action_emails).
 - Fill forms: extract data from voice and populate any form on the user's current page using fill_form tool.
 - Navigate users to any section instantly.
 - Provide prayer times, mosque info, donation guidance.
@@ -264,6 +284,20 @@ const TOOL_DECLARATIONS = [
   { name: "set_user_preference", description: "Set a user preference (language, notification settings, theme).", parameters: { type: "object", properties: { key: { type: "string", description: "Preference key: 'language', 'theme', 'notifications'" }, value: { type: "string", description: "Preference value" } }, required: ["key", "value"] } },
   // --- Form Filling ---
   { name: "fill_form", description: "Fill a form on the user's current page with extracted data. Use this when the user verbally describes data that should go into a form (expense, donation, income, bill, loan, etc). Extract all relevant fields from their speech and pass them as key-value pairs. The frontend will populate the form fields accordingly.", parameters: { type: "object", properties: { fields: { type: "object", description: "Key-value pairs of form field names and their values. Use field names matching the current page context: for receipts use vendor/amount/date/category/paymentMethod/description/department; for income use source/amount/date/type/reference; for donors use name/email/phone/address; for loans use borrowerName/amount/purpose; for bills use supplier/amount/dueDate/category/reference; for monthly-expenses use payee/amount/date/category/reference" }, page: { type: "string", description: "The page the form is on (e.g. /receipts, /income, /donors). If not specified, uses current screen context." }, action: { type: "string", description: "What to do: 'fill' (default, just populate fields) or 'fill_and_confirm' (populate and show confirmation dialog)" } }, required: ["fields"] } },
+  // --- Google Drive & Sheets ---
+  { name: "list_drive_files", description: "List files in the Google Drive folder. Use when user asks 'what's in the drive' or 'show me drive files'.", parameters: { type: "object", properties: { folderId: { type: "string", description: "Optional folder ID. Defaults to the main AQS folder." }, limit: { type: "number", description: "Max files to return. Default 20." } }, required: [] } },
+  { name: "read_drive_file", description: "Read the content of a file from Google Drive.", parameters: { type: "object", properties: { fileId: { type: "string", description: "The Google Drive file ID" } }, required: ["fileId"] } },
+  { name: "save_to_drive", description: "Save/upload a file to Google Drive.", parameters: { type: "object", properties: { fileName: { type: "string", description: "Name for the file" }, content: { type: "string", description: "Text content to save" }, mimeType: { type: "string", description: "MIME type. Default text/plain" }, folderId: { type: "string", description: "Optional folder ID" } }, required: ["fileName", "content"] } },
+  { name: "create_expense_sheet", description: "Create a Google Sheets spreadsheet with expense data and save to Drive. Use when user asks to create an expense sheet or export expenses.", parameters: { type: "object", properties: { title: { type: "string", description: "Title for the spreadsheet" }, period: { type: "string", description: "Time period: 'this_month', 'last_month', 'this_year', or 'YYYY-MM' format" } }, required: ["title"] } },
+  { name: "create_monthly_breakdown", description: "Create a monthly income vs expense breakdown spreadsheet in Google Drive.", parameters: { type: "object", properties: { title: { type: "string", description: "Title for the spreadsheet" }, month: { type: "number", description: "Month number (1-12). Defaults to current month." }, year: { type: "number", description: "Year. Defaults to current year." } }, required: [] } },
+  // --- Gmail Labels & Fetch ---
+  { name: "list_gmail_labels", description: "List all Gmail labels/folders with message counts.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "fetch_emails_by_label", description: "Fetch emails from a specific Gmail label/folder.", parameters: { type: "object", properties: { labelId: { type: "string", description: "Gmail label ID" }, labelName: { type: "string", description: "Label name for display" }, maxResults: { type: "number", description: "Max emails. Default 10." } }, required: ["labelId"] } },
+  { name: "fetch_new_emails", description: "Fetch the latest unread/new emails from the inbox. Use when user asks 'any new emails?' or 'check my inbox'.", parameters: { type: "object", properties: { maxResults: { type: "number", description: "Max emails. Default 5." }, query: { type: "string", description: "Gmail search query" } }, required: [] } },
+  { name: "summarise_and_action_emails", description: "AI-summarise emails and create action items from them.", parameters: { type: "object", properties: { emailIds: { type: "array", items: { type: "string" }, description: "Gmail message IDs to summarise" }, labelId: { type: "string", description: "Or fetch from a label" }, maxResults: { type: "number", description: "Max emails if using labelId. Default 5." } }, required: [] } },
+  // --- Extended Bulk Email (donors, suppliers) ---
+  { name: "send_to_donors", description: "Send an email to donors. Can target all, major, regular, or active donors.", parameters: { type: "object", properties: { group: { type: "string", description: "'all', 'major', 'regular', or 'active'" }, subject: { type: "string" }, body: { type: "string" }, limit: { type: "number", description: "Max recipients. Default 50." } }, required: ["group", "subject", "body"] } },
+  { name: "send_to_suppliers", description: "Send an email to utility companies/suppliers.", parameters: { type: "object", properties: { supplierName: { type: "string", description: "Specific supplier name, or omit for all active suppliers." }, subject: { type: "string" }, body: { type: "string" } }, required: ["subject", "body"] } },
 ];
 
 // --- Screen context helper ---
@@ -428,6 +462,20 @@ const TOOL_PERMISSIONS: Record<string, string[]> = {
   get_qarde_hasan_register: ["superadmin", "admin", "trustee", "manager"],
   get_calendar: ["superadmin", "admin", "trustee", "manager", "staff"],
   set_user_preference: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
+  // Google Drive & Sheets
+  list_drive_files: ["superadmin", "admin", "trustee", "manager"],
+  read_drive_file: ["superadmin", "admin", "trustee", "manager"],
+  save_to_drive: ["superadmin", "admin", "trustee", "manager"],
+  create_expense_sheet: ["superadmin", "admin", "trustee", "manager"],
+  create_monthly_breakdown: ["superadmin", "admin", "trustee", "manager"],
+  // Gmail Labels & Fetch
+  list_gmail_labels: ["superadmin", "admin", "trustee", "manager"],
+  fetch_emails_by_label: ["superadmin", "admin", "trustee", "manager"],
+  fetch_new_emails: ["superadmin", "admin", "trustee", "manager", "staff"],
+  summarise_and_action_emails: ["superadmin", "admin", "trustee", "manager"],
+  // Extended Bulk Email
+  send_to_donors: ["superadmin", "admin", "trustee", "manager"],
+  send_to_suppliers: ["superadmin", "admin", "trustee", "manager"],
 };
 
 function hasToolPermission(toolName: string, userRole: string): boolean {
@@ -1243,6 +1291,169 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
         return { success: true, message: `${recipients.length} WhatsApp links ready. Tap each button to send to: ${recipients.map(r => r.name).join(", ")}` };
       } catch (err: any) {
         return { error: `Bulk WhatsApp failed: ${err.message}` };
+      }
+    }
+    // ─── Google Drive & Sheets ─────────────────────────────────────────────────
+    case "list_drive_files": {
+      try {
+        const files = await listDriveFiles(args.folderId as string | undefined, Number(args.limit) || 20);
+        return { files: files.map(f => ({ id: f.id, name: f.name, type: f.mimeType, modified: f.modifiedTime, link: f.webViewLink })), count: files.length };
+      } catch (err: any) {
+        return { error: `Drive error: ${err.message}` };
+      }
+    }
+    case "read_drive_file": {
+      try {
+        const file = await getDriveFile(String(args.fileId));
+        return { name: file.name, mimeType: file.mimeType, content: file.content.slice(0, 3000), truncated: file.content.length > 3000 };
+      } catch (err: any) {
+        return { error: `Drive read error: ${err.message}` };
+      }
+    }
+    case "save_to_drive": {
+      try {
+        const result = await uploadToDrive(String(args.fileName), String(args.content), String(args.mimeType || "text/plain"), args.folderId as string | undefined);
+        return { success: true, fileId: result.fileId, link: result.webViewLink };
+      } catch (err: any) {
+        return { error: `Drive save error: ${err.message}` };
+      }
+    }
+    case "create_expense_sheet": {
+      try {
+        const period = String(args.period || "this_month");
+        let startDate: Date;
+        let endDate: Date;
+        const now = new Date();
+        if (period === "this_month") { startDate = new Date(now.getFullYear(), now.getMonth(), 1); endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); }
+        else if (period === "last_month") { startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1); endDate = new Date(now.getFullYear(), now.getMonth(), 0); }
+        else if (period === "this_year") { startDate = new Date(now.getFullYear(), 0, 1); endDate = now; }
+        else { const [y, m] = period.split("-").map(Number); startDate = new Date(y, m - 1, 1); endDate = new Date(y, m, 0); }
+        const expenseRows = await db.select().from(receipts).where(and(gte(receipts.receiptDate, startDate), sql`${receipts.receiptDate} <= ${endDate}`));
+        const expenses = expenseRows.map(r => ({ date: r.receiptDate ? new Date(r.receiptDate).toLocaleDateString("en-GB") : "", vendor: r.vendor || "", category: r.categoryName || "", amount: Number(r.amount || 0), department: r.departmentName || "", notes: r.notes || "" }));
+        const title = String(args.title || `AQS Expenses — ${period}`);
+        const result = await createExpenseSheet(title, expenses);
+        return { success: true, spreadsheetUrl: result.spreadsheetUrl, expenseCount: expenses.length, totalAmount: expenses.reduce((s, e) => s + e.amount, 0) };
+      } catch (err: any) {
+        return { error: `Expense sheet error: ${err.message}` };
+      }
+    }
+    case "create_monthly_breakdown": {
+      try {
+        const now = new Date();
+        const month = Number(args.month) || (now.getMonth() + 1);
+        const year = Number(args.year) || now.getFullYear();
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0);
+        const expenseRows = await db.select().from(receipts).where(and(gte(receipts.receiptDate, startDate), sql`${receipts.receiptDate} <= ${endDate}`));
+        const incomeRows = await db.select().from(incomeRecords).where(and(gte(incomeRecords.createdAt, startDate), sql`${incomeRecords.createdAt} <= ${endDate}`));
+        const expenses = expenseRows.map(r => ({ date: r.receiptDate ? new Date(r.receiptDate).toLocaleDateString("en-GB") : "", vendor: r.vendor || "", category: r.categoryName || "", amount: Number(r.amount || 0), department: r.departmentName || "" }));
+        const income = incomeRows.map(r => ({ date: r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "", source: r.tenantName || r.categoryName || "", category: r.categoryName || r.subcategory || "", amount: Number(r.amount || 0), reference: r.notes || "" }));
+        const title = String(args.title || `AQS Monthly Breakdown — ${String(month).padStart(2, "0")}/${year}`);
+        const result = await createMonthlyBreakdownSheet(title, income, expenses);
+        return { success: true, spreadsheetUrl: result.spreadsheetUrl, incomeTotal: income.reduce((s, i) => s + i.amount, 0), expenseTotal: expenses.reduce((s, e) => s + e.amount, 0) };
+      } catch (err: any) {
+        return { error: `Monthly breakdown error: ${err.message}` };
+      }
+    }
+    // ─── Gmail Labels & Fetch ──────────────────────────────────────────────────
+    case "list_gmail_labels": {
+      try {
+        const labels = await listGmailLabels();
+        return { labels: labels.filter(l => l.messagesTotal && l.messagesTotal > 0).map(l => ({ id: l.id, name: l.name, total: l.messagesTotal, unread: l.messagesUnread })) };
+      } catch (err: any) {
+        return { error: `Gmail labels error: ${err.message}` };
+      }
+    }
+    case "fetch_emails_by_label": {
+      try {
+        const emails = await fetchEmailsByLabel(String(args.labelId), Number(args.maxResults) || 10);
+        return { emails: emails.map(e => ({ id: e.id, from: e.fromName || e.from, subject: e.subject, date: e.date.toLocaleDateString("en-GB"), snippet: e.snippet.slice(0, 150) })), count: emails.length, label: args.labelName || args.labelId };
+      } catch (err: any) {
+        return { error: `Gmail fetch error: ${err.message}` };
+      }
+    }
+    case "fetch_new_emails": {
+      try {
+        const query = args.query || "is:unread in:inbox";
+        const emails = await fetchRecentEmails(Number(args.maxResults) || 5, String(query));
+        return { emails: emails.map(e => ({ id: e.id, from: e.fromName || e.from, subject: e.subject, date: e.date.toLocaleDateString("en-GB"), snippet: e.snippet.slice(0, 150) })), count: emails.length };
+      } catch (err: any) {
+        return { error: `Gmail fetch error: ${err.message}` };
+      }
+    }
+    case "summarise_and_action_emails": {
+      try {
+        let emails;
+        if (args.emailIds && (args.emailIds as string[]).length > 0) {
+          // Fetch specific emails by ID
+          const { google } = await import("googleapis");
+          const auth = new google.auth.OAuth2(process.env.GMAIL_CLIENT_ID, process.env.GMAIL_CLIENT_SECRET);
+          auth.setCredentials({ refresh_token: process.env.GMAIL_REFRESH_TOKEN });
+          const gmail = google.gmail({ version: "v1", auth });
+          emails = [];
+          for (const id of (args.emailIds as string[]).slice(0, 10)) {
+            const detail = await gmail.users.messages.get({ userId: "me", id, format: "full" });
+            const headers = detail.data.payload?.headers ?? [];
+            const getH = (n: string) => headers.find((h: any) => h.name?.toLowerCase() === n.toLowerCase())?.value ?? "";
+            const extractBody = (part: any): string => { if (part.mimeType === "text/plain" && part.body?.data) return Buffer.from(part.body.data, "base64url").toString("utf-8"); if (part.parts) { for (const p of part.parts) { const t = extractBody(p); if (t) return t; } } return ""; };
+            emails.push({ from: getH("From"), subject: getH("Subject"), body: extractBody(detail.data.payload).slice(0, 1500) });
+          }
+        } else if (args.labelId) {
+          const fetched = await fetchEmailsByLabel(String(args.labelId), Number(args.maxResults) || 5);
+          emails = fetched.map(e => ({ from: e.fromName || e.from, subject: e.subject, body: e.body.slice(0, 1500) }));
+        } else {
+          const fetched = await fetchRecentEmails(Number(args.maxResults) || 5, "is:unread in:inbox");
+          emails = fetched.map(e => ({ from: e.fromName || e.from, subject: e.subject, body: e.body.slice(0, 1500) }));
+        }
+        if (!emails || emails.length === 0) return { summary: "No emails found to summarise.", actions: [] };
+        // Use LLM to summarise and extract actions
+        const { invokeLLM } = await import("./_core/llm");
+        const prompt = `Summarise these ${emails.length} emails concisely and extract any action items:\n\n${emails.map((e, i) => `Email ${i + 1}:\nFrom: ${e.from}\nSubject: ${e.subject}\nBody: ${e.body}\n---`).join("\n")}`;
+        const llmRes = await invokeLLM({ messages: [{ role: "system", content: "You are a concise email summariser for a UK Islamic charity. Extract key points and action items. Format: Summary paragraph, then numbered action items." }, { role: "user", content: prompt }] });
+        const summaryText = llmRes.choices?.[0]?.message?.content || "Could not generate summary.";
+        return { summary: summaryText, emailCount: emails.length };
+      } catch (err: any) {
+        return { error: `Email summarisation error: ${err.message}` };
+      }
+    }
+    // ─── Extended Bulk Email (donors, suppliers) ───────────────────────────────
+    case "send_to_donors": {
+      try {
+        const group = String(args.group || "all").toLowerCase();
+        const subject = String(args.subject || "").trim();
+        const body = String(args.body || "").trim();
+        if (!subject || !body) return { error: "subject and body are required" };
+        const allDonors = await db.select().from(donors);
+        let recipientList = allDonors.filter(d => d.email && d.status !== "do_not_contact" && d.status !== "deceased");
+        if (group === "major") recipientList = recipientList.filter(d => d.status === "major" || Number(d.totalGiven || 0) >= 1000);
+        else if (group === "regular") recipientList = recipientList.filter(d => d.isRegular);
+        else if (group === "active") recipientList = recipientList.filter(d => d.status === "active" || d.status === "major");
+        const limit = Number(args.limit) || 50;
+        recipientList = recipientList.slice(0, limit);
+        if (recipientList.length === 0) return { error: `No donors found in group '${group}' with email addresses` };
+        const recipients = recipientList.map(d => ({ name: d.name || d.firstName || "Donor", email: d.email! }));
+        const result = await sendBulkGmail(recipients, subject, body);
+        return { success: true, sent: result.sent, failed: result.failed, totalRecipients: recipients.length };
+      } catch (err: any) {
+        return { error: `Donor email error: ${err.message}` };
+      }
+    }
+    case "send_to_suppliers": {
+      try {
+        const subject = String(args.subject || "").trim();
+        const body = String(args.body || "").trim();
+        if (!subject || !body) return { error: "subject and body are required" };
+        let suppliers = await db.select().from(supplierContacts).where(eq(supplierContacts.isActive, true));
+        if (args.supplierName) {
+          suppliers = suppliers.filter(s => s.supplierName.toLowerCase().includes(String(args.supplierName).toLowerCase()));
+        }
+        const recipientList = suppliers.filter(s => s.email);
+        if (recipientList.length === 0) return { error: "No suppliers found with email addresses" };
+        const recipients = recipientList.map(s => ({ name: s.contactName || s.supplierName, email: s.email! }));
+        const result = await sendBulkGmail(recipients, subject, body);
+        return { success: true, sent: result.sent, failed: result.failed, suppliers: recipients.map(r => r.name) };
+      } catch (err: any) {
+        return { error: `Supplier email error: ${err.message}` };
       }
     }
     default:
