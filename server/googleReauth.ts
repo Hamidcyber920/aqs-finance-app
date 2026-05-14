@@ -6,9 +6,6 @@
  */
 import { Router, Request, Response } from "express";
 import { google } from "googleapis";
-import { getDb } from "./db";
-import { users } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -20,15 +17,40 @@ const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.labels",
   "https://www.googleapis.com/auth/calendar.readonly",
   "https://www.googleapis.com/auth/spreadsheets",
+  "https://mail.google.com/",
 ];
 
-function getOAuth2Client(origin: string) {
-  const clientId = process.env.GOOGLE_REAUTH_CLIENT_ID || process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_REAUTH_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+/**
+ * Determine the correct base URL for the redirect URI.
+ * In production (behind a proxy), we need to use https and the correct host.
+ */
+function getBaseUrl(req: Request): string {
+  // Check x-forwarded headers (set by reverse proxy in production)
+  const forwardedProto = req.headers["x-forwarded-proto"] as string | undefined;
+  const forwardedHost = req.headers["x-forwarded-host"] as string | undefined;
+  
+  // Use forwarded values if available (production behind proxy)
+  const protocol = forwardedProto || req.protocol || "https";
+  const host = forwardedHost || req.get("host") || "receiptapp-excmtodu.manus.space";
+  
+  // Always use https for production domains
+  const finalProtocol = host.includes("manus.space") || host.includes("manus.computer") ? "https" : protocol;
+  
+  return `${finalProtocol}://${host}`;
+}
+
+function getOAuth2Client(baseUrl: string) {
+  // IMPORTANT: Use GMAIL_CLIENT_ID ("Aqs finance app" - 781074422659) which has the
+  // redirect URI registered in Google Cloud Console. Do NOT use GOOGLE_REAUTH_CLIENT_ID
+  // ("Hibba io" - 608725271076) as it doesn't have the redirect URI registered.
+  const clientId = process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID;
+  const clientSecret = process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_DRIVE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
     throw new Error("Google OAuth credentials not configured");
   }
-  const redirectUri = `${origin}/api/google/callback`;
+  const redirectUri = `${baseUrl}/api/google/callback`;
+  console.log("[GoogleReauth] Using client ID:", clientId.substring(0, 20) + "...");
+  console.log("[GoogleReauth] Using redirect URI:", redirectUri);
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
@@ -36,16 +58,22 @@ export function registerGoogleReauthRoutes(app: ReturnType<typeof Router> | any)
   // GET /api/google/auth-url - Generate the OAuth consent URL
   app.get("/api/google/auth-url", (req: Request, res: Response) => {
     try {
-      const origin = req.headers.origin || `${req.protocol}://${req.get("host")}`;
-      const oauth2Client = getOAuth2Client(origin);
+      // Accept origin from query param, header, or derive from request
+      const origin = (req.query.origin as string) || req.headers.origin || getBaseUrl(req);
+      const baseUrl = origin.replace(/\/$/, ""); // Remove trailing slash
+      
+      console.log("[GoogleReauth] auth-url requested, origin:", origin, "baseUrl:", baseUrl);
+      
+      const oauth2Client = getOAuth2Client(baseUrl);
       
       const authUrl = oauth2Client.generateAuthUrl({
         access_type: "offline",
         prompt: "consent", // Force consent to get a new refresh token
         scope: GOOGLE_SCOPES,
-        state: Buffer.from(JSON.stringify({ origin })).toString("base64"),
+        state: Buffer.from(JSON.stringify({ origin: baseUrl })).toString("base64"),
       });
       
+      console.log("[GoogleReauth] Generated auth URL (first 100 chars):", authUrl.substring(0, 100));
       res.json({ url: authUrl });
     } catch (err: any) {
       console.error("[GoogleReauth] Error generating auth URL:", err.message);
@@ -68,23 +96,25 @@ export function registerGoogleReauthRoutes(app: ReturnType<typeof Router> | any)
       }
 
       // Decode state to get origin
-      let origin: string;
+      let baseUrl: string;
       try {
         const stateData = JSON.parse(Buffer.from(String(state), "base64").toString());
-        origin = stateData.origin;
+        baseUrl = stateData.origin;
       } catch {
-        origin = `${req.protocol}://${req.get("host")}`;
+        baseUrl = getBaseUrl(req);
       }
 
-      const oauth2Client = getOAuth2Client(origin);
+      console.log("[GoogleReauth] Callback received, baseUrl from state:", baseUrl);
+      
+      const oauth2Client = getOAuth2Client(baseUrl);
       const { tokens } = await oauth2Client.getToken(String(code));
       
       if (!tokens.refresh_token) {
         console.error("[GoogleReauth] No refresh token returned. User may need to revoke access and try again.");
-        return res.redirect("/?google_auth=error&reason=no_refresh_token");
+        return res.redirect("/admin?google_auth=error&reason=no_refresh_token");
       }
 
-      console.log("[GoogleReauth] New tokens obtained successfully");
+      console.log("[GoogleReauth] ✅ New tokens obtained successfully");
       console.log("[GoogleReauth] Refresh token:", tokens.refresh_token.substring(0, 20) + "...");
       console.log("[GoogleReauth] Access token:", tokens.access_token?.substring(0, 20) + "...");
 
@@ -130,7 +160,7 @@ export function registerGoogleReauthRoutes(app: ReturnType<typeof Router> | any)
       res.redirect("/admin?google_auth=success");
     } catch (err: any) {
       console.error("[GoogleReauth] Callback error:", err.message);
-      res.redirect("/?google_auth=error&reason=" + encodeURIComponent(err.message));
+      res.redirect("/admin?google_auth=error&reason=" + encodeURIComponent(err.message));
     }
   });
 
@@ -156,12 +186,10 @@ export function registerGoogleReauthRoutes(app: ReturnType<typeof Router> | any)
 
       // Test Drive access
       let driveOk = false;
-      let driveFiles = 0;
       try {
         const drive = google.drive({ version: "v3", auth });
-        const driveRes = await drive.files.list({ pageSize: 1 });
+        await drive.files.list({ pageSize: 1 });
         driveOk = true;
-        driveFiles = driveRes.data.files?.length || 0;
       } catch (e: any) {
         driveOk = false;
       }
@@ -181,9 +209,38 @@ export function registerGoogleReauthRoutes(app: ReturnType<typeof Router> | any)
         drive: driveOk,
         gmail: gmailOk,
         email: gmailOk ? process.env.GMAIL_FROM_EMAIL || "Connected" : null,
+        tokenPrefix: refreshToken.substring(0, 15) + "...",
       });
     } catch (err: any) {
       res.json({ connected: false, error: err.message });
     }
+  });
+
+  // GET /api/google/debug - Show what redirect URI would be used (for debugging)
+  app.get("/api/google/debug", (req: Request, res: Response) => {
+    const baseUrl = getBaseUrl(req);
+    const origin = req.headers.origin;
+    const forwardedProto = req.headers["x-forwarded-proto"];
+    const forwardedHost = req.headers["x-forwarded-host"];
+    const host = req.get("host");
+    const protocol = req.protocol;
+    
+    res.json({
+      computed_base_url: baseUrl,
+      redirect_uri: `${baseUrl}/api/google/callback`,
+      headers: {
+        origin,
+        "x-forwarded-proto": forwardedProto,
+        "x-forwarded-host": forwardedHost,
+        host,
+        protocol,
+      },
+      env: {
+        has_client_id: !!(process.env.GOOGLE_REAUTH_CLIENT_ID || process.env.GMAIL_CLIENT_ID),
+        has_client_secret: !!(process.env.GOOGLE_REAUTH_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET),
+        has_refresh_token: !!(process.env.GMAIL_REFRESH_TOKEN),
+        refresh_token_prefix: process.env.GMAIL_REFRESH_TOKEN?.substring(0, 15) || "not set",
+      },
+    });
   });
 }

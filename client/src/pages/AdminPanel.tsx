@@ -117,7 +117,7 @@ export default function AdminPanelPage() {
   const handleGoogleReauth = async () => {
     setGoogleLoading(true);
     try {
-      const res = await fetch("/api/google/auth-url", { headers: { Origin: window.location.origin } });
+      const res = await fetch(`/api/google/auth-url?origin=${encodeURIComponent(window.location.origin)}`);
       const data = await res.json();
       if (data.url) {
         window.open(data.url, "_blank");

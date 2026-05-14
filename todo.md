@@ -2139,8 +2139,8 @@
 - [x] Test cross-screen tool requests (e.g., ask for emails while on /receipts)
 
 ## Bug — Hibba still can't do emails or check Google Drive after tool selection fix
-- [ ] Investigate server logs for tool execution errors during voice sessions
-- [ ] Identify and fix root cause of Google Drive/Gmail tool failures
+- [x] Investigate server logs for tool execution errors during voice sessions
+- [x] Identify and fix root cause of Google Drive/Gmail tool failures — was redirect_uri_mismatch (wrong OAuth client used for re-auth)
 
 ## Google OAuth Re-authorization Flow
 - [x] Create server-side OAuth endpoints (/api/google/auth-url, /api/google/callback)
@@ -2150,3 +2150,10 @@
 
 ## Bug — Change Password form sends currentPassword as undefined
 - [x] Fix the change password form validation error: "Invalid input: expected string, received undefined" for currentPassword field
+
+## Bug — Google OAuth redirect_uri_mismatch on deployed site
+- [x] Fix: Re-auth flow was using GOOGLE_REAUTH_CLIENT_ID (Hibba io - 608725271076) which doesn't have the redirect URI registered
+- [x] Solution: Changed code to use GMAIL_CLIENT_ID (Aqs finance app - 781074422659) which has https://receiptapp-excmtodu.manus.space/api/google/callback registered
+- [x] Fix: Frontend now passes origin as query parameter for reliable URL detection behind proxy
+- [x] Fix: Added proper x-forwarded-proto/host detection for HTTPS in production
+- [x] Added /api/google/debug endpoint for troubleshooting redirect URI issues
