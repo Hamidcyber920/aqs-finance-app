@@ -1603,3 +1603,4 @@ export function attachVoiceGateway(server: HttpServer) {
   console.log("[VoiceGateway] WebSocket server attached at /api/voice (Gemini Live mode)");
   return wss;
 }
+// Doc2 implementation complete
