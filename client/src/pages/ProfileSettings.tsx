@@ -149,7 +149,7 @@ export default function ProfileSettingsPage() {
                 <div>
                   <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Current Password</Label>
                   <div style={{ position:"relative",marginTop:6 }}>
-                    <Input {...regPwd("oldPassword",{required:true})} type={showOld?"text":"password"} placeholder="••••••••"
+                    <Input {...regPwd("currentPassword",{required:true})} type={showOld?"text":"password"} placeholder="••••••••"
                       style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,paddingRight:44 }}/>
                     <button type="button" onClick={()=>setShowOld(!showOld)}
                       style={{ position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:T.muted,cursor:"pointer",display:"flex" }}>

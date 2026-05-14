@@ -1,0 +1,60 @@
+{
+  "query": "SELECT id, name, email, role, loginMethod, status, isActive, createdAt FROM users ORDER BY createdAt ASC LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT id, name, email, role, loginMethod, status, isActive, createdAt FROM users ORDER BY createdAt ASC LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "name": "ahamid4",
+      "email": "ahamid4@gmail.com",
+      "role": "superadmin",
+      "loginMethod": "local",
+      "status": "active",
+      "isActive": "1",
+      "createdAt": "2026-04-05 13:28:01"
+    },
+    {
+      "id": "150017",
+      "name": "Test User",
+      "email": "test@test.com",
+      "role": "assistant",
+      "loginMethod": "local",
+      "status": "active",
+      "isActive": "1",
+      "createdAt": "2026-04-07 04:36:38"
+    },
+    {
+      "id": "600004",
+      "name": "Farid Ahmed",
+      "email": "fariddixy@gmail.com",
+      "role": "deputy",
+      "loginMethod": "local",
+      "status": "active",
+      "isActive": "1",
+      "createdAt": "2026-05-06 11:23:02"
+    },
+    {
+      "id": "600003",
+      "name": "Mumin Khan",
+      "email": "meds.mumin@gmail.com",
+      "role": "manager",
+      "loginMethod": "local",
+      "status": "active",
+      "isActive": "1",
+      "createdAt": "2026-05-06 11:23:02"
+    },
+    {
+      "id": "840001",
+      "name": "Manus Scheduled Task",
+      "email": "NULL",
+      "role": "assistant",
+      "loginMethod": "NULL",
+      "status": "pending",
+      "isActive": "1",
+      "createdAt": "2026-05-07 01:04:16"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\temail\trole\tloginMethod\tstatus\tisActive\tcreatedAt\n1\tahamid4\tahamid4@gmail.com\tsuperadmin\tlocal\tactive\t1\t2026-04-05 13:28:01\n150017\tTest User\ttest@test.com\tassistant\tlocal\tactive\t1\t2026-04-07 04:36:38\n600004\tFarid Ahmed\tfariddixy@gmail.com\tdeputy\tlocal\tactive\t1\t2026-05-06 11:23:02\n600003\tMumin Khan\tmeds.mumin@gmail.com\tmanager\tlocal\tactive\t1\t2026-05-06 11:23:02\n840001\tManus Scheduled Task\tNULL\tassistant\tNULL\tpending\t1\t2026-05-07 01:04:16\n",
+  "stderr": "",
+  "execution_time_ms": 268
+}

@@ -2147,3 +2147,6 @@
 - [x] Build admin UI page with "Re-connect Google" button showing connection status
 - [x] Store new refresh tokens in environment/secrets on successful re-auth
 - [x] Test the full flow end-to-end
+
+## Bug — Change Password form sends currentPassword as undefined
+- [x] Fix the change password form validation error: "Invalid input: expected string, received undefined" for currentPassword field

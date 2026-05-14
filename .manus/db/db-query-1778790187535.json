@@ -1,0 +1,313 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "accommodation_rent_payments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "accommodation_tenants"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "annual_returns"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "audit_log"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "bank_connections"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "bistro_daily_totals"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "bistro_menu_items"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "bistro_order_items"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "bistro_orders"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "bulk_message_approvals"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "campaign_milestones"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "campaigns"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comm_channels"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comm_messages"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comm_templates"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comms_attachments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comms_messages"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comms_outbox"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comms_replies"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comms_sections"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "comms_templates"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "compliance_actions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "conflicts_of_interest"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "departments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donor_comms_log"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donor_leads"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donor_notes"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donor_pipeline"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donor_portal_tokens"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donor_segments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donor_thank_you_log"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "donors"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "email_activity_log"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "email_attachments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "email_sections"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "expense_categories"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "facility_bookings"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "facility_rooms"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "friday_collections"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "fundraising_campaigns"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "fundraising_donations"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "fundraising_items"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "gift_aid_certificates"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "gift_aid_claims"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "gift_aid_declarations"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "inbound_emails"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "income_categories"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "income_donors"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "income_records"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "invoices"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "lbmw_correspondence"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "loan_applications"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "loan_repayments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "major_donor_due_diligence"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "meeting_agenda_items"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "onboarding_pipeline"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "org_members"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "payroll_records"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "payroll_runs"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "payroll_v2"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "pension_enrolments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "pledge_payments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "pledges"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "policy_documents"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "policy_versions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "processed_stripe_events"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "qr_codes"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "receipts"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "recognition_tiers"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "reconciliation_sessions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "sadaqah_jariyah_entries"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "saved_views"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "scan_merge_snapshots"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "scheduled_payments"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "section_reply_templates"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "serious_incidents"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "staff_profiles"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "stripe_payment_sessions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "succession_events"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "supplier_contacts"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "system_backups"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "training_records"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "trustee_decisions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "trustee_meetings"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "trustees"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "user_briefing_prefs"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "user_permissions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "users"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "utility_accounts"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "utility_bills"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "utility_buildings"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "utility_categories"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "voice_cost_tracking"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "voice_feature_flags"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "voice_quick_actions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "voice_review_queue"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "voice_sessions"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "voice_tool_calls"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "voice_transcripts"
+    },
+    {
+      "Tables_in_ExcMToduGVqDRtQnvUsVkJ": "volunteer_payments"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_ExcMToduGVqDRtQnvUsVkJ\n__drizzle_migrations\naccommodation_rent_payments\naccommodation_tenants\nannual_returns\naudit_log\nbank_connections\nbistro_daily_totals\nbistro_menu_items\nbistro_order_items\nbistro_orders\nbulk_message_approvals\ncampaign_milestones\ncampaigns\ncomm_channels\ncomm_messages\ncomm_templates\ncomms_attachments\ncomms_messages\ncomms_outbox\ncomms_replies\ncomms_sections\ncomms_templates\ncompliance_actions\nconflicts_of_interest\ndepartments\ndonor_comms_log\ndonor_leads\ndonor_notes\ndonor_pipeline\ndonor_portal_tokens\ndonor_segments\ndonor_thank_you_log\ndonors\nemail_activity_log\nemail_attachments\nemail_sections\nexpense_categories\nfacility_bookings\nfacility_rooms\nfriday_collections\nfundraising_campaigns\nfundraising_donations\nfundraising_items\ngift_aid_certificates\ngift_aid_claims\ngift_aid_declarations\ninbound_emails\nincome_categories\nincome_donors\nincome_records\ninvoices\nlbmw_correspondence\nloan_applications\nloan_repayments\nmajor_donor_due_diligence\nmeeting_agenda_items\nonboarding_pipeline\norg_members\npayroll_records\npayroll_runs\npayroll_v2\npension_enrolments\npledge_payments\npledges\npolicy_documents\npolicy_versions\nprocessed_stripe_events\nqr_codes\nreceipts\nrecognition_tiers\nreconciliation_sessions\nsadaqah_jariyah_entries\nsaved_views\nscan_merge_snapshots\nscheduled_payments\nsection_reply_templates\nserious_incidents\nstaff_profiles\nstripe_payment_sessions\nsuccession_events\nsupplier_contacts\nsystem_backups\ntraining_records\ntrustee_decisions\ntrustee_meetings\ntrustees\nuser_briefing_prefs\nuser_permissions\nusers\nutility_accounts\nutility_bills\nutility_buildings\nutility_categories\nvoice_cost_tracking\nvoice_feature_flags\nvoice_quick_actions\nvoice_review_queue\nvoice_sessions\nvoice_tool_calls\nvoice_transcripts\nvolunteer_payments\n",
+  "stderr": "",
+  "execution_time_ms": 394
+}
