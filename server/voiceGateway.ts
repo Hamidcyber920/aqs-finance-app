@@ -66,6 +66,19 @@ const GEMINI_MODEL = "models/gemini-3.1-flash-live-preview";
 
 const activeClients = new Map<string, VoiceClient>();
 
+// --- Response cache (60s TTL) for frequently-accessed read tools ---
+const responseCache = new Map<string, { data: unknown; expiresAt: number }>();
+const CACHE_TTL_MS = 60_000;
+function getCached(key: string): unknown | null {
+  const entry = responseCache.get(key);
+  if (!entry || Date.now() > entry.expiresAt) { responseCache.delete(key); return null; }
+  return entry.data;
+}
+function setCache(key: string, data: unknown) {
+  responseCache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+const CACHEABLE_TOOLS = new Set(["get_staff_directory", "get_trustees", "get_fund_balance", "get_campaign_status"]);
+
 const SYSTEM_PROMPT = `You are Hibba, the AI voice assistant for Abdullah Quilliam Society — a UK Islamic charity managing Britain's first mosque at Brougham Terrace, Liverpool.
 
 SPEECH QUALITY — CRITICAL:
@@ -245,6 +258,10 @@ const TOOL_DECLARATIONS = [
   { name: "bulk_send_email", description: "Send the same email to a group of people (all trustees, all staff, or specific names). Emails are personalised with each recipient's name. Use when user says 'email all trustees' or 'send to all staff'.", parameters: { type: "object", properties: { group: { type: "string", description: "Target group: 'trustees', 'staff', 'managers', or 'all'" }, subject: { type: "string", description: "Email subject line" }, body: { type: "string", description: "Email body (plain text). Each email will be personalised with Dear [Name]" }, template: { type: "string", description: "Optional template name: 'friday_comms', 'urgent', 'trustee_update', 'staff_announcement'. If provided, body is inserted into the template." } }, required: ["group", "subject", "body"] } },
   { name: "bulk_send_whatsapp", description: "Prepare WhatsApp messages for a group. Opens WhatsApp links one by one for the user to send. Use when user says 'WhatsApp all trustees' or 'message all staff on WhatsApp'.", parameters: { type: "object", properties: { group: { type: "string", description: "Target group: 'trustees', 'staff', 'managers', or 'all'" }, body: { type: "string", description: "Message text (same for all recipients, personalised with name)" } }, required: ["group", "body"] } },
   { name: "get_email_templates", description: "Get available email templates. Use when user asks about templates or wants to send a formatted communication.", parameters: { type: "object", properties: {}, required: [] } },
+  // --- Qarde Hasan & Calendar ---
+  { name: "get_qarde_hasan_register", description: "Get Qarde Hasan (interest-free loan) register. Shows active loans, pending applications, repayment status.", parameters: { type: "object", properties: { status: { type: "string", description: "Filter: 'active', 'pending', 'completed', or 'all'. Defaults to 'active'." } }, required: [] } },
+  { name: "get_calendar", description: "Get upcoming trustee meetings and events.", parameters: { type: "object", properties: { days: { type: "number", description: "Number of days ahead to look. Default 30." } }, required: [] } },
+  { name: "set_user_preference", description: "Set a user preference (language, notification settings, theme).", parameters: { type: "object", properties: { key: { type: "string", description: "Preference key: 'language', 'theme', 'notifications'" }, value: { type: "string", description: "Preference value" } }, required: ["key", "value"] } },
   // --- Form Filling ---
   { name: "fill_form", description: "Fill a form on the user's current page with extracted data. Use this when the user verbally describes data that should go into a form (expense, donation, income, bill, loan, etc). Extract all relevant fields from their speech and pass them as key-value pairs. The frontend will populate the form fields accordingly.", parameters: { type: "object", properties: { fields: { type: "object", description: "Key-value pairs of form field names and their values. Use field names matching the current page context: for receipts use vendor/amount/date/category/paymentMethod/description/department; for income use source/amount/date/type/reference; for donors use name/email/phone/address; for loans use borrowerName/amount/purpose; for bills use supplier/amount/dueDate/category/reference; for monthly-expenses use payee/amount/date/category/reference" }, page: { type: "string", description: "The page the form is on (e.g. /receipts, /income, /donors). If not specified, uses current screen context." }, action: { type: "string", description: "What to do: 'fill' (default, just populate fields) or 'fill_and_confirm' (populate and show confirmation dialog)" } }, required: ["fields"] } },
 ];
@@ -377,8 +394,55 @@ async function isFeatureEnabled(flagName: string, userRole?: string): Promise<bo
   return true;
 }
 
+// --- Role-based tool access control (API-level enforcement, independent of prompt) ---
+const TOOL_PERMISSIONS: Record<string, string[]> = {
+  // Read tools — broadly available
+  get_current_user: ["superadmin", "admin", "trustee", "manager", "staff", "reception", "donor", "auditor"],
+  get_screen_context: ["superadmin", "admin", "trustee", "manager", "staff", "reception", "donor", "auditor"],
+  get_staff_directory: ["superadmin", "admin", "trustee", "manager", "staff"],
+  get_trustees: ["superadmin", "admin", "trustee", "manager", "staff"],
+  get_donor: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
+  search_transactions: ["superadmin", "admin", "trustee", "manager", "staff", "auditor"],
+  get_fund_balance: ["superadmin", "admin", "trustee", "manager", "staff", "auditor"],
+  get_campaign_status: ["superadmin", "admin", "trustee", "manager", "staff", "auditor"],
+  get_gift_aid_status: ["superadmin", "admin", "trustee", "manager"],
+  get_priorities: ["superadmin", "admin", "trustee", "manager", "staff"],
+  get_email_templates: ["superadmin", "admin", "trustee", "manager", "staff"],
+  navigate_to: ["superadmin", "admin", "trustee", "manager", "staff", "reception", "donor"],
+  // Write tools — restricted
+  create_donation: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
+  create_expense: ["superadmin", "admin", "manager", "staff"],
+  update_donor_profile: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
+  log_communication: ["superadmin", "admin", "trustee", "manager", "staff"],
+  create_task: ["superadmin", "admin", "trustee", "manager", "staff"],
+  fill_form: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
+  // Communications — manager+ only for bulk
+  send_email: ["superadmin", "admin", "trustee", "manager", "staff"],
+  send_whatsapp: ["superadmin", "admin", "trustee", "manager", "staff"],
+  bulk_send_email: ["superadmin", "admin", "trustee", "manager"],
+  bulk_send_whatsapp: ["superadmin", "admin", "trustee", "manager"],
+  // Payment & sensitive
+  create_payment_link: ["superadmin", "admin", "trustee", "manager"],
+  flag_for_review: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
+  // Qarde Hasan, Calendar, Preferences
+  get_qarde_hasan_register: ["superadmin", "admin", "trustee", "manager"],
+  get_calendar: ["superadmin", "admin", "trustee", "manager", "staff"],
+  set_user_preference: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
+  fill_form: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
+};
+
+function hasToolPermission(toolName: string, userRole: string): boolean {
+  const allowed = TOOL_PERMISSIONS[toolName];
+  if (!allowed) return true; // Tools not in the map are unrestricted (e.g. new tools)
+  return allowed.includes(userRole);
+}
+
 // --- Execute tool call ---
 async function executeToolCall(toolName: string, args: Record<string, unknown>, client: VoiceClient): Promise<{ status: string; data: unknown; error?: string }> {
+  // API-level permission enforcement (independent of prompt)
+  if (!hasToolPermission(toolName, client.userRole)) {
+    return { status: "error", data: null, error: `Permission denied: your role (${client.userRole}) cannot use ${toolName}` };
+  }
   const db = await getDb();
   const startTime = Date.now();
   try {
@@ -415,8 +479,24 @@ async function executeToolCall(toolName: string, args: Record<string, unknown>, 
 
 // --- Tool routing ---
 async function routeToolCall(toolName: string, args: Record<string, unknown>, client: VoiceClient): Promise<unknown> {
+  // Check cache for cacheable tools
+  if (CACHEABLE_TOOLS.has(toolName)) {
+    const cacheKey = `${toolName}:${JSON.stringify(args)}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+  }
   const db = await getDb();
   if (!db) return { error: "Database connection unavailable" };
+  const result = await _routeToolCallInner(toolName, args, client, db);
+  // Cache the result if cacheable
+  if (CACHEABLE_TOOLS.has(toolName)) {
+    const cacheKey = `${toolName}:${JSON.stringify(args)}`;
+    setCache(cacheKey, result);
+  }
+  return result;
+}
+
+async function _routeToolCallInner(toolName: string, args: Record<string, unknown>, client: VoiceClient, db: NonNullable<Awaited<ReturnType<typeof getDb>>>): Promise<unknown> {
   switch (toolName) {
     case "get_current_user":
       return { userId: client.userId, role: client.userRole, name: client.userName, language: client.language };
@@ -977,6 +1057,33 @@ async function routeToolCall(toolName: string, args: Record<string, unknown>, cl
         return { total: rows.length, entries: rows.map(a => ({ id: a.id, action: (a as any).action, entity: (a as any).entityType || (a as any).entity, entityId: (a as any).entityId, userId: (a as any).userId, userName: (a as any).userName, details: (a as any).details, createdAt: a.createdAt })) };
       } catch { return { error: "Audit trail data not available" }; }
     }
+    case "get_qarde_hasan_register": {
+      const { loanApplications } = await import("../drizzle/schema");
+      const statusFilter = String(args.status || "active").toLowerCase();
+      let loans;
+      if (statusFilter === "all") {
+        loans = await db.select().from(loanApplications).orderBy(desc(loanApplications.createdAt)).limit(50);
+      } else {
+        loans = await db.select().from(loanApplications).where(eq(loanApplications.status, statusFilter as any)).orderBy(desc(loanApplications.createdAt)).limit(50);
+      }
+      return { total: loans.length, loans: loans.map(l => ({ id: l.id, borrower: l.borrowerName, amount: l.amountRequested, status: l.status, purpose: l.purpose, monthlyRepayment: l.monthlyRepayment, createdAt: l.createdAt })) };
+    }
+    case "get_calendar": {
+      const { trusteeMeetings } = await import("../drizzle/schema");
+      const daysAhead = Number(args.days) || 30;
+      const now = new Date();
+      const future = new Date(now.getTime() + daysAhead * 86400000);
+      const meetings = await db.select().from(trusteeMeetings).where(and(gte(trusteeMeetings.meetingDate, now), sql`${trusteeMeetings.meetingDate} <= ${future}`)).orderBy(trusteeMeetings.meetingDate).limit(20);
+      return { upcoming: meetings.length, meetings: meetings.map(m => ({ id: m.id, date: m.meetingDate, type: (m as any).meetingType || "trustee", location: (m as any).location, agenda: (m as any).agenda })) };
+    }
+    case "set_user_preference": {
+      const key = String(args.key || "").trim();
+      const value = String(args.value || "").trim();
+      if (!key) return { error: "Preference key is required" };
+      // Store in user session for now (could persist to DB later)
+      if (key === "language") client.language = value;
+      return { success: true, key, value, note: "Preference updated for this session" };
+    }
      case "fill_form": {
       // Send form fill command to the client WebSocket
       const fields = args.fields || {};
@@ -1234,8 +1341,24 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
         const { functionCalls } = msg.toolCall;
         if (functionCalls && functionCalls.length > 0) {
           const toolResponses: any[] = [];
+          // Audible progress: notify user when multiple tools or slow queries are running
+          const PROGRESS_MESSAGES: Record<string, string> = {
+            search_transactions: "Searching transactions...",
+            get_fund_balance: "Checking fund balances...",
+            get_priorities: "Gathering your priorities...",
+            bulk_send_email: "Sending emails to the group...",
+            bulk_send_whatsapp: "Preparing WhatsApp messages...",
+            get_gift_aid_status: "Checking Gift Aid records...",
+          };
+          if (functionCalls.length > 1 && client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(JSON.stringify({ type: "agent_response", text: "Let me look that up for you..." }));
+          }
           for (const fc of functionCalls) {
             if (client.ws.readyState === WebSocket.OPEN) {
+              const progressMsg = PROGRESS_MESSAGES[fc.name];
+              if (progressMsg) {
+                client.ws.send(JSON.stringify({ type: "progress", text: progressMsg }));
+              }
               client.ws.send(JSON.stringify({ type: "tool_call", toolName: fc.name, toolResult: { status: "executing" } }));
             }
             const result = await executeToolCall(fc.name, fc.args || {}, client);

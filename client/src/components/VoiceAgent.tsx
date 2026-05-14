@@ -417,6 +417,13 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         setTranscript((prev) => [...prev, { id: `agent-${Date.now()}`, speaker: "agent", text: msg.text, timestamp: new Date() }]);
         setIsProcessing(false);
         break;
+      case "progress":
+        // Show progress text as a brief status indicator
+        if (msg.text) {
+          setTranscript(prev => [...prev, { role: "assistant", text: msg.text, timestamp: Date.now() }]);
+        }
+        setIsProcessing(true);
+        break;
       case "tool_call":
         if (msg.toolResult?.status === "executing") {
           setIsProcessing(true);

@@ -1,0 +1,90 @@
+{
+  "query": "SELECT * FROM voice_feature_flags LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 26DHJ7rSPxQWQYz.5e340f0e655e --database ExcMToduGVqDRtQnvUsVkJ --execute SELECT * FROM voice_feature_flags LIMIT 10;",
+  "rows": [
+    {
+      "id": "1",
+      "toolName": "*",
+      "enabledRoles": "[\"superadmin\"]",
+      "phase": "1",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "2",
+      "toolName": "get_current_user",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "1",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "3",
+      "toolName": "get_screen_context",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "1",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "4",
+      "toolName": "set_user_preference",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "1",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "5",
+      "toolName": "get_staff_directory",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "6",
+      "toolName": "get_trustees",
+      "enabledRoles": "[\"superadmin\",\"trustee\"]",
+      "phase": "2",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "7",
+      "toolName": "get_donor",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "8",
+      "toolName": "search_transactions",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "9",
+      "toolName": "get_fund_balance",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\"]",
+      "phase": "2",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    },
+    {
+      "id": "10",
+      "toolName": "get_campaign_status",
+      "enabledRoles": "[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]",
+      "phase": "2",
+      "enabled": "1",
+      "updatedAt": "2026-05-12 20:00:37"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\ttoolName\tenabledRoles\tphase\tenabled\tupdatedAt\n1\t*\t[\"superadmin\"]\t1\t1\t2026-05-12 20:00:37\n2\tget_current_user\t[\"superadmin\",\"trustee\",\"manager\"]\t1\t1\t2026-05-12 20:00:37\n3\tget_screen_context\t[\"superadmin\",\"trustee\",\"manager\"]\t1\t1\t2026-05-12 20:00:37\n4\tset_user_preference\t[\"superadmin\",\"trustee\",\"manager\"]\t1\t1\t2026-05-12 20:00:37\n5\tget_staff_directory\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\t2026-05-12 20:00:37\n6\tget_trustees\t[\"superadmin\",\"trustee\"]\t2\t1\t2026-05-12 20:00:37\n7\tget_donor\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\t2026-05-12 20:00:37\n8\tsearch_transactions\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\t2026-05-12 20:00:37\n9\tget_fund_balance\t[\"superadmin\",\"trustee\",\"manager\"]\t2\t1\t2026-05-12 20:00:37\n10\tget_campaign_status\t[\"superadmin\",\"trustee\",\"manager\",\"deputy\"]\t2\t1\t2026-05-12 20:00:37\n",
+  "stderr": "",
+  "execution_time_ms": 1223
+}

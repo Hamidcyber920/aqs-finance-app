@@ -2072,3 +2072,20 @@
 - [x] Add email templates (Friday Comms, Urgent, Trustee Update, Staff Announcement)
 - [x] Add open_url_batch handler to VoiceAgent frontend for multiple WhatsApp buttons
 - [x] Update system prompt with bulk messaging and template instructions
+
+## Hibba Voice Agent Document 2 Implementation
+- [x] Add role-based permission enforcement on all voice tool endpoints (API-level, not just prompt)
+- [x] Add per-user token budget tracking (200k/day hard cap, 80% soft warning)
+- [x] Role-based tool access control (TOOL_PERMISSIONS map with API-level enforcement)
+- [x] Token budget enforcement (200k/day per user, already existed)
+- [x] Cache get_staff_directory and get_trustees responses (60s TTL)
+- [x] flag_for_review tool and "Correct this" handler (already existed)
+- [x] Voice rollout feature flag (phase-based, DB-driven, already existed)
+- [x] Add missing tool endpoints: get_qarde_hasan_register, get_calendar, set_user_preference
+- [x] Audible progress for complex queries (progress messages + "Let me look that up")
+- [x] Feature flag updated to enable voice for all staff roles (not just superadmin)
+- [ ] Add cost-per-session tracking and weekly cost report (future enhancement)
+- [ ] Add monthly ceiling check (£500) — pause non-superadmin sessions if exceeded (future)
+- [ ] Add session token freshness validation (prevent replay attacks) (future)
+- [ ] Enhanced runtime context: pass form_fields, entity_type, entity_id with every request (future)
+- [ ] Add speaker mode detection with sensitive content warning (future)
