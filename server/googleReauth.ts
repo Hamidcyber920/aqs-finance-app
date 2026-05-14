@@ -23,8 +23,8 @@ const GOOGLE_SCOPES = [
 ];
 
 function getOAuth2Client(origin: string) {
-  const clientId = process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID;
-  const clientSecret = process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+  const clientId = process.env.GOOGLE_REAUTH_CLIENT_ID || process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_DRIVE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_REAUTH_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_DRIVE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
     throw new Error("Google OAuth credentials not configured");
   }

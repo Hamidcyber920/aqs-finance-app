@@ -29,6 +29,8 @@ describe("Google Reauth Routes", () => {
   let app: express.Express;
 
   beforeAll(() => {
+    process.env.GOOGLE_REAUTH_CLIENT_ID = "test_reauth_client_id";
+    process.env.GOOGLE_REAUTH_CLIENT_SECRET = "test_reauth_client_secret";
     process.env.GMAIL_CLIENT_ID = "test_client_id";
     process.env.GMAIL_CLIENT_SECRET = "test_client_secret";
     process.env.GMAIL_REFRESH_TOKEN = "test_refresh_token";
