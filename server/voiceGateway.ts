@@ -194,11 +194,10 @@ CAPABILITIES — You can:
 - Provide prayer times, mosque info, donation guidance.
 
 TOOL AVAILABILITY:
-- Your available tools change based on the user's current screen. If a user asks for something and you don't have the right tool, use navigate_to to take them to the relevant page first, then the tools will update.
-- For Google Drive/Gmail: navigate to /dashboard, /comms-hub, or /admin.
-- For sending emails/WhatsApp: navigate to /communications or /comms-hub.
-- For finance queries: navigate to /receipts, /income, or /monthly-expenses.
-- For people/donor lookups: navigate to /donors or /trustees.
+- You can call ANY tool regardless of the user's current screen. The system will automatically navigate to the correct page if needed.
+- Just call the tool directly — do NOT say "I need to navigate first" or "let me take you to the right page". The navigation happens silently in the background.
+- If a tool call fails, try again — the system may have needed a moment to switch context.
+- NEVER tell the user you can't do something because of the current screen. You have full access to all tools.
 
 BOUNDARIES:
 - Never authenticate users. Never handle card data — use Stripe links.
@@ -402,6 +401,34 @@ const SCREEN_TOOL_GROUPS: Record<string, string[][]> = {
   "/bistro87": [OPERATIONS_TOOLS],
   "/lbmw-correspondence": [COMMS_TOOLS],
 };
+
+// Reverse lookup: tool name → best screen to navigate to for that tool
+const TOOL_TO_SCREEN: Record<string, string> = {};
+// Build the reverse map: for each tool in a group, find the first screen that provides it
+(function buildToolToScreen() {
+  // Priority order: prefer these screens as "home" for each group
+  const GROUP_HOME: [string[], string][] = [
+    [GOOGLE_TOOLS, "/dashboard"],
+    [COMMS_TOOLS, "/comms-hub"],
+    [FINANCE_TOOLS, "/receipts"],
+    [PEOPLE_TOOLS, "/donors"],
+    [OPERATIONS_TOOLS, "/admin"],
+    [FORM_TOOLS, "/receipts"],
+  ];
+  for (const [group, screen] of GROUP_HOME) {
+    for (const toolName of group) {
+      if (!TOOL_TO_SCREEN[toolName]) {
+        TOOL_TO_SCREEN[toolName] = screen;
+      }
+    }
+  }
+})();
+
+// Check if a tool is available in the current context
+function isToolAvailableInContext(toolName: string, screenPath: string, userRole: string): boolean {
+  const availableTools = getToolsForContext(screenPath, userRole);
+  return availableTools.some(t => t.name === toolName);
+}
 
 function getToolsForContext(screenPath: string, userRole: string): typeof TOOL_DECLARATIONS {
   // Determine which tool groups to include based on screen
@@ -1934,6 +1961,23 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
             client.ws.send(JSON.stringify({ type: "agent_response", text: "Let me look that up for you..." }));
           }
           for (const fc of functionCalls) {
+            // --- Auto-navigate: if tool isn't available on current screen, navigate first ---
+            const toolInContext = isToolAvailableInContext(fc.name, client.screenContext, client.userRole);
+            if (!toolInContext && TOOL_TO_SCREEN[fc.name]) {
+              const targetScreen = TOOL_TO_SCREEN[fc.name];
+              console.log(`[VoiceGateway] Auto-navigate: ${fc.name} not available on ${client.screenContext}, navigating to ${targetScreen}`);
+              // Navigate the user
+              if (client.ws.readyState === WebSocket.OPEN) {
+                client.ws.send(JSON.stringify({ type: "progress", text: `Switching to ${targetScreen.replace('/', '')}...` }));
+                client.ws.send(JSON.stringify({ type: "navigate", path: targetScreen }));
+              }
+              // Update client context
+              client.screenContext = targetScreen;
+              // Brief delay to let navigation settle on the frontend
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+            // --- End auto-navigate ---
+            
             if (client.ws.readyState === WebSocket.OPEN) {
               const progressMsg = PROGRESS_MESSAGES[fc.name];
               if (progressMsg) {

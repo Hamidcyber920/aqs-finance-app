@@ -2131,3 +2131,9 @@
 - [x] Add toolConfig with mode AUTO for Gemini Live setup
 - [x] Update system prompt to explain tool availability changes by screen
 - [x] Verify server restarts successfully with new dynamic tool selection
+
+## Hibba Voice Assistant — Auto-Navigate & Retry
+- [x] Implement tool-to-screen mapping (reverse lookup: which screen provides which tool)
+- [x] Add auto-navigate logic: when Gemini calls a tool not in current context, navigate first then retry
+- [x] Update system prompt to instruct Gemini to use navigate_to before calling unavailable tools
+- [x] Test cross-screen tool requests (e.g., ask for emails while on /receipts)
