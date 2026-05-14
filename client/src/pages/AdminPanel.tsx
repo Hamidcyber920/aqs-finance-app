@@ -251,10 +251,10 @@ export default function AdminPanelPage() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display:"flex",gap:4,marginBottom:20,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:4,width:"fit-content" }}>
+        <div style={{ display:"flex",gap:4,marginBottom:20,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:4,overflowX:"auto",WebkitOverflowScrolling:"touch",maxWidth:"100%" }}>
           {(["users","pending","succession","hibba","google"] as const).map(t => (
             <button key={t} onClick={() => { setTab(t); if (t === "google" && !googleStatus) { checkGoogleStatus(); } }}
-              style={{ padding:"8px 20px",borderRadius:10,fontSize:13,fontWeight:600,border:"none",cursor:"pointer",transition:"all 0.2s",
+              style={{ padding:"8px 20px",borderRadius:10,fontSize:13,fontWeight:600,border:"none",cursor:"pointer",transition:"all 0.2s",whiteSpace:"nowrap",flexShrink:0,
                 background:tab===t?"rgba(99,91,255,0.3)":"transparent",
                 color:tab===t?T.white:T.muted }}>
               {t==="users"?"All Users":t==="pending"?`Pending${pendingUsers.length>0?` (${pendingUsers.length})`:""}`:t==="succession"?"Succession":t==="hibba"?"Hibba AI":"Google"}
