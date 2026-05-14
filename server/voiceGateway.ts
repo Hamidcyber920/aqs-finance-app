@@ -298,6 +298,13 @@ const TOOL_DECLARATIONS = [
   // --- Extended Bulk Email (donors, suppliers) ---
   { name: "send_to_donors", description: "Send an email to donors. Can target all, major, regular, or active donors.", parameters: { type: "object", properties: { group: { type: "string", description: "'all', 'major', 'regular', or 'active'" }, subject: { type: "string" }, body: { type: "string" }, limit: { type: "number", description: "Max recipients. Default 50." } }, required: ["group", "subject", "body"] } },
   { name: "send_to_suppliers", description: "Send an email to utility companies/suppliers.", parameters: { type: "object", properties: { supplierName: { type: "string", description: "Specific supplier name, or omit for all active suppliers." }, subject: { type: "string" }, body: { type: "string" } }, required: ["subject", "body"] } },
+  // --- Email-to-CommsHub Pipeline & Calendar ---
+  { name: "fetch_and_push_to_comms", description: "Fetch emails from a Gmail label, push them into the Master Comms Hub, AI-summarise each, and extract action items. Use when user says 'fetch my emails' or 'check emails and put them in comms hub'.", parameters: { type: "object", properties: { labelId: { type: "string", description: "Gmail label ID to fetch from" }, labelName: { type: "string", description: "Label name for display" }, maxResults: { type: "number", description: "Max emails to process. Default 10." } }, required: ["labelId", "labelName"] } },
+  { name: "get_daily_briefing", description: "Get today's calendar appointments, events within 2 hours, urgent emails needing response, and unread count. Use for morning briefing or when user asks 'what's on today?' or 'any urgent items?'.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_calendar_today", description: "Get today's Google Calendar events and appointments.", parameters: { type: "object", properties: { daysAhead: { type: "number", description: "Days ahead to look. Default 1." } }, required: [] } },
+  { name: "set_email_priority", description: "Set the priority/urgency of an email in the Comms Hub. Use when user says 'mark that as urgent' or 'set priority to low'.", parameters: { type: "object", properties: { messageId: { type: "number", description: "Comms message ID" }, priority: { type: "string", description: "'urgent', 'high', 'normal', or 'low'" } }, required: ["messageId", "priority"] } },
+  { name: "move_email_to_section", description: "Move an email to a different section in the Comms Hub.", parameters: { type: "object", properties: { messageId: { type: "number", description: "Comms message ID" }, sectionSlug: { type: "string", description: "Target section slug (e.g., 'urgent', 'galib-khan', 'accountants', 'facilities', 'general')" } }, required: ["messageId", "sectionSlug"] } },
+  { name: "update_drive_file", description: "Re-upload/update an existing file in Google Drive with new content. Use when user says 'save changes back to drive' or 'update the document'.", parameters: { type: "object", properties: { fileId: { type: "string", description: "Google Drive file ID to update" }, content: { type: "string", description: "New file content" }, mimeType: { type: "string", description: "MIME type of the content" } }, required: ["fileId", "content"] } },
 ];
 
 // --- Screen context helper ---
@@ -476,6 +483,12 @@ const TOOL_PERMISSIONS: Record<string, string[]> = {
   // Extended Bulk Email
   send_to_donors: ["superadmin", "admin", "trustee", "manager"],
   send_to_suppliers: ["superadmin", "admin", "trustee", "manager"],
+  fetch_and_push_to_comms: ["superadmin", "admin", "trustee", "manager"],
+  get_daily_briefing: ["superadmin", "admin", "trustee", "manager", "staff"],
+  get_calendar_today: ["superadmin", "admin", "trustee", "manager", "staff"],
+  set_email_priority: ["superadmin", "admin", "trustee", "manager"],
+  move_email_to_section: ["superadmin", "admin", "trustee", "manager"],
+  update_drive_file: ["superadmin", "admin", "trustee", "manager"],
 };
 
 function hasToolPermission(toolName: string, userRole: string): boolean {
@@ -1454,6 +1467,110 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
         return { success: true, sent: result.sent, failed: result.failed, suppliers: recipients.map(r => r.name) };
       } catch (err: any) {
         return { error: `Supplier email error: ${err.message}` };
+      }
+    }
+    case "fetch_and_push_to_comms": {
+      try {
+        const { fetchAndPushToCommsHub } = await import("./googleServices");
+        const labelId = String(args.labelId || "");
+        const labelName = String(args.labelName || "inbox");
+        const maxResults = Number(args.maxResults) || 10;
+        if (!labelId) return { error: "labelId is required" };
+        const results = await fetchAndPushToCommsHub(labelId, labelName, maxResults, client.userId);
+        if (results.length === 0) return { message: "No new emails to process from this label. All emails already in Comms Hub." };
+        return {
+          processed: results.length,
+          emails: results.map(r => ({
+            messageId: r.messageId,
+            summary: r.summary,
+            urgency: r.urgency,
+            section: r.sectionSlug,
+            actionItems: r.actionItems,
+          })),
+        };
+      } catch (err: any) {
+        return { error: `Comms Hub push error: ${err.message}` };
+      }
+    }
+    case "get_daily_briefing": {
+      try {
+        const { collectDailyBriefingData } = await import("./googleServices");
+        const data = await collectDailyBriefingData();
+        return {
+          calendarToday: data.calendarToday.map(e => ({
+            summary: e.summary,
+            start: e.start.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }),
+            end: e.end.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }),
+            location: e.location,
+            allDay: e.allDay,
+          })),
+          upcomingWithin2Hours: data.upcomingWithin2Hours.map(e => ({
+            summary: e.summary,
+            start: e.start.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }),
+          })),
+          urgentEmails: data.urgentEmails,
+          unreadCount: data.unreadCount,
+        };
+      } catch (err: any) {
+        return { error: `Daily briefing error: ${err.message}` };
+      }
+    }
+    case "get_calendar_today": {
+      try {
+        const { fetchCalendarEvents } = await import("./googleServices");
+        const daysAhead = Number(args.daysAhead) || 1;
+        const events = await fetchCalendarEvents(daysAhead);
+        return {
+          events: events.map(e => ({
+            summary: e.summary,
+            start: e.start.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }),
+            end: e.end.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" }),
+            location: e.location || null,
+            allDay: e.allDay,
+          })),
+          count: events.length,
+        };
+      } catch (err: any) {
+        return { error: `Calendar error: ${err.message}` };
+      }
+    }
+    case "set_email_priority": {
+      try {
+        const messageId = Number(args.messageId);
+        const priority = String(args.priority || "normal");
+        if (!messageId) return { error: "messageId is required" };
+        if (!["urgent", "high", "normal", "low"].includes(priority)) return { error: "Priority must be urgent, high, normal, or low" };
+        await db.execute(sql`UPDATE comms_messages SET priority=${priority} WHERE id=${messageId}`);
+        return { success: true, messageId, priority };
+      } catch (err: any) {
+        return { error: `Priority update error: ${err.message}` };
+      }
+    }
+    case "move_email_to_section": {
+      try {
+        const messageId = Number(args.messageId);
+        const sectionSlug = String(args.sectionSlug || "");
+        if (!messageId || !sectionSlug) return { error: "messageId and sectionSlug are required" };
+        const secRows = await db.execute(sql`SELECT id FROM comms_sections WHERE slug=${sectionSlug} LIMIT 1`) as any;
+        const sectionId = secRows[0]?.[0]?.id;
+        if (!sectionId) return { error: `Section '${sectionSlug}' not found` };
+        await db.execute(sql`UPDATE comms_messages SET sectionId=${sectionId} WHERE id=${messageId}`);
+        return { success: true, messageId, movedTo: sectionSlug };
+      } catch (err: any) {
+        return { error: `Move error: ${err.message}` };
+      }
+    }
+    case "update_drive_file": {
+      try {
+        const { updateDriveFile } = await import("./googleServices");
+        const fileId = String(args.fileId || "");
+        const content = String(args.content || "");
+        const mimeType = String(args.mimeType || "text/plain");
+        if (!fileId || !content) return { error: "fileId and content are required" };
+        const result = await updateDriveFile(fileId, content, mimeType);
+        return { success: true, fileId: result.fileId, webViewLink: result.webViewLink };
+      } catch (err: any) {
+        return { error: `Drive update error: ${err.message}` };
       }
     }
     default:

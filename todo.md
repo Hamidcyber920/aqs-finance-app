@@ -2111,3 +2111,11 @@
 - [x] Wire Hibba voice agent with Google Drive tools (read/save files)
 - [x] Wire Hibba voice agent with Gmail label tools (fetch, sort, summarize emails)
 - [x] Wire Hibba voice agent with Sheets tools (create expense/income reports)
+
+## Email-to-Comms-Hub Pipeline & Daily Briefing
+- [x] Auto-push fetched emails into Master Comms Hub with AI summary and action points
+- [x] Priority labeling: allow Urgent/Medium/Low marking on emails in Comms Hub
+- [x] Section movement: move emails between Comms Hub sections (Accounts, Staff, Urgent, etc.)
+- [x] Daily 9am briefing: calendar appointments for the day + events within 2 hours + urgent emails
+- [x] Google Drive document round-trip: save documents to Drive and re-upload after changes
+- [x] Wire Hibba voice tools for email-to-hub pipeline (auto-summarize and push)

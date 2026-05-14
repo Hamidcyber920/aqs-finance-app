@@ -605,3 +605,308 @@ export async function sendBulkGmail(
 
   return { sent, failed, errors };
 }
+
+
+// ─── Google Calendar Integration ─────────────────────────────────────────────
+
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+}
+
+export async function fetchCalendarEvents(
+  daysAhead = 1,
+  calendarId = "primary"
+): Promise<CalendarEvent[]> {
+  const auth = getGmailAuth(); // Same OAuth credentials cover calendar scope
+  const calendar = google.calendar({ version: "v3", auth });
+  const now = new Date();
+  const timeMin = now.toISOString();
+  const timeMax = new Date(now.getTime() + daysAhead * 86400000).toISOString();
+  const res = await calendar.events.list({
+    calendarId,
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: "startTime",
+    maxResults: 50,
+  });
+  return (res.data.items ?? []).map(ev => ({
+    id: ev.id ?? "",
+    summary: ev.summary ?? "(No title)",
+    description: ev.description ?? undefined,
+    location: ev.location ?? undefined,
+    start: new Date(ev.start?.dateTime ?? ev.start?.date ?? now.toISOString()),
+    end: new Date(ev.end?.dateTime ?? ev.end?.date ?? now.toISOString()),
+    allDay: !!ev.start?.date && !ev.start?.dateTime,
+  }));
+}
+
+export async function fetchUpcomingWithin(hours: number): Promise<CalendarEvent[]> {
+  const auth = getGmailAuth();
+  const calendar = google.calendar({ version: "v3", auth });
+  const now = new Date();
+  const timeMax = new Date(now.getTime() + hours * 3600000).toISOString();
+  const res = await calendar.events.list({
+    calendarId: "primary",
+    timeMin: now.toISOString(),
+    timeMax,
+    singleEvents: true,
+    orderBy: "startTime",
+    maxResults: 20,
+  });
+  return (res.data.items ?? []).map(ev => ({
+    id: ev.id ?? "",
+    summary: ev.summary ?? "(No title)",
+    description: ev.description ?? undefined,
+    location: ev.location ?? undefined,
+    start: new Date(ev.start?.dateTime ?? ev.start?.date ?? now.toISOString()),
+    end: new Date(ev.end?.dateTime ?? ev.end?.date ?? now.toISOString()),
+    allDay: !!ev.start?.date && !ev.start?.dateTime,
+  }));
+}
+
+// ─── Email-to-CommsHub Pipeline ──────────────────────────────────────────────
+
+export interface EmailSummaryResult {
+  messageId: number;
+  summary: string;
+  keyPoints: string[];
+  actionItems: string[];
+  urgency: "low" | "normal" | "high" | "urgent";
+  sectionSlug: string;
+}
+
+/**
+ * Fetches emails from a Gmail label, pushes them into the Comms Hub,
+ * summarises each with AI, and extracts action items.
+ */
+export async function fetchAndPushToCommsHub(
+  labelId: string,
+  labelName: string,
+  maxResults = 10,
+  userId = 1
+): Promise<EmailSummaryResult[]> {
+  const { getDb } = await import("./db");
+  const { invokeLLM } = await import("./_core/llm");
+  const { sql } = await import("drizzle-orm");
+  const db = await getDb();
+
+  // Fetch emails from Gmail
+  const emails = await fetchEmailsByLabel(labelId, maxResults);
+  if (!emails.length) return [];
+
+  const results: EmailSummaryResult[] = [];
+
+  for (const email of emails) {
+    // Check if already in comms_messages (by gmailMessageId)
+    const existing = await db!.execute(
+      sql`SELECT id FROM comms_messages WHERE gmailMessageId = ${email.id} LIMIT 1`
+    ) as any;
+    if (existing[0]?.[0]?.id) continue; // Already pushed
+
+    // Determine section based on content/sender
+    let sectionSlug = "general";
+    const fromLower = (email.from ?? "").toLowerCase();
+    const fromNameLower = (email.fromName ?? "").toLowerCase();
+    const subjectLower = (email.subject ?? "").toLowerCase();
+    if (fromNameLower.includes("galib") || fromLower.includes("galib")) sectionSlug = "galib-khan";
+    else if (fromLower.includes("hmrc") || subjectLower.includes("hmrc") || subjectLower.includes("gift aid")) sectionSlug = "accountants";
+    else if (subjectLower.includes("urgent") || subjectLower.includes("asap")) sectionSlug = "urgent";
+    else if (subjectLower.includes("booking") || subjectLower.includes("facilities")) sectionSlug = "facilities";
+    else if (subjectLower.includes("accommodation") || subjectLower.includes("student") || subjectLower.includes("tenancy")) sectionSlug = "student-accommodation";
+
+    // Get section ID
+    const secRows = await db!.execute(
+      sql`SELECT id FROM comms_sections WHERE slug=${sectionSlug} LIMIT 1`
+    ) as any;
+    let sectionId = secRows[0]?.[0]?.id;
+    if (!sectionId) {
+      const genRows = await db!.execute(
+        sql`SELECT id FROM comms_sections WHERE slug='general' LIMIT 1`
+      ) as any;
+      sectionId = genRows[0]?.[0]?.id ?? 1;
+      sectionSlug = "general";
+    }
+
+    // Insert into comms_messages
+    const insertResult = await db!.execute(
+      sql`INSERT INTO comms_messages
+          (sectionId, source, subject, fromName, fromEmail, toNames, body,
+           gmailMessageId, gmailThreadId, gmailLabels, status, priority, receivedAt, createdById)
+          VALUES
+          (${sectionId}, 'gmail_push', ${email.subject}, ${email.fromName ?? null},
+           ${email.from ?? null}, ${email.to ?? null}, ${email.body ?? null},
+           ${email.id}, ${email.threadId ?? null}, ${labelName},
+           'unread', 'normal', ${email.date}, ${userId})`
+    ) as any;
+    const messageId = insertResult[0]?.insertId;
+    if (!messageId) continue;
+
+    // AI Summarise and extract actions
+    try {
+      const content = [
+        `Subject: ${email.subject}`,
+        `From: ${email.fromName ?? ""} <${email.from ?? ""}>`,
+        `Received: ${email.date.toLocaleDateString("en-GB")}`,
+        `Body:\n${(email.body ?? "").slice(0, 3000)}`,
+      ].join("\n");
+
+      const aiResp = await invokeLLM({
+        messages: [
+          { role: "system", content: "You are an executive assistant for a mosque charity (Abdullah Quilliam Society). Summarise emails concisely for the chair and trustees. Return JSON with keys: summary (2-3 sentences), keyPoints (array of strings, max 5), actionItems (array of strings, max 5), urgency (low|normal|high|urgent)." },
+          { role: "user", content: `Please summarise this email:\n\n${content}` },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "email_summary",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                summary: { type: "string" },
+                keyPoints: { type: "array", items: { type: "string" } },
+                actionItems: { type: "array", items: { type: "string" } },
+                urgency: { type: "string", enum: ["low", "normal", "high", "urgent"] },
+              },
+              required: ["summary", "keyPoints", "actionItems", "urgency"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const parsed = JSON.parse(aiResp.choices[0].message.content as string);
+
+      // Update the message with AI summary and set priority
+      const priorityMap: Record<string, string> = { low: "low", normal: "normal", high: "high", urgent: "urgent" };
+      await db!.execute(
+        sql`UPDATE comms_messages
+            SET aiSummary=${parsed.summary},
+                aiKeyPoints=${JSON.stringify(parsed.keyPoints)},
+                aiActionItems=${JSON.stringify(parsed.actionItems)},
+                aiSummarisedAt=NOW(),
+                aiSummarisedById=${userId},
+                priority=${priorityMap[parsed.urgency] || "normal"}
+            WHERE id=${messageId}`
+      );
+
+      results.push({
+        messageId,
+        summary: parsed.summary,
+        keyPoints: parsed.keyPoints,
+        actionItems: parsed.actionItems,
+        urgency: parsed.urgency,
+        sectionSlug,
+      });
+    } catch (err) {
+      results.push({
+        messageId,
+        summary: "(Summarisation pending)",
+        keyPoints: [],
+        actionItems: [],
+        urgency: "normal",
+        sectionSlug,
+      });
+    }
+  }
+
+  return results;
+}
+
+// ─── Daily Briefing Data Collector ───────────────────────────────────────────
+
+export interface DailyBriefingData {
+  calendarToday: CalendarEvent[];
+  upcomingWithin2Hours: CalendarEvent[];
+  urgentEmails: Array<{ id: number; subject: string; from: string; summary: string; receivedAt: string }>;
+  unreadCount: number;
+}
+
+export async function collectDailyBriefingData(): Promise<DailyBriefingData> {
+  const { sql } = await import("drizzle-orm");
+  const { getDb } = await import("./db");
+  const db = await getDb();
+
+  // Fetch calendar events for today
+  let calendarToday: CalendarEvent[] = [];
+  let upcomingWithin2Hours: CalendarEvent[] = [];
+  try {
+    calendarToday = await fetchCalendarEvents(1);
+    upcomingWithin2Hours = await fetchUpcomingWithin(2);
+  } catch (err) {
+    console.error("[DailyBriefing] Calendar fetch failed:", err);
+  }
+
+  // Fetch urgent unread emails from comms_messages
+  let urgentEmails: Array<{ id: number; subject: string; from: string; summary: string; receivedAt: string }> = [];
+  try {
+    const rows = await db!.execute(
+      sql`SELECT id, subject, fromName, fromEmail, aiSummary, receivedAt
+          FROM comms_messages
+          WHERE status IN ('unread', 'flagged')
+            AND priority IN ('urgent', 'high')
+          ORDER BY receivedAt DESC
+          LIMIT 10`
+    ) as any;
+    urgentEmails = (rows[0] ?? []).map((r: any) => ({
+      id: r.id,
+      subject: r.subject,
+      from: r.fromName || r.fromEmail || "Unknown",
+      summary: r.aiSummary || "(No summary yet)",
+      receivedAt: r.receivedAt ? new Date(r.receivedAt).toLocaleDateString("en-GB") : "Unknown",
+    }));
+  } catch (err) {
+    console.error("[DailyBriefing] Urgent emails fetch failed:", err);
+  }
+
+  // Count total unread
+  let unreadCount = 0;
+  try {
+    const countRows = await db!.execute(
+      sql`SELECT COUNT(*) as cnt FROM comms_messages WHERE status = 'unread'`
+    ) as any;
+    unreadCount = Number(countRows[0]?.[0]?.cnt ?? 0);
+  } catch { /* skip */ }
+
+  return { calendarToday, upcomingWithin2Hours, urgentEmails, unreadCount };
+}
+
+// ─── Google Drive Document Round-Trip ────────────────────────────────────────
+
+/**
+ * Update an existing file in Google Drive (re-upload with new content).
+ * Used for editing documents and saving them back.
+ */
+export async function updateDriveFile(
+  fileId: string,
+  content: string | Buffer,
+  mimeType?: string
+): Promise<{ fileId: string; webViewLink: string }> {
+  const auth = getGoogleAuth();
+  const drive = google.drive({ version: "v3", auth });
+
+  const media = {
+    mimeType: mimeType || "text/plain",
+    body: typeof content === "string"
+      ? require("stream").Readable.from([content])
+      : require("stream").Readable.from([content]),
+  };
+
+  const res = await drive.files.update({
+    fileId,
+    media,
+    fields: "id, webViewLink",
+  });
+
+  return {
+    fileId: res.data.id ?? fileId,
+    webViewLink: res.data.webViewLink ?? "",
+  };
+}

@@ -412,7 +412,11 @@ export function registerScheduledJobs() {
   cron.schedule("30 7 * * *", () => {
     generateMorningBriefing().catch(console.error);
   }, { timezone: "Europe/London" });
-  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15) + contract renewal reminders (daily 07:00) + weekly cashflow digest (Mon 07:00) + morning briefing (daily 07:30)");
+  // 9am Calendar + Urgent Emails briefing email
+  cron.schedule("0 9 * * *", () => {
+    sendCalendarAndUrgentBriefing().catch(console.error);
+  }, { timezone: "Europe/London" });
+  console.log("[Scheduled] Jobs registered: weekly repayment alert (Mon 08:00) + monthly trustee report (1st 08:00) + birthday alerts (daily 09:00) + rent reminders (daily 08:30) + compliance digest (Mon 07:30) + Gmail sync (hourly 06-22) + unread digest (daily 08:00) + pledge reminders (daily 09:30) + LBMW Gmail pull (daily 08:15) + contract renewal reminders (daily 07:00) + weekly cashflow digest (Mon 07:00) + morning briefing (daily 07:30) + calendar & urgent briefing (daily 09:00)");
 }
 // Export for manual trigger from tRPC (admin use)
 export { sendWeeklyRepaymentAlert, sendMonthlyTrusteeReport, sendBirthdayAlerts };
@@ -1634,5 +1638,83 @@ export async function generateMorningBriefing() {
     console.log(`[Scheduled] Morning briefing generated: ${briefingText.substring(0, 100)}...`);
   } catch (e) {
     console.error("[Scheduled] Morning briefing generation failed:", e);
+  }
+}
+
+
+// ─── 9am Calendar + Urgent Emails Briefing ──────────────────────────────────
+/**
+ * Daily at 09:00 UK time — sends calendar appointments for the day,
+ * anything coming up within 2 hours, and urgent emails needing response.
+ */
+async function sendCalendarAndUrgentBriefing() {
+  console.log("[Scheduled] Generating 9am calendar & urgent briefing...");
+  try {
+    const { collectDailyBriefingData } = await import("./googleServices");
+    const data = await collectDailyBriefingData();
+    const dateStr = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+    // Build calendar section
+    let calendarHtml = "";
+    if (data.calendarToday.length > 0) {
+      const rows = data.calendarToday.map(e => {
+        const timeStr = e.allDay ? "All Day" : `${e.start.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" })} - ${e.end.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" })}`;
+        return `<tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">${timeStr}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;font-weight:500;">${e.summary}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#6b7280;">${e.location || "-"}</td></tr>`;
+      }).join("");
+      calendarHtml = `<div style="margin:16px 0;"><p style="font-size:14px;font-weight:700;color:#1f2937;margin:0 0 8px;">📅 Today's Calendar (${data.calendarToday.length} events)</p><table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;"><thead><tr style="background:#f9fafb;"><th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;">Time</th><th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;">Event</th><th style="padding:8px 12px;text-align:left;font-size:12px;color:#6b7280;font-weight:600;">Location</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    } else {
+      calendarHtml = `<div style="margin:16px 0;background:#f0fdf4;padding:12px 16px;border-radius:8px;"><p style="margin:0;font-size:13px;color:#16a34a;">📅 No calendar events today. Clear schedule, Alhamdulillah.</p></div>`;
+    }
+
+    // Build upcoming within 2 hours section
+    let upcomingHtml = "";
+    if (data.upcomingWithin2Hours.length > 0) {
+      const items = data.upcomingWithin2Hours.map(e => {
+        const timeStr = e.start.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+        return `<li style="margin:4px 0;font-size:13px;color:#374151;"><strong>${timeStr}</strong> — ${e.summary}</li>`;
+      }).join("");
+      upcomingHtml = `<div style="margin:16px 0;background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:0 8px 8px 0;"><p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#d97706;">⏰ Coming Up Within 2 Hours</p><ul style="margin:0;padding-left:18px;">${items}</ul></div>`;
+    }
+
+    // Build urgent emails section
+    let urgentHtml = "";
+    if (data.urgentEmails.length > 0) {
+      const items = data.urgentEmails.map(e => {
+        return `<li style="margin:6px 0;font-size:13px;color:#374151;"><strong>${e.from}</strong>: ${e.subject}<br><span style="color:#6b7280;font-size:12px;">${e.summary}</span></li>`;
+      }).join("");
+      urgentHtml = `<div style="margin:16px 0;background:#fef2f2;border-left:4px solid #ef4444;padding:12px 16px;border-radius:0 8px 8px 0;"><p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#dc2626;">🚨 Urgent Emails Needing Response (${data.urgentEmails.length})</p><ul style="margin:0;padding-left:18px;">${items}</ul></div>`;
+    }
+
+    // Unread count
+    const unreadHtml = data.unreadCount > 0
+      ? `<div style="margin:16px 0;background:#eff6ff;padding:12px 16px;border-radius:8px;"><p style="margin:0;font-size:13px;color:#1d4ed8;">📬 ${data.unreadCount} unread message${data.unreadCount > 1 ? "s" : ""} in Comms Hub</p></div>`
+      : "";
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f9fafb;font-family:Arial,sans-serif;"><div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);"><div style="background:linear-gradient(135deg,#0A192F,#1e3a5f);padding:24px 28px;"><p style="margin:0;font-size:18px;font-weight:700;color:#ffffff;">9am Briefing from Hibba</p><p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.7);">${dateStr}</p></div><div style="padding:24px 28px;"><p style="color:#374151;font-size:14px;margin:0 0 16px;">Assalamu Alaikum,</p><p style="color:#374151;font-size:14px;margin:0 0 16px;">Here is your 9am briefing — calendar appointments, upcoming events, and urgent items requiring your attention.</p>${upcomingHtml}${calendarHtml}${urgentHtml}${unreadHtml}<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;"><p style="font-size:12px;color:#9ca3af;margin:0;">Generated by Hibba · Abdullah Quilliam Society AI Assistant</p></div></div><div style="background:#f3f4f6;padding:14px 28px;text-align:center;"><p style="margin:0;font-size:11px;color:#9ca3af;">Abdullah Quilliam Society — Liverpool — JazakAllahu Khayran</p></div></div></body></html>`;
+
+    // Send to Dr. Hamid and trustees
+    const db = await getDb();
+    if (!db) return;
+    const recipients: { name: string; email: string }[] = [...WEEKLY_ALERT_RECIPIENTS];
+    try {
+      const activeTrustees = await getActiveTrustees();
+      for (const t of activeTrustees) {
+        if ((t as any).email && !recipients.find(r => r.email === (t as any).email)) {
+          recipients.push({ name: (t as any).name ?? "Trustee", email: (t as any).email });
+        }
+      }
+    } catch { /* skip */ }
+
+    for (const r of recipients) {
+      try {
+        await sendEmail(r.email, r.name, `9am Briefing - ${dateStr}`, html);
+        console.log(`[Scheduled] 9am briefing sent to ${r.name} <${r.email}>`);
+      } catch (emailErr) {
+        console.error(`[Scheduled] Failed to send 9am briefing to ${r.email}:`, emailErr);
+      }
+    }
+    console.log(`[Scheduled] 9am calendar & urgent briefing complete. Calendar: ${data.calendarToday.length} events, Urgent: ${data.urgentEmails.length} emails.`);
+  } catch (e) {
+    console.error("[Scheduled] 9am briefing generation failed:", e);
   }
 }

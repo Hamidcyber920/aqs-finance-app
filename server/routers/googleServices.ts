@@ -5,11 +5,15 @@ import {
   listDriveFiles,
   getDriveFile,
   uploadToDrive,
+  updateDriveFile,
   listGmailLabels,
   fetchEmailsByLabel,
   fetchRecentEmails,
   createExpenseSheet,
   createMonthlyBreakdownSheet,
+  fetchCalendarEvents,
+  fetchAndPushToCommsHub,
+  collectDailyBriefingData,
 } from "../googleServices";
 import { invokeLLM } from "../_core/llm";
 
@@ -53,6 +57,55 @@ export const googleServicesRouter = router({
       }
     }),
 
+  updateDriveFile: protectedProcedure
+    .input(z.object({
+      fileId: z.string().min(1),
+      content: z.string().min(1),
+      mimeType: z.string().default("text/plain"),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const result = await updateDriveFile(input.fileId, input.content, input.mimeType);
+        return result;
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+  // ── Calendar ────────────────────────────────────────────────────────────────
+  getCalendarToday: protectedProcedure
+    .input(z.object({ daysAhead: z.number().int().min(1).max(7).default(1) }))
+    .query(async ({ input }) => {
+      try {
+        const events = await fetchCalendarEvents(input.daysAhead);
+        return events;
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+  // ── Email-to-CommsHub Pipeline ─────────────────────────────────────────────
+  fetchAndPushToComms: protectedProcedure
+    .input(z.object({
+      labelId: z.string().min(1),
+      labelName: z.string().default("inbox"),
+      maxResults: z.number().int().min(1).max(50).default(10),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const results = await fetchAndPushToCommsHub(input.labelId, input.labelName, input.maxResults, ctx.user.id);
+        return results;
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+  // ── Daily Briefing ─────────────────────────────────────────────────────────
+  getDailyBriefing: protectedProcedure.query(async () => {
+    try {
+      const data = await collectDailyBriefingData();
+      return data;
+    } catch (err: any) {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+    }
+  }),
   // ── Gmail Labels ──────────────────────────────────────────────────────────
   listGmailLabels: protectedProcedure.query(async () => {
     try {
