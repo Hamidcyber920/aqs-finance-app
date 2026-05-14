@@ -69,7 +69,7 @@ export default function RegisterPage() {
             <CardDescription>Fill in your details to get started.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div className="space-y-1.5">
                 <Label htmlFor="name">Full name</Label>
                 <Input
@@ -87,7 +87,7 @@ export default function RegisterPage() {
                 <Label htmlFor="email">Email address</Label>
                 <Input
                   id="email"
-                  type="email"
+                  type="text" inputMode="email"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

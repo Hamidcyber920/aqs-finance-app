@@ -2157,3 +2157,6 @@
 - [x] Fix: Frontend now passes origin as query parameter for reliable URL detection behind proxy
 - [x] Fix: Added proper x-forwarded-proto/host detection for HTTPS in production
 - [x] Added /api/google/debug endpoint for troubleshooting redirect URI issues
+
+## Bug — Login form "string did not match expected pattern" on iOS Safari
+- [x] Fix login form to prevent iOS Safari browser-level pattern validation error on email/password fields (Login, Register, ForgotPassword — noValidate + type=text inputMode=email)

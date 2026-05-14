@@ -168,13 +168,13 @@ export default function LoginPage() {
 
               <div style={{ height:1,background:"linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent)",margin:"0 32px" }} />
 
-              <form onSubmit={handleSubmit} style={{ padding:"24px 32px 32px",display:"flex",flexDirection:"column",gap:18 }}>
+              <form onSubmit={handleSubmit} noValidate style={{ padding:"24px 32px 32px",display:"flex",flexDirection:"column",gap:18 }}>
                 <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
                   <Label htmlFor="email" style={{ fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.7)",letterSpacing:"0.05em",textTransform:"uppercase" }}>
                     Email address
                   </Label>
                   <Input
-                    id="email" type="email" placeholder="you@example.com"
+                    id="email" type="text" inputMode="email" placeholder="you@example.com"
                     value={email} onChange={(e) => setEmail(e.target.value)}
                     autoComplete="email" required
                     style={{ height:48,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,color:"#fff",fontSize:14 }}
