@@ -86,7 +86,9 @@ export default function AdminPanelPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [permOpen, setPermOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [tab, setTab] = useState<"users"|"pending"|"succession"|"hibba">("users");
+  const [tab, setTab] = useState<"users"|"pending"|"succession"|"hibba"|"google">("users");
+  const [googleStatus, setGoogleStatus] = useState<{connected:boolean;drive?:boolean;gmail?:boolean;email?:string|null;error?:string}|null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [qaPageKey, setQaPageKey] = useState("/loans");
   const [qaActions, setQaActions] = useState<string[]>(["Show overdue loans", "Summarise active loans", "Any loans due this month?"]);
   const [qaInput, setQaInput] = useState("");
@@ -101,6 +103,48 @@ export default function AdminPanelPage() {
     setEntityContext("Viewing Admin Panel — user management, approvals and permissions");
     return () => setEntityContext(null);
   }, [setEntityContext]);
+
+  // Google re-auth helpers
+  const checkGoogleStatus = async () => {
+    try {
+      const res = await fetch("/api/google/status");
+      const data = await res.json();
+      setGoogleStatus(data);
+    } catch {
+      setGoogleStatus({ connected: false, error: "Could not check status" });
+    }
+  };
+  const handleGoogleReauth = async () => {
+    setGoogleLoading(true);
+    try {
+      const res = await fetch("/api/google/auth-url", { headers: { Origin: window.location.origin } });
+      const data = await res.json();
+      if (data.url) {
+        window.open(data.url, "_blank");
+        toast.success("Google authorization page opened in a new tab");
+      } else {
+        toast.error("Could not generate auth URL");
+      }
+    } catch (err: any) {
+      toast.error("Failed to start re-authorization: " + err.message);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+  // Check for google_auth query param on mount (callback redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google_auth") === "success") {
+      toast.success("Google account connected successfully!");
+      setTab("google");
+      checkGoogleStatus();
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (params.get("google_auth") === "error") {
+      toast.error("Google authorization failed: " + (params.get("reason") || "Unknown error"));
+      setTab("google");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const { data, refetch } = trpc.users.list.useQuery({});
   const { data: pending, refetch: refetchPending } = (trpc.users as any).listPending?.useQuery?.() ?? { data: null, refetch: () => {} };
@@ -208,13 +252,12 @@ export default function AdminPanelPage() {
 
         {/* Tabs */}
         <div style={{ display:"flex",gap:4,marginBottom:20,background:"rgba(255,255,255,0.04)",borderRadius:12,padding:4,width:"fit-content" }}>
-          {(["users","pending","succession","hibba"] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)}
+          {(["users","pending","succession","hibba","google"] as const).map(t => (
+            <button key={t} onClick={() => { setTab(t); if (t === "google" && !googleStatus) { checkGoogleStatus(); } }}
               style={{ padding:"8px 20px",borderRadius:10,fontSize:13,fontWeight:600,border:"none",cursor:"pointer",transition:"all 0.2s",
                 background:tab===t?"rgba(99,91,255,0.3)":"transparent",
                 color:tab===t?T.white:T.muted }}>
-              {t==="users"?"All Users":t==="pending"?`Pending${pendingUsers.length>0?` (${pendingUsers.length})`:""}`:
-               t==="succession"?"Succession":"Hibba AI"}
+              {t==="users"?"All Users":t==="pending"?`Pending${pendingUsers.length>0?` (${pendingUsers.length})`:""}`:t==="succession"?"Succession":t==="hibba"?"Hibba AI":"Google"}
             </button>
           ))}
         </div>
@@ -535,6 +578,73 @@ export default function AdminPanelPage() {
             </div>
           </div>
         )}
+
+        {/* Google Connection tab */}
+        {tab === "google" && (
+          <div style={{ display:"flex",flexDirection:"column",gap:20 }}>
+            {/* Status Card */}
+            <div style={{ background:"rgba(13,34,64,0.8)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"24px" }}>
+              <div style={{ display:"flex",alignItems:"center",gap:12,marginBottom:16 }}>
+                <div style={{ width:40,height:40,borderRadius:12,background:googleStatus?.connected?"rgba(0,255,194,0.15)":"rgba(255,80,80,0.15)",display:"flex",alignItems:"center",justifyContent:"center" }}>
+                  <span style={{ fontSize:20 }}>{googleStatus?.connected ? "✓" : "✗"}</span>
+                </div>
+                <div>
+                  <p style={{ fontSize:16,fontWeight:700,color:"#FFFFFF",margin:0 }}>Google Services Connection</p>
+                  <p style={{ fontSize:12,color:"rgba(255,255,255,0.5)",margin:0,marginTop:2 }}>
+                    {googleStatus?.connected ? "Connected and working" : googleStatus?.error || "Not connected — refresh tokens expired"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Service Status */}
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20 }}>
+                <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)" }}>
+                  <p style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",margin:0,textTransform:"uppercase",letterSpacing:"0.08em" }}>Google Drive</p>
+                  <p style={{ fontSize:14,fontWeight:700,color:googleStatus?.drive?"#00FFC2":"#ff5050",margin:0,marginTop:4 }}>
+                    {googleStatus === null ? "Checking..." : googleStatus.drive ? "Connected" : "Disconnected"}
+                  </p>
+                </div>
+                <div style={{ padding:"14px 16px",borderRadius:12,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)" }}>
+                  <p style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",margin:0,textTransform:"uppercase",letterSpacing:"0.08em" }}>Gmail</p>
+                  <p style={{ fontSize:14,fontWeight:700,color:googleStatus?.gmail?"#00FFC2":"#ff5050",margin:0,marginTop:4 }}>
+                    {googleStatus === null ? "Checking..." : googleStatus.gmail ? "Connected" : "Disconnected"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Re-authorize Button */}
+              <Button
+                onClick={handleGoogleReauth}
+                disabled={googleLoading}
+                style={{ width:"100%",height:48,borderRadius:12,fontWeight:700,fontSize:15,border:"none",cursor:"pointer",
+                  background:googleStatus?.connected?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#4285F4,#34A853)",
+                  color:"#FFFFFF" }}>
+                {googleLoading ? "Redirecting..." : googleStatus?.connected ? "Re-connect Google Account" : "Connect Google Account"}
+              </Button>
+            </div>
+
+            {/* Info Card */}
+            <div style={{ background:"rgba(66,133,244,0.08)",border:"1px solid rgba(66,133,244,0.2)",borderRadius:12,padding:"16px 20px" }}>
+              <p style={{ fontSize:13,color:"rgba(255,255,255,0.7)",margin:0,lineHeight:1.6 }}>
+                <strong style={{ color:"#4285F4" }}>How it works:</strong> Clicking the button above will open Google's consent screen where you can authorize access to Drive, Gmail, Calendar, and Sheets. Once authorized, Hibba will be able to read emails, manage Drive files, and create spreadsheets.
+              </p>
+            </div>
+
+            {/* Scopes Info */}
+            <div style={{ background:"rgba(13,34,64,0.8)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:16,padding:"20px 24px" }}>
+              <p style={{ fontSize:13,fontWeight:700,color:"#FFFFFF",margin:0,marginBottom:12 }}>Permissions requested:</p>
+              <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+                {["Google Drive — read, create, and manage files","Gmail — read, send, and manage emails","Google Calendar — read events","Google Sheets — create and edit spreadsheets"].map(scope => (
+                  <div key={scope} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,background:"rgba(255,255,255,0.04)" }}>
+                    <Check size={14} style={{ color:"#00FFC2",flexShrink:0 }}/>
+                    <span style={{ fontSize:12,color:"rgba(255,255,255,0.6)" }}>{scope}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Create staff dialog */}
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:20,maxWidth:460 }}>

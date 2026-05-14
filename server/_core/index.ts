@@ -17,6 +17,7 @@ import { registerBackupOnMutationMiddleware } from "./backupMiddleware";
 import { registerScheduledJobs } from "../scheduledJobs";
 import { registerStripeWebhook } from "../stripeWebhook";
 import { registerGmailWebhook } from "../gmailWebhook";
+import { registerGoogleReauthRoutes } from "../googleReauth";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -113,6 +114,8 @@ async function startServer() {
   registerStripeWebhook(app);
   // Gmail push notification webhook (POST /api/gmail/push)
   registerGmailWebhook(app);
+  // Google OAuth re-authorization routes
+  registerGoogleReauthRoutes(app);
   // Voice WebSocket auth token endpoint
   const { registerVoiceTokenRoute } = await import("../voiceTokenRoute.ts");
   registerVoiceTokenRoute(app);

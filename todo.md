@@ -2121,7 +2121,7 @@
 - [x] Wire Hibba voice tools for email-to-hub pipeline (auto-summarize and push)
 
 ## Bug Fix — Hibba Can't Access Google Drive / Gmail
-- [ ] Fix Hibba voice tools returning "unable to perform that function" for Google Drive and Gmail operations
+- [x] Fix Hibba voice tools returning "unable to perform that function" for Google Drive and Gmail operations
 
 ## Hibba Voice Assistant — Tool Calling Fix
 - [x] Diagnose root cause: 73 tools sent to Gemini Live exceeds recommended 10-20 limit
@@ -2137,3 +2137,13 @@
 - [x] Add auto-navigate logic: when Gemini calls a tool not in current context, navigate first then retry
 - [x] Update system prompt to instruct Gemini to use navigate_to before calling unavailable tools
 - [x] Test cross-screen tool requests (e.g., ask for emails while on /receipts)
+
+## Bug — Hibba still can't do emails or check Google Drive after tool selection fix
+- [ ] Investigate server logs for tool execution errors during voice sessions
+- [ ] Identify and fix root cause of Google Drive/Gmail tool failures
+
+## Google OAuth Re-authorization Flow
+- [x] Create server-side OAuth endpoints (/api/google/auth-url, /api/google/callback)
+- [x] Build admin UI page with "Re-connect Google" button showing connection status
+- [x] Store new refresh tokens in environment/secrets on successful re-auth
+- [x] Test the full flow end-to-end
