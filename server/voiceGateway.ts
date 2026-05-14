@@ -428,7 +428,6 @@ const TOOL_PERMISSIONS: Record<string, string[]> = {
   get_qarde_hasan_register: ["superadmin", "admin", "trustee", "manager"],
   get_calendar: ["superadmin", "admin", "trustee", "manager", "staff"],
   set_user_preference: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
-  fill_form: ["superadmin", "admin", "trustee", "manager", "staff", "reception"],
 };
 
 function hasToolPermission(toolName: string, userRole: string): boolean {
@@ -633,7 +632,13 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
             grant_type: "refresh_token",
           }),
         });
-        if (!tokenRes.ok) return { error: "Failed to refresh Gmail access token. Please check credentials." };
+        if (!tokenRes.ok) {
+          const errText = await tokenRes.text();
+          if (errText.includes("invalid_grant") || errText.includes("Token has been expired or revoked")) {
+            return { error: "Gmail connection has expired. The refresh token needs to be renewed. Please ask the system administrator to reconnect Gmail in Settings, or try again later. This is not a permanent failure — just a token refresh needed." };
+          }
+          return { error: `Failed to refresh Gmail access token (${tokenRes.status}). Please check Gmail credentials in Settings > Secrets.` };
+        }
         const { access_token } = await tokenRes.json() as { access_token: string };
         // Build RFC 2822 email with HTML body
         const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
@@ -1066,15 +1071,15 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
       } else {
         loans = await db.select().from(loanApplications).where(eq(loanApplications.status, statusFilter as any)).orderBy(desc(loanApplications.createdAt)).limit(50);
       }
-      return { total: loans.length, loans: loans.map(l => ({ id: l.id, borrower: l.borrowerName, amount: l.amountRequested, status: l.status, purpose: l.purpose, monthlyRepayment: l.monthlyRepayment, createdAt: l.createdAt })) };
+      return { total: loans.length, loans: loans.map(l => ({ id: l.id, borrower: l.borrowerName, amount: l.amount, status: l.status, purpose: l.purpose, monthlyRepayment: l.monthlyRepayment, createdAt: l.createdAt })) };
     }
     case "get_calendar": {
       const { trusteeMeetings } = await import("../drizzle/schema");
       const daysAhead = Number(args.days) || 30;
       const now = new Date();
       const future = new Date(now.getTime() + daysAhead * 86400000);
-      const meetings = await db.select().from(trusteeMeetings).where(and(gte(trusteeMeetings.meetingDate, now), sql`${trusteeMeetings.meetingDate} <= ${future}`)).orderBy(trusteeMeetings.meetingDate).limit(20);
-      return { upcoming: meetings.length, meetings: meetings.map(m => ({ id: m.id, date: m.meetingDate, type: (m as any).meetingType || "trustee", location: (m as any).location, agenda: (m as any).agenda })) };
+      const meetings = await db.select().from(trusteeMeetings).where(and(gte(trusteeMeetings.scheduledAt, now), sql`${trusteeMeetings.scheduledAt} <= ${future}`)).orderBy(trusteeMeetings.scheduledAt).limit(20);
+      return { upcoming: meetings.length, meetings: meetings.map(m => ({ id: m.id, date: m.scheduledAt, type: m.meetingType || "trustee", location: (m as any).location, agenda: (m as any).agenda })) };
     }
     case "set_user_preference": {
       const key = String(args.key || "").trim();
@@ -1118,11 +1123,11 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
         const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
         let recipients: Array<{ name: string; email: string }> = [];
         if (group === "trustees") {
-          recipients = allTrustees.filter(t => (t.role || "").toLowerCase().includes("trustee") && t.email).map(t => ({ name: t.name, email: t.email! }));
+          recipients = allTrustees.filter(t => (t.role || "").toLowerCase().includes("trustee") && t.email).map(t => ({ name: t.fullName, email: t.email! }));
         } else if (group === "staff" || group === "managers") {
-          recipients = allTrustees.filter(t => !(t.role || "").toLowerCase().includes("trustee") && t.email).map(t => ({ name: t.name, email: t.email! }));
+          recipients = allTrustees.filter(t => !(t.role || "").toLowerCase().includes("trustee") && t.email).map(t => ({ name: t.fullName, email: t.email! }));
         } else if (group === "all") {
-          recipients = allTrustees.filter(t => t.email).map(t => ({ name: t.name, email: t.email! }));
+          recipients = allTrustees.filter(t => t.email).map(t => ({ name: t.fullName, email: t.email! }));
         } else {
           return { error: `Unknown group '${group}'. Use: trustees, staff, managers, or all` };
         }
@@ -1140,7 +1145,13 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({ client_id: GMAIL_CLIENT_ID, client_secret: GMAIL_CLIENT_SECRET, refresh_token: GMAIL_REFRESH_TOKEN, grant_type: "refresh_token" }),
         });
-        if (!tokenRes.ok) return { error: "Failed to refresh Gmail access token." };
+        if (!tokenRes.ok) {
+          const errText = await tokenRes.text();
+          if (errText.includes("invalid_grant") || errText.includes("Token has been expired or revoked")) {
+            return { error: "Gmail connection has expired. The refresh token needs to be renewed. Please ask the system administrator to reconnect Gmail in Settings." };
+          }
+          return { error: `Failed to refresh Gmail access token (${tokenRes.status}). Please check Gmail credentials.` };
+        }
         const { access_token } = await tokenRes.json() as { access_token: string };
         // Apply template if specified
         const TEMPLATES: Record<string, { subject: string; bodyTemplate: string }> = {
@@ -1186,7 +1197,8 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
         }
         // Log to outbox
         const { commsOutbox } = await import("../drizzle/schema");
-        await db.insert(commsOutbox).values({ recipientGroup: group, recipientIds: [], subject: finalSubject, body, type: "email", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
+        const groupToEnum: Record<string, string> = { trustees: "trustees_all", staff: "staff_all", managers: "staff_all", all: "staff_all" };
+        await db.insert(commsOutbox).values({ recipientGroup: (groupToEnum[group] || "custom") as any, recipientIds: [], subject: finalSubject, body, type: "email", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
         return { success: true, message: `Alhamdulillah, emails sent to ${sentCount} ${group}${failCount > 0 ? ` (${failCount} failed)` : ""}` };
       } catch (err: any) {
         return { error: `Bulk email failed: ${err.message}` };
@@ -1201,11 +1213,11 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
         const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
         let recipients: Array<{ name: string; phone: string }> = [];
         if (group === "trustees") {
-          recipients = allTrustees.filter(t => (t.role || "").toLowerCase().includes("trustee") && t.phone).map(t => ({ name: t.name, phone: t.phone! }));
+          recipients = allTrustees.filter(t => (t.role || "").toLowerCase().includes("trustee") && t.phone).map(t => ({ name: t.fullName, phone: t.phone! }));
         } else if (group === "staff" || group === "managers") {
-          recipients = allTrustees.filter(t => !(t.role || "").toLowerCase().includes("trustee") && t.phone).map(t => ({ name: t.name, phone: t.phone! }));
+          recipients = allTrustees.filter(t => !(t.role || "").toLowerCase().includes("trustee") && t.phone).map(t => ({ name: t.fullName, phone: t.phone! }));
         } else if (group === "all") {
-          recipients = allTrustees.filter(t => t.phone).map(t => ({ name: t.name, phone: t.phone! }));
+          recipients = allTrustees.filter(t => t.phone).map(t => ({ name: t.fullName, phone: t.phone! }));
         } else {
           return { error: `Unknown group '${group}'. Use: trustees, staff, managers, or all` };
         }
@@ -1226,7 +1238,8 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
         }
         // Log to outbox
         const { commsOutbox } = await import("../drizzle/schema");
-        await db.insert(commsOutbox).values({ recipientGroup: group, recipientIds: [], subject: `Bulk WhatsApp to ${group}`, body, type: "sms", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
+        const waGroupToEnum: Record<string, string> = { trustees: "trustees_all", staff: "staff_all", managers: "staff_all", all: "staff_all" };
+        await db.insert(commsOutbox).values({ recipientGroup: (waGroupToEnum[group] || "custom") as any, recipientIds: [], subject: `Bulk WhatsApp to ${group}`, body, type: "sms", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
         return { success: true, message: `${recipients.length} WhatsApp links ready. Tap each button to send to: ${recipients.map(r => r.name).join(", ")}` };
       } catch (err: any) {
         return { error: `Bulk WhatsApp failed: ${err.message}` };
@@ -1236,6 +1249,97 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
       return { error: `Unknown tool: ${toolName}` };
   }
 }
+// --- Proactive greeting: gather context and trigger Gemini to speak first ---
+async function triggerProactiveGreeting(client: VoiceClient, geminiWs: WebSocket, connectionId: string) {
+  try {
+    // Determine time of day in UK timezone
+    const now = new Date();
+    const ukHour = parseInt(now.toLocaleString("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false }));
+    let timeGreeting: string;
+    if (ukHour >= 5 && ukHour < 12) timeGreeting = "Good morning";
+    else if (ukHour >= 12 && ukHour < 17) timeGreeting = "Good afternoon";
+    else if (ukHour >= 17 && ukHour < 21) timeGreeting = "Good evening";
+    else timeGreeting = "Assalamu Alaikum";
+
+    // Gather contextual data
+    const db = await getDb();
+    let pendingCount = 0;
+    let unreadEmailCount = 0;
+    let nextPrayer = "";
+
+    if (db) {
+      try {
+        const pendingResult = await db.execute(sql`SELECT COUNT(*) as cnt FROM receipts WHERE status = 'pending'`);
+        pendingCount = Number((pendingResult as any)[0]?.[0]?.cnt ?? 0);
+      } catch {}
+
+      try {
+        const unreadResult = await db.execute(sql`SELECT COUNT(*) as cnt FROM inbound_emails WHERE status = 'unread'`);
+        unreadEmailCount = Number((unreadResult as any)[0]?.[0]?.cnt ?? 0);
+      } catch {}
+    }
+
+    // Get next prayer time from Aladhan API
+    try {
+      const today = new Date();
+      const dateStr = `${String(today.getDate()).padStart(2, "0")}-${String(today.getMonth() + 1).padStart(2, "0")}-${today.getFullYear()}`;
+      const resp = await fetch(`https://api.aladhan.com/v1/timingsByCity/${dateStr}?city=Liverpool&country=United+Kingdom&method=15`);
+      const data: any = await resp.json();
+      if (data.code === 200 && data.data?.timings) {
+        const t = data.data.timings;
+        const prayers = [
+          { name: "Fajr", time: t.Fajr },
+          { name: "Dhuhr", time: t.Dhuhr },
+          { name: "Asr", time: t.Asr },
+          { name: "Maghrib", time: t.Maghrib },
+          { name: "Isha", time: t.Isha },
+        ];
+        const ukNow = now.toLocaleString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hour12: false });
+        const [nowH, nowM] = ukNow.split(":").map(Number);
+        const nowMinutes = nowH * 60 + nowM;
+        for (const p of prayers) {
+          const [pH, pM] = (p.time || "00:00").split(":").map(Number);
+          const pMinutes = pH * 60 + pM;
+          if (pMinutes > nowMinutes) {
+            nextPrayer = `${p.name} at ${p.time}`;
+            break;
+          }
+        }
+        if (!nextPrayer) nextPrayer = `Fajr tomorrow at ${t.Fajr}`;
+      }
+    } catch {}
+
+    // Build the greeting context prompt for Gemini
+    const contextParts: string[] = [];
+    contextParts.push(`Time of day greeting: ${timeGreeting}`);
+    if (pendingCount > 0) contextParts.push(`Pending items for review: ${pendingCount}`);
+    else contextParts.push(`No pending items for review`);
+    if (unreadEmailCount > 0) contextParts.push(`New unread emails: ${unreadEmailCount}`);
+    if (nextPrayer) contextParts.push(`Next prayer: ${nextPrayer}`);
+
+    const greetingPrompt = `[SESSION START \u2014 PROACTIVE GREETING]
+You have just connected to a new voice session. Greet the user immediately with a spoken greeting. Do NOT wait for the user to speak first.
+Context for your greeting:
+- User name: ${client.userName}
+- ${contextParts.join("\n- ")}
+
+Deliver a warm, concise greeting (2-3 sentences max). Include:
+1. "Assalamu Alaikum ${client.userName}" with the time-appropriate greeting (e.g. "${timeGreeting}")
+2. A brief status update: mention pending items count (or "all clear, Alhamdulillah"), unread emails if any, and the next prayer time.
+3. End with "How can I assist you?" or similar.
+
+Speak naturally and warmly. Do NOT use tools for this greeting \u2014 the data is already provided above.`;
+
+    // Send the greeting prompt to Gemini via clientContent
+    if (geminiWs.readyState === WebSocket.OPEN) {
+      geminiWs.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text: greetingPrompt }] }], turnComplete: true } }));
+    }
+    console.log(`[VoiceGateway] Proactive greeting triggered for ${connectionId} (${timeGreeting}, ${pendingCount} pending, ${unreadEmailCount} unread emails, next: ${nextPrayer})`);
+  } catch (err: any) {
+    console.error(`[VoiceGateway] Proactive greeting error:`, err.message);
+  }
+}
+
 // --- Connect to Gemini Live API ---
 function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSocket | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -1296,6 +1400,8 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
         if (client.ws.readyState === WebSocket.OPEN) {
           client.ws.send(JSON.stringify({ type: "gemini_ready" }));
         }
+        // Proactive greeting: gather context and prompt Gemini to greet immediately
+        triggerProactiveGreeting(client, geminiWs, connectionId);
         return;
       }
 
@@ -1510,7 +1616,7 @@ export function attachVoiceGateway(server: HttpServer) {
         const geminiWs = connectToGeminiLive(client, connectionId);
         client.geminiWs = geminiWs;
 
-        ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, dbSessionId, text: `Assalamu Alaikum ${auth.name}, how can I help you today?` }));
+        ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, dbSessionId, text: `Connecting to Hibba...` }));
         return;
       }
 

@@ -2092,3 +2092,10 @@
 
 ## Bug Fix — Email Compose Timestamp Crash
 - [x] Fix "timestamp.toLocaleTimeString is not a function" error when creating/viewing emails (progress msg used Date.now() instead of new Date(), added safety guard)
+
+## Voice Greeting Improvement & Gmail Fix
+- [x] Improve Hibba's greeting to be time-of-day aware (Good morning/afternoon/evening)
+- [x] Add proactive contextual briefing on session start: pending tasks, next prayer time, new emails/messages
+- [x] Send initial greeting prompt to Gemini after setup completes (auto-trigger greeting without user speaking first)
+- [x] Fix Gmail OAuth error handling: detect invalid_grant and provide clear reconnection guidance
+- [x] Ensure greeting sentence is not cut off (audio plays fully before listening starts)
