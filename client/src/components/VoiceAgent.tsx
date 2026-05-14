@@ -420,7 +420,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
       case "progress":
         // Show progress text as a brief status indicator
         if (msg.text) {
-          setTranscript(prev => [...prev, { role: "assistant", text: msg.text, timestamp: Date.now() }]);
+          setTranscript(prev => [...prev, { id: `progress-${Date.now()}`, speaker: "agent", text: msg.text, timestamp: new Date() }]);
         }
         setIsProcessing(true);
         break;
@@ -1072,7 +1072,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                     </div>
                   )}
                   <div className="flex items-center justify-between mt-1.5">
-                    <span className="text-[10px] text-zinc-500">{entry.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className="text-[10px] text-zinc-500">{(entry.timestamp instanceof Date ? entry.timestamp : new Date(entry.timestamp)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                     {entry.speaker === "agent" && !entry.flagged && (
                       <button onClick={() => flagResponse(entry.id)} className="text-zinc-600 hover:text-amber-400 transition-colors p-0.5" title="Flag for review">
                         <Flag className="w-3 h-3" />

@@ -2089,3 +2089,6 @@
 - [ ] Add session token freshness validation (prevent replay attacks) (future)
 - [ ] Enhanced runtime context: pass form_fields, entity_type, entity_id with every request (future)
 - [ ] Add speaker mode detection with sensitive content warning (future)
+
+## Bug Fix — Email Compose Timestamp Crash
+- [x] Fix "timestamp.toLocaleTimeString is not a function" error when creating/viewing emails (progress msg used Date.now() instead of new Date(), added safety guard)
