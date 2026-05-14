@@ -193,6 +193,13 @@ CAPABILITIES — You can:
 - Navigate users to any section instantly.
 - Provide prayer times, mosque info, donation guidance.
 
+TOOL AVAILABILITY:
+- Your available tools change based on the user's current screen. If a user asks for something and you don't have the right tool, use navigate_to to take them to the relevant page first, then the tools will update.
+- For Google Drive/Gmail: navigate to /dashboard, /comms-hub, or /admin.
+- For sending emails/WhatsApp: navigate to /communications or /comms-hub.
+- For finance queries: navigate to /receipts, /income, or /monthly-expenses.
+- For people/donor lookups: navigate to /donors or /trustees.
+
 BOUNDARIES:
 - Never authenticate users. Never handle card data — use Stripe links.
 - Never read sensitive data (addresses, bank details, NI numbers) unless explicitly asked.
@@ -306,6 +313,129 @@ const TOOL_DECLARATIONS = [
   { name: "move_email_to_section", description: "Move an email to a different section in the Comms Hub.", parameters: { type: "object", properties: { messageId: { type: "number", description: "Comms message ID" }, sectionSlug: { type: "string", description: "Target section slug (e.g., 'urgent', 'galib-khan', 'accountants', 'facilities', 'general')" } }, required: ["messageId", "sectionSlug"] } },
   { name: "update_drive_file", description: "Re-upload/update an existing file in Google Drive with new content. Use when user says 'save changes back to drive' or 'update the document'.", parameters: { type: "object", properties: { fileId: { type: "string", description: "Google Drive file ID to update" }, content: { type: "string", description: "New file content" }, mimeType: { type: "string", description: "MIME type of the content" } }, required: ["fileId", "content"] } },
 ];
+
+// --- Dynamic tool selection (max 20 tools per context) ---
+// Google recommends max 10-20 tools for reliable function calling.
+// We categorize tools and select the relevant subset based on screen context + role.
+
+const CORE_TOOLS = [
+  "get_current_user", "get_screen_context", "get_current_time", "navigate_to",
+  "get_prayer_times", "get_daily_briefing",
+];
+
+const GOOGLE_TOOLS = [
+  "list_drive_files", "read_drive_file", "save_to_drive", "update_drive_file",
+  "list_gmail_labels", "fetch_emails_by_label", "fetch_new_emails",
+  "summarise_and_action_emails", "create_expense_sheet", "get_calendar_today",
+];
+
+const COMMS_TOOLS = [
+  "send_email", "send_whatsapp", "draft_email", "draft_whatsapp",
+  "bulk_send_email", "get_email_templates", "log_communication",
+  "get_comms_inbox", "send_to_donors", "fetch_and_push_to_comms",
+];
+
+const FINANCE_TOOLS = [
+  "search_transactions", "get_income_summary", "get_expenses_summary",
+  "get_fund_balance", "get_campaign_status", "create_donation",
+  "create_payment_link", "generate_report", "get_bills_utilities",
+  "create_monthly_breakdown",
+];
+
+const PEOPLE_TOOLS = [
+  "get_staff_directory", "get_trustees", "get_donor", "search_donors",
+  "update_donor_profile", "create_donor_note", "get_gift_aid_summary",
+  "get_recognition_tiers",
+];
+
+const OPERATIONS_TOOLS = [
+  "get_priorities", "create_task", "schedule_meeting", "get_meetings",
+  "get_compliance_status", "flag_for_review", "get_calendar",
+  "compose_briefing", "get_audit_trail", "set_user_preference",
+];
+
+const FORM_TOOLS = [
+  "fill_form", "get_donation_info", "get_mosque_info",
+];
+
+// Screen-to-tool-group mapping — each screen gets 1 primary group + optional FORM_TOOLS
+const SCREEN_TOOL_GROUPS: Record<string, string[][]> = {
+  "/dashboard": [GOOGLE_TOOLS],
+  "/comms-hub": [GOOGLE_TOOLS, FORM_TOOLS],
+  "/comms-inbox": [GOOGLE_TOOLS, FORM_TOOLS],
+  "/communications": [COMMS_TOOLS],
+  "/receipts": [FINANCE_TOOLS, FORM_TOOLS],
+  "/income": [FINANCE_TOOLS, FORM_TOOLS],
+  "/monthly-expenses": [FINANCE_TOOLS],
+  "/reports": [FINANCE_TOOLS],
+  "/reconciliation": [FINANCE_TOOLS],
+  "/fundraising": [FINANCE_TOOLS],
+  "/campaigns": [FINANCE_TOOLS],
+  "/loans": [FINANCE_TOOLS],
+  "/payroll": [FINANCE_TOOLS],
+  "/donors": [PEOPLE_TOOLS, FORM_TOOLS],
+  "/donor-crm": [PEOPLE_TOOLS, FORM_TOOLS],
+  "/donor-pipeline": [PEOPLE_TOOLS],
+  "/major-donor": [PEOPLE_TOOLS],
+  "/gift-aid": [PEOPLE_TOOLS],
+  "/pledges": [FINANCE_TOOLS],
+  "/trustees": [PEOPLE_TOOLS],
+  "/org-chart": [PEOPLE_TOOLS],
+  "/compliance": [OPERATIONS_TOOLS],
+  "/meetings": [OPERATIONS_TOOLS],
+  "/accommodation": [OPERATIONS_TOOLS],
+  "/facilities": [OPERATIONS_TOOLS],
+  "/admin": [GOOGLE_TOOLS, FORM_TOOLS],
+  "/trustee-dashboard": [FINANCE_TOOLS],
+  "/bills-utilities": [FINANCE_TOOLS, FORM_TOOLS],
+  "/training-tracker": [OPERATIONS_TOOLS],
+  "/conflicts-register": [OPERATIONS_TOOLS],
+  "/decisions": [OPERATIONS_TOOLS],
+  "/bulk-approvals": [OPERATIONS_TOOLS],
+  "/audit-trail": [OPERATIONS_TOOLS],
+  "/settings": [OPERATIONS_TOOLS],
+  "/profile": [OPERATIONS_TOOLS],
+  "/voice-history": [OPERATIONS_TOOLS],
+  "/system-health": [OPERATIONS_TOOLS],
+  "/fintech": [FINANCE_TOOLS],
+  "/donate": [FINANCE_TOOLS, FORM_TOOLS],
+  "/bistro87": [OPERATIONS_TOOLS],
+  "/lbmw-correspondence": [COMMS_TOOLS],
+};
+
+function getToolsForContext(screenPath: string, userRole: string): typeof TOOL_DECLARATIONS {
+  // Determine which tool groups to include based on screen
+  let toolGroups = SCREEN_TOOL_GROUPS[screenPath];
+  
+  // If no specific mapping, check prefix matches
+  if (!toolGroups) {
+    for (const [key, groups] of Object.entries(SCREEN_TOOL_GROUPS)) {
+      if (screenPath.startsWith(key + "/")) { toolGroups = groups; break; }
+    }
+  }
+  
+  // Default: for admin/superadmin/trustee, include Google
+  // For others, include Finance
+  if (!toolGroups) {
+    if (["superadmin", "admin", "trustee", "manager"].includes(userRole)) {
+      toolGroups = [GOOGLE_TOOLS];
+    } else {
+      toolGroups = [FINANCE_TOOLS];
+    }
+  }
+  
+  // Collect unique tool names: CORE + selected groups
+  const toolNames = new Set<string>(CORE_TOOLS);
+  for (const group of toolGroups) {
+    for (const name of group) toolNames.add(name);
+  }
+  
+  // Filter TOOL_DECLARATIONS to only include selected tools
+  const filtered = TOOL_DECLARATIONS.filter(t => toolNames.has(t.name));
+  
+  console.log(`[VoiceGateway] Tool selection for ${screenPath} (${userRole}): ${filtered.length} tools`);
+  return filtered;
+}
 
 // --- Screen context helper ---
 function buildScreenDescription(path: string, entityContext?: string | null): string {
@@ -1695,7 +1825,8 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
       systemInstruction: {
         parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent user: ${client.userName} (role: ${client.userRole}). Current screen: ${buildScreenDescription(client.screenContext, client.entityContext)}. Language: ${client.language}. Answer questions about the current section directly without asking where the user is.` }]
       },
-      tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+      tools: [{ functionDeclarations: getToolsForContext(client.screenContext, client.userRole) }],
+      toolConfig: { functionCallingConfig: { mode: "AUTO" } },
       outputAudioTranscription: {},
       inputAudioTranscription: {},
       realtimeInputConfig: {
@@ -1783,6 +1914,21 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
             bulk_send_email: "Sending emails to the group...",
             bulk_send_whatsapp: "Preparing WhatsApp messages...",
             get_gift_aid_status: "Checking Gift Aid records...",
+            list_drive_files: "Checking Google Drive...",
+            read_drive_file: "Reading file from Drive...",
+            save_to_drive: "Saving to Google Drive...",
+            update_drive_file: "Updating file on Drive...",
+            list_gmail_labels: "Fetching Gmail labels...",
+            fetch_emails_by_label: "Fetching emails...",
+            fetch_new_emails: "Checking for new emails...",
+            fetch_and_push_to_comms: "Fetching emails and pushing to Comms Hub...",
+            create_expense_sheet: "Creating expense spreadsheet...",
+            create_monthly_breakdown: "Creating monthly breakdown...",
+            get_daily_briefing: "Preparing your daily briefing...",
+            get_calendar_today: "Checking your calendar...",
+            send_to_donors: "Sending emails to donors...",
+            send_to_suppliers: "Sending emails to suppliers...",
+            summarise_and_action_emails: "Summarising emails...",
           };
           if (functionCalls.length > 1 && client.ws.readyState === WebSocket.OPEN) {
             client.ws.send(JSON.stringify({ type: "agent_response", text: "Let me look that up for you..." }));
@@ -1795,7 +1941,9 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
               }
               client.ws.send(JSON.stringify({ type: "tool_call", toolName: fc.name, toolResult: { status: "executing" } }));
             }
+            console.log(`[VoiceGateway] Executing tool: ${fc.name}`, JSON.stringify(fc.args || {}).substring(0, 200));
             const result = await executeToolCall(fc.name, fc.args || {}, client);
+            console.log(`[VoiceGateway] Tool result for ${fc.name}: ${result.status}`, result.error || '');
             if (client.ws.readyState === WebSocket.OPEN) {
               client.ws.send(JSON.stringify({ type: "tool_call", toolName: fc.name, toolResult: result }));
             }

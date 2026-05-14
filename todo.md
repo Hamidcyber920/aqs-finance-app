@@ -2119,3 +2119,15 @@
 - [x] Daily 9am briefing: calendar appointments for the day + events within 2 hours + urgent emails
 - [x] Google Drive document round-trip: save documents to Drive and re-upload after changes
 - [x] Wire Hibba voice tools for email-to-hub pipeline (auto-summarize and push)
+
+## Bug Fix — Hibba Can't Access Google Drive / Gmail
+- [ ] Fix Hibba voice tools returning "unable to perform that function" for Google Drive and Gmail operations
+
+## Hibba Voice Assistant — Tool Calling Fix
+- [x] Diagnose root cause: 73 tools sent to Gemini Live exceeds recommended 10-20 limit
+- [x] Implement dynamic tool selection based on screen context (getToolsForContext)
+- [x] Categorize tools into groups: CORE (6), GOOGLE (10), COMMS (10), FINANCE (10), PEOPLE (8), OPERATIONS (10), FORM (3)
+- [x] Map each screen path to 1-2 relevant tool groups (max 16-19 tools per context)
+- [x] Add toolConfig with mode AUTO for Gemini Live setup
+- [x] Update system prompt to explain tool availability changes by screen
+- [x] Verify server restarts successfully with new dynamic tool selection
