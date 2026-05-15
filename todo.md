@@ -2165,3 +2165,7 @@
 - [x] Root cause: Express behind Cloud Run/Cloudflare proxy couldn't detect HTTPS, so cookie had SameSite=None without Secure flag — browsers silently reject this
 - [x] Fix: Added `app.set('trust proxy', 1)` to server/_core/index.ts so req.protocol correctly returns 'https'
 - [x] Fix: Changed login redirect from setLocation("/") to window.location.href = "/" for full page reload after auth
+
+## Bug — Hibba voice agent stuck on "Connecting to Hibba..." on deployed site
+- [x] Diagnose why WebSocket connection fails for voice agent on deployed site — Gemini model gemini-3.1-flash-live-preview requires allowlist access, switched to gemini-2.5-flash-native-audio-latest, removed unsupported toolConfig, changed text input to use clientContent
+- [x] Fix the voice agent connection issue — model changed, toolConfig removed, text input uses clientContent for 2.5 model
