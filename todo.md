@@ -2183,3 +2183,7 @@
 - [x] Preserve screen context awareness and quick actions
 - [x] Add vitest tests for new voice architecture (32 tests passing)
 - [ ] Test and verify on deployed site
+
+## Bug — Hibba native voice returns "Sorry, I couldn't process that" on deployed site
+- [x] Diagnose server-side error: Gemini API requires `id` on tool_calls and `name` on tool response messages
+- [x] Fix: generate IDs for tool_calls, add name field to tool response messages

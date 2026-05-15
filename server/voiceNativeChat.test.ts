@@ -140,6 +140,17 @@ describe("Native Voice Chat - Tool Routing", () => {
 });
 
 describe("Native Voice Chat - nativeChat Function", () => {
+  it("should ensure tool_calls have IDs and tool messages have name field", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceNativeChat.ts", "utf-8");
+    
+    // Must generate IDs for tool_calls (Gemini doesn't always return them)
+    expect(content).toContain('id: tc.id || `call_${Date.now()}_${idx}`');
+    
+    // Must include name on tool response messages (Gemini requires function_response.name)
+    expect(content).toContain('name: toolName');
+  });
+
   it("should have a tool-calling loop with max iterations", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceNativeChat.ts", "utf-8");

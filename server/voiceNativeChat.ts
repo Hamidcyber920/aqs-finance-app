@@ -1000,6 +1000,11 @@ export async function nativeChat(
       toolChoice: "auto",
     });
 
+    // Handle API error responses
+    if ((response as any).error) {
+      console.error(`[NativeChat] LLM error:`, JSON.stringify((response as any).error));
+      break;
+    }
     totalTokens += response.usage?.total_tokens ?? 0;
     const choice = response.choices?.[0];
     if (!choice) break;
@@ -1020,18 +1025,17 @@ export async function nativeChat(
     }
 
     // Process tool calls
+    // Ensure each tool_call has an id (Gemini returns index but not always id)
+    const toolCalls = msg.tool_calls.map((tc: any, idx: number) => ({
+      ...tc,
+      id: tc.id || `call_${Date.now()}_${idx}`,
+    }));
+
     // Add assistant message with tool_calls to conversation
-    messages.push({
-      role: "assistant",
-      content: msg.content || "",
-      // We need to pass tool_calls through but the Message type doesn't have it
-      // So we'll handle this by adding tool results as tool messages
-    } as any);
+    const assistantMsg: any = { role: "assistant", content: msg.content || "", tool_calls: toolCalls };
+    messages.push(assistantMsg);
 
-    // Patch: add tool_calls to the last message
-    (messages[messages.length - 1] as any).tool_calls = msg.tool_calls;
-
-    for (const tc of msg.tool_calls) {
+    for (const tc of toolCalls) {
       const toolName = tc.function.name;
       let toolArgs: Record<string, unknown> = {};
       try {
@@ -1043,11 +1047,12 @@ export async function nativeChat(
 
       const result = await executeToolCall(toolName, toolArgs, ctx);
 
-      // Add tool result to conversation
+      // Add tool result to conversation — Gemini requires `name` on function_response
       messages.push({
         role: "tool",
         content: JSON.stringify(result).substring(0, 4000),
         tool_call_id: tc.id,
+        name: toolName,
       });
     }
   }
