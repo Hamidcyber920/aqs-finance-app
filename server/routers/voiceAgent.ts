@@ -981,7 +981,7 @@ ${transcriptText || "No transcript recorded."}
         </div>
       `;
 
-      const recipientEmail = input.email || ctx.user.email || '';
+      const recipientEmail: string = (input.email || ctx.user.email || '') as string;
       const recipientName = ctx.user.name || "Team Member";
 
       await sendSessionSummaryEmail(
@@ -1096,5 +1096,27 @@ ${transcriptText || "No transcript recorded."}
       return { ok: true };
     }),
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // NATIVE VOICE CHAT (replaces Gemini Live WebSocket)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  nativeChat: protectedProcedure
+    .input(z.object({
+      sessionId: z.number(),
+      message: z.string().min(1).max(5000),
+      screenContext: z.string().default("/"),
+      entityContext: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { nativeChat } = await import("../voiceNativeChat");
+      return nativeChat(input, { id: ctx.user.id, role: ctx.user.role, name: ctx.user.name || "User", email: ctx.user.email });
+    }),
+
+  nativeGreeting: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const { buildGreeting } = await import("../voiceNativeChat");
+      const greeting = await buildGreeting(ctx.user.name || "there", ctx.user.role);
+      return { greeting };
+    }),
 
 });

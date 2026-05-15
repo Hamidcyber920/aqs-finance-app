@@ -2173,3 +2173,13 @@
 ## Bug — Hibba voice agent listening and response not working properly
 - [x] Diagnose audio input/output issues after switching to Gemini 2.5 model
 - [x] Fix audio handling for Gemini 2.5 compatibility: switched to v1alpha API, added thinkingBudget:0, enabled proactiveAudio, changed all realtimeInput.text to clientContent, added contextWindowCompression
+
+## Hibba Voice Agent — Native Rebuild (May 15 2026)
+- [x] Replace Gemini Live WebSocket architecture with native Web Speech API approach
+- [x] Build server-side tRPC voice endpoint: text-in → AI processing with tools → text-out (voiceNativeChat.ts, 1103 lines)
+- [x] Build new VoiceAgent component using browser SpeechRecognition (STT) + SpeechSynthesis (TTS)
+- [x] Preserve all existing Hibba tools (70+ tools: navigate, fill_form, Gmail, Drive, WhatsApp, etc.)
+- [x] Preserve Hibba's Islamic identity, time-aware greeting, and personality
+- [x] Preserve screen context awareness and quick actions
+- [x] Add vitest tests for new voice architecture (32 tests passing)
+- [ ] Test and verify on deployed site
