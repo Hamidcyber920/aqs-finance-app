@@ -2169,3 +2169,7 @@
 ## Bug — Hibba voice agent stuck on "Connecting to Hibba..." on deployed site
 - [x] Diagnose why WebSocket connection fails for voice agent on deployed site — Gemini model gemini-3.1-flash-live-preview requires allowlist access, switched to gemini-2.5-flash-native-audio-latest, removed unsupported toolConfig, changed text input to use clientContent
 - [x] Fix the voice agent connection issue — model changed, toolConfig removed, text input uses clientContent for 2.5 model
+
+## Bug — Hibba voice agent listening and response not working properly
+- [x] Diagnose audio input/output issues after switching to Gemini 2.5 model
+- [x] Fix audio handling for Gemini 2.5 compatibility: switched to v1alpha API, added thinkingBudget:0, enabled proactiveAudio, changed all realtimeInput.text to clientContent, added contextWindowCompression

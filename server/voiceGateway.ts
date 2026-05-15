@@ -76,7 +76,7 @@ const SOFT_WARNING_THRESHOLD = 0.8;
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const MAX_CONCURRENT_SESSIONS_PER_USER = 1;
-const GEMINI_LIVE_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+const GEMINI_LIVE_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent";
 const GEMINI_MODEL = "models/gemini-2.5-flash-native-audio-latest";
 
 const activeClients = new Map<string, VoiceClient>();
@@ -918,7 +918,7 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
         const proactiveNote = `[NAVIGATION COMPLETE] You just navigated the user to: ${screenDesc}. In your next spoken response, give a very brief 1-sentence summary of what this section is for and offer to help. Keep it under 20 words. Do not say "I navigated you" — just describe the section naturally.`;
         setTimeout(() => {
           if (client.geminiWs && client.geminiWs.readyState === WebSocket.OPEN) {
-            client.geminiWs.send(JSON.stringify({ realtimeInput: { text: proactiveNote } }));
+            client.geminiWs.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text: proactiveNote }] }], turnComplete: true } }));
           }
         }, 500); // small delay to let the tool response be processed first
       }
@@ -1848,6 +1848,9 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
             }
           }
         },
+        thinkingConfig: {
+          thinkingBudget: 0,
+        },
       },
       systemInstruction: {
         parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent user: ${client.userName} (role: ${client.userRole}). Current screen: ${buildScreenDescription(client.screenContext, client.entityContext)}. Language: ${client.language}. Answer questions about the current section directly without asking where the user is.` }]
@@ -1869,6 +1872,14 @@ function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSock
         activityHandling: "NO_INTERRUPTION",
       },
       sessionResumption: { handle: client.resumptionHandle || undefined },
+      // Gemini 2.5 native audio features
+      proactivity: {
+        proactiveAudio: true,
+      },
+      contextWindowCompression: {
+        triggerTokens: 25000,
+        slidingWindowTokens: 12500,
+      },
     };
     // Remove undefined sessionResumption handle on first connect
     if (!setupPayload.sessionResumption.handle) delete setupPayload.sessionResumption;
@@ -2150,7 +2161,7 @@ export function attachVoiceGateway(server: HttpServer) {
         client.entityContext = msg.entityContext || client.entityContext;
         if (client.geminiWs && client.geminiWs.readyState === 1 && client.isGeminiReady && prevScreen !== client.screenContext) {
           const ctxNote = `[SYSTEM CONTEXT UPDATE] User navigated to: ${buildScreenDescription(client.screenContext, client.entityContext)}. Adjust your responses to be relevant to this section.`;
-          client.geminiWs.send(JSON.stringify({ realtimeInput: { text: ctxNote } }));
+          client.geminiWs.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text: ctxNote }] }], turnComplete: true } }));
         }
         return;
       }
