@@ -1,15 +1,15 @@
 /**
- * VoiceAgent — Native voice assistant using Web Speech API
+ * VoiceAgent — Real-time bidirectional voice assistant using Gemini Live API
  *
  * Architecture:
- * - SpeechRecognition (browser) captures speech → text
- * - Text sent via tRPC mutation to server (invokeLLM + tool calling loop)
- * - Server returns text response + side effects (navigate, fill_form, open_url)
- * - SpeechSynthesis (browser) speaks the response aloud
- * - No WebSocket, no Gemini Live API — 100% reliable HTTP/tRPC flow
+ * - AudioWorklet captures 16kHz PCM audio continuously while mic is active
+ * - PCM chunks are sent as base64 via WebSocket to server
+ * - Server relays to Gemini Live API for real-time speech understanding + response
+ * - Gemini's audio response (24kHz PCM) streams back and plays immediately
+ * - Result: natural, real-time conversation like a phone call
  */
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff, HelpCircle, Sparkles, Zap, Undo2, Mail, Pencil } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Mic, MicOff, X, Send, ChevronDown, ChevronUp, Flag, Keyboard, Phone, PhoneOff, HelpCircle, Sparkles, Zap, Undo2, Mail, Pencil, Plus, Trash2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -31,6 +31,200 @@ interface VoiceAgentProps {
   entityContext?: string;
 }
 
+// ─── Audio Worklet Processor (inline) ────────────────────────────────────────
+const AUDIO_WORKLET_CODE = `
+class PCMCaptureProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 2048;
+    this.buffer = new Float32Array(this.bufferSize);
+    this.bufferIndex = 0;
+  }
+  process(inputs) {
+    const input = inputs[0];
+    if (!input || !input[0]) return true;
+    const channelData = input[0];
+    // Calculate RMS volume for VAD
+    let sumSquares = 0;
+    for (let i = 0; i < channelData.length; i++) {
+      sumSquares += channelData[i] * channelData[i];
+      this.buffer[this.bufferIndex++] = channelData[i];
+      if (this.bufferIndex >= this.bufferSize) {
+        const int16 = new Int16Array(this.bufferSize);
+        for (let j = 0; j < this.bufferSize; j++) {
+          const s = Math.max(-1, Math.min(1, this.buffer[j]));
+          int16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        this.port.postMessage({ pcm: int16.buffer }, [int16.buffer]);
+        this.buffer = new Float32Array(this.bufferSize);
+        this.bufferIndex = 0;
+      }
+    }
+    const rms = Math.sqrt(sumSquares / channelData.length);
+    this.port.postMessage({ vad: true, volume: rms });
+    return true;
+  }
+}
+registerProcessor('pcm-capture-processor', PCMCaptureProcessor);
+`;
+
+// ─── Audio Playback Queue ────────────────────────────────────────────────────
+class AudioPlaybackQueue {
+  private audioContext: AudioContext | null = null;
+  private queue: Float32Array[] = [];
+  private isPlaying = false;
+  private nextStartTime = 0;
+  private sampleRate = 24000;
+  // Track active source nodes so we can hard-stop them on barge-in
+  private activeSources: AudioBufferSourceNode[] = [];
+  init() {
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext({ sampleRate: this.sampleRate });
+    }
+    if (this.audioContext.state === "suspended") {
+      this.audioContext.resume();
+    }
+  }
+  enqueue(pcmBase64: string) {
+    if (!this.audioContext) this.init();
+    const binaryStr = atob(pcmBase64);
+    const bytes = new Uint8Array(binaryStr.length);
+    for (let i = 0; i < binaryStr.length; i++) {
+      bytes[i] = binaryStr.charCodeAt(i);
+    }
+    const int16 = new Int16Array(bytes.buffer);
+    const float32 = new Float32Array(int16.length);
+    for (let i = 0; i < int16.length; i++) {
+      float32[i] = int16[i] / 32768;
+    }
+    this.queue.push(float32);
+    if (!this.isPlaying) {
+      this.playNext();
+    }
+  }
+  private playNext() {
+    if (!this.audioContext || this.queue.length === 0) {
+      this.isPlaying = false;
+      this.activeSources = [];
+      return;
+    }
+    this.isPlaying = true;
+    const samples = this.queue.shift()!;
+    const buffer = this.audioContext.createBuffer(1, samples.length, this.sampleRate);
+    buffer.getChannelData(0).set(samples);
+    const source = this.audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.audioContext.destination);
+    const currentTime = this.audioContext.currentTime;
+    const startTime = Math.max(currentTime, this.nextStartTime);
+    source.start(startTime);
+    this.nextStartTime = startTime + buffer.duration;
+    this.activeSources.push(source);
+    source.onended = () => {
+      this.activeSources = this.activeSources.filter(s => s !== source);
+      this.playNext();
+    };
+  }
+  stop() {
+    // Hard-stop all currently-playing source nodes immediately
+    for (const src of this.activeSources) {
+      try { src.stop(); } catch (_) { /* already stopped */ }
+    }
+    this.activeSources = [];
+    this.queue = [];
+    this.isPlaying = false;
+    this.nextStartTime = 0;
+  }
+  get playing() { return this.isPlaying; }
+  destroy() {
+    this.stop();
+    this.audioContext?.close();
+    this.audioContext = null;
+  }
+}
+
+// ─── WebSocket connection manager ────────────────────────────────────────────
+class VoiceConnection {
+  private ws: WebSocket | null = null;
+  private sessionId: string | null = null;
+  private onMessage: (msg: any) => void;
+  private onStatusChange: (status: string) => void;
+
+  constructor(onMessage: (msg: any) => void, onStatusChange: (status: string) => void) {
+    this.onMessage = onMessage;
+    this.onStatusChange = onStatusChange;
+  }
+
+  async connect(screenContext: string, entityContext?: string, language?: string) {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    this.onStatusChange("connecting");
+    try {
+      const tokenRes = await fetch("/api/voice/token", { credentials: "include" });
+      if (!tokenRes.ok) {
+        this.onStatusChange("error");
+        toast.error("Authentication failed. Please log in again.");
+        return;
+      }
+      const { token } = await tokenRes.json();
+      const wsUrl = `${protocol}//${window.location.host}/api/voice?token=${encodeURIComponent(token)}`;
+      this.ws = new WebSocket(wsUrl);
+      this.ws.onopen = () => {
+        this.ws?.send(JSON.stringify({ type: "start_session", screenContext, entityContext, language: language || "en-GB" }));
+      };
+      this.ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "session_started") {
+            this.sessionId = msg.sessionId;
+            this.onStatusChange("connected");
+          }
+          this.onMessage(msg);
+        } catch {}
+      };
+      this.ws.onclose = () => { this.onStatusChange("disconnected"); this.sessionId = null; };
+      this.ws.onerror = () => { this.onStatusChange("error"); };
+    } catch {
+      this.onStatusChange("error");
+    }
+  }
+
+  sendAudioChunk(pcmBase64: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "audio_chunk", audio: pcmBase64 }));
+    }
+  }
+
+  sendText(text: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "text_input", text }));
+    }
+  }
+
+  sendScreenContext(screenContext: string, entityContext?: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "screen_context", screenContext, entityContext }));
+    }
+  }
+
+  sendCorrection(transcriptId: string, note: string) {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "correct_this", transcriptId, correctionNote: note }));
+    }
+  }
+
+  disconnect() {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "end_session" }));
+    }
+    this.ws?.close();
+    this.ws = null;
+    this.sessionId = null;
+  }
+
+  get isConnected() { return this.ws?.readyState === WebSocket.OPEN; }
+  get currentSessionId() { return this.sessionId; }
+}
+
 // ─── Waveform animation ─────────────────────────────────────────────────────
 function WaveformAnimation({ isActive }: { isActive: boolean }) {
   return (
@@ -46,191 +240,60 @@ function WaveformAnimation({ isActive }: { isActive: boolean }) {
   );
 }
 
-// ─── Speech Recognition wrapper ─────────────────────────────────────────────
-function useSpeechRecognition() {
-  const recognitionRef = useRef<any>(null);
-  const [isListening, setIsListening] = useState(false);
-  const [interimText, setInterimText] = useState("");
-  const onResultRef = useRef<((text: string) => void) | null>(null);
-  const restartingRef = useRef(false);
-  const shouldListenRef = useRef(false);
-
-  const isSupported = useMemo(() => {
-    return typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
-  }, []);
-
-  const start = useCallback((onResult: (text: string) => void) => {
-    if (!isSupported) {
-      toast.error("Speech recognition not supported in this browser. Please use Chrome or Edge.");
-      return;
-    }
-    onResultRef.current = onResult;
-    shouldListenRef.current = true;
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-GB";
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      restartingRef.current = false;
-    };
-
-    recognition.onresult = (event: any) => {
-      let interim = "";
-      let final = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          final += transcript;
-        } else {
-          interim += transcript;
-        }
-      }
-      setInterimText(interim);
-      if (final.trim()) {
-        setInterimText("");
-        onResultRef.current?.(final.trim());
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      console.log("[SpeechRecognition] Error:", event.error);
-      if (event.error === "not-allowed") {
-        toast.error("Microphone access denied. Please allow microphone permission.");
-        shouldListenRef.current = false;
-        setIsListening(false);
-      } else if (event.error === "no-speech" || event.error === "aborted") {
-        // These are normal — will auto-restart via onend
-      }
-    };
-
-    recognition.onend = () => {
-      // Auto-restart if we should still be listening
-      if (shouldListenRef.current && !restartingRef.current) {
-        restartingRef.current = true;
-        try {
-          recognition.start();
-        } catch {
-          setIsListening(false);
-          shouldListenRef.current = false;
-        }
-      } else {
-        setIsListening(false);
-      }
-    };
-
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-    } catch {
-      toast.error("Could not start speech recognition.");
-    }
-  }, [isSupported]);
-
-  const stop = useCallback(() => {
-    shouldListenRef.current = false;
-    restartingRef.current = false;
-    setInterimText("");
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {}
-      recognitionRef.current = null;
-    }
-    setIsListening(false);
-  }, []);
-
-  return { isListening, interimText, start, stop, isSupported };
-}
-
-// ─── Speech Synthesis wrapper ───────────────────────────────────────────────
-function useSpeechSynthesis() {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-
-  const speak = useCallback((text: string) => {
-    if (!text.trim()) return;
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-GB";
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-
-    // Try to find a good British female voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(v => v.lang === "en-GB" && v.name.toLowerCase().includes("female"))
-      || voices.find(v => v.lang === "en-GB" && !v.name.toLowerCase().includes("male"))
-      || voices.find(v => v.lang === "en-GB")
-      || voices.find(v => v.lang.startsWith("en-"));
-    if (preferred) utterance.voice = preferred;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    utteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, []);
-
-  const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setIsSpeaking(false);
-  }, []);
-
-  return { isSpeaking, speak, stop };
-}
-
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function VoiceAgent({ screenContext = "dashboard", entityContext }: VoiceAgentProps) {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [status, setStatus] = useState<"idle" | "connected" | "connecting" | "error">("idle");
+  const [status, setStatus] = useState<string>("idle");
+  const [isLive, setIsLive] = useState(false);
+  const [isGeminiReady, setIsGeminiReady] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isTextMode, setIsTextMode] = useState(false);
   const [textInput, setTextInput] = useState("");
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
-  const [emailSummaryLoading, setEmailSummaryLoading] = useState(false);
+  const [tokensRemaining, setTokensRemaining] = useState<number | null>(null);
+  const [userSpeaking, setUserSpeaking] = useState(false);
+  const [volumeLevel, setVolumeLevel] = useState(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const VAD_THRESHOLD = 0.04; // RMS threshold for speech detection (raised to avoid false barge-in from mic noise)
+  const BARGE_IN_FRAMES = 5; // consecutive frames above threshold before triggering barge-in
+  const SILENCE_TIMEOUT_MS = 1200; // ms of silence before marking as not speaking
+
+  const connectionRef = useRef<VoiceConnection | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const playbackRef = useRef<AudioPlaybackQueue>(new AudioPlaybackQueue());
+  const isSpeakingRef = useRef(false);
+  const bargeInFramesRef = useRef(0); // consecutive frames above VAD threshold
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [showCommandRef, setShowCommandRef] = useState(false);
   const [lastNavigation, setLastNavigation] = useState<string | null>(null);
   const [prevLocation, setPrevLocation] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+  const [emailSummaryLoading, setEmailSummaryLoading] = useState(false);
+  const [showEditActions, setShowEditActions] = useState(false);
   const [pendingFormFill, setPendingFormFill] = useState<{ fields: Record<string, any>; page: string; summary: string } | null>(null);
   const [pendingWhatsApp, setPendingWhatsApp] = useState<{ url: string; label: string }[] | null>(null);
-  const [showEditActions, setShowEditActions] = useState(false);
   const [editActionsInput, setEditActionsInput] = useState("");
   const [customActions, setCustomActions] = useState<string[] | null>(null);
   const [savingActions, setSavingActions] = useState(false);
-
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Speech hooks
-  const { isListening, interimText, start: startListening, stop: stopListening, isSupported: sttSupported } = useSpeechRecognition();
-  const { isSpeaking, speak, stop: stopSpeaking } = useSpeechSynthesis();
-
-  // tRPC mutations
-  const nativeChatMutation = (trpc as any).voiceAgent.nativeChat.useMutation();
-  const nativeGreetingMutation = (trpc as any).voiceAgent.nativeGreeting.useMutation();
-  const startSessionMutation = (trpc as any).voiceAgent.startSession.useMutation();
 
   // Load user's custom quick actions for current page
   const { data: savedActions, refetch: refetchActions } = (trpc as any).voiceAgent.getQuickActions.useQuery(
     { pageKey: screenContext || "/" },
     { enabled: !!screenContext }
   );
+  // Load admin-shared actions as fallback (only when user has no saved actions)
   const { data: adminSharedActions } = (trpc as any).voiceAgent.getAdminSharedActions.useQuery(
     { pageKey: screenContext || "/" },
     { enabled: !!screenContext && !savedActions }
   );
-
-  // Context-aware quick action chips per page
+  // Context-aware quick action chips per page (MUST be declared before effectiveQuickActions)
   const QUICK_ACTIONS: Record<string, string[]> = {
     "/dashboard": ["Bismillah, summarise today", "Any urgent items?", "What needs my attention?"],
     "/receipts": ["Summarise my expenses", "Any pending approvals?", "Record an expense for me"],
@@ -261,26 +324,33 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     "/system-health": ["Is everything healthy?", "Any errors or warnings?", "What's the server status?"],
   };
   const currentQuickActions = QUICK_ACTIONS[screenContext] || ["Summarise this page", "What can I help with?", "Show recent activity"];
+  // Merge priority: user custom > user saved > admin shared > built-in defaults
   const effectiveQuickActions = (customActions ?? (savedActions as string[] | null | undefined) ?? (adminSharedActions as string[] | null | undefined)) ?? currentQuickActions;
-
   const SECTION_NAMES: Record<string, string> = {
-    "/dashboard": "Dashboard", "/receipts": "Receipts", "/reports": "Reports",
-    "/fundraising": "Fundraising", "/loans": "Qard Hasan Loans", "/income": "Income",
-    "/payroll": "Payroll", "/monthly-expenses": "Monthly Expenses", "/reconciliation": "Reconciliation",
-    "/donors": "Donors", "/campaigns": "Campaigns", "/admin": "Admin Panel",
-    "/trustees": "Trustees & Staff", "/compliance": "Compliance Cockpit", "/meetings": "Meetings",
-    "/comms-hub": "Comms Hub", "/comms-inbox": "Master Inbox", "/donor-crm": "Donor CRM",
-    "/gift-aid": "Gift Aid & CRM+", "/pledges": "Pledges", "/payroll-v3": "Payroll V3",
-    "/major-donor": "Major Donor DD", "/bulk-approvals": "Bulk Approvals",
-    "/conflicts-register": "Conflicts Register", "/recognition-tiers": "Recognition Tiers",
-    "/qr-codes": "QR Codes", "/saved-views": "Saved Views",
-    "/bills-utilities": "Bills & Utilities", "/training-tracker": "Training Tracker",
-    "/lbmw-correspondence": "LBMW Correspondence", "/trustee-dashboard": "Trustee Dashboard",
-    "/facilities": "Facilities & Bookings", "/bistro87": "Bistro 87",
-    "/donate": "Donation Page", "/voice-history": "Voice History",
-    "/profile": "Profile", "/settings": "Settings",
+    "/dashboard":"Dashboard","/receipts":"Receipts","/reports":"Reports",
+    "/fundraising":"Fundraising","/loans":"Loans","/income":"Income",
+    "/payroll":"Payroll","/monthly-expenses":"Monthly Expenses",
+    "/reconciliation":"Reconciliation","/donors":"Donors","/campaigns":"Campaigns",
+    "/communications":"Communications","/comms-hub":"Comms Hub",
+    "/comms-inbox":"Master Inbox","/admin":"Admin Panel",
+    "/trustees":"Trustees & Staff Contacts","/accommodation":"Accommodation",
+    "/compliance":"Compliance Cockpit","/decisions":"Decisions Register",
+    "/gift-aid":"Gift Aid","/meetings":"Meetings & Onboarding",
+    "/audit-trail":"Audit Trail","/system-health":"System Health",
+    "/pledges":"Pledges","/donor-pipeline":"Cultivation Pipeline",
+    "/major-donor":"Major Donor DD","/bulk-approvals":"Bulk Approvals",
+    "/conflicts-register":"Conflicts Register","/recognition-tiers":"Recognition Tiers",
+    "/qr-codes":"QR Codes","/saved-views":"Saved Views",
+    "/bills-utilities":"Bills & Utilities","/training-tracker":"Training Tracker",
+    "/lbmw-correspondence":"LBMW Correspondence","/trustee-dashboard":"Trustee Dashboard",
+    "/facilities":"Facilities & Bookings","/bistro87":"Bistro 87",
+    "/donate":"Donation Page","/voice-history":"Voice History",
+    "/profile":"Profile","/settings":"Settings",
   };
 
+
+  // Keep isSpeakingRef in sync with isSpeaking state
+  useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
   // Auto-scroll transcript
   useEffect(() => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -298,212 +368,341 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // ─── Process side effects from server response ────────────────────────────
-  const processSideEffects = useCallback((sideEffects: any[]) => {
-    for (const effect of sideEffects) {
-      switch (effect.type) {
-        case "navigate":
-          if (effect.data?.path) {
-            setPrevLocation(window.location.pathname);
-            navigate(effect.data.path);
-            const sn = SECTION_NAMES[effect.data.path as string] || (effect.data.path as string).replace(/^\//, "").replace(/-/g, " ");
-            setLastNavigation(sn);
-            toast.success("Navigated to " + sn, { duration: 2500 });
-            setTimeout(() => { setLastNavigation(null); setPrevLocation(null); }, 5000);
+  // Update screen context
+  useEffect(() => {
+    if (connectionRef.current?.isConnected) {
+      connectionRef.current.sendScreenContext(screenContext, entityContext);
+    }
+  }, [screenContext, entityContext]);
+
+  // Handle incoming messages from server
+  const handleMessage = useCallback((msg: any) => {
+    switch (msg.type) {
+      case "session_started":
+        setTranscript((prev) => [...prev, { id: `welcome-${Date.now()}`, speaker: "agent", text: msg.text || "Assalamu Alaikum! How can I help you today?", timestamp: new Date() }]);
+        setIsProcessing(false);
+        if ((msg as any).dbSessionId) setCurrentSessionId((msg as any).dbSessionId);
+        break;
+      case "gemini_ready":
+        setIsGeminiReady(true);
+        break;
+      case "audio_response":
+        setIsSpeaking(true);
+        playbackRef.current.enqueue(msg.audio);
+        break;
+      case "interrupted":
+        // Barge-in acknowledged by server
+        setIsSpeaking(false);
+        playbackRef.current.stop();
+        break;
+      case "turn_complete":
+        setIsSpeaking(false);
+        setIsProcessing(false);
+        break;
+      case "transcript": {
+        const speaker = msg.speaker === "assistant" ? "agent" : msg.speaker;
+        setTranscript((prev) => {
+          // Merge with the last entry if it's from the same speaker and within 3 seconds
+          const last = prev[prev.length - 1];
+          if (last && last.speaker === speaker && (Date.now() - last.timestamp.getTime()) < 3000) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, text: last.text + " " + msg.text };
+            return updated;
           }
-          break;
-        case "fill_form": {
-          const { fields, page, action: fillAction } = effect.data;
-          if (fields && typeof fields === "object") {
-            const isConfirm = fillAction === "fill_and_confirm";
-            window.dispatchEvent(new CustomEvent("hibba:fill_form", {
-              detail: { fields, page: page || screenContext, action: fillAction || "fill" }
-            }));
-            const fieldCount = Object.keys(fields).length;
-            if (isConfirm) {
-              const summary = Object.entries(fields)
-                .filter(([, v]) => v)
-                .map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()}: ${v}`)
-                .join(" \u2022 ");
-              setPendingFormFill({ fields, page: page || screenContext, summary });
-              toast("Bismillah \u2014 please review the form and confirm", {
-                duration: 6000, icon: "\u270d\ufe0f",
-                description: summary.slice(0, 100) + (summary.length > 100 ? "..." : ""),
-              });
-            } else {
-              toast.success(`Bismillah \u2014 Hibba filled ${fieldCount} field${fieldCount > 1 ? "s" : ""}`, { duration: 3000 });
-            }
-            setTranscript((prev) => [...prev, {
-              id: `form-fill-${Date.now()}`, speaker: "agent",
-              text: isConfirm
-                ? `\u270d\ufe0f Form filled (awaiting confirmation): ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(", ")}`
-                : `\u270d\ufe0f Form filled: ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(", ")}`,
-              timestamp: new Date()
-            }]);
-          }
-          break;
-        }
-        case "open_url_batch":
-          if (effect.data?.urls && Array.isArray(effect.data.urls)) {
-            setPendingWhatsApp(effect.data.urls.map((u: any) => ({ url: u.url, label: u.label || "Open" })));
-            toast.success(`${effect.data.urls.length} WhatsApp links ready`, { duration: 10000, icon: "\uD83D\uDCE8", description: "Tap each green button to send" });
-          }
-          break;
-        case "open_url":
-          if (effect.data?.url) {
-            const label = effect.data.label || "Link opened";
-            setPendingWhatsApp([{ url: effect.data.url as string, label: label as string }]);
-            try {
-              const linkEl = document.createElement("a");
-              linkEl.href = effect.data.url as string;
-              linkEl.target = "_blank";
-              linkEl.rel = "noopener noreferrer";
-              document.body.appendChild(linkEl);
-              linkEl.click();
-              setTimeout(() => document.body.removeChild(linkEl), 100);
-            } catch {}
-            toast.success(label as string, { duration: 10000, icon: "\uD83D\uDCE8", description: "Tap the green button below to open WhatsApp" });
-          }
-          break;
+          return [...prev, { id: `${speaker}-${Date.now()}`, speaker, text: msg.text, timestamp: new Date() }];
+        });
+        break;
       }
+      case "agent_response":
+        setTranscript((prev) => [...prev, { id: `agent-${Date.now()}`, speaker: "agent", text: msg.text, timestamp: new Date() }]);
+        setIsProcessing(false);
+        break;
+      case "progress":
+        // Show progress text as a brief status indicator
+        if (msg.text) {
+          setTranscript(prev => [...prev, { id: `progress-${Date.now()}`, speaker: "agent", text: msg.text, timestamp: new Date() }]);
+        }
+        setIsProcessing(true);
+        break;
+      case "tool_call":
+        if (msg.toolResult?.status === "executing") {
+          setIsProcessing(true);
+        }
+        break;
+      case "cost_warning":
+        setTokensRemaining(msg.tokensRemaining);
+        toast.warning(msg.costWarning);
+        break;
+      case "error":
+        toast.error(msg.error || "Voice agent error");
+        setIsProcessing(false);
+        break;
+      case "navigate":
+        if (msg.path) {
+          // Save current location so user can undo
+          setPrevLocation(window.location.pathname);
+          navigate(msg.path);
+          const sn = SECTION_NAMES[msg.path as string] || (msg.path as string).replace(/^\//, "").replace(/-/g, " ");
+          setLastNavigation(sn);
+          toast.success("Navigated to " + sn, { duration: 2500 });
+          setTimeout(() => { setLastNavigation(null); setPrevLocation(null); }, 5000);
+        }
+        break;
+      case "fill_form": {
+        // Hibba is filling a form with extracted data
+        const { fields, page, action: fillAction } = msg;
+        if (fields && typeof fields === "object") {
+          const isConfirm = fillAction === "fill_and_confirm";
+          // Dispatch a custom event that page components can listen to
+          const event = new CustomEvent("hibba:fill_form", {
+            detail: { fields, page: page || screenContext, action: fillAction || "fill" }
+          });
+          window.dispatchEvent(event);
+          const fieldCount = Object.keys(fields).length;
+          if (isConfirm) {
+            // Show confirmation banner with field summary
+            const summary = Object.entries(fields)
+              .filter(([, v]) => v)
+              .map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()}: ${v}`)
+              .join(" \u2022 ");
+            setPendingFormFill({ fields, page: page || screenContext, summary });
+            toast("Bismillah \u2014 please review the form and confirm", {
+              duration: 6000,
+              icon: "\u270d\ufe0f",
+              description: summary.slice(0, 100) + (summary.length > 100 ? "..." : ""),
+            });
+          } else {
+            toast.success(`Bismillah \u2014 Hibba filled ${fieldCount} field${fieldCount > 1 ? "s" : ""}`, { duration: 3000 });
+          }
+          setTranscript((prev) => [...prev, {
+            id: `form-fill-${Date.now()}`,
+            speaker: "agent",
+            text: isConfirm
+              ? `\u270d\ufe0f Form filled (awaiting confirmation): ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(", ")}`
+              : `\u270d\ufe0f Form filled: ${Object.entries(fields).map(([k, v]) => `${k}=${v}`).join(", ")}`,
+            timestamp: new Date()
+          }]);
+        }
+        break;
+      }
+
+      case "open_url_batch":
+        if (msg.urls && Array.isArray(msg.urls)) {
+          setPendingWhatsApp(msg.urls.map((u: any) => ({ url: u.url, label: u.label || "Open" })));
+          toast.success(`${msg.urls.length} WhatsApp links ready`, {
+            duration: 10000,
+            icon: "\u{1F4E8}",
+            description: "Tap each green button to send",
+          });
+          setTranscript((prev) => [...prev, {
+            id: `batch-url-${Date.now()}`,
+            speaker: "agent" as const,
+            text: `\u{1F4E8} ${msg.urls.length} WhatsApp messages ready to send`,
+            timestamp: new Date()
+          }]);
+        }
+        break;
+      case "open_url":
+        if (msg.url) {
+          const label = msg.label || "Link opened";
+          // Store the URL so we can show a persistent clickable button
+          setPendingWhatsApp([{ url: msg.url, label }]);
+          // Also try programmatic open via anchor click
+          try {
+            const linkEl = document.createElement("a");
+            linkEl.href = msg.url;
+            linkEl.target = "_blank";
+            linkEl.rel = "noopener noreferrer";
+            document.body.appendChild(linkEl);
+            linkEl.click();
+            setTimeout(() => document.body.removeChild(linkEl), 100);
+          } catch {}
+          toast.success(label, {
+            duration: 10000,
+            icon: "\uD83D\uDCE8",
+            description: "Tap the green button below to open WhatsApp",
+          });
+          setTranscript((prev) => [...prev, {
+            id: `open-url-${Date.now()}`,
+            speaker: "agent" as const,
+            text: `\uD83D\uDCE8 ${label}`,
+            timestamp: new Date()
+          }]);
+        }
+        break;
+      case "session_ended":
+        setStatus("disconnected");
+        setIsProcessing(false);
+        setIsLive(false);
+        setIsGeminiReady(false);
+        break;
     }
   }, [navigate, screenContext]);
 
-  // ─── Send message to server ───────────────────────────────────────────────
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || !currentSessionId || isProcessing) return;
-
-    // Barge-in: stop Hibba speaking if she's mid-sentence
-    stopSpeaking();
-
-    setIsProcessing(true);
-    setTranscript((prev) => [...prev, { id: `user-${Date.now()}`, speaker: "user", text, timestamp: new Date() }]);
-
-    try {
-      const result = await nativeChatMutation.mutateAsync({
-        sessionId: currentSessionId,
-        message: text,
-        screenContext: screenContext || "/",
-        entityContext: entityContext || undefined,
-      });
-
-      // Process side effects (navigation, form fills, URLs)
-      if (result.sideEffects?.length) {
-        processSideEffects(result.sideEffects);
-      }
-
-      // Add response to transcript
-      if (result.response) {
-        const toolCallEntries = result.toolsExecuted?.length
-          ? result.toolsExecuted.map((name: string) => ({ name, status: "done" }))
-          : undefined;
-        setTranscript((prev) => [...prev, {
-          id: `agent-${Date.now()}`, speaker: "agent", text: result.response,
-          timestamp: new Date(), toolCalls: toolCallEntries,
-        }]);
-
-        // Speak the response (only in voice mode)
-        if (!isTextMode) {
-          speak(result.response);
-        }
-      }
-    } catch (err: any) {
-      console.error("[VoiceAgent] Chat error:", err);
-      const errorMsg = "Sorry, I couldn't process that. Please try again.";
-      setTranscript((prev) => [...prev, { id: `error-${Date.now()}`, speaker: "agent", text: errorMsg, timestamp: new Date() }]);
-      toast.error("Voice assistant error");
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [currentSessionId, isProcessing, screenContext, entityContext, nativeChatMutation, processSideEffects, speak, stopSpeaking, isTextMode]);
-
-  // ─── Connect (create session + greeting) ──────────────────────────────────
-  const connect = useCallback(async () => {
+  // Connect to voice gateway
+  const connect = useCallback(() => {
     if (!user) { toast.error("Please log in to use the voice assistant"); return; }
-    setStatus("connecting");
+    const conn = new VoiceConnection(handleMessage, setStatus);
+    conn.connect(screenContext, entityContext);
+    connectionRef.current = conn;
+    playbackRef.current.init();
+  }, [user, screenContext, entityContext, handleMessage]);
+
+  // Disconnect
+  const disconnect = useCallback(() => {
+    stopMic();
+    connectionRef.current?.disconnect();
+    connectionRef.current = null;
+    playbackRef.current.stop();
+    setStatus("idle");
+    setIsGeminiReady(false);
+    setIsLive(false);
+  }, []);
+
+  // Start streaming mic audio via AudioWorklet
+  const startMic = useCallback(async () => {
+    if (!connectionRef.current?.isConnected || !isGeminiReady) {
+      toast.error("Voice service not ready yet. Please wait a moment.");
+      return;
+    }
     try {
-      // Create a new session
-      const session = await startSessionMutation.mutateAsync({
-        screenContext: screenContext || "/",
-        language: "en-GB",
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
       });
-      const sessionId = session.sessionId;
-      setCurrentSessionId(sessionId);
-      setStatus("connected");
+      streamRef.current = stream;
 
-      // Get greeting
-      try {
-        const greetingResult = await nativeGreetingMutation.mutateAsync();
-        const greetingText = greetingResult.greeting || "Assalamu Alaikum! How can I help you today?";
-        setTranscript((prev) => [...prev, {
-          id: `welcome-${Date.now()}`, speaker: "agent", text: greetingText, timestamp: new Date()
-        }]);
-        // Speak greeting
-        speak(greetingText);
-      } catch {
-        setTranscript((prev) => [...prev, {
-          id: `welcome-${Date.now()}`, speaker: "agent",
-          text: "Assalamu Alaikum! How can I help you today?", timestamp: new Date()
-        }]);
-      }
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
+
+      // Create AudioWorklet for low-latency PCM capture
+      const workletBlob = new Blob([AUDIO_WORKLET_CODE], { type: "application/javascript" });
+      const workletUrl = URL.createObjectURL(workletBlob);
+      await audioContext.audioWorklet.addModule(workletUrl);
+      URL.revokeObjectURL(workletUrl);
+
+      const source = audioContext.createMediaStreamSource(stream);
+      const workletNode = new AudioWorkletNode(audioContext, "pcm-capture-processor");
+      workletNodeRef.current = workletNode;
+
+      // Send PCM chunks to server as base64 + VAD
+      workletNode.port.onmessage = (event) => {
+        if (event.data.vad) {
+          // Voice Activity Detection: update volume and speaking state
+          const vol = event.data.volume as number;
+          setVolumeLevel(vol);
+          if (vol > VAD_THRESHOLD) {
+            bargeInFramesRef.current += 1;
+            setUserSpeaking(true);
+            // Barge-in: require sustained speech (BARGE_IN_FRAMES consecutive frames) to avoid false triggers
+            if (bargeInFramesRef.current >= BARGE_IN_FRAMES && playbackRef.current && isSpeakingRef.current) {
+              playbackRef.current.stop();
+              setIsSpeaking(false);
+              bargeInFramesRef.current = 0;
+            }
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = null;
+            }
+          } else {
+            bargeInFramesRef.current = 0; // reset on silence
+            if (!silenceTimerRef.current) {
+              silenceTimerRef.current = setTimeout(() => {
+                setUserSpeaking(false);
+                silenceTimerRef.current = null;
+              }, SILENCE_TIMEOUT_MS);
+            }
+          }
+          return;
+        }
+        if (event.data.pcm) {
+          const pcmBuffer = new Uint8Array(event.data.pcm);
+          let binary = "";
+          for (let i = 0; i < pcmBuffer.length; i++) {
+            binary += String.fromCharCode(pcmBuffer[i]);
+          }
+          const base64 = btoa(binary);
+          connectionRef.current?.sendAudioChunk(base64);
+        }
+      };
+
+      source.connect(workletNode);
+      workletNode.connect(audioContext.destination);
+      setIsLive(true);
     } catch (err) {
-      console.error("[VoiceAgent] Connect error:", err);
-      setStatus("error");
-      toast.error("Could not start voice session. Please try again.");
+      toast.error("Microphone access denied. Please allow microphone permission.");
     }
-  }, [user, screenContext, startSessionMutation, nativeGreetingMutation, speak]);
+  }, [isGeminiReady]);
+  // Cleanup silence timer on unmount
+  useEffect(() => {
+    return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    };
+  }, []);
 
-  // ─── Toggle mic ───────────────────────────────────────────────────────────
+  // Stop streaming mic
+  const stopMic = useCallback(() => {
+    workletNodeRef.current?.disconnect();
+    workletNodeRef.current = null;
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    setIsLive(false);
+  }, []);
+
+  // Toggle mic on/off
   const toggleMic = useCallback(() => {
-    if (isListening) {
-      stopListening();
+    if (isLive) {
+      stopMic();
     } else {
-      startListening((text) => {
-        // When speech is recognized, send it to the server
-        sendMessage(text);
-      });
+      startMic();
     }
-  }, [isListening, startListening, stopListening, sendMessage]);
+  }, [isLive, startMic, stopMic]);
 
-  // ─── Send text message ────────────────────────────────────────────────────
+  // Send text message
   const sendText = useCallback(() => {
-    if (!textInput.trim()) return;
+    if (!textInput.trim() || !connectionRef.current?.isConnected) return;
     const text = textInput.trim();
     setTextInput("");
-    sendMessage(text);
-  }, [textInput, sendMessage]);
-
+    setIsProcessing(true);
+    setTranscript((prev) => [...prev, { id: `user-${Date.now()}`, speaker: "user", text, timestamp: new Date() }]);
+    connectionRef.current.sendText(text);
+  }, [textInput]);
+  // Send a quick action text without needing the input field
   const sendQuickText = useCallback((text: string) => {
-    sendMessage(text);
-  }, [sendMessage]);
+    if (!connectionRef.current?.isConnected) return;
+    setIsProcessing(true);
+    setTranscript((prev) => [...prev, { id: `user-${Date.now()}`, speaker: "user", text, timestamp: new Date() }]);
+    connectionRef.current.sendText(text);
+  }, []);
 
-  // ─── Flag response ────────────────────────────────────────────────────────
+  // Flag response
   const flagResponse = useCallback((entryId: string) => {
+    connectionRef.current?.sendCorrection(entryId, "User flagged this response as incorrect");
     setTranscript((prev) => prev.map((t) => (t.id === entryId ? { ...t, flagged: true } : t)));
     toast.success("Flagged for Dr. Hamid's review");
   }, []);
 
-  // ─── Toggle panel ─────────────────────────────────────────────────────────
+  // Toggle panel
   const toggleOpen = useCallback(() => {
     if (!isOpen) {
       setIsOpen(true);
-      if (status === "idle" || status === "error") {
+      if (status === "idle" || status === "disconnected" || status === "error") {
         connect();
       }
     } else {
       setIsOpen(false);
-      stopListening();
-      stopSpeaking();
     }
-  }, [isOpen, status, connect, stopListening, stopSpeaking]);
+  }, [isOpen, status, connect]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      stopListening();
-      stopSpeaking();
+      stopMic();
+      connectionRef.current?.disconnect();
+      playbackRef.current.destroy();
     };
-  }, [stopListening, stopSpeaking]);
+  }, []);
 
   if (!user) return null;
 
@@ -527,7 +726,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
         )}
       </button>
 
-      {/* WhatsApp pending buttons */}
+      {/* WhatsApp pending buttons - always visible when there are links to open */}
       {pendingWhatsApp && pendingWhatsApp.length > 0 && (
         <div className="fixed bottom-24 right-6 z-[60] flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
           <button
@@ -551,7 +750,6 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
           ))}
         </div>
       )}
-
       {/* Chat panel */}
       {isOpen && (
         <div className={`fixed bottom-24 right-6 z-50 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl flex flex-col transition-all duration-300 ${
@@ -561,7 +759,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
             <div className="flex items-center gap-2">
               <div className={`w-2.5 h-2.5 rounded-full ${
-                status === "connected" ? (isListening ? "bg-emerald-400 animate-pulse" : "bg-emerald-400")
+                status === "connected" ? (isLive ? "bg-emerald-400 animate-pulse" : "bg-emerald-400")
                 : status === "connecting" ? "bg-amber-400 animate-pulse"
                 : "bg-zinc-500"
               }`} />
@@ -590,6 +788,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                   }
                   setEmailSummaryLoading(true);
                   try {
+                    // Use fetch directly since we need to call trpc mutation imperatively
                     const res = await fetch("/api/trpc/voiceAgent.emailSessionSummary", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
@@ -641,36 +840,50 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
             </div>
           </div>
 
+          {/* Token usage bar */}
+          {tokensRemaining !== null && tokensRemaining < 40000 && (
+            <div className="px-4 py-1.5 bg-amber-900/30 border-b border-amber-800/30">
+              <div className="flex items-center justify-between text-xs text-amber-300">
+                <span>Daily tokens remaining</span>
+                <span>{tokensRemaining.toLocaleString()}</span>
+              </div>
+              <div className="mt-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-full bg-amber-400 rounded-full transition-all" style={{ width: `${Math.max(0, (tokensRemaining / 200000) * 100)}%` }} />
+              </div>
+            </div>
+          )}
+
           {/* Command reference card */}
           {showCommandRef && (
             <div className="px-4 py-3 bg-zinc-800/50 border-b border-zinc-700/50 max-h-[200px] overflow-y-auto">
               <p className="text-xs font-semibold text-zinc-300 mb-2">Example voice commands:</p>
               <div className="space-y-2 text-xs text-zinc-400">
                 <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide">Navigation</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">{"\u2022"}</span>"Take me to Donors" / "Open Training Tracker" / "Go to Bistro 87"</p>
-                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">{"\u2022"}</span>"Show me the Trustee Dashboard" / "Open Compliance Cockpit"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Take me to Donors" / "Open Training Tracker" / "Go to Bistro 87"</p>
+                <p className="flex items-start gap-1.5"><span className="text-emerald-400 mt-0.5">•</span>"Show me the Trustee Dashboard" / "Open Compliance Cockpit"</p>
                 <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mt-1.5">Actions</p>
-                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">{"\u2022"}</span>"Send an email to Ahmed about the meeting"</p>
-                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">{"\u2022"}</span>"Send a WhatsApp to the trustees"</p>
-                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">{"\u2022"}</span>"Add a note to donor Khalid's profile"</p>
+                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Send an email to Ahmed about the meeting"</p>
+                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Send a WhatsApp to the trustees"</p>
+                <p className="flex items-start gap-1.5"><span className="text-blue-400 mt-0.5">•</span>"Add a note to donor Khalid's profile"</p>
                 <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mt-1.5">Form Filling</p>
-                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">{"\u2022"}</span>"I paid \u00a350 to the electrician yesterday for maintenance"</p>
-                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">{"\u2022"}</span>"Record a Sadaqah of \u00a3100 from Brother Ahmed"</p>
-                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">{"\u2022"}</span>"Add a bill: BT broadband, \u00a345, due 20th May"</p>
+                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">•</span>"I paid £50 to the electrician yesterday for maintenance"</p>
+                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">•</span>"Record a Sadaqah of £100 from Brother Ahmed"</p>
+                <p className="flex items-start gap-1.5"><span className="text-purple-400 mt-0.5">•</span>"Add a bill: BT broadband, £45, due 20th May"</p>
                 <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide mt-1.5">Data & Queries</p>
-                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">{"\u2022"}</span>"Find donor Ahmed" / "Show this month's expenses"</p>
-                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">{"\u2022"}</span>"What's the prayer time for Maghrib?"</p>
-                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">{"\u2022"}</span>"How many pledges are outstanding?" / "Show training records"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"Find donor Ahmed" / "Show this month's expenses"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What's the prayer time for Maghrib?"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"How many pledges are outstanding?" / "Show training records"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What decisions are pending?" / "Show LBMW correspondence"</p>
+                <p className="flex items-start gap-1.5"><span className="text-amber-400 mt-0.5">•</span>"What's today's Bistro summary?" / "Show conflicts register"</p>
               </div>
-              <p className="text-[10px] text-zinc-500 mt-2 italic">Tip: Say "Bismillah" to start a new task.</p>
+              <p className="text-[10px] text-zinc-500 mt-2 italic">Tip: Interrupt Hibba anytime — she listens without hesitation. Say "Bismillah" to start a new task.</p>
             </div>
           )}
-
           {/* Navigation banner with undo */}
           {lastNavigation && (
             <div className="mx-4 mt-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-between gap-2 text-xs text-emerald-300 animate-in slide-in-from-top-2 duration-300">
               <div className="flex items-center gap-2">
-                <span>{"\uD83E\uDDED"}</span>
+                <span>🧭</span>
                 <span>Navigated to <strong>{lastNavigation}</strong></span>
               </div>
               {prevLocation && (
@@ -689,14 +902,13 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
               )}
             </div>
           )}
-
           {/* Transcript area */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {status === "connecting" && (
               <div className="flex items-center justify-center py-8">
                 <div className="flex items-center gap-2 text-zinc-400 text-sm">
                   <div className="w-4 h-4 border-2 border-zinc-500 border-t-zinc-300 rounded-full animate-spin" />
-                  Starting session...
+                  Connecting...
                 </div>
               </div>
             )}
@@ -712,11 +924,11 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
               </div>
             )}
 
-            {/* Form Fill Confirmation Banner */}
+            {/* ── Form Fill Confirmation Banner ── */}
             {pendingFormFill && (
               <div className="mx-1 mb-2 rounded-xl border border-emerald-500/30 bg-emerald-950/50 p-3 backdrop-blur-sm">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-emerald-400 text-sm font-semibold">{"\u270d\ufe0f"} Hibba filled the form — please review</span>
+                  <span className="text-emerald-400 text-sm font-semibold">✍️ Hibba filled the form — please review</span>
                 </div>
                 <p className="text-xs text-zinc-300 mb-3 leading-relaxed">{pendingFormFill.summary}</p>
                 <div className="flex gap-2">
@@ -728,22 +940,22 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                     }}
                     className="flex-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-3 transition-colors"
                   >
-                    {"\u2713"} Confirm & Save
+                    ✓ Confirm & Save
                   </button>
                   <button
                     onClick={() => {
                       setPendingFormFill(null);
-                      toast("Form fill cancelled — tell Hibba what to change", { icon: "\u21a9\ufe0f" });
+                      toast("Form fill cancelled — tell Hibba what to change", { icon: "↩️" });
                     }}
                     className="flex-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-semibold py-2 px-3 transition-colors"
                   >
-                    {"\u2717"} Change
+                    ✗ Change
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Quick action chips */}
+            {/* Quick action chips — shown when transcript is empty and connected */}
             {transcript.length === 0 && status === "connected" && (
               <div className="flex flex-col gap-2 py-4">
                 <div className="flex items-center justify-between px-1">
@@ -763,7 +975,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {effectiveQuickActions.map((action: string) => (
+                  {effectiveQuickActions.map((action) => (
                     <button
                       key={action}
                       onClick={() => sendQuickText(action)}
@@ -800,7 +1012,10 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                   />
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setEditActionsInput(currentQuickActions.join("\n"))}
+                      onClick={() => {
+                        const defaults = currentQuickActions;
+                        setEditActionsInput(defaults.join("\n"));
+                      }}
                       className="flex-1 text-xs px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 transition-colors"
                     >
                       Reset to defaults
@@ -834,14 +1049,12 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                       }}
                       className="flex-1 text-xs px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors disabled:opacity-50"
                     >
-                      {savingActions ? "Saving\u2026" : "Save"}
+                      {savingActions ? "Saving…" : "Save"}
                     </button>
                   </div>
                 </div>
               </div>
             )}
-
-            {/* Transcript messages */}
             {transcript.map((entry) => (
               <div key={entry.id} className={`flex ${entry.speaker === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
@@ -873,7 +1086,6 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
               </div>
             ))}
 
-            {/* Processing indicator */}
             {isProcessing && (
               <div className="flex justify-start">
                 <div className="bg-zinc-800 rounded-2xl rounded-bl-md px-4 py-3">
@@ -885,16 +1097,6 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                 </div>
               </div>
             )}
-
-            {/* Interim speech text */}
-            {interimText && (
-              <div className="flex justify-end">
-                <div className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed bg-emerald-600/40 text-emerald-200 rounded-br-md italic">
-                  {interimText}...
-                </div>
-              </div>
-            )}
-
             <div ref={transcriptEndRef} />
           </div>
 
@@ -921,34 +1123,34 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
                   </>
                 ) : (
                   <div className="flex-1 flex flex-col items-center gap-2">
-                    {!sttSupported ? (
-                      <div className="text-xs text-zinc-400 py-2 text-center">
-                        Voice not supported in this browser.
-                        <br />
-                        <button onClick={() => setIsTextMode(true)} className="text-emerald-400 hover:underline mt-1">Switch to text mode</button>
+                    {!isGeminiReady ? (
+                      <div className="flex items-center gap-2 text-zinc-400 text-sm py-4">
+                        <div className="w-4 h-4 border-2 border-zinc-500 border-t-zinc-300 rounded-full animate-spin" />
+                        Connecting to voice service...
                       </div>
                     ) : (
                       <>
                         <button
                           onClick={toggleMic}
-                          disabled={isProcessing}
                           className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-                            isListening
-                              ? "bg-red-500 scale-110 shadow-lg shadow-red-500/30 ring-4 ring-red-400/40"
-                              : "bg-emerald-600 hover:bg-emerald-500 hover:scale-105 disabled:opacity-50"
+                            isLive
+                              ? (userSpeaking ? "bg-red-500 scale-110 shadow-lg shadow-red-500/30 ring-4 ring-red-400/40" : "bg-red-500 scale-105 shadow-lg shadow-red-500/20")
+                              : "bg-emerald-600 hover:bg-emerald-500 hover:scale-105"
                           }`}
                         >
-                          {isListening ? <PhoneOff className="w-6 h-6 text-white" /> : <Phone className="w-6 h-6 text-white" />}
-                          {isListening && (
+                          {isLive ? <PhoneOff className="w-6 h-6 text-white" /> : <Phone className="w-6 h-6 text-white" />}
+                          {isLive && userSpeaking && (
                             <span className="absolute inset-0 rounded-full border-2 border-red-300 animate-ping opacity-40" />
                           )}
                         </button>
                         <p className="text-[11px] text-zinc-500">
-                          {isListening
-                            ? (isSpeaking ? "Hibba is speaking... \u0628\u0633\u0645 \u0627\u0644\u0644\u0647" : "Listening... tap to stop")
-                            : isProcessing
-                              ? "Thinking..."
-                              : "Tap to start speaking"}
+                          {isLive
+                            ? (isSpeaking
+                              ? "Hibba is speaking... بسم الله"
+                              : userSpeaking
+                                ? "Hearing you..."
+                                : "Listening... tap to mute")
+                            : "Tap to start speaking"}
                         </p>
                       </>
                     )}
@@ -958,7 +1160,7 @@ export default function VoiceAgent({ screenContext = "dashboard", entityContext 
             ) : (
               <div className="flex items-center justify-center py-2">
                 <Button size="sm" onClick={connect} className="rounded-xl bg-emerald-600 hover:bg-emerald-500">
-                  {status === "connecting" ? "Connecting..." : "Start Session"}
+                  {status === "connecting" ? "Connecting..." : status === "disconnected" ? "Reconnect" : "Start Session"}
                 </Button>
               </div>
             )}

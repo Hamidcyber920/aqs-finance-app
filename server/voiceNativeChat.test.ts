@@ -291,31 +291,31 @@ describe("Native Voice Chat - Side Effects System", () => {
 });
 
 describe("VoiceAgent Client Component", () => {
-  it("should use Web Speech API instead of WebSocket", async () => {
+  it("should use Gemini Live WebSocket for real-time voice", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/client/src/components/VoiceAgent.tsx", "utf-8");
     
-    // Should use SpeechRecognition
-    expect(content).toContain("SpeechRecognition");
-    expect(content).toContain("webkitSpeechRecognition");
+    // Should use WebSocket for voice
+    expect(content).toContain("WebSocket");
+    expect(content).toContain("VoiceConnection");
     
-    // Should use SpeechSynthesis
-    expect(content).toContain("SpeechSynthesisUtterance");
-    expect(content).toContain("speechSynthesis");
+    // Should use AudioWorklet for PCM capture
+    expect(content).toContain("AudioWorklet");
+    expect(content).toContain("pcm");
     
-    // Should NOT use WebSocket for voice
-    expect(content).not.toContain("new WebSocket");
-    expect(content).not.toContain("ws://");
-    expect(content).not.toContain("wss://");
+    // Should use token-based auth
+    expect(content).toContain("/api/voice/token");
   });
 
-  it("should use tRPC mutations for chat", async () => {
+  it("should use WebSocket messages for voice communication", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/client/src/components/VoiceAgent.tsx", "utf-8");
     
-    expect(content).toContain("voiceAgent.nativeChat.useMutation");
-    expect(content).toContain("voiceAgent.nativeGreeting.useMutation");
-    expect(content).toContain("voiceAgent.startSession.useMutation");
+    // Should handle WebSocket message types
+    expect(content).toContain("audio_response");
+    expect(content).toContain("gemini_ready");
+    expect(content).toContain("turn_complete");
+    expect(content).toContain("start_session");
   });
 
   it("should preserve the hibba:fill_form event dispatch", async () => {
@@ -327,15 +327,14 @@ describe("VoiceAgent Client Component", () => {
     expect(content).toContain("CustomEvent");
   });
 
-  it("should process side effects from server response", async () => {
+  it("should handle server-side effects via WebSocket messages", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/client/src/components/VoiceAgent.tsx", "utf-8");
     
-    expect(content).toContain("processSideEffects");
-    expect(content).toContain('case "navigate"');
-    expect(content).toContain('case "fill_form"');
-    expect(content).toContain('case "open_url"');
-    expect(content).toContain('case "open_url_batch"');
+    // Should handle navigation, form fill, and URL open messages
+    expect(content).toContain("navigate");
+    expect(content).toContain("fill_form");
+    expect(content).toContain("open_url");
   });
 
   it("should have voice and text mode toggle", async () => {
@@ -366,12 +365,13 @@ describe("VoiceAgent Client Component", () => {
     expect(content).toContain("VoiceAgentProps");
   });
 
-  it("should support barge-in (stop speaking when user talks)", async () => {
+  it("should support audio playback queue for smooth streaming", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/client/src/components/VoiceAgent.tsx", "utf-8");
     
-    // Should stop speaking when sending a new message
-    expect(content).toContain("stopSpeaking()");
+    // Should have audio playback management
+    expect(content).toContain("AudioPlaybackQueue");
+    expect(content).toContain("audioContext");
   });
 
   it("should have flag response functionality", async () => {

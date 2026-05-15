@@ -2187,3 +2187,23 @@
 ## Bug — Hibba native voice returns "Sorry, I couldn't process that" on deployed site
 - [x] Diagnose server-side error: Gemini API requires `id` on tool_calls and `name` on tool response messages
 - [x] Fix: generate IDs for tool_calls, add name field to tool response messages
+
+## Restore Gemini Live Voice — Fix Deployed Connection Issue
+- [x] Diagnose why Gemini WebSocket fails on deployed site — confirmed Gemini Live API works (tested directly)
+- [x] Restore original VoiceAgent.tsx with WebSocket audio playback (natural Gemini voice)
+- [x] Keep nativeChat as text-mode fallback only
+- [ ] Verify on deployed site after publish
+
+## ElevenLabs Conversational AI Voice Agent Integration (deferred — user chose Gemini)
+- [x] Research ElevenLabs Conversational AI API and SDK (completed, deferred in favor of Gemini)
+- [ ] (deferred) Set up ElevenLabs API key
+- [ ] (deferred) Build server-side signed URL endpoint for ElevenLabs
+- [ ] (deferred) Build client-side VoiceAgent with ElevenLabs SDK
+- [ ] (deferred) Connect Hibba's tools and personality to ElevenLabs agent
+
+## Gemini Live Voice Agent — Full Rewrite
+- [x] Diagnose exact deployed failure — Gemini Live API confirmed working (v1alpha + gemini-2.5-flash-native-audio-latest)
+- [x] Verified: system prompt, tool declarations, tool implementations, personality all intact in voiceGateway.ts
+- [x] Restored original WebSocket-based VoiceAgent.tsx client component (1172 lines)
+- [x] All 46 tests passing (13 gateway + 33 native chat)
+- [ ] Verify full voice flow on deployed site after publish
