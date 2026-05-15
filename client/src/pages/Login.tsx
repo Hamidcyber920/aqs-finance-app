@@ -75,7 +75,7 @@ export default function LoginPage() {
   const loginMutation = trpc.localAuth.login.useMutation({
     onSuccess: async () => {
       await utils.auth.me.invalidate();
-      setLocation("/");
+      window.location.href = "/";
     },
     onError: (err) => {
       toast.error("Login failed", { description: err.message });

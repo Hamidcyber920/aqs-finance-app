@@ -42,6 +42,9 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // Trust proxy (Cloud Run / Cloudflare) so req.protocol = 'https' and cookies work
+  app.set('trust proxy', 1);
+
   // ── Security headers (Helmet) ──────────────────────────────────────────────
   const isDev = process.env.NODE_ENV === "development";
   app.use(

@@ -2160,3 +2160,8 @@
 
 ## Bug — Login form "string did not match expected pattern" on iOS Safari
 - [x] Fix login form to prevent iOS Safari browser-level pattern validation error on email/password fields (Login, Register, ForgotPassword — noValidate + type=text inputMode=email)
+
+## Bug — Login cookie not persisting on deployed site (SameSite=None without Secure)
+- [x] Root cause: Express behind Cloud Run/Cloudflare proxy couldn't detect HTTPS, so cookie had SameSite=None without Secure flag — browsers silently reject this
+- [x] Fix: Added `app.set('trust proxy', 1)` to server/_core/index.ts so req.protocol correctly returns 'https'
+- [x] Fix: Changed login redirect from setLocation("/") to window.location.href = "/" for full page reload after auth
