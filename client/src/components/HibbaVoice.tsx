@@ -57,13 +57,18 @@ export function HibbaVoice() {
       // 1. Get auth token
       const tokenRes = await fetch("/api/voice/token", { credentials: "include" });
       if (!tokenRes.ok) {
-        throw new Error("Authentication failed. Please log in again.");
+        const errBody = await tokenRes.json().catch(() => null);
+        throw new Error(errBody?.error || "Authentication failed. Please log in again.");
       }
-      const { token } = await tokenRes.json();
+      const tokenData = await tokenRes.json();
+      if (!tokenData?.token) {
+        throw new Error("Invalid token response from server.");
+      }
+      const token = tokenData.token;
 
       // 2. Connect WebSocket
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/api/voice?token=${token}&voice=Aoede`;
+      const wsUrl = `${protocol}//${window.location.host}/api/voice?token=${encodeURIComponent(token)}&voice=Aoede`;
 
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;

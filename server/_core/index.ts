@@ -120,6 +120,9 @@ async function startServer() {
   registerGmailWebhook(app);
   // Google OAuth re-authorization routes
   registerGoogleReauthRoutes(app);
+  // Voice token endpoint (must be BEFORE Vite/static catch-all)
+  registerVoiceTokenRoute(app);
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -144,9 +147,6 @@ async function startServer() {
 
   // Register scheduled cron jobs (weekly repayment alert + monthly trustee report)
   registerScheduledJobs();
-
-  // Voice token endpoint (must be before tRPC to avoid route conflicts)
-  registerVoiceTokenRoute(app);
 
   // Attach Hibba voice gateway (WebSocket)
   attachVoiceGateway(server);
