@@ -11,7 +11,6 @@ import {
   CheckCircle2, Clock, ArrowUpRight, ArrowDownRight, RefreshCw,
   Receipt, CreditCard, HandHeart, BookOpen, Wallet, Zap, GraduationCap
 } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 /* ── Brand tokens ── */
 const T = {
@@ -138,11 +137,8 @@ export default function DashboardPage() {
   const [userFilter, setUserFilter] = useState<number | "all">("all");
 
   /* tRPC queries */
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Dashboard — overview of society operations, compliance and finances");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: receipts } = trpc.receipts.list.useQuery({ limit: 5 });
   const { data: loans } = trpc.loans.list.useQuery({});

@@ -67,7 +67,6 @@ const TrusteeDashboardPage = lazy(() => import("./pages/TrusteeDashboard"));
 const FacilitiesPage = lazy(() => import("./pages/Facilities"));
 const Bistro87Page = lazy(() => import("./pages/Bistro87"));
 const DonatePage = lazy(() => import("./pages/DonatePage"));
-const VoiceHistoryPage = lazy(() => import("./pages/VoiceHistory"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password", "/pending-approval", "/payment/success", "/payment/cancelled", "/pay", "/give", "/donors-wall", "/donate"];
@@ -162,7 +161,6 @@ function Router() {
           <Route path="/facilities" component={FacilitiesPage} />
           <Route path="/bistro87" component={Bistro87Page} />
           <Route path="/donate" component={DonatePage} />
-          <Route path="/voice-history" component={VoiceHistoryPage} />
           <Route path="/payment/success" component={PaymentSuccessPage} />
           <Route path="/payment/cancelled" component={PaymentCancelledPage} />
           <Route path="/pending-approval" component={PendingApprovalPage} />

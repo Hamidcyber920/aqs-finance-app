@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
-import { VoiceContextProvider } from "@/contexts/VoiceContext";
 
 // ─── Global Error Boundary ────────────────────────────────────────────────────
 class AppErrorBoundary extends Component<
@@ -157,9 +156,7 @@ createRoot(document.getElementById("root")!).render(
   <AppErrorBoundary>
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <VoiceContextProvider>
           <App />
-        </VoiceContextProvider>
       </QueryClientProvider>
     </trpc.Provider>
   </AppErrorBoundary>

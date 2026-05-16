@@ -9,7 +9,6 @@ import {
   BookOpen, Save, History, ChevronRight, Clock, Tag,
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -962,11 +961,8 @@ function ThreadWithHistory({
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function CommunicationsPage() {
   const { canDelete, canAdd } = usePermissions();
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Communications — email and messaging centre for trustees and donors");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const [selectedChannelId, setSelectedChannelId] = useState<number|null>(null);
   const [showPanel, setShowPanel] = useState(false);

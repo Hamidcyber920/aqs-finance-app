@@ -10,7 +10,6 @@ import {
   Shield, Search, ChevronLeft, ChevronRight, RefreshCw,
   Clock, User, Database, Activity, AlertCircle,
 } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = {
   navy: "#0A192F", purple: "#635BFF", mint: "#00FFC2",
@@ -37,11 +36,8 @@ export default function AuditTrailPage() {
   const [actionFilter, setActionFilter] = useState("all");
   const PAGE_SIZE = 50;
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Audit Trail — full history of all system actions and changes");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: statsData } = trpc.auditTrail.stats.useQuery();
   const { data: entityTypes } = trpc.auditTrail.getEntityTypes.useQuery();

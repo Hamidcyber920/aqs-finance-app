@@ -8,7 +8,6 @@ import {
 import { SmartUpload } from "@/components/SmartUpload";
 import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = {
   navy:   "#0A192F",
@@ -397,11 +396,8 @@ export default function TrusteesPage() {
   const [lastMergedId, setLastMergedId] = useState<number | null>(null);
   const [premergeSnapshot, setPremergeSnapshot] = useState<Record<string, unknown> | null>(null);
   const [appliedFields, setAppliedFields] = useState<Record<string, unknown> | null>(null);
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Trustees & Staff Contacts — trustee board and staff contact directory");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data, refetch } = trpc.trustees.list.useQuery();
   const { canAdd } = usePermissions();

@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { useFormPersist } from "@/hooks/useFormPersist";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtCurrency(v: string | number | null | undefined) {
@@ -1083,11 +1082,8 @@ function CrmAdminPanel() {
 }
 
 export default function DonorCRM() {
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Donor CRM — full donor relationship management with history and notes");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: leads, refetch: refetchLeads } = trpc.crm.listLeads.useQuery();
   const { data: certs } = trpc.crm.listGiftAidCertificates.useQuery();

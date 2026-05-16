@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -38,11 +37,8 @@ export default function CampaignsPage() {
   const [previewCampaign, setPreviewCampaign] = useState<any>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string|null>(null);
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Campaigns — list of fundraising campaigns and donation targets");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data, refetch } = trpc.campaigns.list.useQuery();
   const { data: donors } = trpc.donors.list.useQuery({ limit:200 });

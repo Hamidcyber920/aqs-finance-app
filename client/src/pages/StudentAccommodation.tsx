@@ -19,7 +19,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -901,11 +900,8 @@ export default function StudentAccommodationPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Student Accommodation — tenant management, rent tracking and room assignments");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: tenants, refetch: refetchTenants } = trpc.accommodation.listTenants.useQuery();
   const { data: upcomingRent } = trpc.accommodation.upcomingRent.useQuery({ daysAhead: 7 });

@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = {
   navy: "#0A192F", purple: "#635BFF", mint: "#00FFC2",
@@ -121,11 +120,8 @@ export default function PayrollPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const chequeRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Payroll — ${activeTab} tab, month: ${month}/${year}`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, month, year, activeTab]);
+  }, [month, year, activeTab]);
 
   const { data, refetch } = trpc.payroll.list.useQuery({ month, year });
   // Approval workflow queries/mutations

@@ -5,7 +5,6 @@ import { SmartUpload } from "@/components/SmartUpload";
 import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = {
   navy:"#0A192F", purple:"#635BFF", mint:"#00FFC2", white:"#FFFFFF",
@@ -382,11 +381,8 @@ function SectionLabel({ label, color }: { label: string; color: string }) {
 }
 
 export default function OrgChartPage() {
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Org Chart — organisational structure, staff hierarchy and contact directory");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: usersData } = trpc.users.list.useQuery({});
   const { data: trusteesData, refetch } = trpc.trustees.list.useQuery();

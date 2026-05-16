@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Bookmark, Plus, Trash2, Star } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const MODULE_LABELS: Record<string, string> = {
   donors: "Donors",
@@ -23,11 +22,8 @@ export default function SavedViews() {
   const [selectedModule, setSelectedModule] = useState("donors");
   const [form, setForm] = useState({ name: "", module: "donors", isDefault: false });
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Saved Views — module: ${selectedModule}`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, selectedModule]);
+  }, [selectedModule]);
 
   const { data: views, refetch } = (trpc as any).savedViews.list.useQuery({ module: selectedModule || undefined });
 

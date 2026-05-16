@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, AlertTriangle, CheckCircle, FileText } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 export default function ConflictsRegister() {
   const [showAdd, setShowAdd] = useState(false);
@@ -24,11 +23,8 @@ export default function ConflictsRegister() {
     donationAmount: "",
   });
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Conflicts Register — trustee conflicts of interest declarations");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: conflicts, refetch } = (trpc as any).conflicts.list.useQuery();
 

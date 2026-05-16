@@ -17,7 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { History, Download, ChevronLeft, ChevronRight, Eye, RotateCcw } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const trpcAny = trpc as any;
@@ -140,11 +139,8 @@ export default function MergeHistoryPage() {
   const [selectedRow, setSelectedRow] = useState<HistoryRow | null>(null);
   const LIMIT = 25;
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Merge History — table filter: ${tableFilter}`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, tableFilter]);
+  }, [tableFilter]);
 
   const { data, isLoading } = trpcAny.scanMerge.listHistory.useQuery({
     tableName: tableFilter === "all" ? undefined : tableFilter,

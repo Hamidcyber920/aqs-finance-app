@@ -7,7 +7,6 @@ import { User, Lock, Bell, Shield, Eye, EyeOff, Save, LogOut } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -19,18 +18,12 @@ const TABS = [
 
 export default function ProfileSettingsPage() {
   const { user, logout } = useAuth();
-  const { setEntityContext } = useVoiceContext();
   const [tab, setTab] = useState("profile");
 
   useEffect(() => {
-    setEntityContext(`Viewing Profile & Settings — ${tab} tab`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, tab]);
-  const { data: briefingPrefs } = (trpc as any).voiceAgent.getBriefingPrefs.useQuery();
-  const saveBriefingPrefsMut = (trpc as any).voiceAgent.saveBriefingPrefs.useMutation({
-    onSuccess: () => toast.success("Briefing preferences saved"),
-    onError: (e: any) => toast.error(e.message),
-  });
+  }, [tab]);
+  const briefingPrefs: any = null;
+  const saveBriefingPrefsMut = { mutate: () => {}, isPending: false };
   const [localPrefs, setLocalPrefs] = useState({
     enabled: true, includeLoans: true, includeDonations: true,
     includePayroll: true, includePledges: true, includeTenants: true, includeCompliance: true,

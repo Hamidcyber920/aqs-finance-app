@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Building2, CalendarDays, Plus, Users, PoundSterling, CheckCircle2, Clock, XCircle, RefreshCw, Edit2 } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const STATUS_COLORS: Record<string, string> = {
   enquiry: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
@@ -177,11 +176,8 @@ export default function Facilities() {
   const [showNewRoom, setShowNewRoom] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Facilities & Bookings — ${tab} tab`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, tab]);
+  }, [tab]);
 
   const utils = trpc.useUtils();
   const stats = trpc.facilities.stats.useQuery();

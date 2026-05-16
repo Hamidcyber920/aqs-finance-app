@@ -23,7 +23,6 @@ import {
   ArrowLeft, MoreHorizontal, Edit3, Zap, Tag,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -718,11 +717,8 @@ export default function CommHub() {
   const isMobile = useIsMobile();
   const utils = trpc.useUtils();
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Comms Hub — centralised communications management centre");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: stats = [], isLoading: statsLoading } = trpc.commsHub.getStats.useQuery(undefined, {
     refetchInterval: 30000,

@@ -7,18 +7,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CheckCircle, XCircle, Clock, Users, Mail, AlertTriangle } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 export default function BulkApprovals() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [reviewNote, setReviewNote] = useState("");
   const [action, setAction] = useState<"approved" | "rejected" | null>(null);
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Bulk Approvals — review and approve outgoing bulk emails to donors");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: pending, refetch } = (trpc as any).bulkApprovals.list.useQuery({ status: "pending" });
   const { data: history } = (trpc as any).bulkApprovals.list.useQuery({ status: undefined });

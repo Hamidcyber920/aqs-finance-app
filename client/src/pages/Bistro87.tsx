@@ -14,7 +14,6 @@ import {
   UtensilsCrossed, Plus, Edit, Trash2, ShoppingCart, CheckCircle,
   TrendingUp, Clock, ChefHat, BarChart3, X, RefreshCw
 } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const ORDER_TYPES = ["dine_in", "takeaway", "delivery", "event_catering"] as const;
 const ORDER_STATUSES = ["pending", "preparing", "ready", "served", "cancelled"] as const;
@@ -56,11 +55,8 @@ export default function Bistro87() {
   const [cart, setCart] = useState<Array<{ menuItemId: number; itemName: string; quantity: number; unitPrice: number; notes: string }>>([]);
 
   // --- Queries ---
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Bistro 87 — ${activeTab} tab`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, activeTab]);
+  }, [activeTab]);
 
   const { data: menuItems = [], refetch: refetchMenu } = trpc.bistro.listMenuItems.useQuery({});
   const { data: orders = [], refetch: refetchOrders } = trpc.bistro.listOrders.useQuery({ status: orderFilter === "all" ? undefined : orderFilter, limit: 100 });

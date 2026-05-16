@@ -18,7 +18,6 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from "recharts";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const CHART_COLORS = ["#1a4731", "#c9a84c", "#2563eb", "#7c3aed", "#dc2626", "#059669", "#d97706", "#0891b2"];
 
@@ -46,11 +45,8 @@ export default function TrusteeDashboard() {
 
   const utils = trpc.useUtils();
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Trustee Dashboard — governance overview with finance approvals and compliance status");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data, isLoading, error } = trpc.trusteeFinance.dashboard.useQuery(
     { year, month },

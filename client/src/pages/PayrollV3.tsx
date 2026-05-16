@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Upload, Plus, CheckCircle, DollarSign, Users, FileText, AlertCircle, ChevronRight } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const CURRENT_YEAR = new Date().getFullYear();
@@ -36,11 +35,8 @@ const EMPTY_FORM = {
 
 export default function PayrollV3Page() {
   const { user } = useAuth();
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Payroll V3 — ${tab} tab, month: ${month}/${year}`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, month, year, tab]);
+  }, [month, year, tab]);
 
   const utils = trpc.useUtils();
   const isAdmin = ["superadmin", "trustee", "manager", "admin"].includes(user?.role ?? "");

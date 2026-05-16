@@ -18,7 +18,6 @@ import {
   Upload, Eye, Clock, Tag, X, Paperclip, Filter, CalendarDays, ChevronDown,
   SquareCheck, Trash2, Flag
 } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: "bg-red-500/20 text-red-400 border-red-500/30",
@@ -94,11 +93,8 @@ export default function CommsInboxPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
 
   // ── Queries ───────────────────────────────────────────────────────────────
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Comms Inbox — all incoming communications in one place");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: sections = [], refetch: refetchSections } = trpc.commsInbox.listSections.useQuery();
   const { data: stats } = trpc.commsInbox.getInboxStats.useQuery(undefined, { refetchInterval: 30000 });

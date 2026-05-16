@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { QrCode, Plus, Download, ExternalLink, Copy, Printer } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 /** Build the full URL with UTM params appended */
 function buildQrUrl(qr: { targetUrl: string; utmSource?: string | null; utmMedium?: string | null; utmCampaign?: string | null }) {
@@ -71,11 +70,8 @@ export default function QRCodes() {
   const [showGenerate, setShowGenerate] = useState(false);
   const [form, setForm] = useState({ label: "", targetUrl: "", campaignId: "", utmSource: "qr", utmMedium: "print", utmCampaign: "" });
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing QR Codes — donation QR codes for campaigns and events");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: qrCodes, refetch } = (trpc as any).qrCodes.list.useQuery();
   const { data: campaigns } = (trpc as any).fundraising.listCampaigns.useQuery();

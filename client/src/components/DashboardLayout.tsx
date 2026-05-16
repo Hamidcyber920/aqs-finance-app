@@ -23,8 +23,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import VoiceAgent from "@/components/VoiceAgent";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 import {
   BarChart3, BookOpen, Building2, Camera, ClipboardList, Scale,
   DollarSign, HandHeart, LayoutDashboard, LogOut, Receipt,
@@ -95,7 +93,6 @@ const adminItems = [
   { icon: History, label: "Merge History", path: "/merge-history" },
   { icon: Database, label: "Backups", path: "/backups" },
   { icon: Shield, label: "Audit Trail", path: "/audit-trail" },
-  { icon: Mic, label: "Voice History", path: "/voice-history" },
   { icon: Activity, label: "System Health", path: "/system-health" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ];
@@ -190,7 +187,6 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const role = user?.role as Role | undefined;
-  const { entityContext } = useVoiceContext();
 
   const showFinance = isAdmin(role) || perms?.canManageFundraising || perms?.canManageLoans || perms?.canManageIncome;
   const showOrg = isAdmin(role) || perms?.canManageDonors || perms?.canSendCampaigns || perms?.canExportReports;
@@ -517,7 +513,6 @@ function DashboardLayoutContent({
           </nav>
         )}
       </SidebarInset>
-      <VoiceAgent screenContext={location.split("?")[0]} entityContext={entityContext ?? undefined} />
     </>
   );
 }

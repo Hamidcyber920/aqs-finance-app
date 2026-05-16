@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -24,11 +23,8 @@ export default function DonorsPage() {
   const [appliedFields, setAppliedFields] = useState<Record<string, unknown> | null>(null);
   const [showDocScan, setShowDocScan] = useState(false);
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Donors — full donor database with search, profiles and RFM scoring");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data, refetch } = trpc.donors.list.useQuery({ limit:100 });
   const computeRfmMut = (trpc as any).donorsV3.computeRfmScores.useMutation({

@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Calendar, Plus, Sparkles, FileText, CheckSquare, ChevronRight, UserPlus } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -53,11 +52,8 @@ const EMPTY_PIPELINE = {
 
 export default function MeetingsV3Page() {
   useAuth();
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Meetings & Onboarding — ${tab} tab`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, tab]);
+  }, [tab]);
 
   const utils = trpc.useUtils();
 

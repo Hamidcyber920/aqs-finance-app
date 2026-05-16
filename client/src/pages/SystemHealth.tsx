@@ -5,7 +5,6 @@ import {
   RefreshCw, Zap, Table2, Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = {
   navy: "#0A192F", purple: "#635BFF", mint: "#00FFC2",
@@ -15,11 +14,8 @@ const T = {
 };
 
 export default function SystemHealthPage() {
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing System Health — server status, API health, database and performance metrics");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data, isLoading, refetch, dataUpdatedAt } = trpc.systemHealth.snapshot.useQuery(
     undefined, { refetchInterval: 30_000 }

@@ -2243,3 +2243,20 @@
 - [x] Verify client-side: VoiceContext provider wrapping app in main.tsx (line 160)
 - [x] No missing wiring — all connections verified
 - [x] Run tests and confirm server health (46/46 tests passing, server 200 OK, voice gateway attached)
+
+## Voice Assistant — Replace with Iframe Embed (Standalone Hibba App)
+- [x] Remove server/voiceGateway.ts
+- [x] Remove server/voiceTokenRoute.ts
+- [x] Remove server/voiceGateway.test.ts
+- [x] Remove client VoiceAgent.tsx component
+- [x] Remove client VoiceContext.tsx
+- [x] Remove VoiceContext provider from main.tsx
+- [x] Remove VoiceAgent mounting from DashboardLayout.tsx
+- [x] Remove voice-related router (server/routers/voiceAgent.ts)
+- [x] Remove @google/genai dependency
+- [ ] Build floating iframe embed component (HibbaAssistant.tsx)
+- [ ] Add iframe with allow="microphone" pointing to standalone Hibba URL
+- [ ] Style as floating button + expandable panel
+- [ ] Mount in DashboardLayout as replacement for VoiceAgent
+- [ ] Run tests and verify server health
+- [ ] Save checkpoint

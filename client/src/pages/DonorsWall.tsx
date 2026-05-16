@@ -10,7 +10,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Heart, Star, Award, Users } from "lucide-react";
 import { useEffect } from "react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const TIER_COLORS: Record<string, string> = {
   Platinum: "bg-purple-100 text-purple-800 border-purple-300",
@@ -20,11 +19,8 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 export default function DonorsWall() {
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Donors Wall — public recognition wall for generous supporters");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: wallData, isLoading } = (trpc as any).crm.getDonorsWall.useQuery();
 

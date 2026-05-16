@@ -21,7 +21,6 @@ import {
   Copy, MessageCircle, ExternalLink, Download, RefreshCw, Plus, Send,
   Smartphone, Globe, Landmark, QrCode, ScanLine, Banknote, Loader2
 } from "lucide-react";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // Stripe publishable key — loaded once outside any component
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string);
@@ -1187,11 +1186,8 @@ function GiftAidPanel() {
 export default function Fintech() {
   const { user } = useAuth();
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Payment Hub — Stripe payments, bank transfers and financial integrations");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   return (
     <div className="container py-6 space-y-6">

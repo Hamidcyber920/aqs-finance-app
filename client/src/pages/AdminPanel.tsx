@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -92,17 +91,14 @@ export default function AdminPanelPage() {
   const [qaPageKey, setQaPageKey] = useState("/loans");
   const [qaActions, setQaActions] = useState<string[]>(["Show overdue loans", "Summarise active loans", "Any loans due this month?"]);
   const [qaInput, setQaInput] = useState("");
-  const { data: sharedActionsData, refetch: refetchSharedActions } = trpc.voiceAgent.listAdminSharedActions.useQuery();
-  const shareActionsMut = trpc.voiceAgent.adminShareQuickActions.useMutation({ onSuccess: () => { toast.success("Quick actions pushed to all users"); refetchSharedActions(); }, onError: (e: any) => toast.error(e.message) });
-  const deleteSharedMut = trpc.voiceAgent.deleteAdminSharedActions.useMutation({ onSuccess: () => { toast.success("Removed shared actions"); refetchSharedActions(); }, onError: (e: any) => toast.error(e.message) });
-  const triggerBriefingMut = trpc.voiceAgent.triggerMorningBriefing.useMutation({ onSuccess: () => toast.success("Morning briefing triggered and sent!"), onError: (e: any) => toast.error(e.message) });
+  const sharedActionsData: any[] = []; const refetchSharedActions = () => {};
+  const shareActionsMut = { mutate: () => toast.info("Voice agent removed"), isPending: false };
+  const deleteSharedMut = { mutate: () => toast.info("Voice agent removed"), isPending: false };
+  const triggerBriefingMut = { mutate: () => toast.info("Voice agent removed"), isPending: false };
   const sharedActionsList = { data: sharedActionsData ?? [], refetch: refetchSharedActions };
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Admin Panel — user management, approvals and permissions");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   // Google re-auth helpers
   const checkGoogleStatus = async () => {

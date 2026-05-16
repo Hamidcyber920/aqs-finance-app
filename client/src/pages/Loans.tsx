@@ -21,7 +21,6 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = {
   navy: "#0A192F", navyLight: "#112240", purple: "#635BFF",
@@ -82,11 +81,8 @@ export default function LoansPage() {
   const [forecastDrilldown, setForecastDrilldown] = useState<{ label: string; donors: { name: string; email: string; amount: number; dueDate: Date }[] } | null>(null);
   const [tableFilter, setTableFilter] = useState<"all" | "active" | "pending" | "donors">("all");
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Qard Hasan Loans — interest-free Islamic loan applications and repayments");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data, refetch } = trpc.loans.listWithSummary.useQuery({});
 

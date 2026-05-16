@@ -6,7 +6,6 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { FileText, Download, TrendingUp, DollarSign, Receipt, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SmartUpload } from "@/components/SmartUpload";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -31,11 +30,8 @@ export default function ReportsPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [generating, setGenerating] = useState(false);
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Financial Reports — month: ${month}/${year}`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, month, year]);
+  }, [month, year]);
 
   const { data: reportData } = trpc.expenses.monthlySummary.useQuery({ month, year });
 

@@ -38,7 +38,6 @@ import { qrCodesRouter } from "./routers/qrCodes";
 import { recognitionTiersRouter } from "./routers/recognitionTiers";
 import { facilitiesRouter } from "./routers/facilities";
 import { bistroRouter } from "./routers/bistro";
-import { voiceAgentRouter } from "./routers/voiceAgent";
 import { googleServicesRouter } from "./routers/googleServices";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
@@ -405,7 +404,6 @@ export const appRouter = router({
   trusteeFinance: trusteeFinanceRouter,
   facilities: facilitiesRouter,
   bistro: bistroRouter,
-  voiceAgent: voiceAgentRouter,
   googleServices: googleServicesRouter,
   // --- SUCCESSIONN & DELEGATION ──────────────────────────────────────────────────
   succession: router({

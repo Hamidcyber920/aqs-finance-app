@@ -15,7 +15,6 @@ import {
   GraduationCap, FileText, ExternalLink, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import SmartDocumentUpload from "@/components/SmartDocumentUpload";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -464,11 +463,8 @@ export default function ComplianceCockpit() {
   const [showTrainingOcr, setShowTrainingOcr] = useState(false);
   const [showPolicyOcr, setShowPolicyOcr] = useState(false);
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Compliance Cockpit — regulatory compliance actions, training and policies");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: actions = [], isLoading: actionsLoading, refetch: refetchActions } = (trpc as any).compliance.listActions.useQuery();
   const { data: training = [], isLoading: trainingLoading, refetch: refetchTraining } = (trpc as any).compliance.listTraining.useQuery();

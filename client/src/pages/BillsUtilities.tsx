@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const FALLBACK_BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"];
 const FALLBACK_CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"];
@@ -609,11 +608,8 @@ export default function BillsUtilities() {
 
 
   const utils = trpc.useUtils();
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext("Viewing Bills & Utilities — supplier bills, utility contracts and payment schedules");
-    return () => setEntityContext(null);
-  }, [setEntityContext]);
+  }, []);
 
   const { data: summary } = trpc.bills.summary.useQuery();
   const { data: allBuildings = [] } = trpc.bills.listBuildings.useQuery();

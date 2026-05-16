@@ -6,7 +6,6 @@ import { Scale, TrendingUp, TrendingDown, AlertCircle, Camera, Upload, Printer, 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useVoiceContext } from "@/contexts/VoiceContext";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -39,11 +38,8 @@ export default function ReconciliationPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const statementRef = useRef<HTMLInputElement>(null);
 
-  const { setEntityContext } = useVoiceContext();
   useEffect(() => {
-    setEntityContext(`Viewing Month-End Reconciliation — month: ${month}/${year}`);
-    return () => setEntityContext(null);
-  }, [setEntityContext, month, year]);
+  }, [month, year]);
 
   const { data, refetch } = trpc.reconciliation.fullStatement.useQuery({ month, year });
 
