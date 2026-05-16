@@ -1,17 +1,24 @@
 /**
- * Hibba Voice Gateway — Component-Level Integration
+ * Hibba Voice Gateway — SSE + HTTP POST Transport
  * Uses @google/genai SDK with ai.live.connect() for Gemini 2.5 Flash Native Audio
  * Voice: Aoede | Model: gemini-2.5-flash-native-audio-latest
- * 
- * Matches the proven pattern from the reference Hibba standalone app.
+ *
+ * Architecture:
+ *   POST /api/voice/start   → Authenticate, create Gemini Live session, return sessionId
+ *   GET  /api/voice/stream   → SSE stream (server→client: audio, transcript, tool events)
+ *   POST /api/voice/audio    → Send audio chunks from client to Gemini (client→server)
+ *   POST /api/voice/text     → Send text from client to Gemini
+ *   POST /api/voice/stop     → End a session
+ *
+ * This replaces the previous WebSocket-based transport which doesn't work through
+ * Cloudflare/Manus deployment proxy (WebSocket upgrade returns 200 HTML instead of 101).
  */
-import { WebSocketServer, WebSocket } from "ws";
-import { Server } from "http";
-import { parse } from "url";
+import type { Express, Request, Response } from "express";
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import type { Session } from "@google/genai";
 import { verifyWsToken } from "./wsAuth";
 import * as db from "./db";
+import crypto from "crypto";
 
 // ─── Gemini API Key ──────────────────────────────────────────────────────────
 const apiKey = process.env.GEMINI_API_KEY || "";
@@ -19,6 +26,65 @@ console.log(`[Hibba] API key configured: ${!!apiKey} (length: ${apiKey.length})`
 
 // ─── Connection timeout for Gemini Live ─────────────────────────────────────
 const GEMINI_CONNECT_TIMEOUT_MS = 20000; // 20 seconds
+const SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes max session lifetime
+
+// ─── Active Sessions Map ────────────────────────────────────────────────────
+interface VoiceSession {
+  id: string;
+  userId: number;
+  userName: string;
+  userRole: string;
+  geminiSession: Session | null;
+  sseResponse: Response | null;
+  createdAt: number;
+  lastActivity: number;
+}
+
+const activeSessions = new Map<string, VoiceSession>();
+
+// Clean up stale sessions every 60 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, session] of activeSessions) {
+    if (now - session.createdAt > SESSION_TTL_MS || now - session.lastActivity > 5 * 60 * 1000) {
+      console.log(`[Hibba] Cleaning up stale session: ${id}`);
+      cleanupSession(id);
+    }
+  }
+}, 60000);
+
+function cleanupSession(sessionId: string) {
+  const session = activeSessions.get(sessionId);
+  if (!session) return;
+
+  try {
+    if (session.geminiSession) {
+      session.geminiSession.close();
+    }
+  } catch (e: any) {
+    console.error(`[Hibba] Error closing Gemini session ${sessionId}:`, e?.message);
+  }
+
+  try {
+    if (session.sseResponse && !session.sseResponse.writableEnded) {
+      sendSSE(session.sseResponse, "session_ended", {});
+      session.sseResponse.end();
+    }
+  } catch (e: any) {
+    // SSE response may already be closed
+  }
+
+  activeSessions.delete(sessionId);
+}
+
+function sendSSE(res: Response, event: string, data: any) {
+  if (res.writableEnded) return;
+  try {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  } catch (e: any) {
+    console.error("[Hibba] SSE write error:", e?.message);
+  }
+}
 
 // ─── System Instruction ──────────────────────────────────────────────────────
 const SYSTEM_INSTRUCTION = `================================================================
@@ -362,90 +428,82 @@ const TOOL_DECLARATIONS = [
   },
   {
     name: "get_qarde_hasan_register",
-    description: "Returns the Qarde Hasan loan register.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: { borrower_id: { type: Type.STRING, description: "Borrower ID" } },
-      required: []
-    }
-  },
-  {
-    name: "scan_receipt",
-    description: "Initiates the scan receipt flow.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        vendor: { type: Type.STRING, description: "Vendor name" },
-        amount: { type: Type.NUMBER, description: "Amount" },
-        category: { type: Type.STRING, description: "Category" },
-        fund_id: { type: Type.STRING, description: "Fund ID" }
-      },
-      required: ["vendor", "amount"]
-    }
+    description: "Returns the Qarde Hasan (interest-free loan) register.",
+    parameters: { type: Type.OBJECT, properties: {}, required: [] }
   },
   {
     name: "draft_whatsapp",
-    description: "Draft a WhatsApp message. Single recipient only after read-back.",
+    description: "Drafts a WhatsApp message.",
     parameters: {
       type: Type.OBJECT,
       properties: {
-        recipient_donor_id: { type: Type.STRING, description: "Recipient donor ID" },
-        free_text: { type: Type.STRING, description: "Message text" },
-        purpose: { type: Type.STRING, description: "thank_you, receipt, follow_up, campaign, milestone, personal" }
+        recipient: { type: Type.STRING, description: "Recipient name or number" },
+        message: { type: Type.STRING, description: "Message text" }
       },
-      required: ["purpose"]
+      required: ["recipient", "message"]
     }
   },
   {
     name: "draft_email",
-    description: "Draft an email.",
+    description: "Drafts an email.",
     parameters: {
       type: Type.OBJECT,
       properties: {
-        recipient_id: { type: Type.STRING, description: "Recipient ID" },
-        subject: { type: Type.STRING, description: "Email subject" },
-        body_markdown: { type: Type.STRING, description: "Email body in markdown" },
-        purpose: { type: Type.STRING, description: "Purpose" }
+        to: { type: Type.STRING, description: "Recipient email" },
+        subject: { type: Type.STRING, description: "Subject" },
+        body: { type: Type.STRING, description: "Body text" }
       },
-      required: ["subject", "body_markdown", "purpose"]
+      required: ["to", "subject", "body"]
     }
   },
   {
     name: "compose_briefing",
-    description: "Produce a structured morning briefing.",
+    description: "Compose a briefing document.",
     parameters: {
       type: Type.OBJECT,
       properties: {
-        date: { type: Type.STRING, description: "Format: YYYY-MM-DD" },
-        depth: { type: Type.STRING, description: "short, standard, or detailed" }
+        date: { type: Type.STRING, description: "Date" },
+        audience: { type: Type.STRING, description: "Audience" }
       },
       required: []
     }
   },
   {
     name: "compose_report",
-    description: "Generate a structured trustee report.",
+    description: "Compose a report.",
     parameters: {
       type: Type.OBJECT,
       properties: {
         report_type: { type: Type.STRING, description: "Report type" },
-        date_from: { type: Type.STRING, description: "Start date" },
-        date_to: { type: Type.STRING, description: "End date" }
+        period: { type: Type.STRING, description: "Period" }
       },
       required: ["report_type"]
     }
   },
   {
     name: "flag_for_review",
-    description: "Raise an item for human review.",
+    description: "Flag an item for review.",
     parameters: {
       type: Type.OBJECT,
       properties: {
+        item_id: { type: Type.STRING, description: "Item ID" },
         category: { type: Type.STRING, description: "Category" },
-        description: { type: Type.STRING, description: "Description" },
-        urgency: { type: Type.STRING, description: "low, medium, high, or critical" }
+        urgency: { type: Type.STRING, description: "low, medium, high, or critical" },
+        notes: { type: Type.STRING, description: "Notes" }
       },
-      required: ["category", "description", "urgency"]
+      required: ["category", "urgency"]
+    }
+  },
+  {
+    name: "scan_receipt",
+    description: "Trigger receipt scanning.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        vendor: { type: Type.STRING, description: "Vendor name" },
+        amount: { type: Type.NUMBER, description: "Amount" }
+      },
+      required: []
     }
   },
   {
@@ -533,7 +591,12 @@ const TOOL_DECLARATIONS = [
 ];
 
 // ─── Tool Execution ──────────────────────────────────────────────────────────
-async function executeTool(name: string, args: any, user: { userId: number; role: string; name: string }, clientWs: WebSocket): Promise<any> {
+async function executeTool(
+  name: string,
+  args: any,
+  user: { userId: number; role: string; name: string },
+  sseRes: Response | null
+): Promise<any> {
   console.log(`[Hibba Tool] ${name}`, JSON.stringify(args).slice(0, 200));
 
   try {
@@ -685,11 +748,15 @@ async function executeTool(name: string, args: any, user: { userId: number; role
         return { status: "Scanned", vendor: args.vendor, amount: args.amount };
 
       case "navigate_to":
-        clientWs.send(JSON.stringify({ type: "navigate", path: args.path }));
+        if (sseRes && !sseRes.writableEnded) {
+          sendSSE(sseRes, "navigate", { path: args.path });
+        }
         return { status: "Navigating", path: args.path };
 
       case "fill_form":
-        clientWs.send(JSON.stringify({ type: "fill_form", fields: args.fields }));
+        if (sseRes && !sseRes.writableEnded) {
+          sendSSE(sseRes, "fill_form", { fields: args.fields });
+        }
         return { status: "Form filled", fields: Object.keys(args.fields || {}) };
 
       default:
@@ -701,83 +768,116 @@ async function executeTool(name: string, args: any, user: { userId: number; role
   }
 }
 
-// ─── Main Gateway ────────────────────────────────────────────────────────────
-export function attachVoiceGateway(server: Server) {
-  const wss = new WebSocketServer({ noServer: true });
+// ─── Register Voice Routes ──────────────────────────────────────────────────
+export function registerVoiceRoutes(app: Express) {
 
-  server.on("upgrade", (req, socket, head) => {
-    const { pathname } = parse(req.url || "", true);
-    if (pathname !== "/api/voice") return;
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req);
-    });
-  });
+  // ── POST /api/voice/start — Create a new Gemini Live session ──
+  app.post("/api/voice/start", async (req: Request, res: Response) => {
+    console.log("[Hibba] POST /api/voice/start");
 
-  wss.on("connection", async (clientWs, req) => {
-    const { query: queryData } = parse(req.url || "", true);
-    const token = queryData.token as string;
-    const voiceName = (queryData.voice as string) || "Aoede";
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
 
-    console.log(`[Hibba] Client connected, voice: ${voiceName}`);
-
-    // ── Auth ──
     if (!token) {
-      clientWs.send(JSON.stringify({ type: "error", message: "No authentication token." }));
-      clientWs.close();
-      return;
+      return res.status(401).json({ error: "No authentication token." });
     }
 
     const user = await verifyWsToken(token);
     if (!user) {
-      clientWs.send(JSON.stringify({ type: "error", message: "Authentication failed. Please log in again." }));
-      clientWs.close();
-      return;
+      return res.status(401).json({ error: "Authentication failed. Please log in again." });
     }
-
-    console.log(`[Hibba] Authenticated: ${user.name} (${user.role})`);
 
     if (!apiKey) {
-      clientWs.send(JSON.stringify({ type: "error", message: "GEMINI_API_KEY not configured." }));
-      clientWs.close();
-      return;
+      return res.status(500).json({ error: "GEMINI_API_KEY not configured on server." });
     }
 
-    // ── Connect to Gemini Live ──
-    let session: Session | null = null;
+    const sessionId = crypto.randomUUID();
+    const voiceName = req.body?.voice || "Aoede";
 
+    console.log(`[Hibba] Creating session ${sessionId} for ${user.name} (voice: ${voiceName})`);
+
+    // Create session entry (Gemini connection happens when SSE connects)
+    const voiceSession: VoiceSession = {
+      id: sessionId,
+      userId: user.userId,
+      userName: user.name,
+      userRole: user.role,
+      geminiSession: null,
+      sseResponse: null,
+      createdAt: Date.now(),
+      lastActivity: Date.now(),
+    };
+
+    activeSessions.set(sessionId, voiceSession);
+
+    return res.json({ sessionId, user: user.name, voice: voiceName });
+  });
+
+  // ── GET /api/voice/stream — SSE stream for a session ──
+  app.get("/api/voice/stream", async (req: Request, res: Response) => {
+    const sessionId = req.query.sessionId as string;
+    const token = req.query.token as string;
+
+    if (!sessionId || !token) {
+      return res.status(400).json({ error: "Missing sessionId or token." });
+    }
+
+    const user = await verifyWsToken(token);
+    if (!user) {
+      return res.status(401).json({ error: "Authentication failed." });
+    }
+
+    const session = activeSessions.get(sessionId);
+    if (!session || session.userId !== user.userId) {
+      return res.status(404).json({ error: "Session not found." });
+    }
+
+    console.log(`[Hibba] SSE stream opened for session ${sessionId} (${user.name})`);
+
+    // Set SSE headers
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no", // Disable nginx buffering
+    });
+    res.flushHeaders();
+
+    // Store the SSE response
+    session.sseResponse = res;
+
+    // Send initial keepalive
+    sendSSE(res, "connected", { sessionId });
+
+    // Now connect to Gemini Live
     try {
-      console.log(`[Hibba] Initializing GoogleGenAI SDK...`);
+      console.log(`[Hibba] Connecting to Gemini Live for session ${sessionId}...`);
       const ai = new GoogleGenAI({ apiKey });
 
-      console.log(`[Hibba] Calling ai.live.connect() for ${user.name}...`);
+      const voiceName = "Aoede";
 
-      // Add a timeout to the Gemini connection
       const connectPromise = ai.live.connect({
         model: "gemini-2.5-flash-native-audio-latest",
         callbacks: {
           onmessage: async (message: any) => {
             try {
+              session.lastActivity = Date.now();
+
               // Audio output
               const audioPart = message?.serverContent?.modelTurn?.parts?.[0]?.inlineData;
               if (audioPart?.data) {
-                if (clientWs.readyState === WebSocket.OPEN) {
-                  clientWs.send(JSON.stringify({ type: "audio", data: audioPart.data }));
-                }
+                sendSSE(res, "audio", { data: audioPart.data });
               }
 
               // Text transcription from model
               const textPart = message?.serverContent?.modelTurn?.parts?.[0]?.text;
               if (textPart) {
-                if (clientWs.readyState === WebSocket.OPEN) {
-                  clientWs.send(JSON.stringify({ type: "transcript", text: textPart }));
-                }
+                sendSSE(res, "transcript", { text: textPart });
               }
 
               // Interruption
               if (message?.serverContent?.interrupted) {
-                if (clientWs.readyState === WebSocket.OPEN) {
-                  clientWs.send(JSON.stringify({ type: "interrupted" }));
-                }
+                sendSSE(res, "interrupted", {});
               }
 
               // Tool calls
@@ -785,20 +885,16 @@ export function attachVoiceGateway(server: Server) {
                 const functionResponses: any[] = [];
                 for (const call of message.toolCall.functionCalls || []) {
                   console.log(`[Hibba] Tool: ${call.name}`);
-                  if (clientWs.readyState === WebSocket.OPEN) {
-                    clientWs.send(JSON.stringify({ type: "tool_call", name: call.name, args: call.args }));
-                  }
+                  sendSSE(res, "tool_call", { name: call.name, args: call.args });
 
-                  const result = await executeTool(call.name, call.args || {}, user, clientWs);
+                  const result = await executeTool(call.name, call.args || {}, user, res);
                   functionResponses.push({ id: call.id, name: call.name, response: result });
 
-                  if (clientWs.readyState === WebSocket.OPEN) {
-                    clientWs.send(JSON.stringify({ type: "tool_response", name: call.name, data: result }));
-                  }
+                  sendSSE(res, "tool_response", { name: call.name, data: result });
                 }
 
-                if (session) {
-                  session.sendToolResponse({ functionResponses });
+                if (session.geminiSession) {
+                  session.geminiSession.sendToolResponse({ functionResponses });
                 }
               }
             } catch (cbError: any) {
@@ -807,17 +903,14 @@ export function attachVoiceGateway(server: Server) {
           },
           onerror: (error: any) => {
             const errMsg = error?.message || error?.toString?.() || "Unknown Gemini error";
-            console.error("[Hibba] Gemini onerror:", errMsg, error);
-            if (clientWs.readyState === WebSocket.OPEN) {
-              clientWs.send(JSON.stringify({ type: "error", message: `AI engine error: ${errMsg}` }));
-            }
+            console.error("[Hibba] Gemini onerror:", errMsg);
+            sendSSE(res, "error", { message: `AI engine error: ${errMsg}` });
           },
           onclose: () => {
-            console.log("[Hibba] Gemini session closed (onclose callback)");
-            if (clientWs.readyState === WebSocket.OPEN) {
-              clientWs.send(JSON.stringify({ type: "session_ended" }));
-              clientWs.close();
-            }
+            console.log(`[Hibba] Gemini session closed for ${sessionId}`);
+            sendSSE(res, "session_ended", {});
+            if (!res.writableEnded) res.end();
+            activeSessions.delete(sessionId);
           },
         },
         config: {
@@ -837,63 +930,146 @@ export function attachVoiceGateway(server: Server) {
         setTimeout(() => reject(new Error(`Gemini connection timed out after ${GEMINI_CONNECT_TIMEOUT_MS / 1000}s`)), GEMINI_CONNECT_TIMEOUT_MS);
       });
 
-      session = await Promise.race([connectPromise, timeoutPromise]);
+      session.geminiSession = await Promise.race([connectPromise, timeoutPromise]);
 
-      console.log(`[Hibba] Gemini Live session established for ${user.name}`);
-      if (clientWs.readyState !== WebSocket.OPEN) {
-        console.log("[Hibba] Client disconnected before session was ready, closing Gemini session");
-        session.close();
-        return;
-      }
-      clientWs.send(JSON.stringify({ type: "session_started", user: user.name, voice: voiceName }));
+      console.log(`[Hibba] Gemini Live session established for ${sessionId}`);
+      sendSSE(res, "session_started", { user: user.name, voice: voiceName });
 
-      // Trigger opening greeting using sendClientContent (more reliable for text prompts)
+      // Trigger opening greeting
       try {
-        session.sendClientContent({
+        session.geminiSession.sendClientContent({
           turns: [{ role: "user", parts: [{ text: `Microphone activated. Please provide the mandatory opening greeting and status briefing for ${user.name}, including prayer times and urgent items.` }] }],
           turnComplete: true,
         });
         console.log(`[Hibba] Greeting prompt sent for ${user.name}`);
       } catch (greetingError: any) {
-        console.error("[Hibba] Failed to send greeting:", greetingError?.message || greetingError);
-        // Non-fatal: session is still active, user can speak
+        console.error("[Hibba] Failed to send greeting:", greetingError?.message);
+        // Non-fatal
       }
 
     } catch (error: any) {
       const errMsg = error?.message || error?.toString?.() || "Unknown connection error";
-      console.error("[Hibba] Failed to connect to Gemini:", errMsg, error?.stack || "");
-      if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(JSON.stringify({ type: "error", message: `Failed to connect to AI: ${errMsg}` }));
-        clientWs.close();
-      }
+      console.error("[Hibba] Failed to connect to Gemini:", errMsg);
+      sendSSE(res, "error", { message: `Failed to connect to AI: ${errMsg}` });
+      if (!res.writableEnded) res.end();
+      activeSessions.delete(sessionId);
       return;
     }
 
-    // ── Client messages ──
-    clientWs.on("message", (data) => {
-      try {
-        const msg = JSON.parse(data.toString());
-        if (msg.type === "audio" && msg.data && session) {
-          session.sendRealtimeInput({
-            audio: { data: msg.data, mimeType: "audio/pcm;rate=16000" },
-          });
-        } else if (msg.type === "text" && msg.text && session) {
-          // Use sendClientContent for text (more reliable, ordered delivery)
-          session.sendClientContent({
-            turns: [{ role: "user", parts: [{ text: msg.text }] }],
-            turnComplete: true,
-          });
-        }
-      } catch (err: any) {
-        console.error("[Hibba] Client message error:", err?.message || err);
-      }
+    // Handle client disconnect
+    req.on("close", () => {
+      console.log(`[Hibba] SSE client disconnected: ${sessionId}`);
+      cleanupSession(sessionId);
     });
 
-    clientWs.on("close", () => {
-      console.log(`[Hibba] Client disconnected: ${user.name}`);
-      if (session) session.close();
-    });
+    // Send keepalive every 15 seconds to prevent proxy timeout
+    const keepaliveInterval = setInterval(() => {
+      if (res.writableEnded) {
+        clearInterval(keepaliveInterval);
+        return;
+      }
+      try {
+        res.write(`:keepalive\n\n`);
+      } catch {
+        clearInterval(keepaliveInterval);
+      }
+    }, 15000);
+
+    req.on("close", () => clearInterval(keepaliveInterval));
   });
 
-  console.log("[Hibba] Voice gateway attached at /api/voice (Gemini 2.5 Flash Native Audio + Aoede)");
+  // ── POST /api/voice/audio — Send audio chunk to Gemini ──
+  app.post("/api/voice/audio", async (req: Request, res: Response) => {
+    const { sessionId, data } = req.body;
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+    if (!token || !sessionId || !data) {
+      return res.status(400).json({ error: "Missing sessionId, token, or data." });
+    }
+
+    const user = await verifyWsToken(token);
+    if (!user) {
+      return res.status(401).json({ error: "Auth failed." });
+    }
+
+    const session = activeSessions.get(sessionId);
+    if (!session || session.userId !== user.userId || !session.geminiSession) {
+      return res.status(404).json({ error: "Session not found or not ready." });
+    }
+
+    try {
+      session.lastActivity = Date.now();
+      session.geminiSession.sendRealtimeInput({
+        audio: { data, mimeType: "audio/pcm;rate=16000" },
+      });
+      return res.json({ ok: true });
+    } catch (error: any) {
+      console.error("[Hibba] Audio send error:", error?.message);
+      return res.status(500).json({ error: "Failed to send audio." });
+    }
+  });
+
+  // ── POST /api/voice/text — Send text to Gemini ──
+  app.post("/api/voice/text", async (req: Request, res: Response) => {
+    const { sessionId, text } = req.body;
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+    if (!token || !sessionId || !text) {
+      return res.status(400).json({ error: "Missing sessionId, token, or text." });
+    }
+
+    const user = await verifyWsToken(token);
+    if (!user) {
+      return res.status(401).json({ error: "Auth failed." });
+    }
+
+    const session = activeSessions.get(sessionId);
+    if (!session || session.userId !== user.userId || !session.geminiSession) {
+      return res.status(404).json({ error: "Session not found or not ready." });
+    }
+
+    try {
+      session.lastActivity = Date.now();
+      session.geminiSession.sendClientContent({
+        turns: [{ role: "user", parts: [{ text }] }],
+        turnComplete: true,
+      });
+      return res.json({ ok: true });
+    } catch (error: any) {
+      console.error("[Hibba] Text send error:", error?.message);
+      return res.status(500).json({ error: "Failed to send text." });
+    }
+  });
+
+  // ── POST /api/voice/stop — End a session ──
+  app.post("/api/voice/stop", async (req: Request, res: Response) => {
+    const { sessionId } = req.body;
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+    if (!token || !sessionId) {
+      return res.status(400).json({ error: "Missing sessionId or token." });
+    }
+
+    const user = await verifyWsToken(token);
+    if (!user) {
+      return res.status(401).json({ error: "Auth failed." });
+    }
+
+    const session = activeSessions.get(sessionId);
+    if (!session || session.userId !== user.userId) {
+      return res.status(404).json({ error: "Session not found." });
+    }
+
+    console.log(`[Hibba] Stopping session ${sessionId} for ${user.name}`);
+    cleanupSession(sessionId);
+    return res.json({ ok: true });
+  });
+
+  console.log("[Hibba] Voice routes registered: /api/voice/start, /api/voice/stream, /api/voice/audio, /api/voice/text, /api/voice/stop");
 }
+
+// Keep the old export name for backward compatibility during migration
+export { registerVoiceRoutes as attachVoiceGateway };

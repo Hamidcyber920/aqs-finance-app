@@ -17,7 +17,7 @@ import { registerScheduledJobs } from "../scheduledJobs";
 import { registerStripeWebhook } from "../stripeWebhook";
 import { registerGmailWebhook } from "../gmailWebhook";
 import { registerGoogleReauthRoutes } from "../googleReauth";
-import { attachVoiceGateway } from "../voiceGateway";
+import { registerVoiceRoutes } from "../voiceGateway";
 import { registerVoiceTokenRoute } from "../voiceTokenRoute";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -122,6 +122,8 @@ async function startServer() {
   registerGoogleReauthRoutes(app);
   // Voice token endpoint (must be BEFORE Vite/static catch-all)
   registerVoiceTokenRoute(app);
+  // Voice SSE + HTTP routes (must be BEFORE Vite/static catch-all)
+  registerVoiceRoutes(app);
 
   // tRPC API
   app.use(
@@ -148,8 +150,7 @@ async function startServer() {
   // Register scheduled cron jobs (weekly repayment alert + monthly trustee report)
   registerScheduledJobs();
 
-  // Attach Hibba voice gateway (WebSocket)
-  attachVoiceGateway(server);
+  // Voice gateway now uses SSE + HTTP POST (no WebSocket needed)
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

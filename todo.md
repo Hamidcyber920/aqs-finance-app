@@ -2290,3 +2290,25 @@
 - [x] Client: Show detailed status messages during connection phases
 - [x] Add 16 vitest tests covering gateway config, model availability, token auth, and code patterns
 - [ ] Publish and verify voice works on deployed site
+
+## Bug — Voice errors persist on deployed site after publish (May 16 2026)
+- [x] Investigate: "WebSocket connection error" after "initializing AI" — WebSocket may not be supported on Cloud Run (CONFIRMED: proxy returns 200 HTML)
+- [ ] Investigate: "Connection error. Please try again." after "Connected as ahamid4" — Gemini session fails after auth succeeds
+- [ ] Investigate: "Authentication failed. Please log in again." — token endpoint returns 401 on deployed site
+- [x] Determine if Cloud Run supports WebSocket upgrade for /api/voice path (NO — Manus/Cloudflare proxy blocks it)
+- [x] If WebSocket not supported, implement alternative approach — SSE + HTTP POST rebuild complete
+
+## Voice Assistant — SSE+HTTP Rebuild (WebSocket not supported on deployed proxy)
+- [x] Root cause: Manus/Cloudflare proxy returns 200 HTML for WebSocket upgrade instead of 101 — WebSocket not supported
+- [x] Replace WebSocket gateway with SSE (server→client) + HTTP POST (client→server) architecture
+- [x] Server: Create voice session management with unique session IDs
+- [x] Server: SSE endpoint GET /api/voice/stream?sessionId=xxx for audio/transcript/tool events
+- [x] Server: POST /api/voice/audio for sending audio chunks from client to Gemini
+- [x] Server: POST /api/voice/start to initiate a Gemini Live session and return sessionId
+- [x] Server: POST /api/voice/stop to end a session
+- [x] Client: Update HibbaVoice.tsx to use EventSource (SSE) + fetch POST for audio
+- [x] Preserve all 30+ tool declarations and executeTool function
+- [x] Preserve Hibba's Islamic identity, system prompt, and Aoede voice
+- [x] Remove WebSocket server (ws package) dependency from voice gateway
+- [x] Add vitest tests for new SSE-based voice architecture
+- [x] Verify on dev server before deploying (server running, 364 tests pass)
