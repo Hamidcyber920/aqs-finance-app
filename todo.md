@@ -2219,8 +2219,8 @@
 - [x] Fix: client-side retry logic (3 attempts with backoff) for token fetch
 - [x] Fix: 15s client-side connection timeout for WebSocket
 - [x] Added detailed logging throughout auth chain for deployed debugging
-- [ ] Publish and verify on deployed site — check Cloud Run logs for [VoiceToken] and [VoiceGateway] Auth lines
-- [ ] If query param stripping is the issue: implement WebSocket subprotocol token passing as fallback
+- [x] (superseded) Publish and verify — replaced by client-side Gemini approach, no server voice logs needed
+- [x] (superseded) WebSocket subprotocol fallback — replaced by client-side Gemini approach
 
 ## Voice Assistant — Full Rebuild (Gemini 2.0 Live + Aoede Voice)
 - [x] Research Gemini 2.0 Live API (models, WebSocket protocol, audio format, voice options)
@@ -2254,12 +2254,12 @@
 - [x] Remove VoiceAgent mounting from DashboardLayout.tsx
 - [x] Remove voice-related router (server/routers/voiceAgent.ts)
 - [x] Remove @google/genai dependency
-- [ ] Build floating iframe embed component (HibbaAssistant.tsx)
-- [ ] Add iframe with allow="microphone" pointing to standalone Hibba URL
-- [ ] Style as floating button + expandable panel
-- [ ] Mount in DashboardLayout as replacement for VoiceAgent
-- [ ] Run tests and verify server health
-- [ ] Save checkpoint
+- [x] (superseded) iframe embed — replaced by direct client-side HibbaVoice component
+- [x] (superseded) iframe microphone — replaced by direct browser Gemini connection
+- [x] (superseded) floating button — HibbaVoice already has floating panel UI
+- [x] (superseded) mount in DashboardLayout — HibbaVoice already mounted
+- [x] Run tests and verify server health — 8 voice tests pass
+- [x] Save checkpoint — de97af98
 
 ## Voice Assistant — Component-Level Integration from Reference Repo
 - [x] Read reference repo audio-utils.ts, App.tsx voice UI, and server.ts patterns
@@ -2289,12 +2289,12 @@
 - [x] Client: Validate WebSocket URL before connecting
 - [x] Client: Show detailed status messages during connection phases
 - [x] Add 16 vitest tests covering gateway config, model availability, token auth, and code patterns
-- [ ] Publish and verify voice works on deployed site
+- [ ] Publish and verify voice works on deployed site (PENDING USER PUBLISH)
 
 ## Bug — Voice errors persist on deployed site after publish (May 16 2026)
 - [x] Investigate: "WebSocket connection error" after "initializing AI" — WebSocket may not be supported on Cloud Run (CONFIRMED: proxy returns 200 HTML)
-- [ ] Investigate: "Connection error. Please try again." after "Connected as ahamid4" — Gemini session fails after auth succeeds
-- [ ] Investigate: "Authentication failed. Please log in again." — token endpoint returns 401 on deployed site
+- [x] (resolved) Connection error after auth — root cause: leaked API key + deprecated model. Fixed with new key + client-side approach
+- [x] (resolved) Auth failed — replaced server-side token route with tRPC ephemeral token (uses existing session auth)
 - [x] Determine if Cloud Run supports WebSocket upgrade for /api/voice path (NO — Manus/Cloudflare proxy blocks it)
 - [x] If WebSocket not supported, implement alternative approach — SSE + HTTP POST rebuild complete
 
@@ -2332,3 +2332,12 @@
 - [x] No server proxy needed — browser connects directly to Gemini WebSocket
 - [x] Test on dev server — 8 voice tests pass, model gemini-2.5-flash-native-audio-latest
 - [ ] Verify on deployed site (PENDING USER PUBLISH)
+
+## Voice UI Improvements — Transcript & Minimizable Panel (May 16 2026)
+- [x] Show full sentences/paragraphs in transcript, not individual words
+- [x] Buffer incoming transcript text and only display when sentence is complete (period, question mark, etc.)
+- [x] Minimizable panel — collapse to small floating button while voice continues
+- [x] Audio continues playing in background when panel is minimized
+- [x] User can scroll/navigate other screens while Hibba speaks
+- [x] Expand back to full panel by tapping the minimized button
+- [x] Clean, professional transcript layout with clear speaker labels (Hibba/You chat bubbles)
