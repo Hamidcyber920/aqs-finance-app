@@ -1,97 +1,79 @@
 /**
- * Voice Gateway Tests — Verify Gemini 2.0 Flash Live + Aoede setup and audio flow
+ * Voice Gateway Tests — Verify @google/genai SDK + Gemini 2.0 Flash Live + Aoede setup
  */
 import { describe, it, expect } from "vitest";
 
-describe("Voice Gateway - Gemini 2.0 Flash Live Setup", () => {
-  const GEMINI_MODEL = "models/gemini-2.0-flash-live-001";
+describe("Voice Gateway - @google/genai SDK Setup", () => {
+  const GEMINI_MODEL = "gemini-2.0-flash-live-001";
   const VOICE_NAME = "Aoede";
 
-  it("should use v1beta API endpoint for Gemini 2.0 Flash Live", () => {
-    const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
-    expect(url).toContain("v1beta");
-    expect(url).toContain("BidiGenerateContent");
+  it("should use correct model name for Gemini 2.0 Flash Live", () => {
+    expect(GEMINI_MODEL).toBe("gemini-2.0-flash-live-001");
   });
 
-  it("should construct correct setup payload with Aoede voice", () => {
-    const setupPayload = {
-      setup: {
-        model: GEMINI_MODEL,
-        generationConfig: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: VOICE_NAME }
-            }
-          }
-        },
-        systemInstruction: {
-          parts: [{ text: "Test system prompt" }]
-        },
-        tools: [{ functionDeclarations: [] }],
-        outputAudioTranscription: {},
-        inputAudioTranscription: {},
-      }
+  it("should construct correct config for ai.live.connect()", () => {
+    // This mirrors the config object passed to ai.live.connect()
+    const config = {
+      responseModalities: ["AUDIO"],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: VOICE_NAME }
+        }
+      },
+      systemInstruction: {
+        parts: [{ text: "Test system prompt" }]
+      },
+      tools: [{ functionDeclarations: [] }],
     };
-
-    // Verify model
-    expect(setupPayload.setup.model).toBe("models/gemini-2.0-flash-live-001");
 
     // Verify responseModalities includes AUDIO
-    expect(setupPayload.setup.generationConfig.responseModalities).toContain("AUDIO");
+    expect(config.responseModalities).toContain("AUDIO");
 
     // Verify voice config uses Aoede
-    expect(setupPayload.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe("Aoede");
+    expect(config.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe("Aoede");
 
-    // Verify transcription configs are present
-    expect(setupPayload.setup.outputAudioTranscription).toBeDefined();
-    expect(setupPayload.setup.inputAudioTranscription).toBeDefined();
+    // Verify system instruction structure
+    expect(config.systemInstruction.parts[0].text).toBe("Test system prompt");
+
+    // Verify tools structure
+    expect(config.tools[0].functionDeclarations).toBeDefined();
   });
 
-  it("should use clientContent format for text input", () => {
-    const textMessage = {
-      clientContent: {
-        turns: [{ role: "user", parts: [{ text: "Hello Hibba" }] }],
-        turnComplete: true
-      }
+  it("should use sendClientContent format for text input", () => {
+    // This mirrors how the SDK sends text to Gemini
+    const clientContent = {
+      turns: [{ role: "user", parts: [{ text: "Hello Hibba" }] }],
+      turnComplete: true
     };
 
-    expect(textMessage.clientContent).toBeDefined();
-    expect(textMessage.clientContent.turns).toHaveLength(1);
-    expect(textMessage.clientContent.turns[0].role).toBe("user");
-    expect(textMessage.clientContent.turns[0].parts[0].text).toBe("Hello Hibba");
-    expect(textMessage.clientContent.turnComplete).toBe(true);
-    expect((textMessage as any).realtimeInput).toBeUndefined();
+    expect(clientContent.turns).toHaveLength(1);
+    expect(clientContent.turns[0].role).toBe("user");
+    expect(clientContent.turns[0].parts[0].text).toBe("Hello Hibba");
+    expect(clientContent.turnComplete).toBe(true);
   });
 
-  it("should use realtimeInput.mediaChunks format for audio", () => {
-    const audioMessage = {
-      realtimeInput: {
-        mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: "base64encodedaudio" }]
-      }
+  it("should use sendRealtimeInput format for audio", () => {
+    // This mirrors how the SDK sends audio to Gemini
+    const realtimeInput = {
+      audio: { data: "base64encodedaudio", mimeType: "audio/pcm;rate=16000" }
     };
 
-    expect(audioMessage.realtimeInput.mediaChunks).toHaveLength(1);
-    expect(audioMessage.realtimeInput.mediaChunks[0].mimeType).toBe("audio/pcm;rate=16000");
-    expect(audioMessage.realtimeInput.mediaChunks[0].data).toBeDefined();
+    expect(realtimeInput.audio.mimeType).toBe("audio/pcm;rate=16000");
+    expect(realtimeInput.audio.data).toBeDefined();
   });
 
-  it("should use clientContent for screen context updates", () => {
-    const ctxNote = "[SYSTEM CONTEXT UPDATE] User navigated to: Dashboard. Adjust your responses.";
-    const contextMessage = {
-      clientContent: {
-        turns: [{ role: "user", parts: [{ text: ctxNote }] }],
-        turnComplete: true
-      }
+  it("should use sendClientContent for screen context updates", () => {
+    const ctxNote = "[SYSTEM] User navigated to: Dashboard. Adjust your responses accordingly.";
+    const clientContent = {
+      turns: [{ role: "user", parts: [{ text: ctxNote }] }],
+      turnComplete: true
     };
 
-    expect(contextMessage.clientContent).toBeDefined();
-    expect(contextMessage.clientContent.turns[0].parts[0].text).toContain("SYSTEM CONTEXT UPDATE");
-    expect((contextMessage as any).realtimeInput).toBeUndefined();
+    expect(clientContent.turns[0].parts[0].text).toContain("[SYSTEM]");
   });
 
-  it("should handle Gemini 2.0 response events correctly", () => {
-    // Audio response
+  it("should handle Gemini Live response events correctly", () => {
+    // Audio response from model
     const audioEvent = {
       serverContent: {
         modelTurn: {
@@ -100,10 +82,17 @@ describe("Voice Gateway - Gemini 2.0 Flash Live Setup", () => {
       }
     };
 
-    // Transcript event
+    // Output transcription event
     const transcriptEvent = {
       serverContent: {
         outputTranscription: { text: "Assalamu Alaikum" }
+      }
+    };
+
+    // Input transcription event
+    const inputTranscriptEvent = {
+      serverContent: {
+        inputTranscription: { text: "Hello" }
       }
     };
 
@@ -114,50 +103,115 @@ describe("Voice Gateway - Gemini 2.0 Flash Live Setup", () => {
       }
     };
 
-    expect(audioEvent.serverContent.modelTurn.parts).toHaveLength(1);
-    expect(audioEvent.serverContent.modelTurn.parts[0].inlineData.mimeType).toBe("audio/pcm;rate=24000");
-    expect(transcriptEvent.serverContent.outputTranscription.text).toBe("Assalamu Alaikum");
-    expect(turnCompleteEvent.serverContent.turnComplete).toBe(true);
-  });
-
-  it("should construct tool response in correct format", () => {
-    const toolResponse = {
-      toolResponse: {
-        functionResponses: [
-          {
-            id: "call_123",
-            name: "get_current_time",
-            response: { result: JSON.stringify({ time: "14:30", timezone: "Europe/London" }) }
-          }
-        ]
+    // Interruption event
+    const interruptEvent = {
+      serverContent: {
+        interrupted: true
       }
     };
 
-    expect(toolResponse.toolResponse.functionResponses).toHaveLength(1);
-    expect(toolResponse.toolResponse.functionResponses[0].id).toBe("call_123");
-    expect(toolResponse.toolResponse.functionResponses[0].name).toBe("get_current_time");
+    expect(audioEvent.serverContent.modelTurn.parts).toHaveLength(1);
+    expect(audioEvent.serverContent.modelTurn.parts[0].inlineData.mimeType).toBe("audio/pcm;rate=24000");
+    expect(transcriptEvent.serverContent.outputTranscription.text).toBe("Assalamu Alaikum");
+    expect(inputTranscriptEvent.serverContent.inputTranscription.text).toBe("Hello");
+    expect(turnCompleteEvent.serverContent.turnComplete).toBe(true);
+    expect(interruptEvent.serverContent.interrupted).toBe(true);
+  });
+
+  it("should construct sendToolResponse in correct format", () => {
+    // This mirrors how the SDK sends tool responses back to Gemini
+    const toolResponse = {
+      functionResponses: [
+        {
+          id: "call_123",
+          name: "get_current_time",
+          response: { status: "success", data: { time: "14:30", timezone: "Europe/London" } }
+        }
+      ]
+    };
+
+    expect(toolResponse.functionResponses).toHaveLength(1);
+    expect(toolResponse.functionResponses[0].id).toBe("call_123");
+    expect(toolResponse.functionResponses[0].name).toBe("get_current_time");
+    expect(toolResponse.functionResponses[0].response.status).toBe("success");
+  });
+
+  it("should use Type enum from @google/genai for tool declarations", () => {
+    // Verify the tool declaration format uses Type.OBJECT, Type.STRING etc.
+    const toolDecl = {
+      name: "search_donors",
+      description: "Search donors by name, email, or phone.",
+      parameters: {
+        type: "OBJECT", // Type.OBJECT resolves to "OBJECT"
+        properties: {
+          query: { type: "STRING", description: "Search query" },
+          limit: { type: "NUMBER", description: "Max results" }
+        },
+        required: ["query"]
+      }
+    };
+
+    expect(toolDecl.name).toBe("search_donors");
+    expect(toolDecl.parameters.type).toBe("OBJECT");
+    expect(toolDecl.parameters.properties.query.type).toBe("STRING");
+    expect(toolDecl.parameters.required).toContain("query");
   });
 });
 
 // Test the source code directly to verify correct patterns
 describe("Voice Gateway - Source Code Verification", () => {
-  it("should use mediaChunks format (not realtimeInput.audio) in voiceGateway.ts", async () => {
+  it("should import and use @google/genai SDK", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
 
-    // Should have mediaChunks for audio
-    expect(content).toContain("mediaChunks");
+    // Should import from @google/genai
+    expect(content).toContain("@google/genai");
+    expect(content).toContain("GoogleGenAI");
+    expect(content).toContain("Modality");
+    expect(content).toContain("Type");
+  });
+
+  it("should use ai.live.connect() pattern", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
+
+    // Should use the SDK's live.connect method
+    expect(content).toContain("ai.live.connect");
+    expect(content).toContain("callbacks");
+    expect(content).toContain("onmessage");
+  });
+
+  it("should use sendRealtimeInput for audio", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
+
+    // Should use session.sendRealtimeInput for audio
+    expect(content).toContain("sendRealtimeInput");
     expect(content).toContain("audio/pcm;rate=16000");
   });
 
-  it("should use v1beta API endpoint in voiceGateway.ts", async () => {
+  it("should use sendClientContent for text messages", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
 
-    expect(content).toContain("v1beta.GenerativeService.BidiGenerateContent");
+    // Should use session.sendClientContent for text
+    expect(content).toContain("sendClientContent");
+    // Count usages - at least for text_input, screen_context, and greeting
+    const matches = content.match(/sendClientContent/g);
+    expect(matches).not.toBeNull();
+    expect(matches!.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("should use Aoede voice in voiceGateway.ts", async () => {
+  it("should use sendToolResponse for tool results", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
+
+    // Should use session.sendToolResponse
+    expect(content).toContain("sendToolResponse");
+    expect(content).toContain("functionResponses");
+  });
+
+  it("should use Aoede voice and correct model", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
 
@@ -165,36 +219,41 @@ describe("Voice Gateway - Source Code Verification", () => {
     expect(content).toContain("gemini-2.0-flash-live-001");
   });
 
-  it("should use clientContent for all text-based messages", async () => {
+  it("should NOT use raw WebSocket connection to Gemini", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
 
-    // Count clientContent usages - should be used for text_input, screen_context, and greeting
-    const clientContentPattern = /clientContent:\s*\{/g;
-    const matches = content.match(clientContentPattern);
-    expect(matches).not.toBeNull();
-    // At least 3: text_input, screen_context, greeting
-    expect(matches!.length).toBeGreaterThanOrEqual(3);
+    // Should NOT have the old raw WebSocket URL pattern
+    expect(content).not.toContain("generativelanguage.googleapis.com/ws");
+    expect(content).not.toContain("BidiGenerateContent");
+    // Should NOT have manual WebSocket framing
+    expect(content).not.toContain("new WebSocket(geminiUrl");
+  });
+
+  it("should have all critical tool declarations", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
+
+    // Core tools
+    expect(content).toContain("get_current_user");
+    expect(content).toContain("navigate_to");
+    expect(content).toContain("fill_form");
+    expect(content).toContain("send_email");
+    expect(content).toContain("search_donors");
+    expect(content).toContain("get_prayer_times");
+    expect(content).toContain("get_staff_directory");
+    expect(content).toContain("compose_briefing");
+    expect(content).toContain("list_drive_files");
+    expect(content).toContain("fetch_new_emails");
   });
 
   it("should not contain realtimeInput.text pattern", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
 
-    // Should NOT have realtimeInput: { text: ... } anywhere
-    const realtimeTextPattern = /realtimeInput:\s*\{\s*text:/g;
+    // Should NOT have realtimeInput: { text: ... } - text goes via sendClientContent
+    const realtimeTextPattern = /sendRealtimeInput\(\s*\{\s*text:/g;
     const matches = content.match(realtimeTextPattern);
     expect(matches).toBeNull();
-  });
-
-  it("should have tool declarations with proper structure", async () => {
-    const fs = await import("fs");
-    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
-
-    // Should have functionDeclarations in the tools section
-    expect(content).toContain("functionDeclarations");
-    // Should have tool response handling
-    expect(content).toContain("toolResponse");
-    expect(content).toContain("functionResponses");
   });
 });

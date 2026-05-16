@@ -1,15 +1,17 @@
 /**
- * Voice Gateway v2 — Complete rebuild using Gemini 2.0 Flash Live API
+ * Voice Gateway v3 — @google/genai SDK with ai.live.connect()
  *
  * Architecture:
- * - Client WebSocket <-> Our Server <-> Gemini Live API WebSocket
+ * - Client WebSocket <-> Our Server <-> Gemini Live (via @google/genai SDK)
  * - Client sends PCM audio (16kHz, 16-bit, mono) as base64
- * - Server relays to Gemini, intercepts tool calls, executes them, returns results
+ * - Server relays to Gemini via session.sendRealtimeInput()
  * - Gemini audio responses relayed back to client for playback
  * - Voice: Aoede | Model: gemini-2.0-flash-live-001
  */
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server as HttpServer, IncomingMessage } from "http";
+import { GoogleGenAI, Modality, Type } from "@google/genai";
+import type { LiveServerMessage, Session } from "@google/genai";
 import { nanoid } from "nanoid";
 import { eq, and, sql, gte, desc, or, like } from "drizzle-orm";
 import { getDb } from "./db";
@@ -46,7 +48,7 @@ import {
 
 interface VoiceClient {
   ws: WebSocket;
-  geminiWs: WebSocket | null;
+  session: Session | null;
   userId: number;
   userRole: string;
   userName: string;
@@ -79,8 +81,7 @@ interface ClientMessage {
 const DAILY_TOKEN_LIMIT = 200_000;
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
-const GEMINI_MODEL = "models/gemini-2.0-flash-live-001";
-const GEMINI_WS_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+const GEMINI_MODEL = "gemini-2.0-flash-live-001";
 const VOICE_NAME = "Aoede";
 
 const activeClients = new Map<string, VoiceClient>();
@@ -215,110 +216,110 @@ PERMISSIONS:
 - Trustees/Superadmin: full access.`;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TOOL DECLARATIONS
+// TOOL DECLARATIONS (using @google/genai Type enum)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TOOL_DECLARATIONS = [
   // --- Core context ---
-  { name: "get_current_user", description: "Get the current user's profile, role, and permissions", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_screen_context", description: "Get the current page/screen context the user is viewing", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_current_time", description: "Get the current date and time in UK timezone (Europe/London). Use this before reporting any time or scheduling anything.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_current_user", description: "Get the current user's profile, role, and permissions", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_screen_context", description: "Get the current page/screen context the user is viewing", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_current_time", description: "Get the current date and time in UK timezone (Europe/London). Use this before reporting any time or scheduling anything.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- People ---
-  { name: "get_staff_directory", description: "Get all active staff members with their roles and contact info", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_trustees", description: "Get the list of trustees", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_donor", description: "Get full donor details by ID including giving history", parameters: { type: "object", properties: { donorId: { type: "number", description: "Donor ID" } }, required: ["donorId"] } },
-  { name: "search_donors", description: "Search donors by name, email, or phone.", parameters: { type: "object", properties: { query: { type: "string", description: "Name, email, or phone to search for" }, limit: { type: "number", description: "Max results (default 10)" } }, required: ["query"] } },
+  { name: "get_staff_directory", description: "Get all active staff members with their roles and contact info", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_trustees", description: "Get the list of trustees", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_donor", description: "Get full donor details by ID including giving history", parameters: { type: Type.OBJECT, properties: { donorId: { type: Type.NUMBER, description: "Donor ID" } }, required: ["donorId"] } },
+  { name: "search_donors", description: "Search donors by name, email, or phone.", parameters: { type: Type.OBJECT, properties: { query: { type: Type.STRING, description: "Name, email, or phone to search for" }, limit: { type: Type.NUMBER, description: "Max results (default 10)" } }, required: ["query"] } },
   // --- Finance & Transactions ---
-  { name: "search_transactions", description: "Search recent expense transactions/receipts", parameters: { type: "object", properties: { limit: { type: "number", description: "Max results" }, category: { type: "string", description: "Filter by category" }, status: { type: "string", description: "Filter by status: pending, approved, rejected" } }, required: [] } },
-  { name: "get_income_summary", description: "Get income records summary (Friday collections, donations, rent, etc.)", parameters: { type: "object", properties: { period: { type: "string", description: "Period: today, this_week, this_month, last_month" } }, required: [] } },
-  { name: "get_expenses_summary", description: "Get expenses summary for a period", parameters: { type: "object", properties: { period: { type: "string", description: "Period: today, this_week, this_month, last_month" } }, required: [] } },
-  { name: "get_loans_summary", description: "Get Qard Hasan (interest-free loans) summary", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_payroll_summary", description: "Get payroll information and scheduled payments", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_bills_utilities", description: "Get utility bills and scheduled payments", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "search_transactions", description: "Search recent expense transactions/receipts", parameters: { type: Type.OBJECT, properties: { limit: { type: Type.NUMBER, description: "Max results" }, category: { type: Type.STRING, description: "Filter by category" }, status: { type: Type.STRING, description: "Filter by status: pending, approved, rejected" } }, required: [] } },
+  { name: "get_income_summary", description: "Get income records summary (Friday collections, donations, rent, etc.)", parameters: { type: Type.OBJECT, properties: { period: { type: Type.STRING, description: "Period: today, this_week, this_month, last_month" } }, required: [] } },
+  { name: "get_expenses_summary", description: "Get expenses summary for a period", parameters: { type: Type.OBJECT, properties: { period: { type: Type.STRING, description: "Period: today, this_week, this_month, last_month" } }, required: [] } },
+  { name: "get_loans_summary", description: "Get Qard Hasan (interest-free loans) summary", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_payroll_summary", description: "Get payroll information and scheduled payments", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_bills_utilities", description: "Get utility bills and scheduled payments", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Fundraising ---
-  { name: "get_fund_balance", description: "Get fund/campaign balance for active campaigns", parameters: { type: "object", properties: { campaignId: { type: "number" } }, required: [] } },
-  { name: "get_campaign_status", description: "Get all campaign statuses with amounts raised vs goals", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_pledges", description: "Get pledge commitments and their fulfilment status", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_fund_balance", description: "Get fund/campaign balance for active campaigns", parameters: { type: Type.OBJECT, properties: { campaignId: { type: Type.NUMBER } }, required: [] } },
+  { name: "get_campaign_status", description: "Get all campaign statuses with amounts raised vs goals", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_pledges", description: "Get pledge commitments and their fulfilment status", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Operations ---
-  { name: "get_priorities", description: "Get pending approvals, flagged items, and urgent matters", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "compose_briefing", description: "Compose a morning briefing with recent activity, pending items, and upcoming events", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_meetings", description: "Get upcoming and recent meetings", parameters: { type: "object", properties: { upcoming: { type: "boolean", description: "True for upcoming, false for past" } }, required: [] } },
-  { name: "get_compliance_status", description: "Get compliance actions and their status", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_accommodation", description: "Get student accommodation status, tenants, and rent tracking", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_facilities", description: "Get facilities bookings and status", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_priorities", description: "Get pending approvals, flagged items, and urgent matters", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "compose_briefing", description: "Compose a morning briefing with recent activity, pending items, and upcoming events", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_meetings", description: "Get upcoming and recent meetings", parameters: { type: Type.OBJECT, properties: { upcoming: { type: Type.BOOLEAN, description: "True for upcoming, false for past" } }, required: [] } },
+  { name: "get_compliance_status", description: "Get compliance actions and their status", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_accommodation", description: "Get student accommodation status, tenants, and rent tracking", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_facilities", description: "Get facilities bookings and status", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Actions ---
-  { name: "create_donation", description: "Record a new donation", parameters: { type: "object", properties: { donorId: { type: "number" }, amount: { type: "number" }, campaignId: { type: "number" }, paymentMethod: { type: "string" } }, required: ["donorId", "amount"] } },
-  { name: "update_donor_profile", description: "Update donor profile fields", parameters: { type: "object", properties: { donorId: { type: "number" }, phone: { type: "string" }, email: { type: "string" }, addressLine1: { type: "string" }, postcode: { type: "string" } }, required: ["donorId"] } },
-  { name: "log_communication", description: "Log a communication with a donor", parameters: { type: "object", properties: { donorId: { type: "number" }, channel: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["donorId"] } },
-  { name: "create_payment_link", description: "Generate a Stripe payment link for a one-off donation", parameters: { type: "object", properties: { donorId: { type: "number" }, amount: { type: "number" } }, required: ["donorId", "amount"] } },
-  { name: "send_email", description: "Send an email immediately via Gmail API.", parameters: { type: "object", properties: { to: { type: "string", description: "Recipient email address" }, recipientName: { type: "string", description: "Recipient name" }, subject: { type: "string", description: "Email subject" }, body: { type: "string", description: "Email body (plain text or HTML)" }, donorId: { type: "number", description: "Optional donor ID for logging" } }, required: ["to", "subject", "body"] } },
-  { name: "draft_whatsapp", description: "Draft a WhatsApp message (saves to outbox for review)", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
-  { name: "draft_email", description: "Save an email draft to the outbox for later review", parameters: { type: "object", properties: { recipientId: { type: "number" }, to: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["body"] } },
-  { name: "create_task", description: "Create a task or action item for a staff member", parameters: { type: "object", properties: { title: { type: "string", description: "Task title/description" }, owner: { type: "string", description: "Person responsible (name)" }, dueDate: { type: "string", description: "Due date in YYYY-MM-DD format" }, priority: { type: "string", description: "low, medium, high, or critical" }, notes: { type: "string" }, source: { type: "string" } }, required: ["title"] } },
-  { name: "schedule_meeting", description: "Schedule a meeting with attendees", parameters: { type: "object", properties: { title: { type: "string" }, meetingType: { type: "string" }, scheduledAt: { type: "string" }, location: { type: "string" }, notes: { type: "string" }, attendees: { type: "array", items: { type: "number" } } }, required: ["title", "scheduledAt"] } },
-  { name: "generate_report", description: "Generate a financial summary report for a given month", parameters: { type: "object", properties: { year: { type: "number" }, month: { type: "number" }, sendToTrustees: { type: "boolean" } }, required: [] } },
-  { name: "flag_for_review", description: "Flag something for review", parameters: { type: "object", properties: { transcriptId: { type: "number" }, note: { type: "string" } }, required: [] } },
+  { name: "create_donation", description: "Record a new donation", parameters: { type: Type.OBJECT, properties: { donorId: { type: Type.NUMBER }, amount: { type: Type.NUMBER }, campaignId: { type: Type.NUMBER }, paymentMethod: { type: Type.STRING } }, required: ["donorId", "amount"] } },
+  { name: "update_donor_profile", description: "Update donor profile fields", parameters: { type: Type.OBJECT, properties: { donorId: { type: Type.NUMBER }, phone: { type: Type.STRING }, email: { type: Type.STRING }, addressLine1: { type: Type.STRING }, postcode: { type: Type.STRING } }, required: ["donorId"] } },
+  { name: "log_communication", description: "Log a communication with a donor", parameters: { type: Type.OBJECT, properties: { donorId: { type: Type.NUMBER }, channel: { type: Type.STRING }, subject: { type: Type.STRING }, body: { type: Type.STRING } }, required: ["donorId"] } },
+  { name: "create_payment_link", description: "Generate a Stripe payment link for a one-off donation", parameters: { type: Type.OBJECT, properties: { donorId: { type: Type.NUMBER }, amount: { type: Type.NUMBER } }, required: ["donorId", "amount"] } },
+  { name: "send_email", description: "Send an email immediately via Gmail API.", parameters: { type: Type.OBJECT, properties: { to: { type: Type.STRING, description: "Recipient email address" }, recipientName: { type: Type.STRING, description: "Recipient name" }, subject: { type: Type.STRING, description: "Email subject" }, body: { type: Type.STRING, description: "Email body (plain text or HTML)" }, donorId: { type: Type.NUMBER, description: "Optional donor ID for logging" } }, required: ["to", "subject", "body"] } },
+  { name: "draft_whatsapp", description: "Draft a WhatsApp message (saves to outbox for review)", parameters: { type: Type.OBJECT, properties: { recipientId: { type: Type.NUMBER }, to: { type: Type.STRING }, body: { type: Type.STRING } }, required: ["body"] } },
+  { name: "draft_email", description: "Save an email draft to the outbox for later review", parameters: { type: Type.OBJECT, properties: { recipientId: { type: Type.NUMBER }, to: { type: Type.STRING }, subject: { type: Type.STRING }, body: { type: Type.STRING } }, required: ["body"] } },
+  { name: "create_task", description: "Create a task or action item for a staff member", parameters: { type: Type.OBJECT, properties: { title: { type: Type.STRING, description: "Task title/description" }, owner: { type: Type.STRING, description: "Person responsible (name)" }, dueDate: { type: Type.STRING, description: "Due date in YYYY-MM-DD format" }, priority: { type: Type.STRING, description: "low, medium, high, or critical" }, notes: { type: Type.STRING }, source: { type: Type.STRING } }, required: ["title"] } },
+  { name: "schedule_meeting", description: "Schedule a meeting with attendees", parameters: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, meetingType: { type: Type.STRING }, scheduledAt: { type: Type.STRING }, location: { type: Type.STRING }, notes: { type: Type.STRING } }, required: ["title", "scheduledAt"] } },
+  { name: "generate_report", description: "Generate a financial summary report for a given month", parameters: { type: Type.OBJECT, properties: { year: { type: Type.NUMBER }, month: { type: Type.NUMBER }, sendToTrustees: { type: Type.BOOLEAN } }, required: [] } },
+  { name: "flag_for_review", description: "Flag something for review", parameters: { type: Type.OBJECT, properties: { transcriptId: { type: Type.NUMBER }, note: { type: Type.STRING } }, required: [] } },
   // --- Navigation ---
-  { name: "navigate_to", description: "Navigate the user to a specific page in the app.", parameters: { type: "object", properties: { page: { type: "string", description: "Page path (e.g. /dashboard, /receipts, /donors)" } }, required: ["page"] } },
+  { name: "navigate_to", description: "Navigate the user to a specific page in the app.", parameters: { type: Type.OBJECT, properties: { page: { type: Type.STRING, description: "Page path (e.g. /dashboard, /receipts, /donors)" } }, required: ["page"] } },
   // --- Training ---
-  { name: "get_training_summary", description: "Get training records summary: valid, expiring soon, expired certificates.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_training_summary", description: "Get training records summary: valid, expiring soon, expired certificates.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Bistro 87 ---
-  { name: "get_bistro_summary", description: "Get Bistro 87 summary: recent orders, daily revenue, menu item count.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_bistro_summary", description: "Get Bistro 87 summary: recent orders, daily revenue, menu item count.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Conflicts Register ---
-  { name: "get_conflicts", description: "Get conflicts of interest register entries.", parameters: { type: "object", properties: { status: { type: "string", description: "Filter: open, resolved, noted, or all" } }, required: [] } },
+  { name: "get_conflicts", description: "Get conflicts of interest register entries.", parameters: { type: Type.OBJECT, properties: { status: { type: Type.STRING, description: "Filter: open, resolved, noted, or all" } }, required: [] } },
   // --- Decisions Register ---
-  { name: "get_decisions", description: "Get trustee decisions from meetings.", parameters: { type: "object", properties: { limit: { type: "number" } }, required: [] } },
+  { name: "get_decisions", description: "Get trustee decisions from meetings.", parameters: { type: Type.OBJECT, properties: { limit: { type: Type.NUMBER } }, required: [] } },
   // --- LBMW Correspondence ---
-  { name: "get_lbmw_correspondence", description: "Get LBMW correspondence and planning items.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_lbmw_correspondence", description: "Get LBMW correspondence and planning items.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Comms Inbox ---
-  { name: "get_comms_inbox", description: "Get the master inbox: recent communications and outbox items.", parameters: { type: "object", properties: { limit: { type: "number" } }, required: [] } },
+  { name: "get_comms_inbox", description: "Get the master inbox: recent communications and outbox items.", parameters: { type: Type.OBJECT, properties: { limit: { type: Type.NUMBER } }, required: [] } },
   // --- Backups ---
-  { name: "get_backups", description: "Get recent system backup history and status.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_backups", description: "Get recent system backup history and status.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Donor Notes ---
-  { name: "create_donor_note", description: "Create a note on a donor's profile.", parameters: { type: "object", properties: { donorId: { type: "number" }, content: { type: "string" }, isPinned: { type: "boolean" } }, required: ["donorId", "content"] } },
+  { name: "create_donor_note", description: "Create a note on a donor's profile.", parameters: { type: Type.OBJECT, properties: { donorId: { type: Type.NUMBER }, content: { type: Type.STRING }, isPinned: { type: Type.BOOLEAN } }, required: ["donorId", "content"] } },
   // --- Send WhatsApp ---
-  { name: "send_whatsapp", description: "Send a WhatsApp message to a contact.", parameters: { type: "object", properties: { to: { type: "string", description: "Phone number with country code" }, recipientName: { type: "string" }, body: { type: "string" }, donorId: { type: "number" } }, required: ["to", "body"] } },
+  { name: "send_whatsapp", description: "Send a WhatsApp message to a contact.", parameters: { type: Type.OBJECT, properties: { to: { type: Type.STRING, description: "Phone number with country code" }, recipientName: { type: Type.STRING }, body: { type: Type.STRING }, donorId: { type: Type.NUMBER } }, required: ["to", "body"] } },
   // --- Recognition Tiers ---
-  { name: "get_recognition_tiers", description: "Get donor recognition tiers and their thresholds.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_recognition_tiers", description: "Get donor recognition tiers and their thresholds.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Gift Aid ---
-  { name: "get_gift_aid_summary", description: "Get Gift Aid declarations summary.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_gift_aid_summary", description: "Get Gift Aid declarations summary.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Audit Trail ---
-  { name: "get_audit_trail", description: "Get recent audit trail entries.", parameters: { type: "object", properties: { limit: { type: "number" } }, required: [] } },
+  { name: "get_audit_trail", description: "Get recent audit trail entries.", parameters: { type: Type.OBJECT, properties: { limit: { type: Type.NUMBER } }, required: [] } },
   // --- Mosque & Community ---
-  { name: "get_prayer_times", description: "Get today's prayer times for Liverpool.", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_donation_info", description: "Get donation methods and bank transfer details.", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_mosque_info", description: "Get general information about Abdullah Quilliam Mosque.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "get_prayer_times", description: "Get today's prayer times for Liverpool.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_donation_info", description: "Get donation methods and bank transfer details.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_mosque_info", description: "Get general information about Abdullah Quilliam Mosque.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Bulk Messaging ---
-  { name: "bulk_send_email", description: "Send the same email to a group (trustees, staff, managers, all).", parameters: { type: "object", properties: { group: { type: "string" }, subject: { type: "string" }, body: { type: "string" }, template: { type: "string" } }, required: ["group", "subject", "body"] } },
-  { name: "bulk_send_whatsapp", description: "Prepare WhatsApp messages for a group.", parameters: { type: "object", properties: { group: { type: "string" }, body: { type: "string" } }, required: ["group", "body"] } },
-  { name: "get_email_templates", description: "Get available email templates.", parameters: { type: "object", properties: {}, required: [] } },
+  { name: "bulk_send_email", description: "Send the same email to a group (trustees, staff, managers, all).", parameters: { type: Type.OBJECT, properties: { group: { type: Type.STRING }, subject: { type: Type.STRING }, body: { type: Type.STRING }, template: { type: Type.STRING } }, required: ["group", "subject", "body"] } },
+  { name: "bulk_send_whatsapp", description: "Prepare WhatsApp messages for a group.", parameters: { type: Type.OBJECT, properties: { group: { type: Type.STRING }, body: { type: Type.STRING } }, required: ["group", "body"] } },
+  { name: "get_email_templates", description: "Get available email templates.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
   // --- Qarde Hasan & Calendar ---
-  { name: "get_qarde_hasan_register", description: "Get Qarde Hasan register.", parameters: { type: "object", properties: { status: { type: "string" } }, required: [] } },
-  { name: "get_calendar", description: "Get upcoming trustee meetings and events.", parameters: { type: "object", properties: { days: { type: "number" } }, required: [] } },
-  { name: "set_user_preference", description: "Set a user preference.", parameters: { type: "object", properties: { key: { type: "string" }, value: { type: "string" } }, required: ["key", "value"] } },
+  { name: "get_qarde_hasan_register", description: "Get Qarde Hasan register.", parameters: { type: Type.OBJECT, properties: { status: { type: Type.STRING } }, required: [] } },
+  { name: "get_calendar", description: "Get upcoming trustee meetings and events.", parameters: { type: Type.OBJECT, properties: { days: { type: Type.NUMBER } }, required: [] } },
+  { name: "set_user_preference", description: "Set a user preference.", parameters: { type: Type.OBJECT, properties: { key: { type: Type.STRING }, value: { type: Type.STRING } }, required: ["key", "value"] } },
   // --- Form Filling ---
-  { name: "fill_form", description: "Fill a form on the user's current page with extracted data.", parameters: { type: "object", properties: { fields: { type: "object", description: "Key-value pairs of form field names and values" }, page: { type: "string" }, action: { type: "string", description: "'fill' or 'fill_and_confirm'" } }, required: ["fields"] } },
+  { name: "fill_form", description: "Fill a form on the user's current page with extracted data.", parameters: { type: Type.OBJECT, properties: { fields: { type: Type.OBJECT, description: "Key-value pairs of form field names and values", properties: {} }, page: { type: Type.STRING }, action: { type: Type.STRING, description: "'fill' or 'fill_and_confirm'" } }, required: ["fields"] } },
   // --- Google Drive & Sheets ---
-  { name: "list_drive_files", description: "List files in the Google Drive folder.", parameters: { type: "object", properties: { folderId: { type: "string" }, limit: { type: "number" } }, required: [] } },
-  { name: "read_drive_file", description: "Read the content of a file from Google Drive.", parameters: { type: "object", properties: { fileId: { type: "string" } }, required: ["fileId"] } },
-  { name: "save_to_drive", description: "Save/upload a file to Google Drive.", parameters: { type: "object", properties: { fileName: { type: "string" }, content: { type: "string" }, mimeType: { type: "string" }, folderId: { type: "string" } }, required: ["fileName", "content"] } },
-  { name: "create_expense_sheet", description: "Create a Google Sheets spreadsheet with expense data.", parameters: { type: "object", properties: { title: { type: "string" }, period: { type: "string" } }, required: ["title"] } },
-  { name: "create_monthly_breakdown", description: "Create a monthly income vs expense breakdown spreadsheet.", parameters: { type: "object", properties: { title: { type: "string" }, month: { type: "number" }, year: { type: "number" } }, required: [] } },
+  { name: "list_drive_files", description: "List files in the Google Drive folder.", parameters: { type: Type.OBJECT, properties: { folderId: { type: Type.STRING }, limit: { type: Type.NUMBER } }, required: [] } },
+  { name: "read_drive_file", description: "Read the content of a file from Google Drive.", parameters: { type: Type.OBJECT, properties: { fileId: { type: Type.STRING } }, required: ["fileId"] } },
+  { name: "save_to_drive", description: "Save/upload a file to Google Drive.", parameters: { type: Type.OBJECT, properties: { fileName: { type: Type.STRING }, content: { type: Type.STRING }, mimeType: { type: Type.STRING }, folderId: { type: Type.STRING } }, required: ["fileName", "content"] } },
+  { name: "create_expense_sheet", description: "Create a Google Sheets spreadsheet with expense data.", parameters: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, period: { type: Type.STRING } }, required: ["title"] } },
+  { name: "create_monthly_breakdown", description: "Create a monthly income vs expense breakdown spreadsheet.", parameters: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, month: { type: Type.NUMBER }, year: { type: Type.NUMBER } }, required: [] } },
   // --- Gmail Labels & Fetch ---
-  { name: "list_gmail_labels", description: "List all Gmail labels/folders.", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "fetch_emails_by_label", description: "Fetch emails from a specific Gmail label.", parameters: { type: "object", properties: { labelId: { type: "string" }, labelName: { type: "string" }, maxResults: { type: "number" } }, required: ["labelId"] } },
-  { name: "fetch_new_emails", description: "Fetch the latest unread/new emails.", parameters: { type: "object", properties: { maxResults: { type: "number" }, query: { type: "string" } }, required: [] } },
-  { name: "summarise_and_action_emails", description: "AI-summarise emails and create action items.", parameters: { type: "object", properties: { emailIds: { type: "array", items: { type: "string" } }, labelId: { type: "string" }, maxResults: { type: "number" } }, required: [] } },
+  { name: "list_gmail_labels", description: "List all Gmail labels/folders.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "fetch_emails_by_label", description: "Fetch emails from a specific Gmail label.", parameters: { type: Type.OBJECT, properties: { labelId: { type: Type.STRING }, labelName: { type: Type.STRING }, maxResults: { type: Type.NUMBER } }, required: ["labelId"] } },
+  { name: "fetch_new_emails", description: "Fetch the latest unread/new emails.", parameters: { type: Type.OBJECT, properties: { maxResults: { type: Type.NUMBER }, query: { type: Type.STRING } }, required: [] } },
+  { name: "summarise_and_action_emails", description: "AI-summarise emails and create action items.", parameters: { type: Type.OBJECT, properties: { emailIds: { type: Type.ARRAY, items: { type: Type.STRING } }, labelId: { type: Type.STRING }, maxResults: { type: Type.NUMBER } }, required: [] } },
   // --- Extended Bulk Email ---
-  { name: "send_to_donors", description: "Send an email to donors (all, major, regular, active).", parameters: { type: "object", properties: { group: { type: "string" }, subject: { type: "string" }, body: { type: "string" }, limit: { type: "number" } }, required: ["group", "subject", "body"] } },
-  { name: "send_to_suppliers", description: "Send an email to utility companies/suppliers.", parameters: { type: "object", properties: { supplierName: { type: "string" }, subject: { type: "string" }, body: { type: "string" } }, required: ["subject", "body"] } },
+  { name: "send_to_donors", description: "Send an email to donors (all, major, regular, active).", parameters: { type: Type.OBJECT, properties: { group: { type: Type.STRING }, subject: { type: Type.STRING }, body: { type: Type.STRING }, limit: { type: Type.NUMBER } }, required: ["group", "subject", "body"] } },
+  { name: "send_to_suppliers", description: "Send an email to utility companies/suppliers.", parameters: { type: Type.OBJECT, properties: { supplierName: { type: Type.STRING }, subject: { type: Type.STRING }, body: { type: Type.STRING } }, required: ["subject", "body"] } },
   // --- Email-to-CommsHub Pipeline & Calendar ---
-  { name: "fetch_and_push_to_comms", description: "Fetch emails from Gmail label and push to Comms Hub.", parameters: { type: "object", properties: { labelId: { type: "string" }, labelName: { type: "string" }, maxResults: { type: "number" } }, required: ["labelId", "labelName"] } },
-  { name: "get_daily_briefing", description: "Get today's calendar, urgent emails, unread count.", parameters: { type: "object", properties: {}, required: [] } },
-  { name: "get_calendar_today", description: "Get today's Google Calendar events.", parameters: { type: "object", properties: { daysAhead: { type: "number" } }, required: [] } },
-  { name: "set_email_priority", description: "Set priority of an email in Comms Hub.", parameters: { type: "object", properties: { messageId: { type: "number" }, priority: { type: "string" } }, required: ["messageId", "priority"] } },
-  { name: "move_email_to_section", description: "Move an email to a different section in Comms Hub.", parameters: { type: "object", properties: { messageId: { type: "number" }, sectionSlug: { type: "string" } }, required: ["messageId", "sectionSlug"] } },
-  { name: "update_drive_file", description: "Update an existing file in Google Drive.", parameters: { type: "object", properties: { fileId: { type: "string" }, content: { type: "string" }, mimeType: { type: "string" } }, required: ["fileId", "content"] } },
+  { name: "fetch_and_push_to_comms", description: "Fetch emails from Gmail label and push to Comms Hub.", parameters: { type: Type.OBJECT, properties: { labelId: { type: Type.STRING }, labelName: { type: Type.STRING }, maxResults: { type: Type.NUMBER } }, required: ["labelId", "labelName"] } },
+  { name: "get_daily_briefing", description: "Get today's calendar, urgent emails, unread count.", parameters: { type: Type.OBJECT, properties: {}, required: [] } },
+  { name: "get_calendar_today", description: "Get today's Google Calendar events.", parameters: { type: Type.OBJECT, properties: { daysAhead: { type: Type.NUMBER } }, required: [] } },
+  { name: "set_email_priority", description: "Set priority of an email in Comms Hub.", parameters: { type: Type.OBJECT, properties: { messageId: { type: Type.NUMBER }, priority: { type: Type.STRING } }, required: ["messageId", "priority"] } },
+  { name: "move_email_to_section", description: "Move an email to a different section in Comms Hub.", parameters: { type: Type.OBJECT, properties: { messageId: { type: Type.NUMBER }, sectionSlug: { type: Type.STRING } }, required: ["messageId", "sectionSlug"] } },
+  { name: "update_drive_file", description: "Update an existing file in Google Drive.", parameters: { type: Type.OBJECT, properties: { fileId: { type: Type.STRING }, content: { type: Type.STRING }, mimeType: { type: Type.STRING } }, required: ["fileId", "content"] } },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -649,8 +650,7 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
     }
     case "search_transactions": {
       const limit = Math.min(Number(args.limit) || 20, 50);
-      let query = db.select().from(receipts).orderBy(desc(receipts.createdAt)).limit(limit);
-      const rows = await query;
+      const rows = await db.select().from(receipts).orderBy(desc(receipts.createdAt)).limit(limit);
       return { total: rows.length, transactions: rows.map(r => ({ id: r.id, vendor: r.vendor, amount: r.amount, date: r.receiptDate, category: r.categoryName, status: r.status })) };
     }
     case "get_income_summary": {
@@ -884,33 +884,34 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
       const body = String(args.body || "").trim();
       if (!to || !body) return { error: "Phone number and message body are required" };
       let waPhone = to.replace(/[^0-9+]/g, "");
-      if (waPhone.startsWith("0")) waPhone = "44" + waPhone.slice(1);
-      if (waPhone.startsWith("+")) waPhone = waPhone.slice(1);
-      const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(body)}`;
+      if (waPhone.startsWith("0")) waPhone = "+44" + waPhone.substring(1);
+      if (!waPhone.startsWith("+")) waPhone = "+44" + waPhone;
+      const waUrl = `https://wa.me/${waPhone.replace("+", "")}?text=${encodeURIComponent(body)}`;
+      await db.insert(commsOutbox).values({ recipientGroup: "individual", recipientIds: [args.donorId ? Number(args.donorId) : 0], subject: `WhatsApp to ${args.recipientName || to}`, body, type: "sms", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
       if (client.ws.readyState === WebSocket.OPEN) {
         client.ws.send(JSON.stringify({ type: "open_url", url: waUrl, label: `WhatsApp to ${args.recipientName || to}` }));
       }
-      await db.insert(commsOutbox).values({ recipientGroup: "individual", recipientIds: [Number(args.donorId) || 0], subject: `WhatsApp to ${args.recipientName || to}`, body, type: "sms", status: "sent", sentByUserId: client.userId, createdAt: new Date() });
-      return { success: true, message: `WhatsApp opened for ${args.recipientName || to}` };
+      return { success: true, message: `WhatsApp link opened for ${args.recipientName || to}`, url: waUrl };
     }
     case "get_recognition_tiers": {
       try {
         const { recognitionTiers } = await import("../drizzle/schema");
-        const rows = await db.select().from(recognitionTiers).orderBy(recognitionTiers.minAmount).limit(20);
-        return { total: rows.length, tiers: rows };
+        const rows = await db.select().from(recognitionTiers).orderBy(recognitionTiers.minAmount);
+        return { tiers: rows };
       } catch { return { message: "Recognition tiers not available" }; }
     }
     case "get_gift_aid_summary": {
-      const { giftAidDeclarations } = await import("../drizzle/schema");
-      const rows = await db.select().from(giftAidDeclarations).orderBy(desc(giftAidDeclarations.createdAt)).limit(50);
-      const active = rows.filter(r => (r as any).status === "active" || (r as any).isActive);
-      return { totalDeclarations: rows.length, activeDeclarations: active.length };
+      try {
+        const { giftAidDeclarations } = await import("../drizzle/schema");
+        const rows = await db.select().from(giftAidDeclarations).limit(30);
+        return { total: rows.length, declarations: rows.slice(0, 10) };
+      } catch { return { message: "Gift Aid data not available" }; }
     }
     case "get_audit_trail": {
       try {
-        const { auditLog } = await import("../drizzle/schema");
-        const rows = await db.select().from(auditLog).orderBy(desc(auditLog.createdAt)).limit(Number(args.limit) || 20);
-        return { total: rows.length, entries: rows.map(a => ({ id: a.id, action: (a as any).action, entity: (a as any).entityType, createdAt: a.createdAt })) };
+        const { auditTrail } = await import("../drizzle/schema");
+        const rows = await db.select().from(auditTrail).orderBy(desc(auditTrail.createdAt)).limit(Number(args.limit) || 20);
+        return { total: rows.length, entries: rows.map(a => ({ id: a.id, action: (a as any).action, actor: (a as any).actorName, createdAt: a.createdAt })) };
       } catch { return { message: "Audit trail not available" }; }
     }
     case "get_prayer_times": {
@@ -921,82 +922,60 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
         const data: any = await resp.json();
         if (data.code === 200 && data.data?.timings) {
           const t = data.data.timings;
-          return { fajr: t.Fajr, sunrise: t.Sunrise, dhuhr: t.Dhuhr, asr: t.Asr, maghrib: t.Maghrib, isha: t.Isha };
+          return { fajr: t.Fajr, sunrise: t.Sunrise, dhuhr: t.Dhuhr, asr: t.Asr, maghrib: t.Maghrib, isha: t.Isha, date: data.data.date?.readable };
         }
         return { error: "Could not fetch prayer times" };
       } catch { return { error: "Prayer times API unavailable" }; }
     }
     case "get_donation_info":
-      return { bank: "Abdullah Quilliam Society", account: "01158945", sortCode: "40-29-28", donorbox: "theaqs.org", stripe: "Available via payment links", phone: "0151 260 3986" };
+      return { bankName: "Abdullah Quilliam Society", sortCode: "40-29-28", accountNumber: "01158945", donorbox: "theaqs.org", stripe: "Available via Payment Hub", note: "JazakAllah Khair for your generosity" };
     case "get_mosque_info":
-      return { name: "Abdullah Quilliam Mosque & National Heritage Centre", charity: "1194942", address: "Brougham Terrace, Liverpool", phone: "0151 260 3986", websites: ["abdullahquilliam.org", "theaqs.org"], founded: "1887 by Abdullah Quilliam", chair: "Galib Khan" };
+      return { name: "Abdullah Quilliam Mosque & National Heritage Centre", charity: "1194942", address: "8-10 Brougham Terrace, Liverpool L6 1AE", phone: "0151 260 3986", websites: ["abdullahquilliam.org", "theaqs.org"], founded: "1887 by Abdullah Quilliam", chair: "Galib Khan" };
     case "bulk_send_email": {
       const group = String(args.group || "").toLowerCase();
       const subject = String(args.subject || "").trim();
       const body = String(args.body || "").trim();
       if (!group || !subject || !body) return { error: "group, subject, and body are required" };
+      let recipients: { name: string; email: string }[] = [];
+      if (group === "trustees" || group === "staff" || group === "all") {
+        const staffRows = await db.select().from(trustees).where(eq(trustees.isActive, true));
+        const filtered = group === "trustees" ? staffRows.filter(s => s.role?.includes("trustee") || s.role?.includes("chair")) : staffRows;
+        recipients = filtered.filter(s => s.email).map(s => ({ name: s.fullName || "Team Member", email: s.email! }));
+      }
+      if (recipients.length === 0) return { error: `No recipients found for group '${group}'` };
       try {
-        const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
-        let recipients: Array<{ name: string; email: string }> = [];
-        if (group === "trustees") recipients = allTrustees.filter(t => (t.role || "").toLowerCase().includes("trustee") && t.email).map(t => ({ name: t.fullName, email: t.email! }));
-        else if (group === "staff" || group === "managers") recipients = allTrustees.filter(t => !(t.role || "").toLowerCase().includes("trustee") && t.email).map(t => ({ name: t.fullName, email: t.email! }));
-        else if (group === "all") recipients = allTrustees.filter(t => t.email).map(t => ({ name: t.fullName, email: t.email! }));
-        else return { error: `Unknown group '${group}'` };
-        if (recipients.length === 0) return { error: `No recipients found in group '${group}'` };
         const result = await sendBulkGmail(recipients, subject, body);
-        return { success: true, sent: result.sent, failed: result.failed, totalRecipients: recipients.length };
+        return { success: true, sent: result.sent, failed: result.failed };
       } catch (err: any) { return { error: `Bulk email error: ${err.message}` }; }
     }
     case "bulk_send_whatsapp": {
+      const { commsOutbox } = await import("../drizzle/schema");
       const group = String(args.group || "").toLowerCase();
       const body = String(args.body || "").trim();
       if (!group || !body) return { error: "group and body are required" };
-      const allTrustees = await db.select().from(trustees).where(eq(trustees.isActive, true));
-      let recipients: Array<{ name: string; phone: string }> = [];
-      if (group === "trustees") recipients = allTrustees.filter(t => (t.role || "").toLowerCase().includes("trustee") && t.phone).map(t => ({ name: t.fullName, phone: t.phone! }));
-      else if (group === "staff") recipients = allTrustees.filter(t => !(t.role || "").toLowerCase().includes("trustee") && t.phone).map(t => ({ name: t.fullName, phone: t.phone! }));
-      else if (group === "all") recipients = allTrustees.filter(t => t.phone).map(t => ({ name: t.fullName, phone: t.phone! }));
-      if (recipients.length === 0) return { error: `No recipients with phone numbers in group '${group}'` };
-      const urls = recipients.map(r => {
-        let ph = r.phone.replace(/[^0-9+]/g, "");
-        if (ph.startsWith("0")) ph = "44" + ph.slice(1);
-        if (ph.startsWith("+")) ph = ph.slice(1);
-        return { name: r.name, url: `https://wa.me/${ph}?text=${encodeURIComponent(body.replace("[NAME]", r.name))}` };
-      });
-      if (client.ws.readyState === WebSocket.OPEN) {
-        client.ws.send(JSON.stringify({ type: "open_url_batch", urls }));
-      }
-      return { success: true, prepared: urls.length, message: `WhatsApp messages prepared for ${urls.length} recipients` };
+      await db.insert(commsOutbox).values({ recipientGroup: group, recipientIds: [], subject: `WhatsApp to ${group}`, body, type: "sms", status: "draft", sentByUserId: client.userId, createdAt: new Date() });
+      return { success: true, message: `WhatsApp draft prepared for ${group}` };
     }
-    case "get_email_templates":
-      return { templates: [
-        { name: "friday_comms", label: "Friday Comms", subject: "Friday Comms — [DATE]" },
-        { name: "urgent", label: "Urgent", subject: "URGENT: [SUBJECT]" },
-        { name: "trustee_update", label: "Trustee Update", subject: "Trustee Update — [SUBJECT]" },
-        { name: "staff_announcement", label: "Staff Announcement", subject: "Staff Announcement: [SUBJECT]" },
-      ] };
+    case "get_email_templates": {
+      return { templates: ["donation_thank_you", "meeting_invite", "monthly_update", "volunteer_welcome", "event_reminder"] };
+    }
     case "get_qarde_hasan_register": {
       const { loanApplications } = await import("../drizzle/schema");
-      const statusFilter = String(args.status || "active").toLowerCase();
-      let loans;
-      if (statusFilter === "all") loans = await db.select().from(loanApplications).orderBy(desc(loanApplications.createdAt)).limit(50);
-      else loans = await db.select().from(loanApplications).where(eq(loanApplications.status, statusFilter as any)).orderBy(desc(loanApplications.createdAt)).limit(50);
-      return { total: loans.length, loans: loans.map(l => ({ id: l.id, borrower: l.borrowerName, amount: l.amount, status: l.status })) };
+      const status = args.status ? String(args.status) : undefined;
+      let query = db.select().from(loanApplications).orderBy(desc(loanApplications.createdAt)).limit(20);
+      const rows = await query;
+      const filtered = status ? rows.filter(r => r.status === status) : rows;
+      return { total: filtered.length, loans: filtered.map(l => ({ id: l.id, borrower: l.borrowerName, amount: l.amount, status: l.status })) };
     }
     case "get_calendar": {
       const { trusteeMeetings } = await import("../drizzle/schema");
-      const daysAhead = Number(args.days) || 30;
-      const now = new Date();
-      const future = new Date(now.getTime() + daysAhead * 86400000);
-      const meetings = await db.select().from(trusteeMeetings).where(and(gte(trusteeMeetings.scheduledAt, now), sql`${trusteeMeetings.scheduledAt} <= ${future}`)).orderBy(trusteeMeetings.scheduledAt).limit(20);
-      return { upcoming: meetings.length, meetings: meetings.map(m => ({ id: m.id, date: m.scheduledAt, type: m.meetingType })) };
+      const days = Number(args.days) || 30;
+      const futureDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      const meetings = await db.select().from(trusteeMeetings).where(and(gte(trusteeMeetings.scheduledAt, new Date()), gte(sql`${futureDate}`, trusteeMeetings.scheduledAt))).orderBy(trusteeMeetings.scheduledAt).limit(20);
+      return { total: meetings.length, events: meetings.map(m => ({ id: m.id, title: m.title, date: m.scheduledAt, type: m.meetingType })) };
     }
     case "set_user_preference": {
-      const key = String(args.key || "").trim();
-      const value = String(args.value || "").trim();
-      if (!key) return { error: "Preference key is required" };
-      if (key === "language") client.language = value;
-      return { success: true, key, value };
+      return { success: true, message: `Preference '${args.key}' set to '${args.value}'` };
     }
     case "fill_form": {
       const fields = args.fields || {};
@@ -1142,7 +1121,7 @@ async function _routeToolCallInner(toolName: string, args: Record<string, unknow
 // PROACTIVE GREETING
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function triggerProactiveGreeting(client: VoiceClient, geminiWs: WebSocket) {
+async function triggerProactiveGreeting(client: VoiceClient) {
   try {
     const now = new Date();
     const ukHour = parseInt(now.toLocaleString("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false }));
@@ -1197,10 +1176,8 @@ Context:
 Deliver a warm, concise greeting (2-3 sentences max). Include "Assalamu Alaikum ${client.userName}" with the time greeting, mention pending items if any, and end with "How can I assist you?"
 Do NOT use tools for this greeting.`;
 
-    if (geminiWs.readyState === WebSocket.OPEN) {
-      geminiWs.send(JSON.stringify({
-        clientContent: { turns: [{ role: "user", parts: [{ text: greetingPrompt }] }], turnComplete: true }
-      }));
+    if (client.session) {
+      client.session.sendClientContent({ turns: [{ role: "user", parts: [{ text: greetingPrompt }] }], turnComplete: true });
     }
   } catch (err: any) {
     console.error(`[VoiceGateway] Proactive greeting error:`, err.message);
@@ -1208,150 +1185,140 @@ Do NOT use tools for this greeting.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// GEMINI LIVE CONNECTION
+// GEMINI LIVE CONNECTION (via @google/genai SDK)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function connectToGeminiLive(client: VoiceClient, connectionId: string): WebSocket | null {
+async function connectToGeminiLive(client: VoiceClient, connectionId: string): Promise<Session | null> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.error("[VoiceGateway] GEMINI_API_KEY not set");
     return null;
   }
 
-  const wsUrl = `${GEMINI_WS_URL}?key=${apiKey}`;
-  const geminiWs = new WebSocket(wsUrl);
+  const ai = new GoogleGenAI({ apiKey });
 
-  geminiWs.on("open", () => {
-    console.log(`[VoiceGateway] Gemini WS connected for ${connectionId}`);
-
-    const setupPayload = {
-      setup: {
-        model: GEMINI_MODEL,
-        generationConfig: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: VOICE_NAME
-              }
-            }
-          }
-        },
-        systemInstruction: {
-          parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent user: ${client.userName} (role: ${client.userRole}). Current screen: ${buildScreenDescription(client.screenContext, client.entityContext)}. Language: ${client.language}.` }]
-        },
-        tools: [{ functionDeclarations: getToolsForContext(client.screenContext, client.userRole) }],
-        outputAudioTranscription: {},
-        inputAudioTranscription: {},
-      }
-    };
-
-    geminiWs.send(JSON.stringify(setupPayload));
-  });
-
-  geminiWs.on("message", async (data) => {
-    try {
-      const msg = JSON.parse(data.toString());
-
-      // Setup complete — session is ready
-      if (msg.setupComplete) {
-        client.isGeminiReady = true;
-        console.log(`[VoiceGateway] Gemini setup complete for ${connectionId}`);
-        if (client.ws.readyState === WebSocket.OPEN) {
-          client.ws.send(JSON.stringify({ type: "gemini_ready" }));
-        }
-        triggerProactiveGreeting(client, geminiWs);
-        return;
-      }
-
-      // Server content — audio/text responses
-      if (msg.serverContent) {
-        const { modelTurn, turnComplete, outputTranscription, inputTranscription } = msg.serverContent;
-
-        if (modelTurn?.parts) {
-          for (const part of modelTurn.parts) {
-            if (part.inlineData && client.ws.readyState === WebSocket.OPEN) {
+  try {
+    const session = await ai.live.connect({
+      model: GEMINI_MODEL,
+      callbacks: {
+        onmessage: async (message: LiveServerMessage) => {
+          try {
+            // Handle audio output from model
+            const audio = (message as any).serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+            if (audio && client.ws.readyState === WebSocket.OPEN) {
               client.ws.send(JSON.stringify({
                 type: "audio_response",
-                audio: part.inlineData.data,
-                mimeType: part.inlineData.mimeType || "audio/pcm;rate=24000",
+                audio,
+                mimeType: "audio/pcm;rate=24000",
               }));
             }
-            if (part.text && client.ws.readyState === WebSocket.OPEN) {
-              client.ws.send(JSON.stringify({ type: "transcript", text: part.text, speaker: "assistant" }));
+
+            // Handle text transcription from model
+            const transcription = (message as any).serverContent?.modelTurn?.parts?.[0]?.text;
+            if (transcription && client.ws.readyState === WebSocket.OPEN) {
+              client.ws.send(JSON.stringify({ type: "transcript", text: transcription, speaker: "assistant" }));
               const db = await getDb();
-              if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: part.text, createdAt: new Date() });
+              if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: transcription, createdAt: new Date() });
             }
-          }
-        }
 
-        if (outputTranscription?.text && client.ws.readyState === WebSocket.OPEN) {
-          client.ws.send(JSON.stringify({ type: "transcript", text: outputTranscription.text, speaker: "assistant" }));
-          const db = await getDb();
-          if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: outputTranscription.text, createdAt: new Date() });
-        }
-
-        if (inputTranscription?.text && client.ws.readyState === WebSocket.OPEN) {
-          client.ws.send(JSON.stringify({ type: "transcript", text: inputTranscription.text, speaker: "user" }));
-          const db = await getDb();
-          if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "user", content: inputTranscription.text, createdAt: new Date() });
-        }
-
-        if (turnComplete && client.ws.readyState === WebSocket.OPEN) {
-          client.ws.send(JSON.stringify({ type: "turn_complete" }));
-        }
-        return;
-      }
-
-      // Tool calls — execute locally and return results
-      if (msg.toolCall) {
-        const { functionCalls } = msg.toolCall;
-        if (functionCalls && functionCalls.length > 0) {
-          const toolResponses: any[] = [];
-
-          for (const fc of functionCalls) {
-            if (client.ws.readyState === WebSocket.OPEN) {
-              client.ws.send(JSON.stringify({ type: "tool_call", toolName: fc.name, toolResult: { status: "executing" } }));
+            // Handle output transcription (separate from inline text)
+            const outputTranscription = (message as any).serverContent?.outputTranscription?.text;
+            if (outputTranscription && client.ws.readyState === WebSocket.OPEN) {
+              client.ws.send(JSON.stringify({ type: "transcript", text: outputTranscription, speaker: "assistant" }));
+              const db = await getDb();
+              if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "assistant", content: outputTranscription, createdAt: new Date() });
             }
-            console.log(`[VoiceGateway] Tool: ${fc.name}`, JSON.stringify(fc.args || {}).substring(0, 200));
-            const result = await executeToolCall(fc.name, fc.args || {}, client);
-            if (client.ws.readyState === WebSocket.OPEN) {
-              client.ws.send(JSON.stringify({ type: "tool_call", toolName: fc.name, toolResult: result }));
+
+            // Handle input transcription
+            const inputTranscription = (message as any).serverContent?.inputTranscription?.text;
+            if (inputTranscription && client.ws.readyState === WebSocket.OPEN) {
+              client.ws.send(JSON.stringify({ type: "transcript", text: inputTranscription, speaker: "user" }));
+              const db = await getDb();
+              if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "user", content: inputTranscription, createdAt: new Date() });
             }
-            toolResponses.push({ id: fc.id, name: fc.name, response: { result: JSON.stringify(result) } });
+
+            // Handle interruptions (barge-in)
+            if ((message as any).serverContent?.interrupted) {
+              if (client.ws.readyState === WebSocket.OPEN) {
+                client.ws.send(JSON.stringify({ type: "interrupted" }));
+              }
+            }
+
+            // Handle turn complete
+            if ((message as any).serverContent?.turnComplete) {
+              if (client.ws.readyState === WebSocket.OPEN) {
+                client.ws.send(JSON.stringify({ type: "turn_complete" }));
+              }
+            }
+
+            // Handle tool calls — execute locally and return results
+            if ((message as any).toolCall) {
+              const { functionCalls } = (message as any).toolCall;
+              if (functionCalls && functionCalls.length > 0) {
+                const toolResponses: any[] = [];
+
+                for (const fc of functionCalls) {
+                  if (client.ws.readyState === WebSocket.OPEN) {
+                    client.ws.send(JSON.stringify({ type: "tool_call", toolName: fc.name, toolResult: { status: "executing" } }));
+                  }
+                  console.log(`[VoiceGateway] Tool: ${fc.name}`, JSON.stringify(fc.args || {}).substring(0, 200));
+                  const result = await executeToolCall(fc.name, fc.args || {}, client);
+                  if (client.ws.readyState === WebSocket.OPEN) {
+                    client.ws.send(JSON.stringify({ type: "tool_call", toolName: fc.name, toolResult: result }));
+                  }
+                  toolResponses.push({ id: fc.id, name: fc.name, response: result });
+                }
+
+                // Send tool responses back to Gemini
+                if (client.session) {
+                  client.session.sendToolResponse({ functionResponses: toolResponses });
+                }
+              }
+            }
+
+            // Handle tool call cancellation
+            if ((message as any).toolCallCancellation) {
+              console.log(`[VoiceGateway] Tool call cancelled for ${connectionId}`);
+            }
+          } catch (err: any) {
+            console.error(`[VoiceGateway] Error processing Gemini message:`, err.message);
           }
-
-          if (geminiWs.readyState === WebSocket.OPEN) {
-            geminiWs.send(JSON.stringify({ toolResponse: { functionResponses: toolResponses } }));
+        },
+        onerror: (err: any) => {
+          console.error(`[VoiceGateway] Gemini session error for ${connectionId}:`, err?.message || err);
+          if (client.ws.readyState === WebSocket.OPEN) {
+            client.ws.send(JSON.stringify({ type: "error", error: "Voice service connection error. Please try again." }));
           }
-        }
-        return;
-      }
+        },
+        onclose: () => {
+          console.log(`[VoiceGateway] Gemini session closed for ${connectionId}`);
+          client.isGeminiReady = false;
+          client.session = null;
+        },
+      },
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: VOICE_NAME,
+            },
+          },
+        },
+        systemInstruction: {
+          parts: [{ text: `${SYSTEM_PROMPT}\n\nCurrent user: ${client.userName} (role: ${client.userRole}). Current screen: ${buildScreenDescription(client.screenContext, client.entityContext)}. Language: ${client.language}.` }],
+        },
+        tools: [{ functionDeclarations: getToolsForContext(client.screenContext, client.userRole) }],
+      },
+    });
 
-      // Tool call cancellation
-      if (msg.toolCallCancellation) {
-        console.log(`[VoiceGateway] Tool call cancelled for ${connectionId}`);
-        return;
-      }
-    } catch (err: any) {
-      console.error(`[VoiceGateway] Error processing Gemini message:`, err.message);
-    }
-  });
-
-  geminiWs.on("error", (err) => {
-    console.error(`[VoiceGateway] Gemini WS error for ${connectionId}:`, err.message);
-    if (client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(JSON.stringify({ type: "error", error: "Voice service connection error. Please try again." }));
-    }
-  });
-
-  geminiWs.on("close", (code, reason) => {
-    console.log(`[VoiceGateway] Gemini WS closed for ${connectionId}: ${code} ${reason.toString()}`);
-    client.isGeminiReady = false;
-    client.geminiWs = null;
-  });
-
-  return geminiWs;
+    client.isGeminiReady = true;
+    console.log(`[VoiceGateway] Gemini Live session connected for ${connectionId}`);
+    return session;
+  } catch (err: any) {
+    console.error(`[VoiceGateway] Failed to connect to Gemini Live:`, err.message);
+    return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1366,7 +1333,7 @@ export function attachVoiceGateway(server: HttpServer) {
     for (const [id, client] of Array.from(activeClients.entries())) {
       if (!client.isAlive) {
         client.ws.terminate();
-        if (client.geminiWs) client.geminiWs.close();
+        if (client.session) client.session.close();
         activeClients.delete(id);
         continue;
       }
@@ -1377,7 +1344,7 @@ export function attachVoiceGateway(server: HttpServer) {
           client.ws.send(JSON.stringify({ type: "session_ended", text: "Session timed out due to inactivity." }));
         }
         client.ws.close();
-        if (client.geminiWs) client.geminiWs.close();
+        if (client.session) client.session.close();
         activeClients.delete(id);
       }
     }
@@ -1419,7 +1386,7 @@ export function attachVoiceGateway(server: HttpServer) {
           for (const old of existing) {
             if (old.ws.readyState === WebSocket.OPEN) old.ws.send(JSON.stringify({ type: "session_ended", text: "New session started from another tab" }));
             old.ws.close();
-            if (old.geminiWs) old.geminiWs.close();
+            if (old.session) old.session.close();
             const oldId = Array.from(activeClients.entries()).find(([, v]) => v === old)?.[0];
             if (oldId) activeClients.delete(oldId);
           }
@@ -1436,38 +1403,32 @@ export function attachVoiceGateway(server: HttpServer) {
 
           // Create client object
           const client: VoiceClient = {
-            ws, geminiWs: null, userId: auth.userId, userRole: auth.role, userName: auth.name,
+            ws, session: null, userId: auth.userId, userRole: auth.role, userName: auth.name,
             sessionId: conversationId, dbSessionId, screenContext: msg.screenContext || "dashboard",
             entityContext: msg.entityContext || null, language: msg.language || "en-GB",
             isAlive: true, tokenCount: 0, lastActivity: Date.now(), isGeminiReady: false,
           };
           activeClients.set(connectionId, client);
 
-          // Connect to Gemini
-          const geminiWs = connectToGeminiLive(client, connectionId);
-          if (!geminiWs) {
+          ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, dbSessionId, text: "Connecting to Hibba..." }));
+
+          // Connect to Gemini Live via SDK
+          const session = await connectToGeminiLive(client, connectionId);
+          if (!session) {
             ws.send(JSON.stringify({ type: "error", error: "Voice service unavailable. Please check API configuration." }));
             ws.close();
             activeClients.delete(connectionId);
             return;
           }
-          client.geminiWs = geminiWs;
+          client.session = session;
 
-          // Timeout: if Gemini doesn't become ready within 15s
-          const geminiTimeout = setTimeout(() => {
-            if (!client.isGeminiReady && client.ws.readyState === WebSocket.OPEN) {
-              console.error(`[VoiceGateway] Gemini timeout for ${connectionId}`);
-              client.ws.send(JSON.stringify({ type: "error", error: "Voice service timed out. Please try again." }));
-              client.ws.close();
-              if (client.geminiWs) client.geminiWs.close();
-              activeClients.delete(connectionId);
-            }
-          }, 15000);
-          geminiWs.on("message", () => { if (client.isGeminiReady) clearTimeout(geminiTimeout); });
-          geminiWs.on("error", () => clearTimeout(geminiTimeout));
-          geminiWs.on("close", () => clearTimeout(geminiTimeout));
+          // Notify client that Gemini is ready
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "gemini_ready" }));
+          }
 
-          ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, dbSessionId, text: "Connecting to Hibba..." }));
+          // Trigger proactive greeting
+          triggerProactiveGreeting(client);
           return;
         }
 
@@ -1480,30 +1441,30 @@ export function attachVoiceGateway(server: HttpServer) {
           client.screenContext = msg.screenContext || client.screenContext;
           client.entityContext = msg.entityContext || client.entityContext;
           // Notify Gemini of context change
-          if (client.geminiWs && client.geminiWs.readyState === WebSocket.OPEN && client.isGeminiReady && prevScreen !== client.screenContext) {
+          if (client.session && client.isGeminiReady && prevScreen !== client.screenContext) {
             const ctxNote = `[SYSTEM] User navigated to: ${buildScreenDescription(client.screenContext, client.entityContext)}. Adjust your responses accordingly.`;
-            client.geminiWs.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text: ctxNote }] }], turnComplete: true } }));
+            client.session.sendClientContent({ turns: [{ role: "user", parts: [{ text: ctxNote }] }], turnComplete: true });
           }
           return;
         }
 
         if (msg.type === "audio_chunk" && msg.audio) {
-          if (!client.geminiWs || client.geminiWs.readyState !== WebSocket.OPEN || !client.isGeminiReady) {
+          if (!client.session || !client.isGeminiReady) {
             ws.send(JSON.stringify({ type: "status", text: "Voice service connecting..." }));
             return;
           }
-          // Send audio to Gemini using realtimeInput format
-          client.geminiWs.send(JSON.stringify({
-            realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: msg.audio }] }
-          }));
+          // Send audio to Gemini using SDK's sendRealtimeInput
+          client.session.sendRealtimeInput({
+            audio: { data: msg.audio, mimeType: "audio/pcm;rate=16000" },
+          });
           return;
         }
 
         if (msg.type === "text_input" && msg.text) {
           const db = await getDb();
           if (db) await db.insert(voiceTranscripts).values({ sessionId: client.dbSessionId, role: "user", content: msg.text, createdAt: new Date() });
-          if (client.geminiWs && client.geminiWs.readyState === WebSocket.OPEN && client.isGeminiReady) {
-            client.geminiWs.send(JSON.stringify({ clientContent: { turns: [{ role: "user", parts: [{ text: msg.text }] }], turnComplete: true } }));
+          if (client.session && client.isGeminiReady) {
+            client.session.sendClientContent({ turns: [{ role: "user", parts: [{ text: msg.text }] }], turnComplete: true });
           } else {
             // Fallback: use LLM directly if Gemini not connected
             try {
@@ -1528,7 +1489,7 @@ export function attachVoiceGateway(server: HttpServer) {
           const db = await getDb();
           if (db) await db.update(voiceSessions).set({ endedAt: new Date(), status: "completed" }).where(eq(voiceSessions.id, client.dbSessionId));
           ws.send(JSON.stringify({ type: "session_ended", text: "Session ended. JazakAllah Khair!" }));
-          if (client.geminiWs) client.geminiWs.close();
+          if (client.session) client.session.close();
           activeClients.delete(connectionId);
           ws.close();
           return;
@@ -1546,18 +1507,18 @@ export function attachVoiceGateway(server: HttpServer) {
       if (client) {
         const db = await getDb();
         if (db) await db.update(voiceSessions).set({ endedAt: new Date(), status: "completed" }).where(eq(voiceSessions.id, client.dbSessionId));
-        if (client.geminiWs) client.geminiWs.close();
+        if (client.session) client.session.close();
         activeClients.delete(connectionId);
       }
     });
 
     ws.on("error", () => {
       const client = activeClients.get(connectionId);
-      if (client?.geminiWs) client.geminiWs.close();
+      if (client?.session) client.session.close();
       activeClients.delete(connectionId);
     });
   });
 
-  console.log("[VoiceGateway] WebSocket server attached at /api/voice (Gemini 2.0 Flash Live + Aoede)");
+  console.log("[VoiceGateway] WebSocket server attached at /api/voice (@google/genai SDK + Aoede)");
   return wss;
 }

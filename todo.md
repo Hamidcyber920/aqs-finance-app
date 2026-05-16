@@ -2231,4 +2231,15 @@
 - [x] Preserve Hibba's Islamic personality and all agentic tools
 - [x] Write comprehensive vitest tests for new gateway (13 tests passing)
 - [x] Integration test: verify full flow works on dev server (server running, 46 tests passing)
-- [ ] Save checkpoint and deliver for deployed testing
+- [x] Save checkpoint and deliver for deployed testing (checkpoint c1b5d859)
+- [x] Migrated to @google/genai SDK with ai.live.connect() (replaces raw WebSocket)
+- [x] Updated tests for SDK approach (17/17 passing)
+- [x] Fixed open_whatsapp to open_url message type alignment
+
+## Merge Verification — Gemini WebSocket + VoiceAgent UI Integration
+- [x] Verify server-side: voiceGateway.ts attached to Express/HTTP server in server entry point (index.ts:151)
+- [x] Verify server-side: voiceTokenRoute.ts registered for /api/voice/token (index.ts:124)
+- [x] Verify client-side: VoiceAgent component mounted in DashboardLayout.tsx (line 520)
+- [x] Verify client-side: VoiceContext provider wrapping app in main.tsx (line 160)
+- [x] No missing wiring — all connections verified
+- [x] Run tests and confirm server health (46/46 tests passing, server 200 OK, voice gateway attached)
