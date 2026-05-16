@@ -10,6 +10,7 @@
  *   - Speaker labels (Hibba / You)
  */
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   Mic,
@@ -33,6 +34,80 @@ interface ChatMessage {
   text: string;
   final: boolean; // true when the sentence/turn is complete
 }
+
+// ── Navigation routes Hibba can use ──
+const NAV_ROUTES: Record<string, string> = {
+  "home": "/",
+  "scan": "/",
+  "capture": "/capture",
+  "dashboard": "/dashboard",
+  "receipts": "/receipts",
+  "expenses": "/monthly-expenses",
+  "monthly expenses": "/monthly-expenses",
+  "reports": "/reports",
+  "fundraising": "/fundraising",
+  "loans": "/loans",
+  "qarde hasan": "/loans",
+  "income": "/income",
+  "payroll": "/payroll",
+  "donors": "/donors",
+  "donor crm": "/donor-crm",
+  "gift aid": "/gift-aid",
+  "pledges": "/pledges",
+  "campaigns": "/campaigns",
+  "communications": "/communications",
+  "comms hub": "/comms-hub",
+  "master inbox": "/comms-inbox",
+  "meetings": "/meetings",
+  "org chart": "/org-chart",
+  "admin": "/admin",
+  "trustees": "/trustees",
+  "compliance": "/compliance",
+  "decisions": "/decisions",
+  "bills": "/bills-utilities",
+  "utilities": "/bills-utilities",
+  "accommodation": "/accommodation",
+  "student accommodation": "/accommodation",
+  "payment hub": "/fintech",
+  "fintech": "/fintech",
+  "reconciliation": "/reconciliation",
+  "backups": "/backups",
+  "audit trail": "/audit-trail",
+  "system health": "/system-health",
+  "settings": "/settings",
+  "profile": "/profile",
+  "training": "/training-tracker",
+  "facilities": "/facilities",
+  "bistro": "/bistro87",
+  "bistro 87": "/bistro87",
+  "trustee dashboard": "/trustee-dashboard",
+  "bulk approvals": "/bulk-approvals",
+  "conflicts register": "/conflicts-register",
+  "recognition tiers": "/recognition-tiers",
+  "qr codes": "/qr-codes",
+  "saved views": "/saved-views",
+  "donor pipeline": "/donor-pipeline",
+  "major donor": "/major-donor",
+  "lbmw": "/lbmw-correspondence",
+};
+
+// ── Tool declarations for Gemini Live API ──
+const HIBBA_TOOLS = [{
+  functionDeclarations: [{
+    name: "navigate_to",
+    description: "Navigate the user to a specific page in the app. Use when the user asks to go to, show, open, or take them to a page.",
+    parameters: {
+      type: "OBJECT" as const,
+      properties: {
+        page: {
+          type: "STRING" as const,
+          description: `The page to navigate to. Valid values: ${Object.keys(NAV_ROUTES).join(", ")}`,
+        },
+      },
+      required: ["page"],
+    },
+  }],
+}];
 
 const SYSTEM_INSTRUCTION = `HIBBA — VOICE AGENT FOR THE ABDULLAH QUILLIAM SOCIETY
 
@@ -91,6 +166,11 @@ Never say "UTC" to the user — always give the local UK time.
 Keep responses concise and conversational — this is a voice interface.
 Speak in short complete sentences. Pause naturally so users can interrupt.
 Never give long monologues. 2-3 sentences max per turn unless asked for detail.
+
+# TOOLS
+You have access to the navigate_to tool. When the user asks to go to a page, show a section, or open something, call navigate_to with the page name.
+Examples: "take me to payroll" → navigate_to(page: "payroll"), "show me the loans" → navigate_to(page: "loans"), "open dashboard" → navigate_to(page: "dashboard").
+After navigating, briefly confirm where you took them.
 `;
 
 /** Detect if a string ends with sentence-ending punctuation */
@@ -100,6 +180,7 @@ function endsWithSentence(text: string): boolean {
 
 export function HibbaVoice() {
   const isMobile = useIsMobile();
+  const [, setLocation] = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [state, setState] = useState<State>("idle");
@@ -213,6 +294,7 @@ export function HibbaVoice() {
           systemInstruction: {
             parts: [{ text: SYSTEM_INSTRUCTION }],
           },
+          tools: HIBBA_TOOLS,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
@@ -274,6 +356,34 @@ export function HibbaVoice() {
               if (msg?.serverContent?.turnComplete) {
                 flushBuffer("hibba");
                 flushBuffer("user");
+              }
+
+              // ── Handle tool calls ──
+              const toolCall = msg?.toolCall;
+              if (toolCall?.functionCalls?.length) {
+                const responses: any[] = [];
+                for (const fc of toolCall.functionCalls) {
+                  console.log(`[Hibba] Tool call: ${fc.name}`, fc.args);
+                  if (fc.name === "navigate_to") {
+                    const page = (fc.args?.page || "").toLowerCase().trim();
+                    const path = NAV_ROUTES[page];
+                    if (path) {
+                      setLocation(path);
+                      upsertMessage(`tool-${fc.id}`, "system", `Navigated to ${page}`, true);
+                      responses.push({ id: fc.id, name: fc.name, response: { result: "success", navigated_to: path } });
+                    } else {
+                      responses.push({ id: fc.id, name: fc.name, response: { result: "error", message: `Unknown page: ${page}` } });
+                    }
+                  } else {
+                    responses.push({ id: fc.id, name: fc.name, response: { result: "error", message: `Unknown tool: ${fc.name}` } });
+                  }
+                }
+                // Send tool responses back to Gemini
+                try {
+                  session.sendToolResponse({ functionResponses: responses });
+                } catch (e) {
+                  console.error("[Hibba] Error sending tool response:", e);
+                }
               }
             } catch (e) {
               console.error("[Hibba] Error processing message:", e);
