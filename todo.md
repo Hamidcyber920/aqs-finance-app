@@ -2273,3 +2273,20 @@
 - [x] Server running with voice gateway attached (Gemini 2.0 Flash Live + Aoede)
 - [x] Run vitest tests (330/337 pass, 7 Google OAuth pre-existing failures)
 - [x] Save checkpoint and deliver
+
+## Bug Fix — Voice Connection Errors on Deployed Site (May 16 2026)
+- [x] Root cause identified: Model `gemini-2.0-flash-live-001` no longer exists in API (returns 404)
+- [x] Switch model to `gemini-2.5-flash-native-audio-latest` (supports bidiGenerateContent)
+- [x] Fix greeting: use `sendClientContent` instead of `sendRealtimeInput` for text prompts
+- [x] Fix text messages: use `sendClientContent` for user text input (ordered, reliable)
+- [x] Add 20-second Gemini connection timeout with clear error message
+- [x] Wrap all onmessage callbacks in try/catch to prevent crashes
+- [x] Add clientWs.readyState checks before every WebSocket send
+- [x] Add detailed [Hibba] and [VoiceToken] logging throughout auth chain
+- [x] Propagate actual error messages to client (not generic "AI engine error")
+- [x] Client: Add token fetch retry logic (3 attempts, exponential backoff for cold starts)
+- [x] Client: Add 25-second connection timeout waiting for session_started
+- [x] Client: Validate WebSocket URL before connecting
+- [x] Client: Show detailed status messages during connection phases
+- [x] Add 16 vitest tests covering gateway config, model availability, token auth, and code patterns
+- [ ] Publish and verify voice works on deployed site

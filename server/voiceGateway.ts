@@ -1,7 +1,7 @@
 /**
  * Hibba Voice Gateway — Component-Level Integration
- * Uses @google/genai SDK with ai.live.connect() for Gemini 2.0 Flash Live
- * Voice: Aoede | Model: gemini-2.0-flash-live-001
+ * Uses @google/genai SDK with ai.live.connect() for Gemini 2.5 Flash Native Audio
+ * Voice: Aoede | Model: gemini-2.5-flash-native-audio-latest
  * 
  * Matches the proven pattern from the reference Hibba standalone app.
  */
@@ -15,6 +15,10 @@ import * as db from "./db";
 
 // ─── Gemini API Key ──────────────────────────────────────────────────────────
 const apiKey = process.env.GEMINI_API_KEY || "";
+console.log(`[Hibba] API key configured: ${!!apiKey} (length: ${apiKey.length})`);
+
+// ─── Connection timeout for Gemini Live ─────────────────────────────────────
+const GEMINI_CONNECT_TIMEOUT_MS = 20000; // 20 seconds
 
 // ─── System Instruction ──────────────────────────────────────────────────────
 const SYSTEM_INSTRUCTION = `================================================================
@@ -742,51 +746,74 @@ export function attachVoiceGateway(server: Server) {
     let session: Session | null = null;
 
     try {
+      console.log(`[Hibba] Initializing GoogleGenAI SDK...`);
       const ai = new GoogleGenAI({ apiKey });
 
-      session = await ai.live.connect({
-        model: "gemini-2.0-flash-live-001",
+      console.log(`[Hibba] Calling ai.live.connect() for ${user.name}...`);
+
+      // Add a timeout to the Gemini connection
+      const connectPromise = ai.live.connect({
+        model: "gemini-2.5-flash-native-audio-latest",
         callbacks: {
           onmessage: async (message: any) => {
-            // Audio output
-            const audioPart = message?.serverContent?.modelTurn?.parts?.[0]?.inlineData;
-            if (audioPart?.data) {
-              clientWs.send(JSON.stringify({ type: "audio", data: audioPart.data }));
-            }
-
-            // Text transcription from model
-            const textPart = message?.serverContent?.modelTurn?.parts?.[0]?.text;
-            if (textPart) {
-              clientWs.send(JSON.stringify({ type: "transcript", text: textPart }));
-            }
-
-            // Interruption
-            if (message?.serverContent?.interrupted) {
-              clientWs.send(JSON.stringify({ type: "interrupted" }));
-            }
-
-            // Tool calls
-            if (message?.toolCall) {
-              const functionResponses: any[] = [];
-              for (const call of message.toolCall.functionCalls || []) {
-                console.log(`[Hibba] Tool: ${call.name}`);
-                clientWs.send(JSON.stringify({ type: "tool_call", name: call.name, args: call.args }));
-
-                const result = await executeTool(call.name, call.args || {}, user, clientWs);
-                functionResponses.push({ id: call.id, name: call.name, response: result });
-
-                clientWs.send(JSON.stringify({ type: "tool_response", name: call.name, data: result }));
+            try {
+              // Audio output
+              const audioPart = message?.serverContent?.modelTurn?.parts?.[0]?.inlineData;
+              if (audioPart?.data) {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ type: "audio", data: audioPart.data }));
+                }
               }
 
-              session!.sendToolResponse({ functionResponses });
+              // Text transcription from model
+              const textPart = message?.serverContent?.modelTurn?.parts?.[0]?.text;
+              if (textPart) {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ type: "transcript", text: textPart }));
+                }
+              }
+
+              // Interruption
+              if (message?.serverContent?.interrupted) {
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ type: "interrupted" }));
+                }
+              }
+
+              // Tool calls
+              if (message?.toolCall) {
+                const functionResponses: any[] = [];
+                for (const call of message.toolCall.functionCalls || []) {
+                  console.log(`[Hibba] Tool: ${call.name}`);
+                  if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: "tool_call", name: call.name, args: call.args }));
+                  }
+
+                  const result = await executeTool(call.name, call.args || {}, user, clientWs);
+                  functionResponses.push({ id: call.id, name: call.name, response: result });
+
+                  if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ type: "tool_response", name: call.name, data: result }));
+                  }
+                }
+
+                if (session) {
+                  session.sendToolResponse({ functionResponses });
+                }
+              }
+            } catch (cbError: any) {
+              console.error("[Hibba] onmessage callback error:", cbError?.message || cbError);
             }
           },
           onerror: (error: any) => {
-            console.error("[Hibba] Gemini error:", error);
-            clientWs.send(JSON.stringify({ type: "error", message: "AI engine error." }));
+            const errMsg = error?.message || error?.toString?.() || "Unknown Gemini error";
+            console.error("[Hibba] Gemini onerror:", errMsg, error);
+            if (clientWs.readyState === WebSocket.OPEN) {
+              clientWs.send(JSON.stringify({ type: "error", message: `AI engine error: ${errMsg}` }));
+            }
           },
           onclose: () => {
-            console.log("[Hibba] Gemini session closed");
+            console.log("[Hibba] Gemini session closed (onclose callback)");
             if (clientWs.readyState === WebSocket.OPEN) {
               clientWs.send(JSON.stringify({ type: "session_ended" }));
               clientWs.close();
@@ -805,16 +832,40 @@ export function attachVoiceGateway(server: Server) {
         },
       });
 
+      // Race between connection and timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Gemini connection timed out after ${GEMINI_CONNECT_TIMEOUT_MS / 1000}s`)), GEMINI_CONNECT_TIMEOUT_MS);
+      });
+
+      session = await Promise.race([connectPromise, timeoutPromise]);
+
       console.log(`[Hibba] Gemini Live session established for ${user.name}`);
+      if (clientWs.readyState !== WebSocket.OPEN) {
+        console.log("[Hibba] Client disconnected before session was ready, closing Gemini session");
+        session.close();
+        return;
+      }
       clientWs.send(JSON.stringify({ type: "session_started", user: user.name, voice: voiceName }));
 
-      // Trigger opening greeting
-      session.sendRealtimeInput({ text: `Microphone activated. Please provide the mandatory opening greeting and status briefing for ${user.name}, including prayer times and urgent items.` });
+      // Trigger opening greeting using sendClientContent (more reliable for text prompts)
+      try {
+        session.sendClientContent({
+          turns: [{ role: "user", parts: [{ text: `Microphone activated. Please provide the mandatory opening greeting and status briefing for ${user.name}, including prayer times and urgent items.` }] }],
+          turnComplete: true,
+        });
+        console.log(`[Hibba] Greeting prompt sent for ${user.name}`);
+      } catch (greetingError: any) {
+        console.error("[Hibba] Failed to send greeting:", greetingError?.message || greetingError);
+        // Non-fatal: session is still active, user can speak
+      }
 
     } catch (error: any) {
-      console.error("[Hibba] Failed to connect to Gemini:", error);
-      clientWs.send(JSON.stringify({ type: "error", message: `Failed to connect: ${error.message}` }));
-      clientWs.close();
+      const errMsg = error?.message || error?.toString?.() || "Unknown connection error";
+      console.error("[Hibba] Failed to connect to Gemini:", errMsg, error?.stack || "");
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify({ type: "error", message: `Failed to connect to AI: ${errMsg}` }));
+        clientWs.close();
+      }
       return;
     }
 
@@ -827,10 +878,14 @@ export function attachVoiceGateway(server: Server) {
             audio: { data: msg.data, mimeType: "audio/pcm;rate=16000" },
           });
         } else if (msg.type === "text" && msg.text && session) {
-          session.sendRealtimeInput({ text: msg.text });
+          // Use sendClientContent for text (more reliable, ordered delivery)
+          session.sendClientContent({
+            turns: [{ role: "user", parts: [{ text: msg.text }] }],
+            turnComplete: true,
+          });
         }
-      } catch (err) {
-        console.error("[Hibba] Client message error:", err);
+      } catch (err: any) {
+        console.error("[Hibba] Client message error:", err?.message || err);
       }
     });
 
@@ -840,5 +895,5 @@ export function attachVoiceGateway(server: Server) {
     });
   });
 
-  console.log("[Hibba] Voice gateway attached at /api/voice (Gemini 2.0 Flash Live + Aoede)");
+  console.log("[Hibba] Voice gateway attached at /api/voice (Gemini 2.5 Flash Native Audio + Aoede)");
 }

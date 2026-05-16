@@ -18,6 +18,11 @@ interface HibbaMessage {
   data?: any;
 }
 
+// Connection retry configuration
+const MAX_TOKEN_RETRIES = 3;
+const TOKEN_RETRY_DELAY_MS = 2000;
+const WS_CONNECTION_TIMEOUT_MS = 25000; // 25s - allows for Gemini connection on server
+
 export function HibbaVoice() {
   const [isOpen, setIsOpen] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("idle");
@@ -25,11 +30,11 @@ export function HibbaVoice() {
   const [messages, setMessages] = useState<HibbaMessage[]>([]);
   const [, navigate] = useLocation();
 
-
   const wsRef = useRef<WebSocket | null>(null);
   const audioPlayerRef = useRef<AudioPlayer | null>(null);
   const audioCaptureRef = useRef<AudioCaptureHandle | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-scroll messages
   useEffect(() => {
@@ -47,37 +52,99 @@ export function HibbaVoice() {
     setMessages((prev) => [...prev.slice(-50), msg]); // Keep last 50 messages
   }, []);
 
+  /**
+   * Fetch the voice token with retry logic for cold starts / transient errors.
+   */
+  const fetchTokenWithRetry = async (): Promise<string> => {
+    let lastError: string = "Unknown error";
+
+    for (let attempt = 1; attempt <= MAX_TOKEN_RETRIES; attempt++) {
+      try {
+        console.log(`[HibbaVoice] Token fetch attempt ${attempt}/${MAX_TOKEN_RETRIES}`);
+        const tokenRes = await fetch("/api/voice/token", { credentials: "include" });
+
+        if (!tokenRes.ok) {
+          const errBody = await tokenRes.json().catch(() => ({ error: `HTTP ${tokenRes.status}` }));
+          lastError = errBody?.error || errBody?.detail || `HTTP ${tokenRes.status}`;
+          console.warn(`[HibbaVoice] Token fetch failed (attempt ${attempt}):`, lastError);
+
+          // Don't retry on 401 (auth failure) - user needs to log in
+          if (tokenRes.status === 401) {
+            throw new Error(lastError);
+          }
+
+          // Retry on 5xx (server errors, cold starts)
+          if (attempt < MAX_TOKEN_RETRIES) {
+            await new Promise((r) => setTimeout(r, TOKEN_RETRY_DELAY_MS * attempt));
+            continue;
+          }
+          throw new Error(lastError);
+        }
+
+        const tokenData = await tokenRes.json();
+        if (!tokenData?.token || typeof tokenData.token !== "string" || tokenData.token.length < 10) {
+          throw new Error("Invalid token response from server.");
+        }
+
+        console.log(`[HibbaVoice] Token obtained (length: ${tokenData.token.length})`);
+        return tokenData.token;
+      } catch (err: any) {
+        lastError = err?.message || "Network error";
+        if (attempt >= MAX_TOKEN_RETRIES || lastError.includes("Not authenticated") || lastError.includes("log in")) {
+          throw new Error(lastError);
+        }
+        await new Promise((r) => setTimeout(r, TOKEN_RETRY_DELAY_MS * attempt));
+      }
+    }
+
+    throw new Error(lastError);
+  };
+
   const connect = useCallback(async () => {
     if (connectionState === "connecting" || connectionState === "connected") return;
 
     setConnectionState("connecting");
     setMessages([]);
+    addMessage({ type: "status", text: "Connecting to Hibba..." });
 
     try {
-      // 1. Get auth token
-      const tokenRes = await fetch("/api/voice/token", { credentials: "include" });
-      if (!tokenRes.ok) {
-        const errBody = await tokenRes.json().catch(() => null);
-        throw new Error(errBody?.error || "Authentication failed. Please log in again.");
-      }
-      const tokenData = await tokenRes.json();
-      if (!tokenData?.token) {
-        throw new Error("Invalid token response from server.");
-      }
-      const token = tokenData.token;
+      // 1. Get auth token with retry
+      const token = await fetchTokenWithRetry();
 
-      // 2. Connect WebSocket
+      // 2. Construct and validate WebSocket URL
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/api/voice?token=${encodeURIComponent(token)}&voice=Aoede`;
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/api/voice?token=${encodeURIComponent(token)}&voice=Aoede`;
 
+      // Validate the URL before attempting connection
+      try {
+        new URL(wsUrl);
+      } catch {
+        throw new Error(`Invalid WebSocket URL constructed. Host: ${host}`);
+      }
+
+      console.log(`[HibbaVoice] Connecting WebSocket to ${protocol}//${host}/api/voice`);
+
+      // 3. Connect WebSocket
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
-      // 3. Initialize audio player
+      // 4. Initialize audio player
       audioPlayerRef.current = new AudioPlayer();
 
+      // 5. Set connection timeout - if no session_started within timeout, fail
+      connectionTimeoutRef.current = setTimeout(() => {
+        if (connectionState === "connecting" || ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+          console.warn("[HibbaVoice] Connection timeout - no session_started received");
+          ws.close();
+          setConnectionState("error");
+          addMessage({ type: "error", text: "Connection timed out. The AI service may be starting up — please try again in a moment." });
+        }
+      }, WS_CONNECTION_TIMEOUT_MS);
+
       ws.onopen = () => {
-        console.log("[HibbaVoice] WebSocket connected");
+        console.log("[HibbaVoice] WebSocket connected, waiting for session_started...");
+        addMessage({ type: "status", text: "WebSocket connected, initializing AI..." });
       };
 
       ws.onmessage = (event) => {
@@ -90,14 +157,26 @@ export function HibbaVoice() {
       };
 
       ws.onerror = (err) => {
-        console.error("[HibbaVoice] WebSocket error:", err);
+        console.error("[HibbaVoice] WebSocket error event:", err);
+        // Clear timeout
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
         setConnectionState("error");
-        addMessage({ type: "error", text: "Connection error. Please try again." });
+        addMessage({ type: "error", text: "WebSocket connection error. Check your network and try again." });
       };
 
-      ws.onclose = () => {
-        console.log("[HibbaVoice] WebSocket closed");
-        setConnectionState("idle");
+      ws.onclose = (event) => {
+        console.log(`[HibbaVoice] WebSocket closed: code=${event.code} reason=${event.reason || "none"}`);
+        // Clear timeout
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        if (connectionState !== "error") {
+          setConnectionState("idle");
+        }
         stopMic();
       };
     } catch (error: any) {
@@ -110,6 +189,11 @@ export function HibbaVoice() {
   const handleServerMessage = useCallback((msg: any) => {
     switch (msg.type) {
       case "session_started":
+        // Clear connection timeout - we're connected!
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
         setConnectionState("connected");
         addMessage({ type: "status", text: `Connected as ${msg.user}` });
         // Auto-start mic after connection
@@ -168,10 +252,13 @@ export function HibbaVoice() {
         break;
 
       case "error":
-        addMessage({ type: "error", text: msg.message || "An error occurred." });
+        // Show the actual error message from the server
+        const errorText = msg.message || "An error occurred.";
+        addMessage({ type: "error", text: errorText });
+        console.error("[HibbaVoice] Server error:", errorText);
         break;
     }
-  }, [navigate, toast, addMessage]);
+  }, [navigate, addMessage]);
 
   const startMic = useCallback(async () => {
     if (isMicActive || !wsRef.current) return;
@@ -199,6 +286,11 @@ export function HibbaVoice() {
   }, []);
 
   const disconnect = useCallback(() => {
+    // Clear any pending timeout
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
+    }
     stopMic();
     if (wsRef.current) {
       wsRef.current.close();
@@ -327,7 +419,7 @@ export function HibbaVoice() {
         {connectionState === "idle" && "Ready"}
         {connectionState === "connecting" && "Connecting to Hibba..."}
         {connectionState === "connected" && (isMicActive ? "🎙️ Listening..." : "Connected — mic muted")}
-        {connectionState === "error" && "Connection failed"}
+        {connectionState === "error" && "Connection failed — tap mic to retry"}
       </div>
     </div>
   );
