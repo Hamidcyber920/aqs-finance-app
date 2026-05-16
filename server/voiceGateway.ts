@@ -49,7 +49,7 @@ const sessions = new Map<string, VoiceSession>();
 // Cleanup stale sessions every 60s
 setInterval(() => {
   const now = Date.now();
-  for (const [id, s] of sessions) {
+  for (const [id, s] of Array.from(sessions.entries())) {
     if (now - s.createdAt > SESSION_TTL_MS || now - s.lastActivity > 5 * 60_000) {
       console.log(`[Hibba] Cleaning stale session ${id}`);
       cleanup(id);
