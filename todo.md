@@ -2321,3 +2321,14 @@
 - [x] Wire into server entry point, verify on dev server (30 tests pass)
 - [ ] Save checkpoint and test on deployed site (PENDING)
 - [ ] Once working: incrementally add tools back from reference doc
+
+## Voice Agent — Client-Side Direct Gemini Connection (May 16 2026)
+- [x] Remove server-side voice gateway from server entry (voiceGateway.ts kept for compat, routes removed)
+- [x] Build client-side HibbaVoice component that connects directly to Gemini Live API from browser
+- [x] Use ephemeral tokens via tRPC voice.getEphemeralToken (server creates token, client uses it)
+- [x] Use @google/genai SDK in the browser (client-side) for live.connect()
+- [x] Audio capture via AudioWorklet/MediaRecorder, playback via AudioContext
+- [x] Hibba Islamic identity system prompt preserved
+- [x] No server proxy needed — browser connects directly to Gemini WebSocket
+- [x] Test on dev server — 8 voice tests pass, model gemini-2.5-flash-native-audio-latest
+- [ ] Verify on deployed site (PENDING USER PUBLISH)

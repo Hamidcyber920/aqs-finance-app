@@ -1,12 +1,20 @@
 /**
- * HibbaVoice — Minimal Voice Assistant Component
- * SSE (server→client) + HTTP POST (client→server)
- * No tools — pure audio conversation only.
+ * HibbaVoice — Client-Side Voice Assistant
+ *
+ * Connects DIRECTLY to Gemini Live API from the browser using an
+ * ephemeral token obtained via tRPC. No server proxy needed.
+ *
+ * Flow:
+ *   1. Call trpc.voice.getEphemeralToken to get a short-lived Gemini token
+ *   2. Create GoogleGenAI client with the ephemeral token
+ *   3. Call ai.live.connect() — browser WebSocket goes directly to Google
+ *   4. Stream mic audio → Gemini, receive audio → speaker
  */
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Mic, MicOff, X, Loader2, Phone } from "lucide-react";
 import { startAudioCapture, AudioPlayer, type AudioCaptureHandle } from "@/lib/audio-utils";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 type State = "idle" | "connecting" | "connected" | "error";
 
@@ -15,9 +23,7 @@ interface Msg {
   text: string;
 }
 
-const TOKEN_RETRIES = 3;
-const TOKEN_DELAY = 2000;
-const AUDIO_BATCH_MS = 200;
+const SYSTEM_INSTRUCTION = `You are Hibba, a warm and knowledgeable AI voice assistant for AQS (Al-Qalam Society), an Islamic charity and community organisation. You speak with a calm, professional, and friendly tone. You greet users with "Assalamu Alaikum" and can help with general questions about the organisation. Keep responses concise and conversational since this is a voice interface.`;
 
 export function HibbaVoice() {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,189 +31,197 @@ export function HibbaVoice() {
   const [micOn, setMicOn] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
 
-  const sessionIdRef = useRef<string | null>(null);
-  const tokenRef = useRef<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
+  const sessionRef = useRef<any>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
   const captureRef = useRef<AudioCaptureHandle | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const batchRef = useRef<string[]>([]);
-  const batchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectingRef = useRef(false);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
-  useEffect(() => () => { disconnect(); }, []);
+  const getToken = trpc.voice.getEphemeralToken.useMutation();
 
-  const add = useCallback((msg: Msg) => {
-    setMsgs(prev => [...prev.slice(-30), msg]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs]);
+
+  useEffect(() => {
+    return () => { disconnect(); };
   }, []);
 
-  // ── Token fetch with retry ──
-  async function fetchToken(): Promise<string> {
-    let lastErr = "";
-    for (let i = 1; i <= TOKEN_RETRIES; i++) {
-      try {
-        console.log(`[Hibba] Token attempt ${i}/${TOKEN_RETRIES}`);
-        const r = await fetch("/api/voice/token", { credentials: "include" });
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
-          lastErr = body?.error || `HTTP ${r.status}`;
-          if (r.status === 401) throw new Error("AUTH:" + lastErr);
-          if (i < TOKEN_RETRIES) await new Promise(r => setTimeout(r, TOKEN_DELAY));
-          continue;
-        }
-        const { token } = await r.json();
-        if (!token) throw new Error("Empty token");
-        return token;
-      } catch (e: any) {
-        if (e.message?.startsWith("AUTH:")) throw e;
-        lastErr = e.message || "Network error";
-        if (i < TOKEN_RETRIES) await new Promise(r => setTimeout(r, TOKEN_DELAY));
-      }
-    }
-    throw new Error(lastErr);
-  }
+  const add = useCallback((msg: Msg) => {
+    setMsgs((prev) => [...prev.slice(-30), msg]);
+  }, []);
 
-  // ── Connect ──
+  // ── Connect directly to Gemini Live API ──
   async function connect() {
-    if (state === "connecting" || state === "connected") return;
+    if (connectingRef.current || state === "connected") return;
+    connectingRef.current = true;
     setState("connecting");
     setMsgs([]);
     add({ type: "status", text: "Connecting to Hibba..." });
 
     try {
-      // 1. Get token
-      const token = await fetchToken();
-      tokenRef.current = token;
-      add({ type: "status", text: "Authenticated." });
+      // 1. Get ephemeral token from our server
+      add({ type: "status", text: "Getting voice token..." });
+      const result = await getToken.mutateAsync();
+      const { token, model, user } = result;
+      add({ type: "status", text: `Authenticated as ${user}.` });
 
-      // 2. Start session
-      const startRes = await fetch("/api/voice/start", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+      // 2. Import @google/genai dynamically (it's a large package)
+      add({ type: "status", text: "Initializing AI..." });
+      const { GoogleGenAI, Modality } = await import("@google/genai");
+
+      const ai = new GoogleGenAI({
+        apiKey: token,
+        httpOptions: { apiVersion: "v1alpha" },
+      });
+
+      // 3. Connect to Gemini Live API directly from browser
+      add({ type: "status", text: "Connecting to Gemini..." });
+
+      const session = await ai.live.connect({
+        model,
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: "Aoede" },
+            },
+          },
+          systemInstruction: {
+            parts: [{ text: SYSTEM_INSTRUCTION }],
+          },
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
         },
-        body: JSON.stringify({ voice: "Aoede" }),
+        callbacks: {
+          onopen: () => {
+            console.log("[Hibba] Gemini Live session opened");
+            add({ type: "status", text: "Connected to Gemini." });
+            setState("connected");
+            connectingRef.current = false;
+            // Auto-start mic
+            startMic();
+          },
+          onmessage: (msg: any) => {
+            try {
+              // Handle audio data
+              const audioParts = msg?.serverContent?.modelTurn?.parts?.filter(
+                (p: any) => p.inlineData?.mimeType?.startsWith("audio/")
+              );
+              if (audioParts?.length) {
+                for (const part of audioParts) {
+                  if (part.inlineData?.data) {
+                    if (!playerRef.current) playerRef.current = new AudioPlayer();
+                    playerRef.current.play(part.inlineData.data);
+                  }
+                }
+              }
+
+              // Handle output audio transcription
+              const outputTranscript = msg?.serverContent?.outputTranscription?.text;
+              if (outputTranscript) {
+                add({ type: "transcript", text: outputTranscript });
+              }
+
+              // Handle input audio transcription
+              const inputTranscript = msg?.serverContent?.inputTranscription?.text;
+              if (inputTranscript) {
+                add({ type: "transcript", text: `You: ${inputTranscript}` });
+              }
+
+              // Handle interruption (barge-in)
+              if (msg?.serverContent?.interrupted) {
+                playerRef.current?.interrupt();
+              }
+
+              // Handle turn complete
+              if (msg?.serverContent?.turnComplete) {
+                // Turn is done, ready for next input
+              }
+            } catch (e) {
+              console.error("[Hibba] Error processing message:", e);
+            }
+          },
+          onerror: (err: any) => {
+            console.error("[Hibba] Gemini Live error:", err);
+            add({ type: "error", text: `Voice error: ${err?.message || "Connection lost"}` });
+            setState("error");
+            connectingRef.current = false;
+            stopMic();
+          },
+          onclose: (ev: any) => {
+            console.log("[Hibba] Gemini Live session closed:", ev);
+            add({ type: "status", text: "Session ended." });
+            setState("idle");
+            connectingRef.current = false;
+            stopMic();
+          },
+        },
       });
 
-      if (!startRes.ok) {
-        const body = await startRes.json().catch(() => ({}));
-        throw new Error(body?.error || `Start failed: ${startRes.status}`);
-      }
+      sessionRef.current = session;
 
-      const { sessionId, user } = await startRes.json();
-      sessionIdRef.current = sessionId;
-      add({ type: "status", text: `Session started for ${user}.` });
-
-      // 3. Open SSE stream
-      const streamUrl = `/api/voice/stream?sessionId=${sessionId}&token=${encodeURIComponent(token)}`;
-      const es = new EventSource(streamUrl);
-      esRef.current = es;
-
-      add({ type: "status", text: "Connecting to AI..." });
-
-      es.addEventListener("connected", () => {
-        console.log("[Hibba] SSE connected");
-      });
-
-      es.addEventListener("session_started", (e) => {
-        const d = JSON.parse(e.data);
-        add({ type: "status", text: `Connected as ${d.user}` });
-        setState("connected");
-        // Start mic automatically
-        startMic();
-      });
-
-      es.addEventListener("audio", (e) => {
-        const d = JSON.parse(e.data);
-        if (d.data) {
-          if (!playerRef.current) playerRef.current = new AudioPlayer();
-          playerRef.current.play(d.data);
-        }
-      });
-
-      es.addEventListener("transcript", (e) => {
-        const d = JSON.parse(e.data);
-        if (d.text) {
-          const prefix = d.source === "input" ? "You: " : "";
-          add({ type: "transcript", text: prefix + d.text });
-        }
-      });
-
-      es.addEventListener("interrupted", () => {
-        playerRef.current?.interrupt();
-      });
-
-      es.addEventListener("error", (e) => {
-        // SSE error event — could be from server or connection loss
-        if (e instanceof MessageEvent) {
-          try {
-            const d = JSON.parse(e.data);
-            add({ type: "error", text: d.message || "Connection error" });
-          } catch {
-            add({ type: "error", text: "Connection lost. Please try again." });
-          }
-        } else {
-          // EventSource connection error
-          console.error("[Hibba] EventSource error:", e);
-          add({ type: "error", text: "Connection lost. Please try again." });
-        }
-        setState("error");
-        stopMic();
-      });
-
-      es.addEventListener("session_ended", () => {
-        add({ type: "status", text: "Session ended." });
-        setState("idle");
-        stopMic();
+      // Send a greeting prompt to trigger Hibba's first message
+      session.sendClientContent({
+        turns: [
+          {
+            role: "user",
+            parts: [{ text: "Greet me briefly." }],
+          },
+        ],
+        turnComplete: true,
       });
 
     } catch (e: any) {
-      const msg = e.message?.startsWith("AUTH:")
+      console.error("[Hibba] Connection error:", e);
+      const msg = e?.message?.includes("UNAUTHORIZED")
         ? "Authentication failed. Please log in again."
-        : e.message || "Connection failed";
+        : e?.message || "Connection failed. Please try again.";
       add({ type: "error", text: msg });
       setState("error");
+      connectingRef.current = false;
     }
   }
 
   // ── Disconnect ──
   function disconnect() {
     stopMic();
-    stopBatch();
 
-    if (esRef.current) {
-      esRef.current.close();
-      esRef.current = null;
-    }
-
-    if (sessionIdRef.current && tokenRef.current) {
-      fetch("/api/voice/stop", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokenRef.current}`,
-        },
-        body: JSON.stringify({ sessionId: sessionIdRef.current }),
-      }).catch(() => {});
+    if (sessionRef.current) {
+      try {
+        sessionRef.current.close();
+      } catch (e) {
+        console.error("[Hibba] Error closing session:", e);
+      }
+      sessionRef.current = null;
     }
 
     playerRef.current?.destroy();
     playerRef.current = null;
-    sessionIdRef.current = null;
-    tokenRef.current = null;
     setState("idle");
+    connectingRef.current = false;
   }
 
   // ── Mic control ──
   async function startMic() {
     if (captureRef.current) return;
     try {
-      captureRef.current = await startAudioCapture((base64) => {
-        batchRef.current.push(base64);
+      captureRef.current = await startAudioCapture((base64Pcm) => {
+        // Send audio directly to Gemini via the live session
+        if (sessionRef.current) {
+          try {
+            sessionRef.current.sendRealtimeInput({
+              audio: {
+                data: base64Pcm,
+                mimeType: "audio/pcm;rate=16000",
+              },
+            });
+          } catch (e) {
+            console.error("[Hibba] Error sending audio:", e);
+          }
+        }
       });
       setMicOn(true);
-      startBatch();
     } catch (e: any) {
       toast.error("Microphone access denied");
       console.error("[Hibba] Mic error:", e);
@@ -218,37 +232,6 @@ export function HibbaVoice() {
     captureRef.current?.stop();
     captureRef.current = null;
     setMicOn(false);
-    stopBatch();
-  }
-
-  // ── Audio batching ──
-  function startBatch() {
-    if (batchTimerRef.current) return;
-    batchTimerRef.current = setInterval(() => {
-      if (batchRef.current.length === 0) return;
-      const chunks = batchRef.current.splice(0);
-      const combined = chunks.join("");
-      if (!sessionIdRef.current || !tokenRef.current) return;
-
-      fetch("/api/voice/audio", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokenRef.current}`,
-        },
-        body: JSON.stringify({ sessionId: sessionIdRef.current, data: combined }),
-      }).catch((err) => {
-        console.error("[Hibba] Audio POST error:", err);
-      });
-    }, AUDIO_BATCH_MS);
-  }
-
-  function stopBatch() {
-    if (batchTimerRef.current) {
-      clearInterval(batchTimerRef.current);
-      batchTimerRef.current = null;
-    }
-    batchRef.current = [];
   }
 
   // ── Toggle ──
@@ -256,31 +239,44 @@ export function HibbaVoice() {
     if (state === "idle" || state === "error") {
       connect();
     } else if (state === "connected") {
-      if (micOn) stopMic(); else startMic();
+      if (micOn) stopMic();
+      else startMic();
     }
   }
 
   // ── Render ──
   const statusText =
-    state === "connecting" ? "Connecting..." :
-    state === "connected" ? (micOn ? "Listening" : "Ready") :
-    state === "error" ? "Connection failed — tap mic to retry" :
-    "Tap mic to start";
+    state === "connecting"
+      ? "Connecting..."
+      : state === "connected"
+        ? micOn
+          ? "Listening"
+          : "Ready"
+        : state === "error"
+          ? "Connection failed — tap mic to retry"
+          : "Tap mic to start";
 
   return (
     <>
       {/* Floating panel */}
       {isOpen && (
-        <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-md rounded-xl bg-white shadow-2xl border border-gray-200 overflow-hidden"
-          style={{ maxHeight: "60vh" }}>
+        <div
+          className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-md rounded-xl bg-white shadow-2xl border border-gray-200 overflow-hidden"
+          style={{ maxHeight: "60vh" }}
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 bg-emerald-600 text-white">
             <div className="flex items-center gap-2">
               <Phone className="w-4 h-4" />
               <span className="font-semibold text-sm">Hibba</span>
             </div>
-            <button onClick={() => { disconnect(); setIsOpen(false); }}
-              className="p-1 hover:bg-emerald-700 rounded">
+            <button
+              onClick={() => {
+                disconnect();
+                setIsOpen(false);
+              }}
+              className="p-1 hover:bg-emerald-700 rounded"
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -288,12 +284,18 @@ export function HibbaVoice() {
           {/* Messages */}
           <div className="p-3 overflow-y-auto" style={{ maxHeight: "40vh" }}>
             {msgs.map((m, i) => (
-              <div key={i} className={`text-xs mb-1.5 px-2 py-1 rounded ${
-                m.type === "error" ? "bg-red-50 text-red-600" :
-                m.type === "transcript" ? "bg-gray-50 text-gray-700" :
-                "bg-gray-100 text-gray-500"
-              }`}>
-                {m.type === "error" && "⚠ "}{m.text}
+              <div
+                key={i}
+                className={`text-xs mb-1.5 px-2 py-1 rounded ${
+                  m.type === "error"
+                    ? "bg-red-50 text-red-600"
+                    : m.type === "transcript"
+                      ? "bg-gray-50 text-gray-700"
+                      : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                {m.type === "error" && "⚠ "}
+                {m.text}
               </div>
             ))}
             <div ref={endRef} />
@@ -304,13 +306,20 @@ export function HibbaVoice() {
       {/* Mic button */}
       <div className="fixed bottom-4 left-0 right-0 z-50 flex flex-col items-center gap-1">
         <button
-          onClick={() => { if (!isOpen) setIsOpen(true); toggleMic(); }}
+          onClick={() => {
+            if (!isOpen) setIsOpen(true);
+            toggleMic();
+          }}
           className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
-            state === "connecting" ? "bg-yellow-500 animate-pulse" :
-            state === "connected" && micOn ? "bg-emerald-600 animate-pulse" :
-            state === "connected" ? "bg-emerald-600" :
-            state === "error" ? "bg-red-500" :
-            "bg-emerald-600 hover:bg-emerald-700"
+            state === "connecting"
+              ? "bg-yellow-500 animate-pulse"
+              : state === "connected" && micOn
+                ? "bg-emerald-600 animate-pulse"
+                : state === "connected"
+                  ? "bg-emerald-600"
+                  : state === "error"
+                    ? "bg-red-500"
+                    : "bg-emerald-600 hover:bg-emerald-700"
           }`}
         >
           {state === "connecting" ? (

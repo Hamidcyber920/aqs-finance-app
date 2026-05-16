@@ -17,8 +17,7 @@ import { registerScheduledJobs } from "../scheduledJobs";
 import { registerStripeWebhook } from "../stripeWebhook";
 import { registerGmailWebhook } from "../gmailWebhook";
 import { registerGoogleReauthRoutes } from "../googleReauth";
-import { registerVoiceRoutes } from "../voiceGateway";
-import { registerVoiceTokenRoute } from "../voiceTokenRoute";
+// Voice is now client-side (ephemeral token via tRPC, browser connects directly to Gemini)
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -121,9 +120,9 @@ async function startServer() {
   // Google OAuth re-authorization routes
   registerGoogleReauthRoutes(app);
   // Voice token endpoint (must be BEFORE Vite/static catch-all)
-  registerVoiceTokenRoute(app);
+  // Voice token route removed — ephemeral token served via tRPC voice.getEphemeralToken
   // Voice SSE + HTTP routes (must be BEFORE Vite/static catch-all)
-  registerVoiceRoutes(app);
+  // Voice gateway removed — browser connects directly to Gemini Live API
 
   // tRPC API
   app.use(

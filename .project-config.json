@@ -7,17 +7,18 @@
   ],
   "dev_command": "pnpm run dev",
   "env_vars": {
-    "DATABASE_URL": "mysql://26DHJ7rSPxQWQYz.5e340f0e655e:0N6vPtBvCm137PIix2vl@gateway05.us-east-1.prod.aws.tidbcloud.com:4000/ExcMToduGVqDRtQnvUsVkJ?ssl={\"rejectUnauthorized\":true}"
+    "DATABASE_URL": "mysql://26DHJ7rSPxQWQYz.5e340f0e655e:0N6vPtBvCm137PIix2vl@gateway05.us-east-1.prod.aws.tidbcloud.com:4000/ExcMToduGVqDRtQnvUsVkJ?ssl={\"rejectUnauthorized\":true}",
+    "DRIZZLE_DATABASE_URL": "mysql://26DHJ7rSPxQWQYz.5e340f0e655e:0N6vPtBvCm137PIix2vl@gateway05.us-east-1.prod.aws.tidbcloud.com:4000/ExcMToduGVqDRtQnvUsVkJ?ssl={\"rejectUnauthorized\":true}"
   },
   "experiments": [
     "no_db_push"
   ],
   "git_remote": {
     "repo_url": "s3://vida-prod-gitrepo/webdev-git/310519663490667955/ExcMToduGVqDRtQnvUsVkJ",
-    "access_key_id": "ASIAZV3A2ECZJELTJPU5",
-    "secret_access_key": "IXeXjLmUCiHB8lk0YfogT12V6kztN2hAOtY5K6Is",
-    "session_token": "IQoJb3JpZ2luX2VjEMr//////////wEaCXVzLWVhc3QtMSJHMEUCIDotOdjcy5tA2bxy7upC/uQN/TbiwId28i1A+4qdcxlBAiEAsOtDAjoOEgiAPxmtWnNXZMoBRqUOfqiDG2TuSWnHIqcq/wMIk///////////ARAEGgw2NjUzODYwOTg4NjYiDH3xuo2orklDuySgUyrTAwhozkNMhn6PgnpwQZgKKqCp65coaORwAH/DLg0DTfnhxvdOXmedfxm7GBNPDEc3j82E2iyhzObyRo2ukYXOz5MdNbHJDsEB3uO609DGvcOOWunGuzVu6IWLnv87vNZMl4uFEX0+23kZjwZ+lvbHwIM9hnJ90GKCtOdE8Cfn8zBtVOhbIjsTxTip1YpEz/FbRp12gJ4qa2cFFv5gOXFgvAu1h8yrYqTFfQMMY94cbCU1SISeGyLji+UPNOK0WQjO4/VaXlK7w+lSE/M1f2zg2evxYHkEnwA0hX6QW6x/PsegYgw/ZiclAj5sOki+OH2SGXefQcAUMt765rHCPTmg/bumR/CEt9q4a2aLh9R1lqK186ycfCSYzcXsXBR/Cxf32VovJ5IrD6EKMcfzR7at3EV2MNo2E1Wqi4/sa1DzXc5dUVHSDXx79YEHg/D78H7bffW2m1HMqF2y4GezpZMB/YEuyi+JvAlPPQqaOO0DEPVTa/Txg/hf2gm1djHrxix7GYGVgNa8yUJujtKq2yIef2bher3dVTgXXxdSg45hzLCL+xsbiebFq9rRXm2+ePlIJ/urWEH1bOpXg3V1BUNmjUlm+qS5yHlZzo1US1Zr44tMOZqpMMHeotAGOp0BGeJtsRkj+u71LYTqYz6NxVWYNm0AMmn6L+wvomxPlUL4UVHgm3vtC/LcJHAO348OTlCw4OX29TMzxdG/uHsEkKzPblc5Kbxuw8Y/WW+8Rximn382FDgIwDH8ljOIR6HhrsD5M28uNlrA3bS0plVMwepbytpaZ2DL9EMulzHxRv7gfXDHJnuSwAgr5uaCIZKu+tyrV3gG1lOEx44n6Q==",
-    "expiration": "2026-05-17T05:54:09.000Z"
+    "access_key_id": "ASIAZV3A2ECZBNNBQGJS",
+    "secret_access_key": "z9PVET8elcdeHmo4XCM4Zx7SVxtNQyeHgrScNwLg",
+    "session_token": "IQoJb3JpZ2luX2VjEMz//////////wEaCXVzLWVhc3QtMSJHMEUCIFNiTWJeGVSTLghNb1Bv/v5wGOPDndAtsvYDJ2/r5WivAiEAwguqSvUfNldR1Ne/0QdgfxV0MHPoXdrsnwz4lNqtntAq/wMIlf//////////ARAEGgw2NjUzODYwOTg4NjYiDMWNK+LYByIOC3YwFCrTA6e8jzR6gUqeH2hU30n/lqgiEyTVk0UuFcMvuihIamyayoKySDHi8634CaqUN679Aq3PD/hTYZdc3e7lsJvGWnQmVikgJWOtbq5mZVyeu19gdckLWktGxzsT6SMp28TWK/CUxUw0BCi9lfLHSJxmCiq6u0OnmUFH9M3lsB4FnghATjbgx1tSx1RXVv1ZFWw6cm0pOOifcQIxcPWJsl4alLJLdTM9df7IPu3F/1p5h50PKSiIxE8ZRY8Nq1sDleU2K2XytfhtC+B/8n4gNNrlvIbFYDBPTa1DKbbxr+f7bXXVT1zgMXpHpKXXBjkXQ6MF2edgTPoTfHEc+f8yRSrXoNqXvsf/BhPWOk7JMKue7Ir8syuqFzlna+JFJc903qiT3456E2bvhgh7I+ivGk8sFLAHXcXcjJ8XN3qZlbCXU/Lteib/yL5un9LtH9zAk6ZeTxY1Gb6m8MXD+OfAakvycQZD9uiXVBap9t1blc9B3obr6if59ZJUseeo9BbBlRjsnWPNT/bP1GOMpWPl7Hx0gru+FWksWUITuKDryYtYnPFeQJVArjrp+PFYL/rVULlzWSPUnWkD+l9eEIiimsWO5mcKpoN7eAp3zYaCznJCKB9UJAToMK+Oo9AGOp0B4+DXrM6glTgQ1XYwD1bewopri+J17PRjCP2s8Tyft2EmDu0Ct7qATPp9ws3MXSZc+bje3GD44pBng1n8ivTj3AE0E8GCblzgPauWkqDV2r0PH17uX5dJ9TAZwLt86O0nUcCSwTOAanCPWDyMsqLzPuQzGXXTUGRCNe/BFZaQOdRvMNClgbFTr3sUVwZRijxllcJyBc7L5IAt5AvORA==",
+    "expiration": "2026-05-17T07:36:15.000Z"
   },
   "name": "receipt-scanner",
   "path": "/home/ubuntu/receipt-scanner",
