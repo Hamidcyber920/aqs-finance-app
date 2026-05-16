@@ -2346,3 +2346,6 @@
 - [x] Added https://generativelanguage.googleapis.com to CSP connect-src
 - [x] Added wss://generativelanguage.googleapis.com to CSP connect-src
 - [x] Set GEMINI_API_KEY with preventMatching to ensure correct key is used
+
+## Bug Fix — Mic button overlapping bottom nav (May 16 2026)
+- [x] Move Hibba mic button above the bottom navigation bar so it doesn't overlap with Scan tab

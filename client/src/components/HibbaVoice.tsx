@@ -10,6 +10,7 @@
  *   - Speaker labels (Hibba / You)
  */
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useIsMobile } from "@/hooks/useMobile";
 import {
   Mic,
   MicOff,
@@ -41,6 +42,7 @@ function endsWithSentence(text: string): boolean {
 }
 
 export function HibbaVoice() {
+  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [state, setState] = useState<State>("idle");
@@ -343,7 +345,7 @@ export function HibbaVoice() {
       {/* ── Expanded panel ── */}
       {isOpen && !minimized && (
         <div
-          className="fixed bottom-24 left-3 right-3 z-50 mx-auto max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden"
+          className={`fixed left-3 right-3 z-50 mx-auto max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden ${isMobile ? "bottom-40" : "bottom-24"}`}
           style={{ maxHeight: "55vh" }}
         >
           {/* Header */}
@@ -433,7 +435,7 @@ export function HibbaVoice() {
       {isOpen && minimized && isActive && (
         <button
           onClick={handleExpand}
-          className="fixed bottom-24 right-4 z-50 flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-full shadow-lg hover:bg-emerald-700 transition-all"
+          className={`fixed right-4 z-50 flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-full shadow-lg hover:bg-emerald-700 transition-all ${isMobile ? "bottom-40" : "bottom-24"}`}
         >
           <Phone className="w-4 h-4" />
           <span className="text-xs font-medium">Hibba</span>
@@ -443,7 +445,7 @@ export function HibbaVoice() {
       )}
 
       {/* ── Mic button ── */}
-      <div className="fixed bottom-4 left-0 right-0 z-50 flex flex-col items-center gap-1">
+      <div className={`fixed left-0 right-0 z-50 flex flex-col items-center gap-1 ${isMobile ? "bottom-20" : "bottom-4"}`}>
         <button
           onClick={() => {
             if (!isOpen) {
