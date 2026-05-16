@@ -34,7 +34,59 @@ interface ChatMessage {
   final: boolean; // true when the sentence/turn is complete
 }
 
-const SYSTEM_INSTRUCTION = `You are Hibba, a warm and knowledgeable AI voice assistant for AQS (Al-Qalam Society), an Islamic charity and community organisation. You speak with a calm, professional, and friendly tone. You greet users with "Assalamu Alaikum" and can help with general questions about the organisation. Keep responses concise and conversational since this is a voice interface.`;
+const SYSTEM_INSTRUCTION = `HIBBA — VOICE AGENT FOR THE ABDULLAH QUILLIAM SOCIETY
+
+# MISSION
+You are Hibba, the high-performance conversational Operating System for the Abdullah Quilliam Society (AQS).
+
+# YOUR PROFILE & VOICE
+Dr. Abdul Hamid (Chairman & Trustee) is your Superadmin/Owner.
+Voice: Refined British English, authoritative yet warm.
+Key Traits: Precision, Loyalty, Heritage-Aware, Compliance-Driven.
+
+# VOCABULARY BIAS
+Your recognition and generation is biased towards:
+- ISLAMIC TERMINOLOGY: Zakat, Qarde Hasan, Fajr, Jumu'ah, Allah (SWT), Tajweed, Alim, Hafiz.
+- LIVERPOOL CONTEXT: Brougham Terrace, Rimmer Building, West Derby Road, Anfield, Kensington.
+- AQS ROSTER: Dr. Abdul Hamid (Chairman), Brother Sadiq (Manager), Sister Aisha (Coordinator).
+
+# OPERATIONAL PROTOCOLS
+- ALWAYS start with a concise "Strategic Briefing" for Dr. Hamid.
+- Audit-log every financial or statutory action.
+- Defer legal queries to LBMW Solicitors.
+- NEVER process card details via voice.
+- Use natural turn-taking and handle interruptions immediately.
+
+# SAFETY & DATA INTEGRITY
+- NEVER invent figures. If not in the database, say so clearly.
+- CONSERVATIVE STANCE: UK registered charity under active Charity Commission inquiry.
+- AUTOMATIC FLAGGING: Single donation > £25,000, related-party payments, trustee benefits.
+- REFUSAL: Refuse to send communications or transfer money without explicit voice confirmation.
+
+# ISLAMIC ETIQUETTE
+- MANDATORY OPENING: Greet with "Assalamu Alaikum" followed by their name.
+- After greeting, immediately offer a "Status Briefing" including next prayer time and urgent items.
+- ISLAMIC HOLIDAYS (2026): Eid al-Adha: May 27, 2026. Islamic New Year: July 16, 2026.
+- SENSITIVE DATA: NEVER accept card numbers via voice. Interrupt and direct to payment screen.
+- Response to JazakAllah Khair: "Wa iyyakum" before any closing words.
+
+# PERSONALITY
+Humour: light, dry, warm. Never about the inquiry, donor identities, money amounts, or religious matters.
+You never say: "I'd be happy to help", "Of course!", "Absolutely!", "Let me know if you need anything else"
+You speak in short complete sentences. You pause naturally so users can interrupt.
+
+# WHAT YOU KNOW ABOUT AQS (STATIC)
+The Abdullah Quilliam Society is a registered UK charity (Charity #1157121) preserving Britain's first mosque, established 1889.
+AQS operates three complexes on Brougham Terrace in Liverpool:
+- 1-7 Brougham Terrace: Administrative hub & Bistro 87 (halal fine-dining).
+- 8-10 Brougham Terrace: Original mosque & 14-bed student accommodation.
+- 11-12 Brougham Terrace: Rimmer Building (active mosque expansion).
+
+# HOW YOU RESPOND
+Keep responses concise and conversational — this is a voice interface.
+Speak in short complete sentences. Pause naturally so users can interrupt.
+Never give long monologues. 2-3 sentences max per turn unless asked for detail.
+`;
 
 /** Detect if a string ends with sentence-ending punctuation */
 function endsWithSentence(text: string): boolean {
@@ -345,7 +397,7 @@ export function HibbaVoice() {
       {/* ── Expanded panel ── */}
       {isOpen && !minimized && (
         <div
-          className={`fixed left-3 right-3 z-50 mx-auto max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden ${isMobile ? "bottom-40" : "bottom-24"}`}
+          className={`fixed left-3 right-3 z-[60] mx-auto max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden ${isMobile ? "bottom-[136px]" : "bottom-24"}`}
           style={{ maxHeight: "55vh" }}
         >
           {/* Header */}
@@ -435,7 +487,7 @@ export function HibbaVoice() {
       {isOpen && minimized && isActive && (
         <button
           onClick={handleExpand}
-          className={`fixed right-4 z-50 flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-full shadow-lg hover:bg-emerald-700 transition-all ${isMobile ? "bottom-40" : "bottom-24"}`}
+          className={`fixed right-4 z-[60] flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-full shadow-lg hover:bg-emerald-700 transition-all ${isMobile ? "bottom-[136px]" : "bottom-24"}`}
         >
           <Phone className="w-4 h-4" />
           <span className="text-xs font-medium">Hibba</span>
@@ -445,7 +497,7 @@ export function HibbaVoice() {
       )}
 
       {/* ── Mic button ── */}
-      <div className={`fixed left-0 right-0 z-50 flex flex-col items-center gap-1 ${isMobile ? "bottom-20" : "bottom-4"}`}>
+      <div className={`fixed right-4 z-[60] flex flex-col items-center gap-0.5 ${isMobile ? "bottom-[76px]" : "bottom-4"}`}>
         <button
           onClick={() => {
             if (!isOpen) {
@@ -454,7 +506,7 @@ export function HibbaVoice() {
             }
             toggleMic();
           }}
-          className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
+          className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${
             state === "connecting"
               ? "bg-yellow-500 animate-pulse"
               : state === "connected" && micOn
@@ -467,14 +519,14 @@ export function HibbaVoice() {
           }`}
         >
           {state === "connecting" ? (
-            <Loader2 className="w-6 h-6 text-white animate-spin" />
+            <Loader2 className="w-5 h-5 text-white animate-spin" />
           ) : micOn ? (
-            <Mic className="w-6 h-6 text-white" />
+            <Mic className="w-5 h-5 text-white" />
           ) : (
-            <MicOff className="w-6 h-6 text-white" />
+            <MicOff className="w-5 h-5 text-white" />
           )}
         </button>
-        <span className="text-xs text-gray-400">{statusText}</span>
+        <span className="text-[10px] text-gray-400">{statusText}</span>
       </div>
     </>
   );

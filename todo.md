@@ -2349,3 +2349,12 @@
 
 ## Bug Fix — Mic button overlapping bottom nav (May 16 2026)
 - [x] Move Hibba mic button above the bottom navigation bar so it doesn't overlap with Scan tab
+
+## Hibba Personality & Tools Re-addition (May 16 2026)
+- [x] Fix mic button position — moved to bottom-right just above More nav item
+- [x] Add full Hibba personality system instruction (Islamic identity, time-aware greeting, AQS context)
+- [ ] Add navigation tools (navigate user to different pages in the app)
+- [ ] Add receipt/expense query tools (lookup receipts, expenses, categories)
+- [ ] Add donor and loan query tools (lookup donors, loans, repayments)
+- [ ] Add payroll and income tools (lookup payroll, income records)
+- [ ] Test each tool addition incrementally — rollback if crash
