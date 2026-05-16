@@ -411,7 +411,9 @@ export function HibbaVoice() {
               }
 
               // Handle Hibba's transcript (output)
-              const outputText = msg?.serverContent?.outputTranscription?.text;
+              const rawOutputText = msg?.serverContent?.outputTranscription?.text;
+              // Filter out control codes like <ctrl46> that Gemini sometimes emits
+              const outputText = rawOutputText?.replace(/<ctrl\d+>/g, "").trim();
               if (outputText) {
                 hibbaBufferRef.current += outputText;
                 const currentId = `hibba-${hibbaIdRef.current}`;
@@ -424,7 +426,8 @@ export function HibbaVoice() {
               }
 
               // Handle user's transcript (input)
-              const inputText = msg?.serverContent?.inputTranscription?.text;
+              const rawInputText = msg?.serverContent?.inputTranscription?.text;
+              const inputText = rawInputText?.replace(/<ctrl\d+>/g, "").trim();
               if (inputText) {
                 userBufferRef.current += inputText;
                 const currentId = `user-${userIdRef.current}`;

@@ -2360,3 +2360,4 @@
 - [x] Add dashboard summary tool (get_dashboard_summary, get_monthly_expense_total)
 - [x] Server-side hibbaTools router with protected read-only queries
 - [ ] Test each tool addition incrementally — rollback if crash
+- [x] Fix: filter out <ctrl46> control codes from Gemini output/input transcription display
