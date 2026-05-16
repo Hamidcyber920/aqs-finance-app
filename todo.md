@@ -2341,3 +2341,8 @@
 - [x] User can scroll/navigate other screens while Hibba speaks
 - [x] Expand back to full panel by tapping the minimized button
 - [x] Clean, professional transcript layout with clear speaker labels (Hibba/You chat bubbles)
+
+## Bug Fix — CSP blocking Gemini Live connection (May 16 2026)
+- [x] Added https://generativelanguage.googleapis.com to CSP connect-src
+- [x] Added wss://generativelanguage.googleapis.com to CSP connect-src
+- [x] Set GEMINI_API_KEY with preventMatching to ensure correct key is used

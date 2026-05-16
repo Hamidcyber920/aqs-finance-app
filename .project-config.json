@@ -15,10 +15,10 @@
   ],
   "git_remote": {
     "repo_url": "s3://vida-prod-gitrepo/webdev-git/310519663490667955/ExcMToduGVqDRtQnvUsVkJ",
-    "access_key_id": "ASIAZV3A2ECZBNNBQGJS",
-    "secret_access_key": "z9PVET8elcdeHmo4XCM4Zx7SVxtNQyeHgrScNwLg",
-    "session_token": "IQoJb3JpZ2luX2VjEMz//////////wEaCXVzLWVhc3QtMSJHMEUCIFNiTWJeGVSTLghNb1Bv/v5wGOPDndAtsvYDJ2/r5WivAiEAwguqSvUfNldR1Ne/0QdgfxV0MHPoXdrsnwz4lNqtntAq/wMIlf//////////ARAEGgw2NjUzODYwOTg4NjYiDMWNK+LYByIOC3YwFCrTA6e8jzR6gUqeH2hU30n/lqgiEyTVk0UuFcMvuihIamyayoKySDHi8634CaqUN679Aq3PD/hTYZdc3e7lsJvGWnQmVikgJWOtbq5mZVyeu19gdckLWktGxzsT6SMp28TWK/CUxUw0BCi9lfLHSJxmCiq6u0OnmUFH9M3lsB4FnghATjbgx1tSx1RXVv1ZFWw6cm0pOOifcQIxcPWJsl4alLJLdTM9df7IPu3F/1p5h50PKSiIxE8ZRY8Nq1sDleU2K2XytfhtC+B/8n4gNNrlvIbFYDBPTa1DKbbxr+f7bXXVT1zgMXpHpKXXBjkXQ6MF2edgTPoTfHEc+f8yRSrXoNqXvsf/BhPWOk7JMKue7Ir8syuqFzlna+JFJc903qiT3456E2bvhgh7I+ivGk8sFLAHXcXcjJ8XN3qZlbCXU/Lteib/yL5un9LtH9zAk6ZeTxY1Gb6m8MXD+OfAakvycQZD9uiXVBap9t1blc9B3obr6if59ZJUseeo9BbBlRjsnWPNT/bP1GOMpWPl7Hx0gru+FWksWUITuKDryYtYnPFeQJVArjrp+PFYL/rVULlzWSPUnWkD+l9eEIiimsWO5mcKpoN7eAp3zYaCznJCKB9UJAToMK+Oo9AGOp0B4+DXrM6glTgQ1XYwD1bewopri+J17PRjCP2s8Tyft2EmDu0Ct7qATPp9ws3MXSZc+bje3GD44pBng1n8ivTj3AE0E8GCblzgPauWkqDV2r0PH17uX5dJ9TAZwLt86O0nUcCSwTOAanCPWDyMsqLzPuQzGXXTUGRCNe/BFZaQOdRvMNClgbFTr3sUVwZRijxllcJyBc7L5IAt5AvORA==",
-    "expiration": "2026-05-17T07:36:15.000Z"
+    "access_key_id": "ASIAZV3A2ECZIZQN44WL",
+    "secret_access_key": "vD1JZglInICCSxQeUQeZGGxE/dk1GtPCHdHedrKW",
+    "session_token": "IQoJb3JpZ2luX2VjEM7//////////wEaCXVzLWVhc3QtMSJIMEYCIQDSWmIb/jYgnexwE+NwAuu6ESJV8zfb5rHLR8StGzV9/gIhAL9cukdu23q32Hc/Gpnof2MmhiBbjsgg7/tmdIJ8vjTuKv8DCJb//////////wEQBBoMNjY1Mzg2MDk4ODY2IgwQc2pSlrD26MaqfDgq0wNpAPtjfhMnwkXdiUAOXDD8CrxIPGOnCp9/ae/mSMtE+GIt6GPpfkBWyclR0cybK9Je84TQHbe/5nAq00SHeSRgEy/SJhzEqV0FRCCDKrqpjsSLueCpjKWwcTkJa+ykw2801uv/OEHc/aXHMiMe3gPbkRG9HpF7yUCz2xFbp1XGdVDN7Gem3lof9+yqF5ZU8M+0FyCw0kpoeKay8i8ROj0Te4kfuWhhwnKCd+E1HAxVie58g59WgcWWFYoWoBNj6M4nZ7z+2yGGSi6LhsW9XWQB2Yqre4WKydsi/+l7ZuzaOthoIlcRvOnlWMwP8CIueQWJxubFCNmABS61C5x++M4SreqcBTzd2ztA24qQ15TQt6Lz+8nPx+fTuQfqr3IGQNPghAnl2Zou+c2goelF8FBOA16LNSXdwjwf5SSYJkdWjBRqvi0popF6W9byyzc5ezC62lAKlANVnsBOw9Hv+k2cK24aRIGPqKo4o9dBCF83Il7gcd3zXVBtHM8zlandIyggJzL5Y0JwUCNCmRhZ1f8aQneW8jbWcn8Dc/utg3Avp9DAek1YffRywH9Ju1eyyB0WYqcWeOD1J0JlESmitcgwn4b33yMen5uszcV6CC15lwNBJTDyvaPQBjqcATYmmzoxs8Ym7K5ZSr/Rs3QQvptLm/rtMEtJlnO0oaAXjcVDO04naS3ROZoZulMwVed9wpckmnOuwNJqE5MaLqQM7A/PQ2SiIONbpvafJL6wlXtqBKzDc5HqkTXQ4w0OH8NX0wYeR/liNlt9+MTbG2HsIasMQQpKrBuzte5r0ADDWT9q+bb7I5/rL7zkQHkURP8uPT3ggNiBpk2Omg==",
+    "expiration": "2026-05-17T09:17:38.000Z"
   },
   "name": "receipt-scanner",
   "path": "/home/ubuntu/receipt-scanner",
@@ -26,7 +26,7 @@
   "secrets": {
     "BUILT_IN_FORGE_API_KEY": "WokpFusw9ADWhe22B9YrBi",
     "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
-    "GEMINI_API_KEY": "AIzaSyBewum8iEMw4tFp2lUIwOXJ9ApsXKvXdvc",
+    "GEMINI_API_KEY": "AIzaSyAN6ds9AHaTPRt1qW2K2KlUtIhqKynJGYQ",
     "GMAIL_CLIENT_ID": "781074422659-3flvumoibdu2qjpqicr0npn308isfggb.apps.googleusercontent.com",
     "GMAIL_CLIENT_SECRET": "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",
     "GMAIL_FROM_EMAIL": "ahamid4@gmail.com",

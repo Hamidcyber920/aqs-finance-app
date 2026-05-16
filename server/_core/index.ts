@@ -56,7 +56,7 @@ async function startServer() {
           styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
           imgSrc: ["'self'", "data:", "blob:", "https:"],
           fontSrc: ["'self'", "https://fonts.gstatic.com"],
-          connectSrc: ["'self'", "wss:", "ws:", "https://api.manus.im", "https://api.stripe.com", "https://api.aladhan.com", "https://*.manus.computer", "https://*.manus.space"],
+          connectSrc: ["'self'", "wss:", "ws:", "https://api.manus.im", "https://api.stripe.com", "https://api.aladhan.com", "https://*.manus.computer", "https://*.manus.space", "https://generativelanguage.googleapis.com", "wss://generativelanguage.googleapis.com"],
           frameSrc: ["'self'", "https://js.stripe.com", "https://donorbox.org"],
           objectSrc: ["'none'"],
           baseUri: ["'self'"],
