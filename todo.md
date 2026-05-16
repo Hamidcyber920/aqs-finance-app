@@ -2207,3 +2207,6 @@
 - [x] Restored original WebSocket-based VoiceAgent.tsx client component (1172 lines)
 - [x] All 46 tests passing (13 gateway + 33 native chat)
 - [ ] Verify full voice flow on deployed site after publish
+
+## Bug — Login fails with "The string did not match the expected pattern"
+- [x] Fix: added .trim() to all email Zod schemas (login, register, forgotPassword) to handle whitespace; improved error message display in toast

@@ -78,14 +78,24 @@ export default function LoginPage() {
       window.location.href = "/";
     },
     onError: (err) => {
-      toast.error("Login failed", { description: err.message });
+      // Zod validation errors come as JSON array in message — extract readable text
+      let msg = err.message;
+      try {
+        const issues = JSON.parse(msg);
+        if (Array.isArray(issues)) msg = issues.map((i: any) => i.message).join(", ");
+      } catch { /* not JSON, use as-is */ }
+      toast.error("Login failed", { description: msg || "Please check your email and password" });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
-    loginMutation.mutate({ email, password });
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !password) {
+      toast.error("Please enter both email and password");
+      return;
+    }
+    loginMutation.mutate({ email: trimmedEmail, password });
   };
 
   return (

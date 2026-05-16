@@ -89,7 +89,7 @@ export const localAuthRouter = router({
     .input(
       z.object({
         name: z.string().min(2, "Name must be at least 2 characters"),
-        email: z.string().email("Invalid email address"),
+        email: z.string().trim().email("Invalid email address"),
         password: z.string().min(8, "Password must be at least 8 characters"),
       })
     )
@@ -131,7 +131,7 @@ export const localAuthRouter = router({
   login: publicProcedure
     .input(
       z.object({
-        email: z.string().email(),
+        email: z.string().trim().email(),
         password: z.string().min(1),
       })
     )
@@ -175,7 +175,7 @@ export const localAuthRouter = router({
     }),
 
   forgotPassword: publicProcedure
-    .input(z.object({ email: z.string().email() }))
+    .input(z.object({ email: z.string().trim().email() }))
     .mutation(async ({ input }) => {
       const user = await getUserByEmail(input.email.toLowerCase());
       // Always return success to prevent email enumeration
