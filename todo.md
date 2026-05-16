@@ -2260,3 +2260,16 @@
 - [ ] Mount in DashboardLayout as replacement for VoiceAgent
 - [ ] Run tests and verify server health
 - [ ] Save checkpoint
+
+## Voice Assistant — Component-Level Integration from Reference Repo
+- [x] Read reference repo audio-utils.ts, App.tsx voice UI, and server.ts patterns
+- [x] Install @google/genai SDK
+- [x] Create server-side Gemini WebSocket gateway (voiceGateway.ts) from reference repo patterns
+- [x] Create client-side audio-utils.ts from reference repo
+- [x] Create client-side HibbaVoice.tsx floating component
+- [x] Wire HibbaVoice into DashboardLayout
+- [x] Connect tools to existing receipt-scanner database and tRPC procedures
+- [x] Use existing GEMINI_API_KEY
+- [x] Server running with voice gateway attached (Gemini 2.0 Flash Live + Aoede)
+- [x] Run vitest tests (330/337 pass, 7 Google OAuth pre-existing failures)
+- [x] Save checkpoint and deliver

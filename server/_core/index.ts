@@ -17,6 +17,8 @@ import { registerScheduledJobs } from "../scheduledJobs";
 import { registerStripeWebhook } from "../stripeWebhook";
 import { registerGmailWebhook } from "../gmailWebhook";
 import { registerGoogleReauthRoutes } from "../googleReauth";
+import { attachVoiceGateway } from "../voiceGateway";
+import { registerVoiceTokenRoute } from "../voiceTokenRoute";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -142,6 +144,12 @@ async function startServer() {
 
   // Register scheduled cron jobs (weekly repayment alert + monthly trustee report)
   registerScheduledJobs();
+
+  // Voice token endpoint (must be before tRPC to avoid route conflicts)
+  registerVoiceTokenRoute(app);
+
+  // Attach Hibba voice gateway (WebSocket)
+  attachVoiceGateway(server);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

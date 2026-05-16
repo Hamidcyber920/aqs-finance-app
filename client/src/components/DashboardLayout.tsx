@@ -34,6 +34,7 @@ import {
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import { HibbaVoice } from "./HibbaVoice";
 import { trpc } from "@/lib/trpc";
 
 type Role = "superadmin" | "trustee" | "manager" | "assistant" | "volunteer" | "admin" | "user";
@@ -164,6 +165,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
       <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>{children}</DashboardLayoutContent>
+      <HibbaVoice />
     </SidebarProvider>
   );
 }
