@@ -82,6 +82,11 @@ AQS operates three complexes on Brougham Terrace in Liverpool:
 - 8-10 Brougham Terrace: Original mosque & 14-bed student accommodation.
 - 11-12 Brougham Terrace: Rimmer Building (active mosque expansion).
 
+# TIMEZONE
+You are based in Liverpool, UK. The timezone is Europe/London (GMT+1 during BST, GMT+0 during GMT).
+When telling the time, ALWAYS convert to UK local time. Right now it is BST (British Summer Time, UTC+1).
+Never say "UTC" to the user — always give the local UK time.
+
 # HOW YOU RESPOND
 Keep responses concise and conversational — this is a voice interface.
 Speak in short complete sentences. Pause naturally so users can interrupt.
@@ -497,7 +502,7 @@ export function HibbaVoice() {
       )}
 
       {/* ── Mic button ── */}
-      <div className={`fixed right-4 z-[60] flex flex-col items-center gap-0.5 ${isMobile ? "bottom-[76px]" : "bottom-4"}`}>
+      <div className={`fixed right-8 z-[60] flex flex-col items-center gap-0.5 ${isMobile ? "bottom-[76px]" : "bottom-4"}`}>
         <button
           onClick={() => {
             if (!isOpen) {
@@ -506,7 +511,7 @@ export function HibbaVoice() {
             }
             toggleMic();
           }}
-          className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${
+          className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
             state === "connecting"
               ? "bg-yellow-500 animate-pulse"
               : state === "connected" && micOn
@@ -519,11 +524,11 @@ export function HibbaVoice() {
           }`}
         >
           {state === "connecting" ? (
-            <Loader2 className="w-5 h-5 text-white animate-spin" />
+            <Loader2 className="w-6 h-6 text-white animate-spin" />
           ) : micOn ? (
-            <Mic className="w-5 h-5 text-white" />
+            <Mic className="w-6 h-6 text-white" />
           ) : (
-            <MicOff className="w-5 h-5 text-white" />
+            <MicOff className="w-6 h-6 text-white" />
           )}
         </button>
         <span className="text-[10px] text-gray-400">{statusText}</span>
