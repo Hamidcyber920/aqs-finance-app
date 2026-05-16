@@ -40,6 +40,7 @@ import { facilitiesRouter } from "./routers/facilities";
 import { bistroRouter } from "./routers/bistro";
 import { googleServicesRouter } from "./routers/googleServices";
 import { voiceRouter } from "./routers/voice";
+import { hibbaToolsRouter } from "./routers/hibbaTools";
 import {
   createReceipt, deleteReceipt, getAllCategories, getCategoryTotals, getMonthlyTotal,
   getReceiptById, listReceipts, listAllReceipts, seedDefaultCategories, updateReceipt, getAdminReceiptStats,
@@ -407,6 +408,7 @@ export const appRouter = router({
   bistro: bistroRouter,
   googleServices: googleServicesRouter,
   voice: voiceRouter,
+  hibbaTools: hibbaToolsRouter,
   // --- SUCCESSIONN & DELEGATION ──────────────────────────────────────────────────
   succession: router({
     /** Get current succession status: who is the delegate, last owner activity, inactivity days */

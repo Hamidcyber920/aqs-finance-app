@@ -93,20 +93,98 @@ const NAV_ROUTES: Record<string, string> = {
 
 // ── Tool declarations for Gemini Live API ──
 const HIBBA_TOOLS = [{
-  functionDeclarations: [{
-    name: "navigate_to",
-    description: "Navigate the user to a specific page in the app. Use when the user asks to go to, show, open, or take them to a page.",
-    parameters: {
-      type: "OBJECT" as const,
-      properties: {
-        page: {
-          type: "STRING" as const,
-          description: `The page to navigate to. Valid values: ${Object.keys(NAV_ROUTES).join(", ")}`,
+  functionDeclarations: [
+    {
+      name: "navigate_to",
+      description: "Navigate the user to a specific page in the app. Use when the user asks to go to, show, open, or take them to a page.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          page: { type: "STRING" as const, description: `The page to navigate to. Valid values: ${Object.keys(NAV_ROUTES).join(", ")}` },
         },
+        required: ["page"],
       },
-      required: ["page"],
     },
-  }],
+    {
+      name: "get_dashboard_summary",
+      description: "Get a high-level financial overview: total expenses, income, active loans, fundraising progress, pending approvals. Use when the user asks about overall finances, how things are going, or wants a briefing.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "query_receipts",
+      description: "Look up receipts and expenses. Use when user asks about spending, receipts, invoices, or expenses.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          vendor: { type: "STRING" as const, description: "Filter by vendor/supplier name" },
+          status: { type: "STRING" as const, description: "Filter by status: pending, approved, or rejected" },
+          limit: { type: "NUMBER" as const, description: "Number of results 1-20, default 5" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "query_loans",
+      description: "Look up Qarde Hasan loans. Use when user asks about loans, borrowers, or Qarde Hasan.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          status: { type: "STRING" as const, description: "Filter: active, approved, pending, completed" },
+          limit: { type: "NUMBER" as const, description: "Number of results 1-10, default 5" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "query_donors",
+      description: "Look up donors. Use when user asks about donors, contributions, or supporters.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          search: { type: "STRING" as const, description: "Search by donor name or email" },
+          is_regular: { type: "BOOLEAN" as const, description: "Filter regular donors only" },
+          limit: { type: "NUMBER" as const, description: "Number of results 1-10, default 5" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "query_payroll",
+      description: "Look up payroll records. Use when user asks about salaries, staff payments, or wages.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          month: { type: "NUMBER" as const, description: "Month number 1-12" },
+          year: { type: "NUMBER" as const, description: "Year e.g. 2026" },
+          limit: { type: "NUMBER" as const, description: "Number of results 1-10, default 5" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "query_income",
+      description: "Look up income records (rentals, collections, hall hire). Use when user asks about income or revenue.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          limit: { type: "NUMBER" as const, description: "Number of results 1-10, default 5" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "get_monthly_expense_total",
+      description: "Get the total expenses for a specific month. Use when user asks how much was spent in a month.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          month: { type: "NUMBER" as const, description: "Month number 1-12" },
+          year: { type: "NUMBER" as const, description: "Year e.g. 2026" },
+        },
+        required: ["month", "year"],
+      },
+    },
+  ],
 }];
 
 const SYSTEM_INSTRUCTION = `HIBBA — VOICE AGENT FOR THE ABDULLAH QUILLIAM SOCIETY
@@ -168,8 +246,18 @@ Speak in short complete sentences. Pause naturally so users can interrupt.
 Never give long monologues. 2-3 sentences max per turn unless asked for detail.
 
 # TOOLS
-You have access to the navigate_to tool. When the user asks to go to a page, show a section, or open something, call navigate_to with the page name.
-Examples: "take me to payroll" → navigate_to(page: "payroll"), "show me the loans" → navigate_to(page: "loans"), "open dashboard" → navigate_to(page: "dashboard").
+You have access to these tools. ALWAYS use them to get real data — NEVER make up numbers.
+
+1. navigate_to(page) — Navigate user to a page. E.g. "take me to payroll" → navigate_to(page: "payroll").
+2. get_dashboard_summary() — Get overall financial stats (expenses, income, loans, fundraising, pending approvals).
+3. query_receipts(vendor?, status?, limit?) — Look up receipts/expenses.
+4. query_loans(status?, limit?) — Look up Qarde Hasan loans.
+5. query_donors(search?, is_regular?, limit?) — Look up donors.
+6. query_payroll(month?, year?, limit?) — Look up payroll records.
+7. query_income(limit?) — Look up income records.
+8. get_monthly_expense_total(month, year) — Get total expenses for a specific month.
+
+When the user asks about data, ALWAYS call the appropriate tool first. Summarise results concisely in 2-3 sentences with key £ figures.
 After navigating, briefly confirm where you took them.
 `;
 
@@ -201,6 +289,7 @@ export function HibbaVoice() {
   const userIdRef = useRef(0);
 
   const getToken = trpc.voice.getEphemeralToken.useMutation();
+  const utils = trpc.useUtils();
 
   // Auto-scroll to bottom when messages change (only when panel is expanded)
   useEffect(() => {
@@ -361,29 +450,7 @@ export function HibbaVoice() {
               // ── Handle tool calls ──
               const toolCall = msg?.toolCall;
               if (toolCall?.functionCalls?.length) {
-                const responses: any[] = [];
-                for (const fc of toolCall.functionCalls) {
-                  console.log(`[Hibba] Tool call: ${fc.name}`, fc.args);
-                  if (fc.name === "navigate_to") {
-                    const page = (fc.args?.page || "").toLowerCase().trim();
-                    const path = NAV_ROUTES[page];
-                    if (path) {
-                      setLocation(path);
-                      upsertMessage(`tool-${fc.id}`, "system", `Navigated to ${page}`, true);
-                      responses.push({ id: fc.id, name: fc.name, response: { result: "success", navigated_to: path } });
-                    } else {
-                      responses.push({ id: fc.id, name: fc.name, response: { result: "error", message: `Unknown page: ${page}` } });
-                    }
-                  } else {
-                    responses.push({ id: fc.id, name: fc.name, response: { result: "error", message: `Unknown tool: ${fc.name}` } });
-                  }
-                }
-                // Send tool responses back to Gemini
-                try {
-                  session.sendToolResponse({ functionResponses: responses });
-                } catch (e) {
-                  console.error("[Hibba] Error sending tool response:", e);
-                }
+                handleToolCalls(toolCall.functionCalls, session);
               }
             } catch (e) {
               console.error("[Hibba] Error processing message:", e);
@@ -428,6 +495,98 @@ export function HibbaVoice() {
       setState("error");
       setStatusText("Connection failed — tap mic to retry");
       connectingRef.current = false;
+    }
+  }
+
+  // ── Handle tool calls from Gemini ──
+  async function handleToolCalls(functionCalls: any[], session: any) {
+    const responses: any[] = [];
+    for (const fc of functionCalls) {
+      console.log(`[Hibba] Tool call: ${fc.name}`, fc.args);
+      try {
+        let result: any;
+        switch (fc.name) {
+          case "navigate_to": {
+            const page = (fc.args?.page || "").toLowerCase().trim();
+            const path = NAV_ROUTES[page];
+            if (path) {
+              setLocation(path);
+              upsertMessage(`tool-${fc.id}`, "system", `Navigated to ${page}`, true);
+              result = { success: true, navigated_to: path };
+            } else {
+              result = { error: `Unknown page: ${page}. Available: ${Object.keys(NAV_ROUTES).slice(0, 10).join(", ")}...` };
+            }
+            break;
+          }
+          case "get_dashboard_summary": {
+            const data = await utils.client.hibbaTools.dashboardSummary.query();
+            result = data;
+            break;
+          }
+          case "query_receipts": {
+            const data = await utils.client.hibbaTools.queryReceipts.query({
+              vendor: fc.args?.vendor,
+              status: fc.args?.status,
+              limit: fc.args?.limit ? Number(fc.args.limit) : 5,
+            });
+            result = data;
+            break;
+          }
+          case "query_loans": {
+            const data = await utils.client.hibbaTools.queryLoans.query({
+              status: fc.args?.status,
+              limit: fc.args?.limit ? Number(fc.args.limit) : 5,
+            });
+            result = data;
+            break;
+          }
+          case "query_donors": {
+            const data = await utils.client.hibbaTools.queryDonors.query({
+              search: fc.args?.search,
+              isRegular: fc.args?.is_regular,
+              limit: fc.args?.limit ? Number(fc.args.limit) : 5,
+            });
+            result = data;
+            break;
+          }
+          case "query_payroll": {
+            const data = await utils.client.hibbaTools.queryPayroll.query({
+              month: fc.args?.month ? Number(fc.args.month) : undefined,
+              year: fc.args?.year ? Number(fc.args.year) : undefined,
+              limit: fc.args?.limit ? Number(fc.args.limit) : 5,
+            });
+            result = data;
+            break;
+          }
+          case "query_income": {
+            const data = await utils.client.hibbaTools.queryIncome.query({
+              limit: fc.args?.limit ? Number(fc.args.limit) : 5,
+            });
+            result = data;
+            break;
+          }
+          case "get_monthly_expense_total": {
+            const data = await utils.client.hibbaTools.monthlyExpenseTotal.query({
+              month: Number(fc.args?.month),
+              year: Number(fc.args?.year),
+            });
+            result = data;
+            break;
+          }
+          default:
+            result = { error: `Unknown tool: ${fc.name}` };
+        }
+        responses.push({ id: fc.id, name: fc.name, response: result });
+      } catch (err: any) {
+        console.error(`[Hibba] Tool ${fc.name} error:`, err);
+        responses.push({ id: fc.id, name: fc.name, response: { error: err?.message || "Tool execution failed" } });
+      }
+    }
+    // Send all tool responses back to Gemini
+    try {
+      session.sendToolResponse({ functionResponses: responses });
+    } catch (e) {
+      console.error("[Hibba] Error sending tool response:", e);
     }
   }
 
