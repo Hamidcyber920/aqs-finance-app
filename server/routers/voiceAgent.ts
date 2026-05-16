@@ -981,7 +981,7 @@ ${transcriptText || "No transcript recorded."}
         </div>
       `;
 
-      const recipientEmail: string = (input.email || ctx.user.email || '') as string;
+      const recipientEmail: string = String(input.email || ctx.user.email || '');
       const recipientName = ctx.user.name || "Team Member";
 
       await sendSessionSummaryEmail(

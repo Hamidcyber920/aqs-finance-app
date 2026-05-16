@@ -2221,3 +2221,14 @@
 - [x] Added detailed logging throughout auth chain for deployed debugging
 - [ ] Publish and verify on deployed site — check Cloud Run logs for [VoiceToken] and [VoiceGateway] Auth lines
 - [ ] If query param stripping is the issue: implement WebSocket subprotocol token passing as fallback
+
+## Voice Assistant — Full Rebuild (Gemini 2.0 Live + Aoede Voice)
+- [x] Research Gemini 2.0 Live API (models, WebSocket protocol, audio format, voice options)
+- [x] Extract all 70+ tools, system prompt, and personality from existing voiceGateway.ts
+- [x] Build new server-side voice gateway (voiceGateway.ts) from scratch — clean WebSocket proxy to Gemini 2.0 Live
+- [x] Client VoiceAgent.tsx verified compatible with new server protocol (no changes needed)
+- [x] Configure Aoede voice in Gemini 2.0 Live setup message
+- [x] Preserve Hibba's Islamic personality and all agentic tools
+- [x] Write comprehensive vitest tests for new gateway (13 tests passing)
+- [x] Integration test: verify full flow works on dev server (server running, 46 tests passing)
+- [ ] Save checkpoint and deliver for deployed testing

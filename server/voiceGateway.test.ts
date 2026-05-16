@@ -1,83 +1,54 @@
 /**
- * Voice Gateway Tests — Verify Gemini 2.5 Live API setup and audio flow
+ * Voice Gateway Tests — Verify Gemini 2.0 Flash Live + Aoede setup and audio flow
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import WebSocket from "ws";
+import { describe, it, expect } from "vitest";
 
-// Test the setup payload structure for Gemini 2.5 compatibility
-describe("Voice Gateway - Gemini 2.5 Setup", () => {
-  const GEMINI_MODEL = "models/gemini-2.5-flash-native-audio-latest";
+describe("Voice Gateway - Gemini 2.0 Flash Live Setup", () => {
+  const GEMINI_MODEL = "models/gemini-2.0-flash-live-001";
+  const VOICE_NAME = "Aoede";
 
-  it("should use v1alpha API endpoint", () => {
-    const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent";
-    expect(url).toContain("v1alpha");
-    expect(url).not.toContain("v1beta");
+  it("should use v1beta API endpoint for Gemini 2.0 Flash Live", () => {
+    const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+    expect(url).toContain("v1beta");
+    expect(url).toContain("BidiGenerateContent");
   });
 
-  it("should construct correct setup payload with thinkingBudget=0", () => {
+  it("should construct correct setup payload with Aoede voice", () => {
     const setupPayload = {
-      model: GEMINI_MODEL,
-      generationConfig: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: "Kore" }
+      setup: {
+        model: GEMINI_MODEL,
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: VOICE_NAME }
+            }
           }
         },
-        thinkingConfig: {
-          thinkingBudget: 0,
+        systemInstruction: {
+          parts: [{ text: "Test system prompt" }]
         },
-      },
-      systemInstruction: {
-        parts: [{ text: "Test system prompt" }]
-      },
-      tools: [{ functionDeclarations: [] }],
-      outputAudioTranscription: {},
-      inputAudioTranscription: {},
-      realtimeInputConfig: {
-        automaticActivityDetection: {
-          disabled: false,
-          startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
-          endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
-          prefixPaddingMs: 300,
-          silenceDurationMs: 1500,
-        },
-        activityHandling: "NO_INTERRUPTION",
-      },
-      proactivity: {
-        proactiveAudio: true,
-      },
-      contextWindowCompression: {
-        triggerTokens: 25000,
-        slidingWindowTokens: 12500,
-      },
+        tools: [{ functionDeclarations: [] }],
+        outputAudioTranscription: {},
+        inputAudioTranscription: {},
+      }
     };
 
-    // Verify thinkingBudget is set to 0 (not thinkingLevel)
-    expect(setupPayload.generationConfig.thinkingConfig.thinkingBudget).toBe(0);
-    
+    // Verify model
+    expect(setupPayload.setup.model).toBe("models/gemini-2.0-flash-live-001");
+
     // Verify responseModalities includes AUDIO
-    expect(setupPayload.generationConfig.responseModalities).toContain("AUDIO");
-    
-    // Verify proactiveAudio is enabled
-    expect(setupPayload.proactivity.proactiveAudio).toBe(true);
-    
-    // Verify voice config
-    expect(setupPayload.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe("Kore");
-    
-    // Verify VAD config
-    expect(setupPayload.realtimeInputConfig.activityHandling).toBe("NO_INTERRUPTION");
-    expect(setupPayload.realtimeInputConfig.automaticActivityDetection.disabled).toBe(false);
-    
-    // Verify context window compression
-    expect(setupPayload.contextWindowCompression.triggerTokens).toBe(25000);
-    
+    expect(setupPayload.setup.generationConfig.responseModalities).toContain("AUDIO");
+
+    // Verify voice config uses Aoede
+    expect(setupPayload.setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe("Aoede");
+
     // Verify transcription configs are present
-    expect(setupPayload.outputAudioTranscription).toBeDefined();
-    expect(setupPayload.inputAudioTranscription).toBeDefined();
+    expect(setupPayload.setup.outputAudioTranscription).toBeDefined();
+    expect(setupPayload.setup.inputAudioTranscription).toBeDefined();
   });
 
-  it("should use clientContent format for text input (not realtimeInput.text)", () => {
+  it("should use clientContent format for text input", () => {
     const textMessage = {
       clientContent: {
         turns: [{ role: "user", parts: [{ text: "Hello Hibba" }] }],
@@ -85,32 +56,27 @@ describe("Voice Gateway - Gemini 2.5 Setup", () => {
       }
     };
 
-    // Verify clientContent structure
     expect(textMessage.clientContent).toBeDefined();
     expect(textMessage.clientContent.turns).toHaveLength(1);
     expect(textMessage.clientContent.turns[0].role).toBe("user");
     expect(textMessage.clientContent.turns[0].parts[0].text).toBe("Hello Hibba");
     expect(textMessage.clientContent.turnComplete).toBe(true);
-    
-    // Verify no realtimeInput.text
     expect((textMessage as any).realtimeInput).toBeUndefined();
   });
 
-  it("should use realtimeInput.audio format for audio chunks", () => {
+  it("should use realtimeInput.mediaChunks format for audio", () => {
     const audioMessage = {
       realtimeInput: {
-        audio: {
-          data: "base64encodedaudio",
-          mimeType: "audio/pcm;rate=16000"
-        }
+        mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: "base64encodedaudio" }]
       }
     };
 
-    expect(audioMessage.realtimeInput.audio.mimeType).toBe("audio/pcm;rate=16000");
-    expect(audioMessage.realtimeInput.audio.data).toBeDefined();
+    expect(audioMessage.realtimeInput.mediaChunks).toHaveLength(1);
+    expect(audioMessage.realtimeInput.mediaChunks[0].mimeType).toBe("audio/pcm;rate=16000");
+    expect(audioMessage.realtimeInput.mediaChunks[0].data).toBeDefined();
   });
 
-  it("should use clientContent for screen context updates (not realtimeInput.text)", () => {
+  it("should use clientContent for screen context updates", () => {
     const ctxNote = "[SYSTEM CONTEXT UPDATE] User navigated to: Dashboard. Adjust your responses.";
     const contextMessage = {
       clientContent: {
@@ -124,8 +90,8 @@ describe("Voice Gateway - Gemini 2.5 Setup", () => {
     expect((contextMessage as any).realtimeInput).toBeUndefined();
   });
 
-  it("should handle Gemini 2.5 single-part-per-event responses correctly", () => {
-    // Gemini 2.5 sends one part per event, unlike 3.1 which can send multiple
+  it("should handle Gemini 2.0 response events correctly", () => {
+    // Audio response
     const audioEvent = {
       serverContent: {
         modelTurn: {
@@ -134,42 +100,24 @@ describe("Voice Gateway - Gemini 2.5 Setup", () => {
       }
     };
 
+    // Transcript event
     const transcriptEvent = {
       serverContent: {
         outputTranscription: { text: "Assalamu Alaikum" }
       }
     };
 
+    // Turn complete event
     const turnCompleteEvent = {
       serverContent: {
         turnComplete: true
       }
     };
 
-    // Audio event should have exactly one part with inlineData
     expect(audioEvent.serverContent.modelTurn.parts).toHaveLength(1);
-    expect(audioEvent.serverContent.modelTurn.parts[0].inlineData).toBeDefined();
     expect(audioEvent.serverContent.modelTurn.parts[0].inlineData.mimeType).toBe("audio/pcm;rate=24000");
-
-    // Transcript event should have outputTranscription
     expect(transcriptEvent.serverContent.outputTranscription.text).toBe("Assalamu Alaikum");
-
-    // Turn complete event
     expect(turnCompleteEvent.serverContent.turnComplete).toBe(true);
-  });
-
-  it("should use clientContent for navigation proactive notes", () => {
-    const proactiveNote = "[NAVIGATION COMPLETE] You just navigated the user to: Dashboard.";
-    const navMessage = {
-      clientContent: {
-        turns: [{ role: "user", parts: [{ text: proactiveNote }] }],
-        turnComplete: true
-      }
-    };
-
-    expect(navMessage.clientContent).toBeDefined();
-    expect(navMessage.clientContent.turns[0].parts[0].text).toContain("NAVIGATION COMPLETE");
-    expect((navMessage as any).realtimeInput).toBeUndefined();
   });
 
   it("should construct tool response in correct format", () => {
@@ -191,57 +139,62 @@ describe("Voice Gateway - Gemini 2.5 Setup", () => {
   });
 });
 
-// Test the source code directly to verify no realtimeInput.text remains
+// Test the source code directly to verify correct patterns
 describe("Voice Gateway - Source Code Verification", () => {
-  it("should not contain realtimeInput.text in voiceGateway.ts", async () => {
+  it("should use mediaChunks format (not realtimeInput.audio) in voiceGateway.ts", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
-    
-    // Should NOT have realtimeInput: { text: ... } anywhere
-    const realtimeTextPattern = /realtimeInput:\s*\{\s*text:/g;
-    const matches = content.match(realtimeTextPattern);
-    expect(matches).toBeNull();
-    
-    // Should have realtimeInput only for audio
-    const realtimeAudioPattern = /realtimeInput:\s*\{\s*audio:/g;
-    const audioMatches = content.match(realtimeAudioPattern);
-    expect(audioMatches).not.toBeNull();
-    expect(audioMatches!.length).toBeGreaterThan(0);
+
+    // Should have mediaChunks for audio
+    expect(content).toContain("mediaChunks");
+    expect(content).toContain("audio/pcm;rate=16000");
   });
 
-  it("should use v1alpha API endpoint in voiceGateway.ts", async () => {
+  it("should use v1beta API endpoint in voiceGateway.ts", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
-    
-    expect(content).toContain("v1alpha.GenerativeService.BidiGenerateContent");
-    expect(content).not.toContain("v1beta.GenerativeService.BidiGenerateContent");
+
+    expect(content).toContain("v1beta.GenerativeService.BidiGenerateContent");
   });
 
-  it("should have thinkingBudget in setup config", async () => {
+  it("should use Aoede voice in voiceGateway.ts", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
-    
-    expect(content).toContain("thinkingBudget: 0");
-    // Should NOT have thinkingLevel (that's for 3.1)
-    expect(content).not.toContain("thinkingLevel");
-  });
 
-  it("should have proactiveAudio enabled in setup config", async () => {
-    const fs = await import("fs");
-    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
-    
-    expect(content).toContain("proactiveAudio: true");
+    expect(content).toContain("Aoede");
+    expect(content).toContain("gemini-2.0-flash-live-001");
   });
 
   it("should use clientContent for all text-based messages", async () => {
     const fs = await import("fs");
     const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
-    
-    // Count clientContent usages - should be used for text_input, screen_context, proactive greeting, and nav notes
+
+    // Count clientContent usages - should be used for text_input, screen_context, and greeting
     const clientContentPattern = /clientContent:\s*\{/g;
     const matches = content.match(clientContentPattern);
     expect(matches).not.toBeNull();
-    // At least 4: text_input, screen_context, proactive greeting, navigation note
-    expect(matches!.length).toBeGreaterThanOrEqual(4);
+    // At least 3: text_input, screen_context, greeting
+    expect(matches!.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("should not contain realtimeInput.text pattern", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
+
+    // Should NOT have realtimeInput: { text: ... } anywhere
+    const realtimeTextPattern = /realtimeInput:\s*\{\s*text:/g;
+    const matches = content.match(realtimeTextPattern);
+    expect(matches).toBeNull();
+  });
+
+  it("should have tool declarations with proper structure", async () => {
+    const fs = await import("fs");
+    const content = fs.readFileSync("/home/ubuntu/receipt-scanner/server/voiceGateway.ts", "utf-8");
+
+    // Should have functionDeclarations in the tools section
+    expect(content).toContain("functionDeclarations");
+    // Should have tool response handling
+    expect(content).toContain("toolResponse");
+    expect(content).toContain("functionResponses");
   });
 });
