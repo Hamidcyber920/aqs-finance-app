@@ -2312,3 +2312,12 @@
 - [x] Remove WebSocket server (ws package) dependency from voice gateway
 - [x] Add vitest tests for new SSE-based voice architecture
 - [x] Verify on dev server before deploying (server running, 364 tests pass)
+
+## Voice Agent — Clean Rebuild from GitHub Reference (May 16 2026)
+- [x] Extract all Hibba skills/tools/integrations into reference doc (hibba-skills-reference.md)
+- [x] Read GitHub reference repo for clean Gemini Live voice implementation
+- [x] Build minimal voice gateway — pure Gemini Live audio, NO tools, NO tool declarations
+- [x] Build minimal HibbaVoice client component — just mic capture + audio playback
+- [x] Wire into server entry point, verify on dev server (30 tests pass)
+- [ ] Save checkpoint and test on deployed site (PENDING)
+- [ ] Once working: incrementally add tools back from reference doc
