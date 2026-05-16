@@ -14,7 +14,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { ENV } from "./_core/env";
 
-const WS_TOKEN_EXPIRY = "30s"; // Very short-lived - only needs to last until WS connects
+const WS_TOKEN_EXPIRY = "120s"; // Increased to handle Cloud Run cold starts (can take 30-60s)
 
 function getSecretKey() {
   return new TextEncoder().encode(ENV.cookieSecret);

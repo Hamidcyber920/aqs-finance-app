@@ -2210,3 +2210,14 @@
 
 ## Bug — Login fails with "The string did not match the expected pattern"
 - [x] Fix: added .trim() to all email Zod schemas (login, register, forgotPassword) to handle whitespace; improved error message display in toast
+
+## Bug — Voice WebSocket auth fails on deployed site ("Authentication failed. Please log in again.")
+- [x] Deep trace of full auth chain: token fetch → token verify → WebSocket upgrade → Gemini connect
+- [x] Fix: increased WS token expiry 30s→120s for Cloud Run cold starts
+- [x] Fix: null check on connectToGeminiLive return value
+- [x] Fix: 15s Gemini connection timeout with clear error reporting
+- [x] Fix: client-side retry logic (3 attempts with backoff) for token fetch
+- [x] Fix: 15s client-side connection timeout for WebSocket
+- [x] Added detailed logging throughout auth chain for deployed debugging
+- [ ] Publish and verify on deployed site — check Cloud Run logs for [VoiceToken] and [VoiceGateway] Auth lines
+- [ ] If query param stripping is the issue: implement WebSocket subprotocol token passing as fallback

@@ -529,19 +529,34 @@ function buildScreenDescription(path: string, entityContext?: string | null): st
 
 // --- Auth helper ---
 async function authenticateFromRequest(req: IncomingMessage): Promise<{ userId: number; role: string; name: string } | null> {
+  // Try token-based auth first (for WebSocket connections)
   try {
-    const url = new URL(req.url || "/", "http://localhost");
+    const rawUrl = req.url || "/";
+    console.log(`[VoiceGateway] Auth: req.url = ${rawUrl}`);
+    const url = new URL(rawUrl, "http://localhost");
     const queryToken = url.searchParams.get("token");
+    console.log(`[VoiceGateway] Auth: token present = ${!!queryToken}, token length = ${queryToken?.length || 0}`);
     if (queryToken) {
       const { verifyWsToken } = await import("./wsAuth");
       const result = await verifyWsToken(queryToken);
+      console.log(`[VoiceGateway] Auth: token verify result = ${JSON.stringify(result)}`);
       if (result) return result;
+      console.warn(`[VoiceGateway] Auth: token verification FAILED — token may be expired or invalid`);
     }
-  } catch {}
+  } catch (tokenErr: any) {
+    console.error(`[VoiceGateway] Auth: token parsing error:`, tokenErr?.message || tokenErr);
+  }
+  // Fallback to cookie-based auth
   try {
+    const hasCookie = !!req.headers.cookie;
+    console.log(`[VoiceGateway] Auth: cookie present = ${hasCookie}`);
     const fakeReq = { headers: { cookie: req.headers.cookie || "" } } as any;
     const user = await sdk.authenticateRequest(fakeReq);
-    if (!user) return null;
+    if (!user) {
+      console.warn(`[VoiceGateway] Auth: cookie auth returned null user`);
+      return null;
+    }
+    console.log(`[VoiceGateway] Auth: cookie auth success, userId = ${user.id}`);
     return { userId: user.id, role: user.role, name: user.name || "User" };
   } catch (err: any) {
     console.error(`[VoiceGateway] Auth error:`, err?.message || err);
@@ -2145,7 +2160,30 @@ export function attachVoiceGateway(server: HttpServer) {
 
         // Connect to Gemini Live
         const geminiWs = connectToGeminiLive(client, connectionId);
+        if (!geminiWs) {
+          console.error(`[VoiceGateway] Failed to create Gemini connection for ${connectionId}`);
+          ws.send(JSON.stringify({ type: "error", error: "Voice service unavailable. Please check API configuration." }));
+          ws.close();
+          activeClients.delete(connectionId);
+          return;
+        }
         client.geminiWs = geminiWs;
+
+        // Timeout: if Gemini doesn't become ready within 15s, close and report error
+        const geminiTimeout = setTimeout(() => {
+          if (!client.isGeminiReady && client.ws.readyState === WebSocket.OPEN) {
+            console.error(`[VoiceGateway] Gemini connection timeout for ${connectionId}`);
+            client.ws.send(JSON.stringify({ type: "error", error: "Voice service timed out. Please try again." }));
+            client.ws.close();
+            if (client.geminiWs) client.geminiWs.close();
+            activeClients.delete(connectionId);
+          }
+        }, 15000);
+        // Clear timeout when Gemini becomes ready (store ref on client for cleanup)
+        const origOnMessage = geminiWs.listeners("message")[0] as ((...args: any[]) => void) | undefined;
+        geminiWs.on("message", () => { if (client.isGeminiReady) clearTimeout(geminiTimeout); });
+        geminiWs.on("error", () => clearTimeout(geminiTimeout));
+        geminiWs.on("close", () => clearTimeout(geminiTimeout));
 
         ws.send(JSON.stringify({ type: "session_started", sessionId: conversationId, dbSessionId, text: `Connecting to Hibba...` }));
         return;

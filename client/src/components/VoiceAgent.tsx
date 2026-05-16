@@ -159,31 +159,83 @@ class VoiceConnection {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     this.onStatusChange("connecting");
     try {
-      const tokenRes = await fetch("/api/voice/token", { credentials: "include" });
-      if (!tokenRes.ok) {
+      // Retry token fetch up to 3 times (handles Cloud Run cold starts / 503s)
+      let token: string | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          console.log(`[Voice] Token fetch attempt ${attempt + 1}`);
+          const tokenRes = await fetch("/api/voice/token", { credentials: "include" });
+          console.log(`[Voice] Token response: ${tokenRes.status}`);
+          if (tokenRes.ok) {
+            const data = await tokenRes.json();
+            token = data.token;
+            break;
+          }
+          if (tokenRes.status === 401) {
+            // Genuine auth failure — don't retry
+            console.error("[Voice] Auth failed (401) — cookie may be missing or expired");
+            this.onStatusChange("error");
+            toast.error("Authentication failed. Please log in again.");
+            return;
+          }
+          // 503 or other transient error — wait and retry
+          console.warn(`[Voice] Token fetch returned ${tokenRes.status}, retrying...`);
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        } catch (fetchErr) {
+          console.error(`[Voice] Token fetch error:`, fetchErr);
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      }
+      if (!token) {
+        console.error("[Voice] Failed to get token after 3 attempts");
         this.onStatusChange("error");
-        toast.error("Authentication failed. Please log in again.");
+        toast.error("Could not connect to voice service. Please try again.");
         return;
       }
-      const { token } = await tokenRes.json();
+
       const wsUrl = `${protocol}//${window.location.host}/api/voice?token=${encodeURIComponent(token)}`;
+      console.log(`[Voice] Opening WebSocket...`);
       this.ws = new WebSocket(wsUrl);
+
+      // Connection timeout — if no session_started within 15s, give up
+      const connectTimeout = setTimeout(() => {
+        if (!this.sessionId) {
+          console.error("[Voice] Connection timeout — no session_started received in 15s");
+          this.ws?.close();
+          this.onStatusChange("error");
+          toast.error("Voice service timed out. Please try again.");
+        }
+      }, 15000);
+
       this.ws.onopen = () => {
+        console.log("[Voice] WebSocket opened, sending start_session");
         this.ws?.send(JSON.stringify({ type: "start_session", screenContext, entityContext, language: language || "en-GB" }));
       };
       this.ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === "session_started") {
+            clearTimeout(connectTimeout);
             this.sessionId = msg.sessionId;
             this.onStatusChange("connected");
+            console.log("[Voice] Session started:", msg.sessionId);
           }
           this.onMessage(msg);
         } catch {}
       };
-      this.ws.onclose = () => { this.onStatusChange("disconnected"); this.sessionId = null; };
-      this.ws.onerror = () => { this.onStatusChange("error"); };
-    } catch {
+      this.ws.onclose = (ev) => {
+        clearTimeout(connectTimeout);
+        console.log(`[Voice] WebSocket closed: code=${ev.code} reason=${ev.reason}`);
+        this.onStatusChange("disconnected");
+        this.sessionId = null;
+      };
+      this.ws.onerror = (ev) => {
+        clearTimeout(connectTimeout);
+        console.error("[Voice] WebSocket error:", ev);
+        this.onStatusChange("error");
+      };
+    } catch (err) {
+      console.error("[Voice] Connect error:", err);
       this.onStatusChange("error");
     }
   }
