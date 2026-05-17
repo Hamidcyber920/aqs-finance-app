@@ -2430,3 +2430,7 @@
 - [x] Separate file selection (preview) from processing (upload+extract) with auto-trigger useEffect + manual Scan button fallback
 ## Bug Fix — AI extraction not populating receipt form fields (May 2026)
 - [x] Fix field name mismatch: AI returns vendorName/totalAmount/purchaseDate/items but form expects vendor/amount/description/date
+## Bug Fix — 503 Service Unavailable persists even with compression (May 2026)
+- [x] Implement direct-to-S3 upload from browser (directUpload.ts) bypassing server entirely
+- [x] Update Capture.tsx to use directUpload instead of /api/upload
+- [x] Update SmartUpload.tsx to use directUpload instead of /api/upload

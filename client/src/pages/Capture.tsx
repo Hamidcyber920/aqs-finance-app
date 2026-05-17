@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { compressImage } from "@/lib/compressImage";
+import { directUpload } from "@/lib/directUpload";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -131,32 +132,13 @@ export default function CapturePage() {
     setScanError(null);
 
     try {
-      // Compress image before upload to avoid 503 on Cloud Run (512MB RAM)
+      // Compress image before upload to avoid large files
       const compressed = await compressImage(file);
-      console.log("[Capture] Starting upload, file:", compressed.name, compressed.type, compressed.size, `(original: ${file.size})`);
-      const fd = new FormData();
-      fd.append("file", compressed);
-      const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
-      // Safari throws "The string did not match the expected pattern" on res.json()
-      // when response isn't valid JSON. Use text() + JSON.parse() defensively.
-      const resText = await res.text();
-      console.log("[Capture] Upload response status:", res.status, "body:", resText.substring(0, 200));
-      let data: any;
-      try {
-        data = JSON.parse(resText);
-      } catch (parseErr) {
-        console.error("[Capture] Failed to parse upload response:", resText.substring(0, 500));
-        throw new Error(`Upload error (${res.status}): ${resText.substring(0, 100) || "empty response"}`);
-      }
-      if (!res.ok) {
-        throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
-      }
-      const uploadUrl = data.url;
-      if (!uploadUrl) {
-        console.error("[Capture] Upload response missing url:", data);
-        throw new Error("Upload succeeded but no file URL returned");
-      }
-      console.log("[Capture] Upload success:", uploadUrl);
+      console.log("[Capture] Starting direct upload, file:", compressed.name, compressed.type, compressed.size, `(original: ${file.size})`);
+
+      // Upload directly to S3 from browser — bypasses server entirely to avoid 503 OOM
+      const { url: uploadUrl } = await directUpload(compressed, "receipts");
+      console.log("[Capture] Direct upload success:", uploadUrl);
 
       // AI extraction
       setUploading(false);
