@@ -325,6 +325,9 @@ export function HibbaVoice() {
   const userBufferRef = useRef("");
   const hibbaIdRef = useRef(0);
   const userIdRef = useRef(0);
+  // Track when Hibba is speaking to suppress echo in input transcription
+  const hibbaSpeakingRef = useRef(false);
+  const speakingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getToken = trpc.voice.getEphemeralToken.useMutation();
   const utils = trpc.useUtils();
@@ -440,12 +443,19 @@ export function HibbaVoice() {
                 (p: any) => p.inlineData?.mimeType?.startsWith("audio/")
               );
               if (audioParts?.length) {
+                // Mark Hibba as speaking to suppress echo in input transcription
+                hibbaSpeakingRef.current = true;
+                if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
                 for (const part of audioParts) {
                   if (part.inlineData?.data) {
                     if (!playerRef.current) playerRef.current = new AudioPlayer();
                     playerRef.current.play(part.inlineData.data);
                   }
                 }
+                // Keep suppressing for 1.5s after last audio chunk to handle trailing echo
+                speakingTimeoutRef.current = setTimeout(() => {
+                  hibbaSpeakingRef.current = false;
+                }, 1500);
               }
 
               // Handle Hibba's transcript (output)
@@ -453,6 +463,10 @@ export function HibbaVoice() {
               // Filter out control codes like <ctrl46> that Gemini sometimes emits
               const outputText = rawOutputText?.replace(/<ctrl\d+>/g, "").trim();
               if (outputText) {
+                // Add a space before appending if buffer doesn't end with space
+                if (hibbaBufferRef.current && !hibbaBufferRef.current.endsWith(" ")) {
+                  hibbaBufferRef.current += " ";
+                }
                 hibbaBufferRef.current += outputText;
                 const currentId = `hibba-${hibbaIdRef.current}`;
                 // Show the in-progress text
@@ -463,10 +477,14 @@ export function HibbaVoice() {
                 }
               }
 
-              // Handle user's transcript (input)
+              // Handle user's transcript (input) — suppress while Hibba is speaking (echo)
               const rawInputText = msg?.serverContent?.inputTranscription?.text;
               const inputText = rawInputText?.replace(/<ctrl\d+>/g, "").trim();
-              if (inputText) {
+              if (inputText && !hibbaSpeakingRef.current) {
+                // Add a space before appending if buffer doesn't end with space
+                if (userBufferRef.current && !userBufferRef.current.endsWith(" ")) {
+                  userBufferRef.current += " ";
+                }
                 userBufferRef.current += inputText;
                 const currentId = `user-${userIdRef.current}`;
                 upsertMessage(currentId, "user", userBufferRef.current.trim(), false);
@@ -478,12 +496,18 @@ export function HibbaVoice() {
               // Handle interruption (barge-in)
               if (msg?.serverContent?.interrupted) {
                 playerRef.current?.interrupt();
+                // Stop echo suppression since Hibba was interrupted
+                hibbaSpeakingRef.current = false;
+                if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
                 // Finalize any in-progress Hibba message
                 flushBuffer("hibba");
               }
 
               // Handle turn complete — finalize any remaining buffer
               if (msg?.serverContent?.turnComplete) {
+                // Stop echo suppression on turn complete
+                hibbaSpeakingRef.current = false;
+                if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
                 flushBuffer("hibba");
                 flushBuffer("user");
               }

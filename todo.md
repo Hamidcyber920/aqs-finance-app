@@ -2370,3 +2370,5 @@
 - [x] Add staff directory tool (get_staff_directory)
 - [ ] Add scan receipt trigger tool (scan_receipt — opens scanner)
 - [ ] Add form fill tool (fill_form — fills form fields by voice)
+- [x] Fix: Hibba's speech being echoed back as "YOU" messages (suppress input transcription while Hibba is speaking)
+- [x] Fix: Words running together in transcript display (add spaces between buffered chunks)
