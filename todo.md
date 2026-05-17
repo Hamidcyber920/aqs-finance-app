@@ -2361,3 +2361,12 @@
 - [x] Server-side hibbaTools router with protected read-only queries
 - [ ] Test each tool addition incrementally — rollback if crash
 - [x] Fix: filter out <ctrl46> control codes from Gemini output/input transcription display
+
+## Hibba Abilities — Round 2 (May 17 2026)
+- [x] Add prayer times tool (get_prayer_times for Liverpool)
+- [x] Add fundraising campaign status tool (get_fundraising_campaigns)
+- [x] Add trustees tool (get_trustees)
+- [x] Add Friday collections tool (get_friday_collections)
+- [x] Add staff directory tool (get_staff_directory)
+- [ ] Add scan receipt trigger tool (scan_receipt — opens scanner)
+- [ ] Add form fill tool (fill_form — fills form fields by voice)

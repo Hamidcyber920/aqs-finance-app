@@ -184,6 +184,37 @@ const HIBBA_TOOLS = [{
         required: ["month", "year"],
       },
     },
+    {
+      name: "get_prayer_times",
+      description: "Get today's Islamic prayer times for Liverpool UK. Use when user asks about prayer times, salah, Fajr, Dhuhr, Asr, Maghrib, Isha, or next prayer.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "get_fundraising_campaigns",
+      description: "Get fundraising campaign statuses. Use when user asks about campaigns, fundraising progress, or targets.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "get_trustees",
+      description: "Get the list of current trustees. Use when user asks about trustees, board members, or governance.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "get_friday_collections",
+      description: "Get recent Friday Jumu'ah collection amounts. Use when user asks about Friday collections or Jumu'ah donations.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          limit: { type: "NUMBER" as const, description: "Number of results 1-20, default 5" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "get_staff_directory",
+      description: "Get the staff and user directory. Use when user asks about staff, employees, team members, or who works here.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
   ],
 }];
 
@@ -256,9 +287,16 @@ You have access to these tools. ALWAYS use them to get real data — NEVER make 
 6. query_payroll(month?, year?, limit?) — Look up payroll records.
 7. query_income(limit?) — Look up income records.
 8. get_monthly_expense_total(month, year) — Get total expenses for a specific month.
+9. get_prayer_times() — Get today's prayer times for Liverpool. Use for salah queries and morning briefings.
+10. get_fundraising_campaigns() — Get all fundraising campaigns with progress.
+11. get_trustees() — Get the current trustee board list.
+12. get_friday_collections(limit?) — Get recent Jumu'ah collection amounts.
+13. get_staff_directory() — Get staff/user directory.
 
 When the user asks about data, ALWAYS call the appropriate tool first. Summarise results concisely in 2-3 sentences with key £ figures.
 After navigating, briefly confirm where you took them.
+For prayer times, tell them the next upcoming prayer and its time.
+For the morning briefing, use get_prayer_times + get_dashboard_summary together.
 `;
 
 /** Detect if a string ends with sentence-ending punctuation */
@@ -573,6 +611,33 @@ export function HibbaVoice() {
               month: Number(fc.args?.month),
               year: Number(fc.args?.year),
             });
+            result = data;
+            break;
+          }
+          case "get_prayer_times": {
+            const data = await utils.client.hibbaTools.prayerTimes.query();
+            result = data;
+            break;
+          }
+          case "get_fundraising_campaigns": {
+            const data = await utils.client.hibbaTools.fundraisingCampaigns.query();
+            result = data;
+            break;
+          }
+          case "get_trustees": {
+            const data = await utils.client.hibbaTools.trustees.query();
+            result = data;
+            break;
+          }
+          case "get_friday_collections": {
+            const data = await utils.client.hibbaTools.fridayCollections.query({
+              limit: fc.args?.limit ? Number(fc.args.limit) : 5,
+            });
+            result = data;
+            break;
+          }
+          case "get_staff_directory": {
+            const data = await utils.client.hibbaTools.staffDirectory.query();
             result = data;
             break;
           }

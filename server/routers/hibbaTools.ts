@@ -12,6 +12,10 @@ import {
   getPayrollRecords,
   getIncomeRecords,
   getMonthlyTotal,
+  getFundraisingCampaigns,
+  getTrustees,
+  getFridayCollections,
+  listAllUsers,
 } from "../db";
 
 export const hibbaToolsRouter = router({
@@ -161,6 +165,116 @@ export const hibbaToolsRouter = router({
           netPay: r.netPay,
           paymentMethod: r.paymentMethod,
           paymentStatus: r.paymentStatus,
+        })),
+      };
+    }),
+
+  /**
+   * Get prayer times for Liverpool from Aladhan API
+   */
+  prayerTimes: protectedProcedure
+    .query(async () => {
+      try {
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, "0");
+        const mm = String(today.getMonth() + 1).padStart(2, "0");
+        const yyyy = today.getFullYear();
+        const res = await fetch(
+          `https://api.aladhan.com/v1/timingsByCity/${dd}-${mm}-${yyyy}?city=Liverpool&country=United+Kingdom&method=2`
+        );
+        const json = await res.json();
+        if (json.code === 200 && json.data?.timings) {
+          const t = json.data.timings;
+          return {
+            fajr: t.Fajr,
+            sunrise: t.Sunrise,
+            dhuhr: t.Dhuhr,
+            asr: t.Asr,
+            maghrib: t.Maghrib,
+            isha: t.Isha,
+            date: json.data.date?.readable || `${dd}-${mm}-${yyyy}`,
+            hijriDate: json.data.date?.hijri?.date || null,
+          };
+        }
+        return { error: "Could not fetch prayer times" };
+      } catch (e: any) {
+        return { error: e?.message || "Prayer times API unavailable" };
+      }
+    }),
+
+  /**
+   * Get fundraising campaigns
+   */
+  fundraisingCampaigns: protectedProcedure
+    .query(async () => {
+      const campaigns = await getFundraisingCampaigns();
+      return {
+        total: campaigns.length,
+        campaigns: campaigns.slice(0, 10).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          targetAmount: c.targetAmount,
+          currentAmount: c.currentAmount,
+          status: c.status,
+          startDate: c.startDate,
+          endDate: c.endDate,
+        })),
+      };
+    }),
+
+  /**
+   * Get trustees list
+   */
+  trustees: protectedProcedure
+    .query(async () => {
+      const trustees = await getTrustees(true);
+      return {
+        total: trustees.length,
+        trustees: trustees.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          role: t.role,
+          email: t.email,
+          phone: t.phone,
+          status: t.status,
+        })),
+      };
+    }),
+
+  /**
+   * Get Friday collections
+   */
+  fridayCollections: protectedProcedure
+    .input(z.object({
+      limit: z.number().min(1).max(20).default(5),
+    }).optional())
+    .query(async ({ input }) => {
+      const collections = await getFridayCollections(input?.limit ?? 5);
+      return {
+        total: collections.length,
+        collections: collections.map((c: any) => ({
+          id: c.id,
+          date: c.date,
+          amount: c.amount,
+          notes: c.notes,
+        })),
+      };
+    }),
+
+  /**
+   * Get staff directory
+   */
+  staffDirectory: protectedProcedure
+    .query(async () => {
+      const { users } = await listAllUsers(50, 0);
+      return {
+        total: users.length,
+        staff: users.map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          isActive: u.isActive,
         })),
       };
     }),
