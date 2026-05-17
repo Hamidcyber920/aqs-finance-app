@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
+import { RouteGuard } from "./components/RouteGuard";
 
 // ─── Lazy-loaded page components (code-split) ───────────────────────────────
 const CapturePage = lazy(() => import("./pages/Capture"));
@@ -109,6 +110,7 @@ function Router() {
 
   return (
     <DashboardLayout>
+      <RouteGuard>
       <Suspense fallback={<PageLoader />}>
         <Switch>
           {/* ── DAILY ── */}
@@ -192,6 +194,7 @@ function Router() {
           <Route component={NotFound} />
         </Switch>
       </Suspense>
+      </RouteGuard>
     </DashboardLayout>
   );
 }

@@ -2402,3 +2402,9 @@
 - [x] Mobile sidebar: drawer-slide from left, identical structure to desktop
 - [x] Verify all old URLs still work and land on correct tab — all routes preserved in App.tsx
 - [x] Produce changelog of every menu item change — see below
+
+## Route Permission Guards (May 2026)
+- [x] Create RouteGuard component that checks user role against allowed roles for each route
+- [x] Create "You don't have access" page component — clean, graceful denial (ShieldX icon, message, Go to Dashboard button)
+- [x] Define route-to-role permission mapping matching sidebar visibleTo arrays (routePermissions.ts — single source of truth)
+- [x] Wrap restricted routes in App.tsx with RouteGuard

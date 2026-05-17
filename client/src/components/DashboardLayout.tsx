@@ -33,16 +33,10 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { HibbaVoice } from "./HibbaVoice";
 import { trpc } from "@/lib/trpc";
+import { getRoleCategory, type RoleCategory } from "@/lib/routePermissions";
 
 // ─── Role types ─────────────────────────────────────────────────────────────
 type Role = "superadmin" | "trustee" | "manager" | "assistant" | "volunteer" | "admin" | "user";
-
-// Map roles to the brief's three categories
-function getRoleCategory(role?: string | null): "superadmin" | "trustee" | "staff" {
-  if (role === "superadmin" || role === "admin") return "superadmin";
-  if (role === "trustee") return "trustee";
-  return "staff"; // manager, assistant, volunteer, user
-}
 
 // ─── Navigation definition ──────────────────────────────────────────────────
 type NavSection = {
@@ -64,12 +58,12 @@ const NAVIGATION: NavSection[] = [
     items: [
       { icon: Camera, label: "Scan Receipt", path: "/", visibleTo: ["superadmin", "staff"] },
       { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", visibleTo: ["superadmin", "trustee", "staff"] },
+      { icon: Receipt, label: "My Expenses", path: "/receipts", visibleTo: ["superadmin", "staff"] },
     ],
   },
   {
     label: "FINANCE",
     items: [
-      { icon: Receipt, label: "My Expenses", path: "/receipts", visibleTo: ["superadmin", "staff"] },
       { icon: DollarSign, label: "Income & Rentals", path: "/income", visibleTo: ["superadmin", "trustee", "staff"] },
       { icon: ClipboardList, label: "Monthly Expenses", path: "/monthly-expenses", visibleTo: ["superadmin", "staff"] },
       { icon: Zap, label: "Bills & Utilities", path: "/bills-utilities", visibleTo: ["superadmin"], badgeKey: "bills" },
