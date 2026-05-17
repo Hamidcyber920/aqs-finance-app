@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { compressImage } from "@/lib/compressImage";
-import { directUpload } from "@/lib/directUpload";
+
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -365,10 +365,20 @@ export function SmartUpload({
     }
     setUploading(true);
     try {
-      // Compress images before upload
+      // Compress images before upload to reduce file size
       const processedFile = await compressImage(file);
-      // Upload directly to S3 from browser — bypasses server to avoid 503 OOM
-      const { url: fileUrl } = await directUpload(processedFile, `smart-upload/${moduleType}`);
+      const formData = new FormData();
+      formData.append("file", processedFile);
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text().catch(() => "");
+        throw new Error(`Upload failed (${uploadRes.status}): ${errText.substring(0, 100)}`);
+      }
+      const uploadText = await uploadRes.text();
+      let uploadData: any;
+      try { uploadData = JSON.parse(uploadText); } catch { throw new Error("Upload returned invalid response"); }
+      const fileUrl = uploadData.url;
+      if (!fileUrl) throw new Error("Upload succeeded but no URL returned");
       setUploading(false);
       setExtracting(true);
       const mimeType = file.type || (file.name.endsWith(".csv") ? "text/csv" : "application/octet-stream");

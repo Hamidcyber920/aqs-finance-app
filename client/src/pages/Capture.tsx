@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { compressImage } from "@/lib/compressImage";
-import { directUpload } from "@/lib/directUpload";
+// Server upload via /api/upload (server has correct S3 credentials)
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -132,13 +132,28 @@ export default function CapturePage() {
     setScanError(null);
 
     try {
-      // Compress image before upload to avoid large files
+      // Compress image before upload to reduce from 3-8MB to ~200-400KB
       const compressed = await compressImage(file);
-      console.log("[Capture] Starting direct upload, file:", compressed.name, compressed.type, compressed.size, `(original: ${file.size})`);
+      console.log("[Capture] Compressed:", compressed.name, compressed.type, (compressed.size / 1024).toFixed(0) + "KB", `(original: ${(file.size / 1024).toFixed(0)}KB)`);
 
-      // Upload directly to S3 from browser — bypasses server entirely to avoid 503 OOM
-      const { url: uploadUrl } = await directUpload(compressed, "receipts");
-      console.log("[Capture] Direct upload success:", uploadUrl);
+      // Upload to server which forwards to S3
+      const formData = new FormData();
+      formData.append("file", compressed, compressed.name);
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text().catch(() => uploadRes.statusText);
+        throw new Error(`Upload failed (${uploadRes.status}): ${errText.substring(0, 100)}`);
+      }
+      const uploadJson = await uploadRes.text();
+      let uploadData: any;
+      try { uploadData = JSON.parse(uploadJson); } catch { throw new Error("Server returned invalid response: " + uploadJson.substring(0, 80)); }
+      const uploadUrl = uploadData.url;
+      if (!uploadUrl) throw new Error("Upload succeeded but no URL returned");
+      console.log("[Capture] Upload success:", uploadUrl);
 
       // AI extraction
       setUploading(false);

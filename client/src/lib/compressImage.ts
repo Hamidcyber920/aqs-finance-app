@@ -1,95 +1,137 @@
 /**
  * Client-side image compression for mobile uploads.
- * Resizes large photos (e.g., iPhone 12MP = 4032x3024) to a max dimension
- * and compresses to JPEG to reduce file size from 3-8MB to under 1MB.
+ * Aggressively compresses iPhone photos (3-8MB HEIC/JPEG) to under 500KB.
+ * This is critical because the server has limited memory (512MB Cloud Run).
+ *
+ * For OCR/receipt scanning, 800px max dimension at 0.6 quality is more than sufficient.
  */
 
-const MAX_DIMENSION = 1600; // px — enough for AI OCR while keeping file small
-const JPEG_QUALITY = 0.7;
-const MAX_FILE_SIZE = 1.5 * 1024 * 1024; // 1.5MB target
+const MAX_DIMENSION = 800; // Max width or height in pixels
+const JPEG_QUALITY = 0.6; // JPEG compression quality
+const TARGET_SIZE = 500 * 1024; // Target max 500KB
+const RETRY_QUALITY = 0.4; // Retry quality if still too large
 
 export async function compressImage(file: File): Promise<File> {
-  // Skip non-image files
+  // Skip non-images (PDFs, CSVs)
   if (!file.type.startsWith("image/")) {
     return file;
   }
 
-  // Skip already small files (< 1MB)
-  if (file.size < 1 * 1024 * 1024) {
+  // Skip already small files (under 200KB)
+  if (file.size < 200 * 1024) {
     return file;
   }
 
-  return new Promise<File>((resolve, reject) => {
+  // Try createImageBitmap first (better iOS/HEIC support in modern Safari)
+  if (typeof createImageBitmap === "function" && typeof OffscreenCanvas !== "undefined") {
+    try {
+      return await compressWithBitmap(file);
+    } catch (err) {
+      console.warn("[Compress] createImageBitmap failed, trying fallback:", err);
+    }
+  }
+
+  // Fallback: traditional Image + canvas
+  return compressFallback(file);
+}
+
+async function compressWithBitmap(file: File): Promise<File> {
+  const bitmap = await createImageBitmap(file);
+  const { width, height } = bitmap;
+
+  // Calculate new dimensions
+  let newWidth = width;
+  let newHeight = height;
+  if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+    const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+    newWidth = Math.round(width * ratio);
+    newHeight = Math.round(height * ratio);
+  }
+
+  // Draw to OffscreenCanvas
+  const canvas = new OffscreenCanvas(newWidth, newHeight);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    bitmap.close();
+    throw new Error("No canvas context");
+  }
+  ctx.drawImage(bitmap, 0, 0, newWidth, newHeight);
+  bitmap.close();
+
+  // Convert to JPEG blob
+  let blob = await canvas.convertToBlob({ type: "image/jpeg", quality: JPEG_QUALITY });
+
+  // If still too large, retry with lower quality
+  if (blob.size > TARGET_SIZE) {
+    blob = await canvas.convertToBlob({ type: "image/jpeg", quality: RETRY_QUALITY });
+  }
+
+  const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+
+  console.log(`[Compress] ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB, ${newWidth}x${newHeight}`);
+  return compressed;
+}
+
+/**
+ * Fallback compression using Image element + canvas.
+ * Works on older Safari where createImageBitmap/OffscreenCanvas may not be available.
+ */
+function compressFallback(file: File): Promise<File> {
+  return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
 
     img.onload = () => {
       URL.revokeObjectURL(url);
+      const { width, height } = img;
 
-      let { width, height } = img;
-
-      // Calculate new dimensions maintaining aspect ratio
+      let newWidth = width;
+      let newHeight = height;
       if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-        if (width > height) {
-          height = Math.round((height * MAX_DIMENSION) / width);
-          width = MAX_DIMENSION;
-        } else {
-          width = Math.round((width * MAX_DIMENSION) / height);
-          height = MAX_DIMENSION;
-        }
+        const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+        newWidth = Math.round(width * ratio);
+        newHeight = Math.round(height * ratio);
       }
 
-      // Draw to canvas
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = newWidth;
+      canvas.height = newHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
-        resolve(file); // fallback to original
+        resolve(file);
         return;
       }
-      ctx.drawImage(img, 0, 0, width, height);
+      ctx.drawImage(img, 0, 0, newWidth, newHeight);
 
-      // Convert to blob with compression
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            resolve(file); // fallback to original
+            resolve(file);
             return;
           }
-
-          // If still too large, try lower quality
-          if (blob.size > MAX_FILE_SIZE) {
+          // If still too large, retry with lower quality
+          if (blob.size > TARGET_SIZE) {
             canvas.toBlob(
               (blob2) => {
-                if (!blob2) {
-                  resolve(file);
-                  return;
-                }
-                const compressed = new File(
-                  [blob2],
-                  file.name.replace(/\.[^.]+$/, ".jpg"),
-                  { type: "image/jpeg", lastModified: Date.now() }
-                );
-                console.log(
-                  `[Compress] ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB (quality: 0.5)`
-                );
+                if (!blob2) { resolve(file); return; }
+                const compressed = new File([blob2], file.name.replace(/\.[^.]+$/, ".jpg"), {
+                  type: "image/jpeg", lastModified: Date.now(),
+                });
+                console.log(`[Compress/fallback] ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`);
                 resolve(compressed);
               },
               "image/jpeg",
-              0.5
+              RETRY_QUALITY
             );
             return;
           }
-
-          const compressed = new File(
-            [blob],
-            file.name.replace(/\.[^.]+$/, ".jpg"),
-            { type: "image/jpeg", lastModified: Date.now() }
-          );
-          console.log(
-            `[Compress] ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB (quality: ${JPEG_QUALITY})`
-          );
+          const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+            type: "image/jpeg", lastModified: Date.now(),
+          });
+          console.log(`[Compress/fallback] ${(file.size / 1024).toFixed(0)}KB → ${(compressed.size / 1024).toFixed(0)}KB`);
           resolve(compressed);
         },
         "image/jpeg",
@@ -99,7 +141,7 @@ export async function compressImage(file: File): Promise<File> {
 
     img.onerror = () => {
       URL.revokeObjectURL(url);
-      // Can't load image (e.g., HEIC not supported by canvas) — return original
+      console.warn("[Compress/fallback] Image decode failed, returning original file");
       resolve(file);
     };
 

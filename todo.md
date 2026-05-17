@@ -2434,3 +2434,8 @@
 - [x] Implement direct-to-S3 upload from browser (directUpload.ts) bypassing server entirely
 - [x] Update Capture.tsx to use directUpload instead of /api/upload
 - [x] Update SmartUpload.tsx to use directUpload instead of /api/upload
+## Rebuild — Scanner/Capture page from scratch (May 2026)
+- [x] Revert SmartUpload.tsx to working server-based upload (undo direct upload that may have broken other sections)
+- [x] Rebuild Capture.tsx scanner to use server /api/upload with client-side compression (not direct upload)
+- [x] Test build compiles cleanly
+- [ ] Verify scanner works end-to-end (user testing required)
