@@ -215,6 +215,30 @@ const HIBBA_TOOLS = [{
       description: "Get the staff and user directory. Use when user asks about staff, employees, team members, or who works here.",
       parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
     },
+    {
+      name: "open_scanner",
+      description: "Open the receipt/document scanner. Use when user says 'scan a receipt', 'upload a bill', 'take a photo of a receipt', 'I need to scan something', or similar.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          doc_type: { type: "STRING" as const, description: "Document type: receipt, collection_sheet, business_card, bank_transfer, donor_form. Default: receipt" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "fill_form",
+      description: "Fill form fields on the current page by voice. Use when user dictates data like 'set the amount to 500', 'the vendor is Tesco', 'donor name is Ahmed Khan', 'set salary to 2500'. Extract field names and values from what the user says.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          fields: { type: "STRING" as const, description: "JSON string of field-value pairs to fill, e.g. '{\"amount\":\"500\",\"vendor\":\"Tesco\",\"category\":\"Groceries\"}'. Use camelCase field names." },
+          page: { type: "STRING" as const, description: "The page path where the form is, e.g. '/receipts', '/payroll', '/donors'. Use current page if not specified." },
+          action: { type: "STRING" as const, description: "'fill' to just fill fields, 'fill_and_confirm' to fill and submit. Default: fill" },
+        },
+        required: ["fields"],
+      },
+    },
   ],
 }];
 
@@ -292,6 +316,8 @@ You have access to these tools. ALWAYS use them to get real data — NEVER make 
 11. get_trustees() — Get the current trustee board list.
 12. get_friday_collections(limit?) — Get recent Jumu'ah collection amounts.
 13. get_staff_directory() — Get staff/user directory.
+14. open_scanner(doc_type?) — Open the document scanner/camera. Use when user wants to scan or upload a receipt, bill, collection sheet, business card, etc.
+15. fill_form(fields, page?, action?) — Fill form fields on the current page. Extract field names and values from what the user says. fields is a JSON object of key-value pairs.
 
 When the user asks about data, ALWAYS call the appropriate tool first. Summarise results concisely in 2-3 sentences with key £ figures.
 After navigating, briefly confirm where you took them.
@@ -663,6 +689,34 @@ export function HibbaVoice() {
           case "get_staff_directory": {
             const data = await utils.client.hibbaTools.staffDirectory.query();
             result = data;
+            break;
+          }
+          case "open_scanner": {
+            const docType = fc.args?.doc_type || "receipt";
+            // Navigate to the capture page
+            setLocation("/capture");
+            // Dispatch event so the Capture page can auto-select the doc type
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent("hibba:open_scanner", { detail: { docType } }));
+            }, 300);
+            result = { success: true, message: `Scanner opened for ${docType}. User can now take a photo or upload a file.` };
+            break;
+          }
+          case "fill_form": {
+            try {
+              const fieldsStr = fc.args?.fields || "{}";
+              const fields = typeof fieldsStr === "string" ? JSON.parse(fieldsStr) : fieldsStr;
+              const page = fc.args?.page || window.location.pathname;
+              const action = fc.args?.action || "fill";
+              // Dispatch the form fill event that useHibbaFormFill listens for
+              window.dispatchEvent(new CustomEvent("hibba:fill_form", {
+                detail: { fields, page, action }
+              }));
+              const fieldNames = Object.keys(fields).join(", ");
+              result = { success: true, message: `Filled fields: ${fieldNames} on ${page}` };
+            } catch (parseErr) {
+              result = { error: "Could not parse form fields. Please try again." };
+            }
             break;
           }
           default:
