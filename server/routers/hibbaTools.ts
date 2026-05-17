@@ -9,6 +9,7 @@ import {
   listReceipts,
   getLoans,
   getDonors,
+  getDonorById,
   getPayrollRecords,
   getIncomeRecords,
   getMonthlyTotal,
@@ -17,6 +18,11 @@ import {
   getFridayCollections,
   listAllUsers,
 } from "../db";
+import {
+  getAllTenants,
+  getOverdueRentPayments,
+  getUpcomingRentDue,
+} from "../db.accommodation";
 
 export const hibbaToolsRouter = router({
   /**
@@ -276,6 +282,124 @@ export const hibbaToolsRouter = router({
           role: u.role,
           isActive: u.isActive,
         })),
+      };
+    }),
+
+  /**
+   * Get current user identity and role
+   */
+  getCurrentUser: protectedProcedure
+    .query(async ({ ctx }) => {
+      return {
+        id: ctx.user.id,
+        name: ctx.user.name,
+        email: ctx.user.email,
+        role: ctx.user.role,
+      };
+    }),
+
+  /**
+   * Search donors by name
+   */
+  searchDonors: protectedProcedure
+    .input(z.object({
+      nameOrId: z.string(),
+      limit: z.number().min(1).max(10).default(5),
+    }))
+    .query(async ({ input }) => {
+      // Try numeric ID first
+      const numId = parseInt(input.nameOrId);
+      if (!isNaN(numId)) {
+        const donor = await getDonorById(numId);
+        if (donor) return { total: 1, donors: [{ id: donor.id, name: donor.name, email: donor.email, phone: donor.phone, totalGiven: donor.totalGiven, isRegular: donor.isRegular, giftAid: donor.giftAid }] };
+      }
+      // Search by name
+      const donors = await getDonors({ search: input.nameOrId, limit: input.limit });
+      return {
+        total: donors.length,
+        donors: donors.map(d => ({
+          id: d.id,
+          name: d.name,
+          email: d.email,
+          phone: (d as any).phone,
+          totalGiven: d.totalGiven,
+          isRegular: d.isRegular,
+          giftAid: (d as any).giftAid,
+        })),
+      };
+    }),
+
+  /**
+   * Get accommodation status — tenants, overdue rent, upcoming rent
+   */
+  accommodationStatus: protectedProcedure
+    .query(async () => {
+      try {
+        const tenants = await getAllTenants();
+        const overdue = await getOverdueRentPayments();
+        const upcoming = await getUpcomingRentDue(7);
+        const activeTenants = tenants.filter((t: any) => t.status === "active");
+        return {
+          totalTenants: tenants.length,
+          activeTenants: activeTenants.length,
+          overduePayments: overdue.length,
+          overdueTotal: overdue.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0),
+          upcomingDue: upcoming.length,
+          tenants: activeTenants.slice(0, 10).map((t: any) => ({
+            name: t.fullName || t.name,
+            room: t.roomNumber,
+            monthlyRent: t.monthlyRent,
+            status: t.status,
+          })),
+        };
+      } catch {
+        return { error: "Accommodation data unavailable" };
+      }
+    }),
+
+  /**
+   * Get strategic briefing — combines dashboard, urgent items, prayer times
+   */
+  strategicBriefing: protectedProcedure
+    .query(async ({ ctx }) => {
+      const stats = await getDashboardStats();
+      const loans = await getLoans("active");
+      const campaigns = await getFundraisingCampaigns();
+      const activeCampaigns = campaigns.filter((c: any) => c.status === "active");
+      // Prayer times
+      let prayerTimes = null;
+      try {
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, "0");
+        const mm = String(today.getMonth() + 1).padStart(2, "0");
+        const yyyy = today.getFullYear();
+        const res = await fetch(`https://api.aladhan.com/v1/timingsByCity/${dd}-${mm}-${yyyy}?city=Liverpool&country=United+Kingdom&method=2`);
+        const json = await res.json();
+        if (json.code === 200) prayerTimes = json.data?.timings;
+      } catch { /* ignore */ }
+      return {
+        user: { name: ctx.user.name, role: ctx.user.role },
+        financials: stats ? {
+          totalExpenses: stats.totalExpenses,
+          totalIncome: stats.totalIncome,
+          activeLoanTotal: stats.activeLoanTotal,
+          activeLoanCount: stats.activeLoanCount,
+          pendingApprovals: stats.pendingApprovals,
+        } : null,
+        activeLoans: loans.length,
+        activeCampaigns: activeCampaigns.length,
+        campaignHighlights: activeCampaigns.slice(0, 3).map((c: any) => ({
+          name: c.name,
+          raised: c.currentAmount,
+          target: c.targetAmount,
+        })),
+        prayerTimes: prayerTimes ? {
+          fajr: prayerTimes.Fajr,
+          dhuhr: prayerTimes.Dhuhr,
+          asr: prayerTimes.Asr,
+          maghrib: prayerTimes.Maghrib,
+          isha: prayerTimes.Isha,
+        } : null,
       };
     }),
 

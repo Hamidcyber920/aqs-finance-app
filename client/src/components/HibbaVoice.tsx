@@ -239,6 +239,33 @@ const HIBBA_TOOLS = [{
         required: ["fields", "page"],
       },
     },
+    {
+      name: "get_current_user",
+      description: "Get the current logged-in user's identity, name, email, and role. Use when user asks 'who am I', 'what's my role', or you need to personalise a greeting.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "search_donors",
+      description: "Search for a specific donor by name or ID. Use when user asks about a specific person's donations, e.g. 'look up Ahmed Khan' or 'find donor 42'. Returns detailed donor info including gift aid status.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          name_or_id: { type: "STRING" as const, description: "Donor name or numeric ID to search for" },
+          limit: { type: "NUMBER" as const, description: "Max results 1-10, default 5" },
+        },
+        required: ["name_or_id"],
+      },
+    },
+    {
+      name: "get_accommodation_status",
+      description: "Get student accommodation status: active tenants, overdue rent, upcoming payments. Use when user asks about accommodation, tenants, rooms, or rent.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "get_strategic_briefing",
+      description: "Get a comprehensive strategic briefing combining financials, active loans, campaigns, and prayer times. Use when user says 'give me a briefing', 'morning update', 'status report', or at session start for Dr. Hamid.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
   ],
 }];
 
@@ -318,11 +345,16 @@ You have access to these tools. ALWAYS use them to get real data — NEVER make 
 13. get_staff_directory() — Get staff/user directory.
 14. open_scanner(doc_type?) — Open the document scanner/camera. Use when user wants to scan or upload a receipt, bill, collection sheet, business card, etc.
 15. fill_form(fields, page?, action?) — Fill form fields on the current page. Extract field names and values from what the user says. fields is a JSON object of key-value pairs.
+16. get_current_user() — Get the current user's identity, name, email, and role. Use to personalise greetings.
+17. search_donors(name_or_id, limit?) — Search for a specific donor by name or ID. Returns detailed info including gift aid status.
+18. get_accommodation_status() — Get student accommodation overview: tenants, overdue rent, upcoming payments.
+19. get_strategic_briefing() — Get a comprehensive briefing combining financials, loans, campaigns, and prayer times. Use for morning briefings or status reports.
 
 When the user asks about data, ALWAYS call the appropriate tool first. Summarise results concisely in 2-3 sentences with key £ figures.
 After navigating, briefly confirm where you took them.
 For prayer times, tell them the next upcoming prayer and its time.
-For the morning briefing, use get_prayer_times + get_dashboard_summary together.
+For the morning briefing, use get_strategic_briefing() for a comprehensive overview, or combine get_prayer_times + get_dashboard_summary.
+At session start, use get_current_user() to personalise the greeting, then offer a briefing.
 `;
 
 /** Detect if a string ends with sentence-ending punctuation */
@@ -724,6 +756,28 @@ export function HibbaVoice() {
             } catch (parseErr) {
               result = { error: "Could not parse form fields. Please try again." };
             }
+            break;
+          }
+          case "get_current_user": {
+            const user = await utils.hibbaTools.getCurrentUser.fetch();
+            result = user;
+            break;
+          }
+          case "search_donors": {
+            const nameOrId = fc.args?.name_or_id || fc.args?.nameOrId || "";
+            const limit = Number(fc.args?.limit) || 5;
+            const donors = await utils.hibbaTools.searchDonors.fetch({ nameOrId, limit });
+            result = donors;
+            break;
+          }
+          case "get_accommodation_status": {
+            const accomm = await utils.hibbaTools.accommodationStatus.fetch();
+            result = accomm;
+            break;
+          }
+          case "get_strategic_briefing": {
+            const briefing = await utils.hibbaTools.strategicBriefing.fetch();
+            result = briefing;
             break;
           }
           default:

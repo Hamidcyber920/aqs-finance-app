@@ -2372,3 +2372,9 @@
 - [x] Add form fill tool (fill_form — fills form fields by voice via useHibbaFormFill event dispatch)
 - [x] Fix: Hibba's speech being echoed back as "YOU" messages (suppress input transcription while Hibba is speaking)
 - [x] Fix: Words running together in transcript display (add spaces between buffered chunks)
+## Hibba Abilities — Round 3 (May 17 2026)
+- [x] Add get_current_user tool (personalise greetings by identity)
+- [x] Add search_donors tool (search by name/ID with gift aid status)
+- [x] Add get_accommodation_status tool (tenants, overdue rent, upcoming payments)
+- [x] Add get_strategic_briefing tool (comprehensive briefing combining all data)
+- [ ] Test all 19 tools on published site
