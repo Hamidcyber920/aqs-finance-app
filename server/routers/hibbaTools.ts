@@ -311,7 +311,7 @@ export const hibbaToolsRouter = router({
       const numId = parseInt(input.nameOrId);
       if (!isNaN(numId)) {
         const donor = await getDonorById(numId);
-        if (donor) return { total: 1, donors: [{ id: donor.id, name: donor.name, email: donor.email, phone: donor.phone, totalGiven: donor.totalGiven, isRegular: donor.isRegular, giftAid: donor.giftAid }] };
+        if (donor) return { total: 1, donors: [{ id: donor.id, name: donor.name, email: donor.email, phone: (donor as any).phone, totalGiven: donor.totalGiven, isRegular: donor.isRegular, giftAidDeclared: donor.giftAidDeclared }] };
       }
       // Search by name
       const donors = await getDonors({ search: input.nameOrId, limit: input.limit });
@@ -324,7 +324,7 @@ export const hibbaToolsRouter = router({
           phone: (d as any).phone,
           totalGiven: d.totalGiven,
           isRegular: d.isRegular,
-          giftAid: (d as any).giftAid,
+          giftAidDeclared: d.giftAidDeclared,
         })),
       };
     }),
