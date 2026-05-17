@@ -139,6 +139,7 @@ queryClient.getMutationCache().subscribe(event => {
 
 // Safari-safe fetch wrapper: Safari throws "The string did not match the expected pattern"
 // when response.json() is called on certain responses. We intercept and use text()+JSON.parse() instead.
+// Also handles non-JSON responses (e.g. 503 "Service Unavailable") gracefully.
 async function safariSafeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const res = await globalThis.fetch(input, {
     ...(init ?? {}),
@@ -151,7 +152,18 @@ async function safariSafeFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       if (prop === 'json') {
         return async () => {
           const text = await cloned.text();
-          return JSON.parse(text);
+          try {
+            return JSON.parse(text);
+          } catch (parseErr) {
+            // If the server returned non-JSON (e.g. 503 "Service Unavailable"),
+            // throw a clear error instead of a cryptic "Unexpected identifier" message
+            console.error("[safariSafeFetch] Non-JSON response:", target.status, text.substring(0, 200));
+            throw new Error(
+              target.status === 503
+                ? "Server is temporarily unavailable (503). Please wait a moment and try again."
+                : `Server error (${target.status}): ${text.substring(0, 100)}`
+            );
+          }
         };
       }
       const val = (target as any)[prop];

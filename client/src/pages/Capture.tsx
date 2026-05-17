@@ -124,8 +124,52 @@ export default function CapturePage() {
     }
   }, []);
 
+  // Helper: upload compressed image to /api/upload with retry for 503 (cold start)
+  const uploadWithRetry = useCallback(async (compressed: File, maxRetries = 2): Promise<string> => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const formData = new FormData();
+      formData.append("file", compressed, compressed.name);
+      console.log(`[Capture] Upload attempt ${attempt + 1}/${maxRetries + 1}`);
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      // Safari-safe: always use text() + JSON.parse() instead of response.json()
+      const uploadText = await uploadRes.text();
+      console.log("[Capture] Upload response:", uploadRes.status, uploadText.substring(0, 200));
+
+      if (uploadRes.status === 503 && attempt < maxRetries) {
+        // Server cold-starting or OOM — wait and retry
+        const delay = (attempt + 1) * 3000; // 3s, 6s
+        console.log(`[Capture] 503 — server warming up, retrying in ${delay / 1000}s...`);
+        toast.info("Server is warming up... retrying automatically");
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
+      if (!uploadRes.ok) {
+        throw new Error(
+          uploadRes.status === 503
+            ? "Server is temporarily unavailable. Please wait a moment and tap 'Scan with AI' again."
+            : `Upload failed (${uploadRes.status}): ${uploadText.substring(0, 100)}`
+        );
+      }
+
+      let uploadJson: any;
+      try {
+        uploadJson = JSON.parse(uploadText);
+      } catch {
+        throw new Error(`Server returned invalid response: ${uploadText.substring(0, 100)}`);
+      }
+      const url = uploadJson.url;
+      if (!url) throw new Error("Upload succeeded but no URL returned");
+      return url;
+    }
+    throw new Error("Upload failed after retries. Please try again.");
+  }, []);
+
   // Step 2: Upload + AI extraction — triggered automatically or by button tap
-  const uploadBase64Mutation = trpc.documents.uploadBase64.useMutation();
   const processFile = useCallback(async (file: File) => {
     if (uploading || analyzing) return; // prevent double-tap
     setUploading(true);
@@ -137,27 +181,8 @@ export default function CapturePage() {
       const compressed = await compressImage(file);
       console.log("[Capture] Compressed:", compressed.name, compressed.type, (compressed.size / 1024).toFixed(0) + "KB", `(original: ${(file.size / 1024).toFixed(0)}KB)`);
 
-      // Convert to base64 (avoids multipart/multer which crashes on Cloud Run)
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          // Strip the data:...;base64, prefix
-          const base64Data = result.split(',')[1] || result;
-          resolve(base64Data);
-        };
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsDataURL(compressed);
-      });
-
-      // Upload via tRPC (regular JSON body, no multipart)
-      const uploadResult = await uploadBase64Mutation.mutateAsync({
-        base64,
-        mimeType: compressed.type || 'image/jpeg',
-        fileName: compressed.name,
-      });
-      const uploadUrl = uploadResult.url;
-      if (!uploadUrl) throw new Error("Upload succeeded but no URL returned");
+      // Upload with automatic retry for 503 (cold start)
+      const uploadUrl = await uploadWithRetry(compressed);
       console.log("[Capture] Upload success:", uploadUrl);
 
       // AI extraction
@@ -199,13 +224,17 @@ export default function CapturePage() {
     } catch (err: any) {
       console.error("[Capture] Process error:", err);
       const msg = err?.message || "Could not process document";
-      setScanError(msg);
-      toast.error(msg);
+      // Make 503 errors more user-friendly
+      const friendlyMsg = msg.includes("503") || msg.includes("temporarily unavailable")
+        ? "Server is busy — please tap 'Scan with AI' to try again"
+        : msg;
+      setScanError(friendlyMsg);
+      toast.error(friendlyMsg);
     } finally {
       setUploading(false);
       setAnalyzing(false);
     }
-  }, [uploading, analyzing, docType, extractMutation, setValue, checkCrmByPhone]);
+  }, [uploading, analyzing, docType, extractMutation, setValue, checkCrmByPhone, uploadWithRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-trigger processing when a file is selected
   const hasTriggeredRef = useRef(false);

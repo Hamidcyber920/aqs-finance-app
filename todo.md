@@ -2446,3 +2446,10 @@
 - [x] Rebuild Capture.tsx processFile to compress, convert to base64, send via tRPC
 - [x] Test build compiles and works locally
 - [ ] Verify scanner works end-to-end on deployed site (user to test on iPhone)
+
+## Bug Fix — JSON Parse error "Unexpected identifier Service" on iOS Safari (May 2026)
+- [x] Fix: switched from base64 tRPC to /api/upload with retry logic for 503 errors
+- [x] Add robust error handling for non-JSON responses in safariSafeFetch and Capture.tsx
+- [x] safariSafeFetch: catch JSON.parse errors and show clear "Server unavailable" message instead of cryptic parse error
+- [x] Capture.tsx: uploadWithRetry helper with auto-retry (3s, 6s delays) for 503 cold-start errors
+- [x] Capture.tsx: user-friendly error messages for 503 errors

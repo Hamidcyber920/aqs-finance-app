@@ -5,7 +5,7 @@ import { sdk } from "./_core/sdk";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 16 * 1024 * 1024 }, // 16MB — client compresses but keep generous limit as fallback
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB — client compresses images to ~400KB; higher limit for PDFs via SmartUpload
 });
 
 export const uploadRouter = express.Router();
