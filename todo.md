@@ -2417,6 +2417,12 @@
 ## Bug Fix — Receipt AI extraction not working for staff role (May 2026)
 - [x] Change documents.extract from seniorProcedure to protectedProcedure so all logged-in users can scan receipts
 - [x] Improve error handling in Capture.tsx so upload/extract failures show clear error messages instead of silently failing
+## Bug Fix — 503 Service Unavailable on iOS photo upload (May 2026)
+- [x] Add client-side image compression (compressImage.ts) to reduce iPhone photos from 3-8MB to <1MB before upload
+- [x] Apply compression in Capture.tsx processFile before upload
+- [x] Apply compression in SmartUpload.tsx before upload
+- [x] Reduce multer limit from 16MB to 5MB and express.json from 50MB to 10MB to prevent OOM
+
 ## Bug Fix — Safari "string did not match expected pattern" on upload response (May 2026)
 - [x] Fix Safari res.json() crash — use defensive text() + JSON.parse() in Capture.tsx processFile
 - [x] Fix Safari res.json() crash in SmartUpload.tsx upload fetch

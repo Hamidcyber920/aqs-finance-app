@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { compressImage } from "@/lib/compressImage";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
@@ -363,10 +364,12 @@ export function SmartUpload({
     }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "bin";
+      // Compress images before upload to avoid 503 on Cloud Run
+      const processedFile = await compressImage(file);
+      const ext = processedFile.name.split(".").pop() || "bin";
       const key = `smart-upload/${moduleType}-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", processedFile);
       formData.append("key", key);
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
       let fileUrl: string;

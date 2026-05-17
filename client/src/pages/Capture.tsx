@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
+import { compressImage } from "@/lib/compressImage";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -130,10 +131,11 @@ export default function CapturePage() {
     setScanError(null);
 
     try {
-      // Upload file to S3
-      console.log("[Capture] Starting upload, file:", file.name, file.type, file.size);
+      // Compress image before upload to avoid 503 on Cloud Run (512MB RAM)
+      const compressed = await compressImage(file);
+      console.log("[Capture] Starting upload, file:", compressed.name, compressed.type, compressed.size, `(original: ${file.size})`);
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("file", compressed);
       const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
       // Safari throws "The string did not match the expected pattern" on res.json()
       // when response isn't valid JSON. Use text() + JSON.parse() defensively.

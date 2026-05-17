@@ -5,7 +5,7 @@ import { sdk } from "./_core/sdk";
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 16 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB — images compressed on client
 });
 
 export const uploadRouter = express.Router();
