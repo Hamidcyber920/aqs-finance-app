@@ -2408,3 +2408,6 @@
 - [x] Create "You don't have access" page component — clean, graceful denial (ShieldX icon, message, Go to Dashboard button)
 - [x] Define route-to-role permission mapping matching sidebar visibleTo arrays (routePermissions.ts — single source of truth)
 - [x] Wrap restricted routes in App.tsx with RouteGuard
+
+## Bug Fix — Missing reconciliation.markPaymentPaid procedure (May 2026)
+- [x] Fix "No procedure found on path reconciliation.markPaymentPaid" error — was calling markPaymentPaid instead of markPaid

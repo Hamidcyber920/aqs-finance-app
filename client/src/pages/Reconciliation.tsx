@@ -47,7 +47,7 @@ export default function ReconciliationPage() {
     onSuccess: () => { toast.success("Bank balance saved"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const markPaidMutation = (trpc.reconciliation as any).markPaymentPaid?.useMutation?.({
+  const markPaidMutation = (trpc.reconciliation as any).markPaid?.useMutation?.({
     onSuccess: () => { toast.success("Payment marked"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
