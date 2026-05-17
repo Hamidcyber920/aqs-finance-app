@@ -94,7 +94,9 @@ export default function CapturePage() {
     setCheckingCrm(true);
     try {
       const res = await fetch(`/api/trpc/crm.matchByPhone?input=${encodeURIComponent(JSON.stringify({ phone }))}`, { credentials: "include" });
-      const json = await res.json();
+      const text = await res.text();
+      let json: any = null;
+      try { json = JSON.parse(text); } catch { /* ignore parse errors */ }
       setCrmMatch(json?.result?.data || null);
     } catch { setCrmMatch(null); }
     finally { setCheckingCrm(false); }
@@ -133,12 +135,25 @@ export default function CapturePage() {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({ error: "Upload failed" }));
-        throw new Error(errBody.error || `Upload failed (HTTP ${res.status})`);
+      // Safari throws "The string did not match the expected pattern" on res.json()
+      // when response isn't valid JSON. Use text() + JSON.parse() defensively.
+      const resText = await res.text();
+      console.log("[Capture] Upload response status:", res.status, "body:", resText.substring(0, 200));
+      let data: any;
+      try {
+        data = JSON.parse(resText);
+      } catch (parseErr) {
+        console.error("[Capture] Failed to parse upload response:", resText.substring(0, 500));
+        throw new Error("Upload failed — server returned invalid response");
       }
-      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
+      }
       const uploadUrl = data.url;
+      if (!uploadUrl) {
+        console.error("[Capture] Upload response missing url:", data);
+        throw new Error("Upload succeeded but no file URL returned");
+      }
       console.log("[Capture] Upload success:", uploadUrl);
 
       // AI extraction

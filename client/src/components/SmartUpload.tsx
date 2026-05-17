@@ -371,8 +371,12 @@ export function SmartUpload({
       const uploadRes = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
       let fileUrl: string;
       if (uploadRes.ok) {
-        const data = await uploadRes.json();
+        // Safari: use text() + JSON.parse() to avoid "string did not match expected pattern"
+        const resText = await uploadRes.text();
+        let data: any;
+        try { data = JSON.parse(resText); } catch { throw new Error("Upload returned invalid response"); }
         fileUrl = data.url;
+        if (!fileUrl) throw new Error("Upload succeeded but no URL returned");
       } else {
         throw new Error("Upload failed");
       }

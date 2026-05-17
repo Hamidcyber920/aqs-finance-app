@@ -2417,3 +2417,8 @@
 ## Bug Fix — Receipt AI extraction not working for staff role (May 2026)
 - [x] Change documents.extract from seniorProcedure to protectedProcedure so all logged-in users can scan receipts
 - [x] Improve error handling in Capture.tsx so upload/extract failures show clear error messages instead of silently failing
+## Bug Fix — Safari "string did not match expected pattern" on upload response (May 2026)
+- [x] Fix Safari res.json() crash — use defensive text() + JSON.parse() in Capture.tsx processFile
+- [x] Fix Safari res.json() crash in SmartUpload.tsx upload fetch
+- [x] Fix Safari res.json() crash in checkCrmByPhone fetch
+- [x] Separate file selection (preview) from processing (upload+extract) with auto-trigger useEffect + manual Scan button fallback
