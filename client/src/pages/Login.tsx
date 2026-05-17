@@ -75,7 +75,7 @@ export default function LoginPage() {
   const loginMutation = trpc.localAuth.login.useMutation({
     onSuccess: async () => {
       await utils.auth.me.invalidate();
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     },
     onError: (err) => {
       // Zod validation errors come as JSON array in message — extract readable text

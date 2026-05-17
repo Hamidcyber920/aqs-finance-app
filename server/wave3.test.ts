@@ -531,12 +531,12 @@ describe("Wave 5: Audit Trail & System Health Frontend Pages", () => {
     expect(src).toContain("AuditTrailPage");
     expect(src).toContain("SystemHealthPage");
   });
-  it("DashboardLayout.tsx has Audit Trail and System Health nav items", () => {
-    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/components/DashboardLayout.tsx"), "utf-8");
-    expect(src).toContain("Audit Trail");
-    expect(src).toContain("System Health");
+  it("App.tsx has Audit Trail and System Health routes accessible", () => {
+    const src = require("fs").readFileSync(require("path").join(__dirname, "../client/src/App.tsx"), "utf-8");
     expect(src).toContain("/audit-trail");
     expect(src).toContain("/system-health");
+    expect(src).toContain("AuditTrailPage");
+    expect(src).toContain("SystemHealthPage");
   });
 });
 

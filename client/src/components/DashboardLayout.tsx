@@ -11,11 +11,8 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
-  SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -37,67 +34,100 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { HibbaVoice } from "./HibbaVoice";
 import { trpc } from "@/lib/trpc";
 
+// ─── Role types ─────────────────────────────────────────────────────────────
 type Role = "superadmin" | "trustee" | "manager" | "assistant" | "volunteer" | "admin" | "user";
-function isAdmin(role?: string | null): boolean {
-  return role === "superadmin" || role === "trustee" || role === "manager" || role === "admin";
+
+// Map roles to the brief's three categories
+function getRoleCategory(role?: string | null): "superadmin" | "trustee" | "staff" {
+  if (role === "superadmin" || role === "admin") return "superadmin";
+  if (role === "trustee") return "trustee";
+  return "staff"; // manager, assistant, volunteer, user
 }
 
-const coreItems = [
-  { icon: Camera, label: "Scan Receipt", path: "/" },
-  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: Receipt, label: "My Expenses", path: "/receipts" },
-];
-const incomeItems = [
-  { icon: HandHeart, label: "Fundraising", path: "/fundraising" },
-  { icon: BookOpen, label: "Qarde Hasan Loans", path: "/loans" },
-  { icon: DollarSign, label: "Income & Rentals", path: "/income" },
-  { icon: Home, label: "Student Accommodation", path: "/accommodation" },
-  { icon: CreditCard, label: "Payment Hub", path: "/fintech" },
-  { icon: UserCheck, label: "Donor CRM", path: "/donor-crm" },
-  { icon: Gift, label: "Gift Aid & CRM+", path: "/gift-aid" },
-  { icon: TrendingUp, label: "Pledges", path: "/pledges" },
-  { icon: Handshake, label: "Cultivation Pipeline", path: "/donor-pipeline" },
-  { icon: Flag, label: "Major Donor DD", path: "/major-donor" },
-  { icon: Bookmark, label: "Saved Views", path: "/saved-views" },
-  { icon: QrCode, label: "QR Codes", path: "/qr-codes" },
-  { icon: Trophy, label: "Recognition Tiers", path: "/recognition-tiers" },
-  { icon: Globe, label: "Donors Wall", path: "/donors-wall" },
-];
-const expenseItems = [
-  { icon: Wallet, label: "Payroll", path: "/payroll" },
-  { icon: ClipboardList, label: "Monthly Expenses", path: "/monthly-expenses" },
-];
-const reconciliationItems = [{ icon: Scale, label: "Reconciliation", path: "/reconciliation" }];
-const orgItems = [
-  { icon: GitBranch, label: "Org Chart", path: "/org-chart" },
-  { icon: MessageSquare, label: "Communications", path: "/communications" },
-  { icon: Inbox, label: "Comms Hub", path: "/comms-hub" },
-  { icon: MailOpen, label: "Master Inbox", path: "/comms-inbox" },
-  { icon: CalendarDays, label: "Meetings & Onboarding", path: "/meetings" },
-  { icon: Users, label: "Donors", path: "/donors" },
-  { icon: Building2, label: "Campaigns", path: "/campaigns" },
-  { icon: BarChart3, label: "Reports", path: "/reports" },
-];
-const adminItems = [
-  { icon: ShieldCheck, label: "Admin Panel", path: "/admin" },
-  { icon: Users, label: "Trustees & Staff Contacts", path: "/trustees" },
-  { icon: ClipboardCheck, label: "Compliance Cockpit", path: "/compliance" },
-  { icon: AlertTriangle, label: "Conflicts Register", path: "/conflicts-register" },
-  { icon: Gavel, label: "Decisions Register", path: "/decisions" },
-  { icon: AlertTriangle, label: "Bulk Approvals", path: "/bulk-approvals" },
-  { icon: Zap, label: "Bills & Utilities", path: "/bills-utilities" },
-  { icon: GraduationCap, label: "Training Tracker", path: "/training-tracker" },
-  { icon: MailSearch, label: "LBMW Correspondence", path: "/lbmw-correspondence" },
-  { icon: ShieldCheck, label: "Trustee Dashboard", path: "/trustee-dashboard" },
-  { icon: Building2, label: "Facilities & Bookings", path: "/facilities" },
-  { icon: UtensilsCrossed, label: "Bistro 87", path: "/bistro87" },
-  { icon: History, label: "Merge History", path: "/merge-history" },
-  { icon: Database, label: "Backups", path: "/backups" },
-  { icon: Shield, label: "Audit Trail", path: "/audit-trail" },
-  { icon: Activity, label: "System Health", path: "/system-health" },
-  { icon: Settings, label: "Settings", path: "/settings" },
+// ─── Navigation definition ──────────────────────────────────────────────────
+type NavSection = {
+  label: string;
+  items: NavItemDef[];
+};
+
+type NavItemDef = {
+  icon: React.ElementType;
+  label: string;
+  path: string;
+  visibleTo: ("superadmin" | "trustee" | "staff")[];
+  badgeKey?: string;
+};
+
+const NAVIGATION: NavSection[] = [
+  {
+    label: "DAILY",
+    items: [
+      { icon: Camera, label: "Scan Receipt", path: "/", visibleTo: ["superadmin", "staff"] },
+      { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", visibleTo: ["superadmin", "trustee", "staff"] },
+    ],
+  },
+  {
+    label: "FINANCE",
+    items: [
+      { icon: Receipt, label: "My Expenses", path: "/receipts", visibleTo: ["superadmin", "staff"] },
+      { icon: DollarSign, label: "Income & Rentals", path: "/income", visibleTo: ["superadmin", "trustee", "staff"] },
+      { icon: ClipboardList, label: "Monthly Expenses", path: "/monthly-expenses", visibleTo: ["superadmin", "staff"] },
+      { icon: Zap, label: "Bills & Utilities", path: "/bills-utilities", visibleTo: ["superadmin"], badgeKey: "bills" },
+      { icon: CreditCard, label: "Payment Hub", path: "/fintech", visibleTo: ["superadmin", "trustee"] },
+      { icon: Scale, label: "Reconciliation", path: "/reconciliation", visibleTo: ["superadmin"] },
+      { icon: BookOpen, label: "Qarde Hasan Loans", path: "/loans", visibleTo: ["superadmin", "trustee"] },
+      { icon: Wallet, label: "Payroll", path: "/payroll", visibleTo: ["superadmin"] },
+    ],
+  },
+  {
+    label: "DONORS & FUNDRAISING",
+    items: [
+      { icon: Users, label: "Donors", path: "/donor-crm", visibleTo: ["superadmin", "trustee", "staff"] },
+      { icon: Building2, label: "Campaigns", path: "/campaigns", visibleTo: ["superadmin", "trustee", "staff"] },
+      { icon: Gift, label: "Gift Aid & CRM+", path: "/gift-aid", visibleTo: ["superadmin"] },
+      { icon: HandHeart, label: "Fundraising", path: "/fundraising", visibleTo: ["superadmin"] },
+    ],
+  },
+  {
+    label: "COMMUNICATIONS",
+    items: [
+      { icon: MessageSquare, label: "Communications", path: "/communications", visibleTo: ["superadmin", "staff"], badgeKey: "inbox" },
+      { icon: CalendarDays, label: "Meetings & Onboarding", path: "/meetings", visibleTo: ["superadmin", "staff"] },
+    ],
+  },
+  {
+    label: "REPORTS",
+    items: [
+      { icon: BarChart3, label: "Reports", path: "/reports", visibleTo: ["superadmin", "trustee"] },
+    ],
+  },
+  {
+    label: "OPERATIONS",
+    items: [
+      { icon: UtensilsCrossed, label: "Bistro 87", path: "/bistro87", visibleTo: ["superadmin"] },
+      { icon: Home, label: "Student Accommodation", path: "/accommodation", visibleTo: ["superadmin"] },
+      { icon: Building2, label: "Facilities & Bookings", path: "/facilities", visibleTo: ["superadmin"] },
+      { icon: GraduationCap, label: "Training Tracker", path: "/training-tracker", visibleTo: ["superadmin"] },
+    ],
+  },
+  {
+    label: "GOVERNANCE",
+    items: [
+      { icon: ShieldCheck, label: "Trustee Dashboard", path: "/trustee-dashboard", visibleTo: ["superadmin", "trustee"] },
+      { icon: ClipboardCheck, label: "Compliance Cockpit", path: "/compliance", visibleTo: ["superadmin", "trustee"] },
+      { icon: Users, label: "People", path: "/trustees", visibleTo: ["superadmin", "trustee"] },
+    ],
+  },
+  {
+    label: "SYSTEM",
+    items: [
+      { icon: ShieldCheck, label: "Admin Panel", path: "/admin", visibleTo: ["superadmin"] },
+      { icon: Settings, label: "Settings", path: "/settings", visibleTo: ["superadmin"] },
+    ],
+  },
 ];
 
+// ─── Mobile bottom nav ──────────────────────────────────────────────────────
 const mobileBottomNav = [
   { icon: LayoutDashboard, label: "Home", path: "/dashboard" },
   { icon: DollarSign, label: "Income", path: "/income" },
@@ -106,6 +136,7 @@ const mobileBottomNav = [
   { icon: Menu, label: "More", path: "/__more__" },
 ];
 
+// ─── Sidebar sizing ─────────────────────────────────────────────────────────
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
 const MIN_WIDTH = 200;
@@ -178,10 +209,6 @@ function DashboardLayoutContent({
   setSidebarWidth: (w: number) => void;
 }) {
   const { user, logout } = useAuth();
-  const { data: perms } = trpc.users.getPermissions.useQuery(
-    { userId: user?.id ?? 0 },
-    { enabled: !!user?.id }
-  );
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar, setOpenMobile, isMobile: sidebarIsMobile } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -189,18 +216,7 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const role = user?.role as Role | undefined;
-
-  const showFinance = isAdmin(role) || perms?.canManageFundraising || perms?.canManageLoans || perms?.canManageIncome;
-  const showOrg = isAdmin(role) || perms?.canManageDonors || perms?.canSendCampaigns || perms?.canExportReports;
-  const showPayroll = isAdmin(role) || perms?.canManagePayroll || perms?.canViewOwnPayslip;
-  const showAdmin = isAdmin(role);
-
-  const visibleIncomeItems = incomeItems.filter(() => showFinance);
-  const visibleExpenseItems = expenseItems.filter((item) => {
-    if (item.path === "/payroll") return showPayroll;
-    return showFinance || showPayroll;
-  });
-  const visibleReconciliationItems = reconciliationItems.filter(() => showAdmin);
+  const roleCategory = getRoleCategory(role);
 
   useEffect(() => { if (isCollapsed) setIsResizing(false); }, [isCollapsed]);
   useEffect(() => {
@@ -233,12 +249,28 @@ function DashboardLayoutContent({
   // Fetch bills expiry count for sidebar badge
   const { data: billsSummary } = trpc.bills.summary.useQuery(undefined, {
     refetchInterval: 60000,
-    enabled: !!user && showAdmin,
+    enabled: !!user && roleCategory === "superadmin",
   });
   const billsExpiryBadge = (billsSummary?.expiringSoon ?? 0) + (billsSummary?.expired ?? 0);
 
+  // Badge resolver
+  function getBadge(badgeKey?: string): number | undefined {
+    if (!badgeKey) return undefined;
+    if (badgeKey === "inbox") return inboxUnread?.total ?? 0;
+    if (badgeKey === "bills") return billsExpiryBadge > 0 ? billsExpiryBadge : undefined;
+    return undefined;
+  }
+
+  // Filter navigation by role
+  const visibleSections = NAVIGATION
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => item.visibleTo.includes(roleCategory)),
+    }))
+    .filter((section) => section.items.length > 0);
+
   const NavItem = ({ icon: Icon, label, path, badge }: { icon: React.ElementType; label: string; path: string; badge?: number }) => {
-    const isActive = location === path || (path !== "/" && location.startsWith(path));
+    const isActive = location === path || (path !== "/" && path !== "/dashboard" && location.startsWith(path));
     return (
       <SidebarMenuItem>
         <SidebarMenuButton
@@ -270,7 +302,6 @@ function DashboardLayoutContent({
         <Sidebar collapsible="icon" style={{ background: sidebarBg }}>
           <SidebarHeader className="p-3 border-b border-sidebar-border/30">
             <div className="flex items-center gap-3 px-1 py-1">
-              {/* Refined corporate gift icon — squeezed */}
               <div className="shrink-0 h-9 w-9 rounded-xl flex items-center justify-center overflow-visible"
                 style={{ transform: "scaleX(0.82)", transformOrigin: "center" }}>
                 <SidebarGiftIcon />
@@ -302,84 +333,21 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="overflow-y-auto">
-            {/* MAIN */}
-            <div className="px-3 pt-4 pb-1">
-              {!isCollapsed && (
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Main</p>
-              )}
-              <ul className="flex flex-col gap-0.5">
-                {coreItems.map((item) => (
-                  <NavItem key={item.path} {...item} />
-                ))}
-              </ul>
-            </div>
-
-            {/* FINANCE */}
-            {(visibleIncomeItems.length > 0 || visibleExpenseItems.length > 0) && (
-              <div className="px-3 pt-4 pb-1 border-t border-white/5">
+            {visibleSections.map((section, idx) => (
+              <div key={section.label} className={`px-3 pt-4 pb-1 ${idx > 0 ? "border-t border-white/5" : ""}`}>
                 {!isCollapsed && (
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Finance</p>
+                  <p className="font-semibold uppercase tracking-widest px-1 mb-2"
+                    style={{ fontSize: "11px", color: "#6B7280", paddingTop: idx > 0 ? "0px" : "0px" }}>
+                    {section.label}
+                  </p>
                 )}
                 <ul className="flex flex-col gap-0.5">
-                  {visibleIncomeItems.map((item) => (
-                    <NavItem key={item.path} {...item} />
-                  ))}
-                  {visibleExpenseItems.map((item) => (
-                    <NavItem key={item.path} {...item} />
+                  {section.items.map((item) => (
+                    <NavItem key={item.path} icon={item.icon} label={item.label} path={item.path} badge={getBadge(item.badgeKey)} />
                   ))}
                 </ul>
               </div>
-            )}
-
-            {/* RECONCILIATION */}
-            {visibleReconciliationItems.length > 0 && (
-              <div className="px-3 pt-4 pb-1 border-t border-white/5">
-                {!isCollapsed && (
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Reconciliation</p>
-                )}
-                <ul className="flex flex-col gap-0.5">
-                  {visibleReconciliationItems.map((item) => (
-                    <NavItem key={item.path} {...item} />
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* ORGANISATION */}
-            {showOrg && (
-              <div className="px-3 pt-4 pb-1 border-t border-white/5">
-                {!isCollapsed && (
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Organisation</p>
-                )}
-                <ul className="flex flex-col gap-0.5">
-                  {orgItems.map((item) => (
-                    <NavItem
-                      key={item.path}
-                      {...item}
-                      badge={item.path === "/comms-inbox" ? (inboxUnread?.total ?? 0) : undefined}
-                    />
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* ADMINISTRATION */}
-            {showAdmin && (
-              <div className="px-3 pt-4 pb-3 border-t border-white/5">
-                {!isCollapsed && (
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30 px-1 mb-2">Administration</p>
-                )}
-                <ul className="flex flex-col gap-0.5">
-                  {adminItems.map((item) => (
-                    <NavItem
-                      key={item.path}
-                      {...item}
-                      badge={item.path === "/bills-utilities" && billsExpiryBadge > 0 ? billsExpiryBadge : undefined}
-                    />
-                  ))}
-                </ul>
-              </div>
-            )}
+            ))}
           </SidebarContent>
 
           <SidebarFooter className="p-3 border-t border-sidebar-border/30">
@@ -439,7 +407,6 @@ function DashboardLayoutContent({
           >
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-10 w-10 rounded-lg text-white/80 hover:bg-white/10 flex items-center justify-center" />
-              {/* Hibba wordmark in mobile bar */}
               <div className="flex items-center gap-2">
                 <div style={{ transform: "scaleX(0.82)", transformOrigin: "center" }}>
                   <SidebarGiftIcon />

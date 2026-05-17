@@ -111,55 +111,77 @@ function Router() {
     <DashboardLayout>
       <Suspense fallback={<PageLoader />}>
         <Switch>
+          {/* ── DAILY ── */}
           <Route path="/" component={CapturePage} />
           <Route path="/capture" component={CapturePage} />
           <Route path="/dashboard" component={DashboardPage} />
+
+          {/* ── FINANCE ── */}
           <Route path="/receipts" component={ReceiptsPage} />
           <Route path="/receipts/:id" component={ReceiptDetailPage} />
-          <Route path="/reports" component={ReportsPage} />
-          <Route path="/fundraising" component={FundraisingPage} />
+          <Route path="/income" component={IncomePage} />
+          <Route path="/monthly-expenses" component={MonthlyExpensesPage} />
+          <Route path="/bills-utilities" component={BillsUtilitiesPage} />
+          <Route path="/fintech" component={FintechPage} />
+          <Route path="/reconciliation" component={ReconciliationPage} />
           <Route path="/loans" component={LoansPage} />
           <Route path="/loans/:id">{(params) => <LoanDetailPage id={parseInt((params as { id: string }).id)} />}</Route>
-          <Route path="/income" component={IncomePage} />
           <Route path="/payroll" component={PayrollPage} />
-          <Route path="/monthly-expenses" component={MonthlyExpensesPage} />
-          <Route path="/reconciliation" component={ReconciliationPage} />
+          <Route path="/payroll-v3" component={PayrollV3Page} />
+
+          {/* ── DONORS & FUNDRAISING ── */}
+          {/* Main Donors/CRM screen — tabs inside handle sub-views */}
+          <Route path="/donor-crm" component={DonorCRMPage} />
           <Route path="/donors" component={DonorsPage} />
           <Route path="/donors/:id" component={DonorProfilePage} />
           <Route path="/campaigns" component={CampaignsPage} />
-          <Route path="/org-chart" component={OrgChartPage} />
-          <Route path="/communications" component={CommunicationsPage} />
-          <Route path="/comms-hub" component={CommHubPage} />
-          <Route path="/admin" component={AdminPanelPage} />
-          <Route path="/trustees" component={TrusteesPage} />
-          <Route path="/backups" component={BackupsPage} />
-          <Route path="/accommodation" component={StudentAccommodationPage} />
-          <Route path="/fintech" component={FintechPage} />
-          <Route path="/donor-crm" component={DonorCRMPage} />
-          <Route path="/merge-history" component={MergeHistoryPage} />
-          <Route path="/compliance" component={ComplianceCockpitPage} />
-          <Route path="/decisions" component={DecisionsPage} />
           <Route path="/gift-aid" component={GiftAidPage} />
-          <Route path="/payroll-v3" component={PayrollV3Page} />
-          <Route path="/comms-v3" component={CommsV3Page} />
-          <Route path="/meetings" component={MeetingsV3Page} />
-          <Route path="/comms-inbox" component={CommsInboxPage} />
-          <Route path="/audit-trail" component={AuditTrailPage} />
-          <Route path="/system-health" component={SystemHealthPage} />
+          <Route path="/fundraising" component={FundraisingPage} />
+          {/* Items that became tabs inside Donors — keep routes working */}
           <Route path="/pledges" component={PledgesPage} />
           <Route path="/donor-pipeline" component={DonorPipelinePage} />
           <Route path="/major-donor" component={MajorDonorPage} />
-          <Route path="/bulk-approvals" component={BulkApprovalsPage} />
-          <Route path="/conflicts-register" component={ConflictsRegisterPage} />
+          <Route path="/saved-views" component={SavedViewsPage} />
           <Route path="/recognition-tiers" component={RecognitionTiersPage} />
           <Route path="/qr-codes" component={QRCodesPage} />
-          <Route path="/saved-views" component={SavedViewsPage} />
-          <Route path="/bills-utilities" component={BillsUtilitiesPage} />
-          <Route path="/training-tracker" component={TrainingTrackerPage} />
-          <Route path="/lbmw-correspondence" component={LbmwCorrespondencePage} />
-          <Route path="/trustee-dashboard" component={TrusteeDashboardPage} />
-          <Route path="/facilities" component={FacilitiesPage} />
+
+          {/* ── COMMUNICATIONS ── */}
+          <Route path="/communications" component={CommunicationsPage} />
+          <Route path="/comms-hub" component={CommHubPage} />
+          <Route path="/comms-inbox" component={CommsInboxPage} />
+          <Route path="/comms-v3" component={CommsV3Page} />
+          <Route path="/meetings" component={MeetingsV3Page} />
+
+          {/* ── REPORTS ── */}
+          <Route path="/reports" component={ReportsPage} />
+
+          {/* ── OPERATIONS ── */}
           <Route path="/bistro87" component={Bistro87Page} />
+          <Route path="/accommodation" component={StudentAccommodationPage} />
+          <Route path="/facilities" component={FacilitiesPage} />
+          <Route path="/training-tracker" component={TrainingTrackerPage} />
+
+          {/* ── GOVERNANCE ── */}
+          <Route path="/trustee-dashboard" component={TrusteeDashboardPage} />
+          <Route path="/compliance" component={ComplianceCockpitPage} />
+          {/* Items that became tabs inside Compliance Cockpit — keep routes working */}
+          <Route path="/conflicts-register" component={ConflictsRegisterPage} />
+          <Route path="/decisions" component={DecisionsPage} />
+          <Route path="/bulk-approvals" component={BulkApprovalsPage} />
+          <Route path="/lbmw-correspondence" component={LbmwCorrespondencePage} />
+          {/* People (merged Trustees + Org Chart) */}
+          <Route path="/trustees" component={TrusteesPage} />
+          <Route path="/org-chart" component={OrgChartPage} />
+
+          {/* ── SYSTEM ── */}
+          <Route path="/admin" component={AdminPanelPage} />
+          {/* Items that moved under Settings — keep routes working */}
+          <Route path="/merge-history" component={MergeHistoryPage} />
+          <Route path="/backups" component={BackupsPage} />
+          <Route path="/audit-trail" component={AuditTrailPage} />
+          <Route path="/system-health" component={SystemHealthPage} />
+
+          {/* ── Other ── */}
           <Route path="/donate" component={DonatePage} />
           <Route path="/payment/success" component={PaymentSuccessPage} />
           <Route path="/payment/cancelled" component={PaymentCancelledPage} />

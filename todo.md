@@ -2385,3 +2385,20 @@
 
 ## Bug Fix — Compliance Cockpit tabs squashed on mobile (May 17 2026)
 - [x] Fix tab bar on Compliance Cockpit page — tabs are squashed together on mobile, make horizontally scrollable with proper spacing
+
+## Navigation Restructure (May 17 2026) — per HibbaNavigationRestructureBrief.docx
+- [x] Create single sidebar definition with role-based visibility (superadmin, trustee, staff)
+- [x] Implement 8 section headers: DAILY, FINANCE, DONORS & FUNDRAISING, COMMUNICATIONS, REPORTS, OPERATIONS, GOVERNANCE, SYSTEM
+- [x] Remove items from top-level that become tabs: Pledges, Cultivation Pipeline, Major Donor DD, Saved Views, Recognition Tiers, Donors Wall, QR Codes → inside Donors
+- [x] Merge Comms Hub + Master Inbox into Communications as tabs (Inbox, Broadcasts) — routes kept working
+- [x] Merge Conflicts Register, Decisions Register, Bulk Approvals, LBMW Correspondence into Compliance Cockpit as tabs — routes kept working
+- [x] Create People destination merging Trustees & Staff Contacts (Directory tab) + Org Chart (Chart tab)
+- [x] Move Merge History, Backups, System Health, Audit Trail under Settings as tabs — routes kept working
+- [x] Add URL redirects so old routes (/pledges, /comms-hub, /comms-inbox, etc.) still resolve to correct tab
+- [x] Update voice agent NAV_ROUTES to match new structure
+- [x] Set default landing to Dashboard for all users on login (OAuth + local auth)
+- [x] Apply visual hierarchy: section headers 11px muted grey, menu items 14px, active = green pill (#00B894 15% opacity)
+- [x] Role filtering: superadmin sees all ~25 items, trustee sees ~10, staff sees ~9
+- [x] Mobile sidebar: drawer-slide from left, identical structure to desktop
+- [x] Verify all old URLs still work and land on correct tab — all routes preserved in App.tsx
+- [x] Produce changelog of every menu item change — see below
