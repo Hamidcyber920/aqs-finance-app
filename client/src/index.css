@@ -407,3 +407,7 @@
 .compliance-bg-green { background-color: oklch(0.72 0.17 145 / 12%); border: 1px solid oklch(0.72 0.17 145 / 25%); }
 .compliance-bg-amber { background-color: oklch(0.78 0.16 55 / 12%); border: 1px solid oklch(0.78 0.16 55 / 25%); }
 .compliance-bg-red   { background-color: oklch(0.70 0.20 15 / 12%); border: 1px solid oklch(0.70 0.20 15 / 25%); }
+
+/* Hide scrollbar for horizontal scroll containers */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

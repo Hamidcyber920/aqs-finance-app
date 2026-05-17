@@ -538,28 +538,28 @@ export default function ComplianceCockpit() {
 
         {/* Tabs */}
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="grid w-full grid-cols-5 max-w-3xl">
-            <TabsTrigger value="actions">
+          <TabsList className="flex w-full max-w-3xl overflow-x-auto no-scrollbar">
+            <TabsTrigger value="actions" className="whitespace-nowrap">
               <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
               Inquiry Actions
               {overdueActions > 0 && <span className="ml-1.5 bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">{overdueActions}</span>}
             </TabsTrigger>
-            <TabsTrigger value="training">
+            <TabsTrigger value="training" className="whitespace-nowrap">
               <GraduationCap className="h-3.5 w-3.5 mr-1.5" />
               Training
               {expiredTraining > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">{expiredTraining}</span>}
             </TabsTrigger>
-            <TabsTrigger value="policies">
+            <TabsTrigger value="policies" className="whitespace-nowrap">
               <FileText className="h-3.5 w-3.5 mr-1.5" />
               Policies
               {overduePolices > 0 && <span className="ml-1.5 bg-amber-500 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">{overduePolices}</span>}
             </TabsTrigger>
-            <TabsTrigger value="incidents">
+            <TabsTrigger value="incidents" className="whitespace-nowrap">
               <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
               Incidents
               {incidents.filter((i: any) => i.status !== 'closed').length > 0 && <span className="ml-1.5 bg-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">{incidents.filter((i: any) => i.status !== 'closed').length}</span>}
             </TabsTrigger>
-            <TabsTrigger value="annual">
+            <TabsTrigger value="annual" className="whitespace-nowrap">
               <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
               Annual Return
             </TabsTrigger>

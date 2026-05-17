@@ -2382,3 +2382,6 @@
 ## Bug Fix — Hibba response speed and UK time (May 17 2026)
 - [x] Fix UK time wrong — inject actual UK time (Europe/London) into system instruction + fix prayer times API date to use UK local date
 - [x] Speed up Hibba responses — trimmed system instruction ~40%, removed auto-briefing on greeting, pre-inject user identity (no tool call needed), simplified greeting prompt
+
+## Bug Fix — Compliance Cockpit tabs squashed on mobile (May 17 2026)
+- [x] Fix tab bar on Compliance Cockpit page — tabs are squashed together on mobile, make horizontally scrollable with proper spacing
