@@ -2411,3 +2411,6 @@
 
 ## Bug Fix — Missing reconciliation.markPaymentPaid procedure (May 2026)
 - [x] Fix "No procedure found on path reconciliation.markPaymentPaid" error — was calling markPaymentPaid instead of markPaid
+
+## Bug Fix — Receipt scanning "string did not match expected pattern" (May 2026)
+- [x] Fix receipt scanning error "Could not process: The string did not match the expected pattern" — iOS Safari conflict between FileReader.readAsDataURL and file.arrayBuffer() on same File object. Fixed by using URL.createObjectURL for preview + wrapping hash in try-catch

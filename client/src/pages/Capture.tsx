@@ -99,20 +99,29 @@ export default function CapturePage() {
   }, []);
 
   const handleFile = async (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
+    // Use URL.createObjectURL for preview — avoids iOS conflict with arrayBuffer()
+    setPreview(URL.createObjectURL(file));
     setUploading(true);
     setExtracted(null); setCrmMatch(null); setMultiRecords([]); setSavedToCrm(false);
     try {
-      // Compute SHA-256 hash of file for duplicate detection
-      const hashBuffer = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-      const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
-      setImageHash(hashHex);
+      // Compute SHA-256 hash of file for duplicate detection (non-blocking)
+      try {
+        const arrayBuf = await file.arrayBuffer();
+        const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuf);
+        const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+        setImageHash(hashHex);
+      } catch {
+        // Hash computation can fail on some mobile browsers — skip duplicate detection
+        setImageHash("");
+      }
       setDuplicateWarning(null);
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(errBody.error || `Upload failed (${res.status})`);
+      }
       const { url } = await res.json();
       setUploading(false); setAnalyzing(true);
       const aiData = await extractMutation.mutateAsync({ fileUrl: url, mimeType: file.type || 'image/jpeg', moduleType: docType });
