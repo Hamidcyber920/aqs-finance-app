@@ -181,10 +181,9 @@ export const hibbaToolsRouter = router({
   prayerTimes: protectedProcedure
     .query(async () => {
       try {
-        const today = new Date();
-        const dd = String(today.getDate()).padStart(2, "0");
-        const mm = String(today.getMonth() + 1).padStart(2, "0");
-        const yyyy = today.getFullYear();
+        // Use UK local date (Europe/London) to avoid UTC date boundary issues
+        const ukDateStr = new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+        const [dd, mm, yyyy] = ukDateStr.split("/");
         const res = await fetch(
           `https://api.aladhan.com/v1/timingsByCity/${dd}-${mm}-${yyyy}?city=Liverpool&country=United+Kingdom&method=2`
         );
@@ -366,13 +365,11 @@ export const hibbaToolsRouter = router({
       const loans = await getLoans("active");
       const campaigns = await getFundraisingCampaigns();
       const activeCampaigns = campaigns.filter((c: any) => c.status === "active");
-      // Prayer times
+      // Prayer times (use UK local date)
       let prayerTimes = null;
       try {
-        const today = new Date();
-        const dd = String(today.getDate()).padStart(2, "0");
-        const mm = String(today.getMonth() + 1).padStart(2, "0");
-        const yyyy = today.getFullYear();
+        const ukDateStr = new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+        const [dd, mm, yyyy] = ukDateStr.split("/");
         const res = await fetch(`https://api.aladhan.com/v1/timingsByCity/${dd}-${mm}-${yyyy}?city=Liverpool&country=United+Kingdom&method=2`);
         const json = await res.json();
         if (json.code === 200) prayerTimes = json.data?.timings;

@@ -345,41 +345,32 @@ Your recognition and generation is biased towards:
 - LIVERPOOL CONTEXT: Brougham Terrace, Rimmer Building, West Derby Road, Anfield, Kensington.
 - AQS ROSTER: Dr. Abdul Hamid (Chairman), Brother Sadiq (Manager), Sister Aisha (Coordinator).
 
-# OPERATIONAL PROTOCOLS
-- ALWAYS start with a concise "Strategic Briefing" for Dr. Hamid.
-- Audit-log every financial or statutory action.
+# PROTOCOLS
 - Defer legal queries to LBMW Solicitors.
 - NEVER process card details via voice.
-- Use natural turn-taking and handle interruptions immediately.
+- Use natural turn-taking.
 
-# SAFETY & DATA INTEGRITY
-- NEVER invent figures. If not in the database, say so clearly.
-- CONSERVATIVE STANCE: UK registered charity under active Charity Commission inquiry.
-- AUTOMATIC FLAGGING: Single donation > £25,000, related-party payments, trustee benefits.
-- REFUSAL: Refuse to send communications or transfer money without explicit voice confirmation.
+# SAFETY
+- NEVER invent figures. If not in the database, say so.
+- Flag: donations > £25k, related-party payments, trustee benefits.
+- Refuse money transfers or comms without explicit voice confirmation.
 
 # ISLAMIC ETIQUETTE
-- MANDATORY OPENING: Greet with "Assalamu Alaikum" followed by their name.
-- After greeting, immediately offer a "Status Briefing" including next prayer time and urgent items.
-- ISLAMIC HOLIDAYS (2026): Eid al-Adha: May 27, 2026. Islamic New Year: July 16, 2026.
-- SENSITIVE DATA: NEVER accept card numbers via voice. Interrupt and direct to payment screen.
-- Response to JazakAllah Khair: "Wa iyyakum" before any closing words.
+- Open with "Assalamu Alaikum" + their name.
+- Holidays 2026: Eid al-Adha May 27, Islamic New Year July 16.
+- Response to JazakAllah Khair: "Wa iyyakum".
 
 # PERSONALITY
-Humour: light, dry, warm. Never about the inquiry, donor identities, money amounts, or religious matters.
-You never say: "I'd be happy to help", "Of course!", "Absolutely!", "Let me know if you need anything else"
-You speak in short complete sentences. You pause naturally so users can interrupt.
+Light, dry humour. Never joke about the inquiry, donors, money, or religion.
+Avoid: "I'd be happy to help", "Of course!", "Absolutely!", "Let me know if you need anything else".
 
-# WHAT YOU KNOW ABOUT AQS (STATIC)
-The Abdullah Quilliam Society is a registered UK charity (Charity #1157121) preserving Britain's first mosque, established 1889.
-AQS operates three complexes on Brougham Terrace in Liverpool:
-- 1-7 Brougham Terrace: Administrative hub & Bistro 87 (halal fine-dining).
-- 8-10 Brougham Terrace: Original mosque & 14-bed student accommodation.
-- 11-12 Brougham Terrace: Rimmer Building (active mosque expansion).
+# AQS FACTS
+Abdullah Quilliam Society — UK charity #1157121, Britain's first mosque (1889), Brougham Terrace, Liverpool.
+1-7: Admin hub & Bistro 87. 8-10: Original mosque & 14-bed accommodation. 11-12: Rimmer Building (expansion).
 
-# TIMEZONE
-You are based in Liverpool, UK. The timezone is Europe/London (GMT+1 during BST, GMT+0 during GMT).
-When telling the time, ALWAYS convert to UK local time. Right now it is BST (British Summer Time, UTC+1).
+# TIMEZONE & CURRENT TIME
+You are based in Liverpool, UK. The timezone is Europe/London.
+{{CURRENT_TIME_PLACEHOLDER}}
 Never say "UTC" to the user — always give the local UK time.
 
 # HOW YOU RESPOND
@@ -388,52 +379,52 @@ Speak in short complete sentences. Pause naturally so users can interrupt.
 Never give long monologues. 2-3 sentences max per turn unless asked for detail.
 
 # TOOLS
-You have access to these tools. ALWAYS use them to get real data — NEVER make up numbers.
-
-1. navigate_to(page) — Navigate user to a page. E.g. "take me to payroll" → navigate_to(page: "payroll").
-2. get_dashboard_summary() — Get overall financial stats (expenses, income, loans, fundraising, pending approvals).
-3. query_receipts(vendor?, status?, limit?) — Look up receipts/expenses.
-4. query_loans(status?, limit?) — Look up Qarde Hasan loans.
-5. query_donors(search?, is_regular?, limit?) — Look up donors.
-6. query_payroll(month?, year?, limit?) — Look up payroll records.
-7. query_income(limit?) — Look up income records.
-8. get_monthly_expense_total(month, year) — Get total expenses for a specific month.
-9. get_prayer_times() — Get today's prayer times for Liverpool. Use for salah queries and morning briefings.
-10. get_fundraising_campaigns() — Get all fundraising campaigns with progress.
-11. get_trustees() — Get the current trustee board list.
-12. get_friday_collections(limit?) — Get recent Jumu'ah collection amounts.
-13. get_staff_directory() — Get staff/user directory.
-14. open_scanner(doc_type?) — Open the document scanner/camera. Use when user wants to scan or upload a receipt, bill, collection sheet, business card, etc.
-15. fill_form(fields, page?, action?) — Fill form fields on the current page. Extract field names and values from what the user says. fields is a JSON object of key-value pairs.
-16. get_current_user() — Get the current user's identity, name, email, and role. Use to personalise greetings.
-17. search_donors(name_or_id, limit?) — Search for a specific donor by name or ID. Returns detailed info including gift aid status.
-18. get_accommodation_status() — Get student accommodation overview: tenants, overdue rent, upcoming payments.
-19. get_strategic_briefing() — Get a comprehensive briefing combining financials, loans, campaigns, and prayer times. Use for morning briefings or status reports.
-
-When the user asks about data, ALWAYS call the appropriate tool first. Summarise results concisely in 2-3 sentences with key £ figures.
-After navigating, briefly confirm where you took them.
-For prayer times, tell them the next upcoming prayer and its time.
-For the morning briefing, use get_strategic_briefing() for a comprehensive overview, or combine get_prayer_times + get_dashboard_summary.
-At session start, use get_current_user() to personalise the greeting, then offer a briefing.
+ALWAYS use tools for real data — NEVER invent numbers. Summarise results in 2-3 sentences with key £ figures.
+User identity is in RUNTIME CONTEXT — no need to call get_current_user for greetings.
+For briefings, use get_strategic_briefing(). For prayer, use get_prayer_times() and tell them the NEXT upcoming prayer.
 `;
 
-/** Build full system instruction with runtime context and speaker mode warning */
-function buildSystemInstruction(ctx: RuntimeContext, isSpeakerMode: boolean): string {
-  let instruction = BASE_SYSTEM_INSTRUCTION;
+/** Build full system instruction with runtime context, UK time, user identity, and speaker mode */
+function buildSystemInstruction(
+  ctx: RuntimeContext,
+  isSpeakerMode: boolean,
+  userName?: string,
+  userRole?: string
+): string {
+  // Inject actual UK time
+  const ukTime = new Date().toLocaleString("en-GB", {
+    timeZone: "Europe/London",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const ukHour = new Date().toLocaleString("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false });
+  const isDST = new Date().toLocaleString("en-GB", { timeZone: "Europe/London", timeZoneName: "short" }).includes("BST");
+  const timeStr = `Right now it is: ${ukTime} (${isDST ? "BST, UTC+1" : "GMT, UTC+0"}).`;
 
-  // Append runtime context
-  instruction += `\n\n# RUNTIME CONTEXT\nThe user is currently on page: ${ctx.currentPage}\n`;
+  let instruction = BASE_SYSTEM_INSTRUCTION.replace("{{CURRENT_TIME_PLACEHOLDER}}", timeStr);
+
+  // Append runtime context with user identity (avoids needing get_current_user tool call)
+  instruction += `\n\n# RUNTIME CONTEXT\n`;
+  if (userName) {
+    instruction += `Current user: ${userName}${userRole ? ` (${userRole})` : ""}\n`;
+  }
+  instruction += `Current page: ${ctx.currentPage}\n`;
   if (ctx.formFields.length > 0) {
-    instruction += `Available form fields on this page: ${ctx.formFields.join(", ")}\n`;
-    instruction += `You can use fill_form() with these field names to populate the form.\n`;
+    instruction += `Form fields on this page: ${ctx.formFields.join(", ")}\n`;
+    instruction += `You can use fill_form() with these field names.\n`;
   }
   if (ctx.entityType && ctx.entityId) {
-    instruction += `Currently viewing ${ctx.entityType} with ID: ${ctx.entityId}\n`;
+    instruction += `Viewing ${ctx.entityType} ID: ${ctx.entityId}\n`;
   }
 
-  // Append speaker mode warning
+  // Speaker mode warning (concise)
   if (isSpeakerMode) {
-    instruction += `\n# ⚠️ SPEAKER MODE ACTIVE\nThe user appears to be using device speakers (not headphones/earpiece). Others nearby may hear your responses.\nDO NOT read aloud:\n- Exact financial amounts (say "a significant amount" or "I can see the figure on screen")\n- Bank account numbers, sort codes, NI numbers\n- Personal addresses or phone numbers\n- Donor names with their donation amounts\n- Salary figures\nInstead, say: "I can see that information — would you like me to show it on screen rather than read it aloud?"\nFor navigation and general queries, respond normally.\n`;
+    instruction += `\n# ⚠️ SPEAKER MODE\nSpeakers detected (no headphones). Do NOT read aloud: exact amounts, account numbers, NI numbers, addresses, salaries, or donor+amount pairs. Say "I can see that on screen" and offer to show it instead.\n`;
   }
 
   return instruction;
@@ -539,12 +530,7 @@ export function HibbaVoice() {
     userIdRef.current = 0;
 
     try {
-      // 1. Detect speaker mode and build runtime context
-      const isSpeakerMode = await detectSpeakerMode();
-      const runtimeCtx = buildRuntimeContext(window.location.pathname);
-      const fullSystemInstruction = buildSystemInstruction(runtimeCtx, isSpeakerMode);
-
-      // 2. Get ephemeral token (with freshness timestamp for anti-replay)
+      // 1. Get ephemeral token (with freshness timestamp for anti-replay)
       setStatusText("Authenticating...");
       const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
       const result = await getToken.mutateAsync({
@@ -555,6 +541,11 @@ export function HibbaVoice() {
       const { token, model, user, sessionId: sId } = result;
       voiceSessionIdRef.current = sId ?? null;
       sessionStartTimeRef.current = Date.now();
+
+      // 2. Detect speaker mode and build system instruction with UK time + user identity
+      const isSpeakerMode = await detectSpeakerMode();
+      const runtimeCtx = buildRuntimeContext(window.location.pathname);
+      const fullSystemInstruction = buildSystemInstruction(runtimeCtx, isSpeakerMode, user, undefined);
 
       upsertMessage("sys-auth", "system", `Connected as ${user}${isSpeakerMode ? " 🔊" : ""}`, true);
 
@@ -702,10 +693,11 @@ export function HibbaVoice() {
 
       sessionRef.current = session;
 
-      // Send greeting prompt
+      // Send greeting prompt — keep it simple to avoid triggering tool calls on startup
+      // The user's name and time are already in the system instruction
       session.sendClientContent({
         turns: [
-          { role: "user", parts: [{ text: "Greet me briefly." }] },
+          { role: "user", parts: [{ text: "Say Assalamu Alaikum and a one-sentence greeting. Do NOT call any tools." }] },
         ],
         turnComplete: true,
       });
