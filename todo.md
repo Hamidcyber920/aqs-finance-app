@@ -2440,3 +2440,9 @@
 - [x] Test build compiles cleanly
 - [x] Fix Safari 'string did not match expected pattern' in tRPC client with safariSafeFetch proxy
 - [ ] Verify scanner works end-to-end (user testing required)
+
+## Rebuild — Base64 upload approach to fix 503 (May 2026)
+- [x] Create tRPC procedure for base64 image upload (bypasses multer/multipart entirely)
+- [x] Rebuild Capture.tsx processFile to compress, convert to base64, send via tRPC
+- [x] Test build compiles and works locally
+- [ ] Verify scanner works end-to-end on deployed site (user to test on iPhone)

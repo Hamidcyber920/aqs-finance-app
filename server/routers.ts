@@ -4434,6 +4434,22 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
         };
       }),
 
+    // ─── BASE64 UPLOAD (bypasses multer/multipart for iOS compatibility) ─────────────────────────
+    uploadBase64: protectedProcedure
+      .input(z.object({
+        base64: z.string(), // base64-encoded image data (no data: prefix)
+        mimeType: z.string(),
+        fileName: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const ext = input.mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+        const fileName = input.fileName || `scan-${Date.now()}.${ext}`;
+        const key = `receipts/${ctx.user.id}/${nanoid(8)}-${fileName}`;
+        const buffer = Buffer.from(input.base64, 'base64');
+        const { url } = await storagePut(key, buffer, input.mimeType);
+        return { url, key };
+      }),
+
     // ─── PROFILE MATCHER ───────────────────────────────────────────────────────────────────────────
     // Fuzzy-match an extracted name against existing records in the database.
     // Returns up to 3 candidate matches with a similarity score (0-100).

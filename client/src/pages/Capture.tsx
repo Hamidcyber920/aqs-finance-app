@@ -125,6 +125,7 @@ export default function CapturePage() {
   }, []);
 
   // Step 2: Upload + AI extraction — triggered automatically or by button tap
+  const uploadBase64Mutation = trpc.documents.uploadBase64.useMutation();
   const processFile = useCallback(async (file: File) => {
     if (uploading || analyzing) return; // prevent double-tap
     setUploading(true);
@@ -136,22 +137,26 @@ export default function CapturePage() {
       const compressed = await compressImage(file);
       console.log("[Capture] Compressed:", compressed.name, compressed.type, (compressed.size / 1024).toFixed(0) + "KB", `(original: ${(file.size / 1024).toFixed(0)}KB)`);
 
-      // Upload to server which forwards to S3
-      const formData = new FormData();
-      formData.append("file", compressed, compressed.name);
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
+      // Convert to base64 (avoids multipart/multer which crashes on Cloud Run)
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          // Strip the data:...;base64, prefix
+          const base64Data = result.split(',')[1] || result;
+          resolve(base64Data);
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(compressed);
       });
-      if (!uploadRes.ok) {
-        const errText = await uploadRes.text().catch(() => uploadRes.statusText);
-        throw new Error(`Upload failed (${uploadRes.status}): ${errText.substring(0, 100)}`);
-      }
-      const uploadJson = await uploadRes.text();
-      let uploadData: any;
-      try { uploadData = JSON.parse(uploadJson); } catch { throw new Error("Server returned invalid response: " + uploadJson.substring(0, 80)); }
-      const uploadUrl = uploadData.url;
+
+      // Upload via tRPC (regular JSON body, no multipart)
+      const uploadResult = await uploadBase64Mutation.mutateAsync({
+        base64,
+        mimeType: compressed.type || 'image/jpeg',
+        fileName: compressed.name,
+      });
+      const uploadUrl = uploadResult.url;
       if (!uploadUrl) throw new Error("Upload succeeded but no URL returned");
       console.log("[Capture] Upload success:", uploadUrl);
 

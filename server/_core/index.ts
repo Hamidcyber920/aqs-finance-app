@@ -101,8 +101,9 @@ async function startServer() {
   // Raw body parser for Stripe webhook signature verification (must be before express.json)
   app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
   // Body parsers — keep limits reasonable to avoid OOM on Cloud Run (512MB)
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // 5MB is enough for base64 images (~500KB compressed → ~667KB base64)
+  app.use(express.json({ limit: "5mb" }));
+  app.use(express.urlencoded({ limit: "5mb", extended: true }));
   // Storage proxy for /manus-storage/* paths
   registerStorageProxy(app);
   // OAuth callback under /api/oauth/callback
