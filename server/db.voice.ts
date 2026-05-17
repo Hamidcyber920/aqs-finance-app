@@ -76,7 +76,8 @@ export async function recordVoiceCost(data: {
 }) {
   const db = getDb();
   if (!db) return;
-  const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Midnight today
   await db.insert(voiceCostTracking).values({
     userId: data.userId,
     date: today,

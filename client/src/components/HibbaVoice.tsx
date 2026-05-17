@@ -20,10 +20,69 @@ import {
   Phone,
   Minimize2,
   Maximize2,
+  Volume2,
 } from "lucide-react";
 import { startAudioCapture, AudioPlayer, type AudioCaptureHandle } from "@/lib/audio-utils";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+
+// ── Speaker mode detection ──
+// Heuristic: if no headphones/earpiece detected, assume speaker mode
+async function detectSpeakerMode(): Promise<boolean> {
+  try {
+    if (!navigator.mediaDevices?.enumerateDevices) return false;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioOutputs = devices.filter(d => d.kind === "audiooutput");
+    // If only 1 output (built-in speaker) or none labelled as headphone/earphone, assume speaker
+    const hasHeadphones = audioOutputs.some(d => {
+      const label = (d.label || "").toLowerCase();
+      return label.includes("headphone") || label.includes("earphone") ||
+             label.includes("airpod") || label.includes("bluetooth") ||
+             label.includes("headset") || label.includes("earbud");
+    });
+    return !hasHeadphones;
+  } catch {
+    return false; // Can't detect, assume private
+  }
+}
+
+// ── Runtime context builder ──
+// Builds dynamic context about the current page, visible forms, and entity
+interface RuntimeContext {
+  currentPage: string;
+  formFields: string[];
+  entityType: string | null;
+  entityId: string | null;
+}
+
+// Known form fields per page path
+const PAGE_FORM_FIELDS: Record<string, string[]> = {
+  "/loans": ["applicantName", "applicantEmail", "applicantPhone", "applicantAddress", "amount", "purpose", "guarantorName", "notes", "termValue"],
+  "/payroll": ["employeeName", "niNumber", "taxCode", "grossPay", "incomeTax", "netPay", "paymentMethod"],
+  "/income": ["amount", "incomeDate", "description", "category", "subcategory", "reference"],
+  "/capture": ["amount", "date", "description", "vendor", "category", "paymentMethod"],
+  "/bills-utilities": ["amount", "billDate", "notes", "periodStart", "periodEnd"],
+  "/accommodation": ["tenantName", "email", "phone", "roomNumber", "monthlyRent"],
+  "/donors": ["name", "email", "phone", "address", "notes"],
+  "/fundraising": ["name", "targetAmount", "description"],
+};
+
+function buildRuntimeContext(pathname: string): RuntimeContext {
+  // Extract entity type and ID from URL patterns like /loans/123
+  const parts = pathname.split("/").filter(Boolean);
+  let entityType: string | null = null;
+  let entityId: string | null = null;
+  if (parts.length >= 2 && /^\d+$/.test(parts[parts.length - 1])) {
+    entityId = parts[parts.length - 1];
+    entityType = parts[parts.length - 2];
+  }
+
+  // Match form fields for the base path
+  const basePath = "/" + (parts[0] || "");
+  const formFields = PAGE_FORM_FIELDS[basePath] || [];
+
+  return { currentPage: pathname, formFields, entityType, entityId };
+}
 
 type State = "idle" | "connecting" | "connected" | "error";
 
@@ -269,7 +328,8 @@ const HIBBA_TOOLS = [{
   ],
 }];
 
-const SYSTEM_INSTRUCTION = `HIBBA — VOICE AGENT FOR THE ABDULLAH QUILLIAM SOCIETY
+// Base system instruction — runtime context and speaker mode appended dynamically
+const BASE_SYSTEM_INSTRUCTION = `HIBBA — VOICE AGENT FOR THE ABDULLAH QUILLIAM SOCIETY
 
 # MISSION
 You are Hibba, the high-performance conversational Operating System for the Abdullah Quilliam Society (AQS).
@@ -356,6 +416,28 @@ For prayer times, tell them the next upcoming prayer and its time.
 For the morning briefing, use get_strategic_briefing() for a comprehensive overview, or combine get_prayer_times + get_dashboard_summary.
 At session start, use get_current_user() to personalise the greeting, then offer a briefing.
 `;
+
+/** Build full system instruction with runtime context and speaker mode warning */
+function buildSystemInstruction(ctx: RuntimeContext, isSpeakerMode: boolean): string {
+  let instruction = BASE_SYSTEM_INSTRUCTION;
+
+  // Append runtime context
+  instruction += `\n\n# RUNTIME CONTEXT\nThe user is currently on page: ${ctx.currentPage}\n`;
+  if (ctx.formFields.length > 0) {
+    instruction += `Available form fields on this page: ${ctx.formFields.join(", ")}\n`;
+    instruction += `You can use fill_form() with these field names to populate the form.\n`;
+  }
+  if (ctx.entityType && ctx.entityId) {
+    instruction += `Currently viewing ${ctx.entityType} with ID: ${ctx.entityId}\n`;
+  }
+
+  // Append speaker mode warning
+  if (isSpeakerMode) {
+    instruction += `\n# ⚠️ SPEAKER MODE ACTIVE\nThe user appears to be using device speakers (not headphones/earpiece). Others nearby may hear your responses.\nDO NOT read aloud:\n- Exact financial amounts (say "a significant amount" or "I can see the figure on screen")\n- Bank account numbers, sort codes, NI numbers\n- Personal addresses or phone numbers\n- Donor names with their donation amounts\n- Salary figures\nInstead, say: "I can see that information — would you like me to show it on screen rather than read it aloud?"\nFor navigation and general queries, respond normally.\n`;
+  }
+
+  return instruction;
+}
 
 /** Detect if a string ends with sentence-ending punctuation */
 function endsWithSentence(text: string): boolean {
@@ -457,20 +539,26 @@ export function HibbaVoice() {
     userIdRef.current = 0;
 
     try {
-      // 1. Get ephemeral token
+      // 1. Detect speaker mode and build runtime context
+      const isSpeakerMode = await detectSpeakerMode();
+      const runtimeCtx = buildRuntimeContext(window.location.pathname);
+      const fullSystemInstruction = buildSystemInstruction(runtimeCtx, isSpeakerMode);
+
+      // 2. Get ephemeral token (with freshness timestamp for anti-replay)
       setStatusText("Authenticating...");
       const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
       const result = await getToken.mutateAsync({
         device: isMobileDevice ? "mobile" : "desktop",
         screenContext: window.location.pathname,
+        requestTimestamp: Date.now(),
       });
       const { token, model, user, sessionId: sId } = result;
       voiceSessionIdRef.current = sId ?? null;
       sessionStartTimeRef.current = Date.now();
 
-      upsertMessage("sys-auth", "system", `Connected as ${user}`, true);
+      upsertMessage("sys-auth", "system", `Connected as ${user}${isSpeakerMode ? " 🔊" : ""}`, true);
 
-      // 2. Import @google/genai dynamically
+      // 3. Import @google/genai dynamically
       setStatusText("Initializing AI...");
       const { GoogleGenAI, Modality } = await import("@google/genai");
 
@@ -479,7 +567,7 @@ export function HibbaVoice() {
         httpOptions: { apiVersion: "v1alpha" },
       });
 
-      // 3. Connect to Gemini Live API directly from browser
+      // 4. Connect to Gemini Live API directly from browser
       setStatusText("Connecting to Gemini...");
 
       const session = await ai.live.connect({
@@ -492,9 +580,9 @@ export function HibbaVoice() {
             },
           },
           systemInstruction: {
-            parts: [{ text: SYSTEM_INSTRUCTION }],
+            parts: [{ text: fullSystemInstruction }],
           },
-          tools: HIBBA_TOOLS,
+          tools: HIBBA_TOOLS as any,
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },

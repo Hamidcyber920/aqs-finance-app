@@ -36,13 +36,28 @@ export const voiceRouter = router({
   /**
    * Get an ephemeral token for client-side Gemini Live API connection.
    * Also creates a session record and checks the monthly cost ceiling.
+   * Includes issuedAt timestamp for freshness validation (anti-replay).
    */
   getEphemeralToken: protectedProcedure
     .input(z.object({
       device: z.string().optional(),
       screenContext: z.string().optional(),
+      requestTimestamp: z.number().optional(), // Client-side timestamp for freshness check
     }).optional())
     .mutation(async ({ ctx, input }) => {
+      // ── Token freshness check (anti-replay) ──
+      // If client sends a requestTimestamp, reject if it's older than 60 seconds
+      if (input?.requestTimestamp) {
+        const age = Date.now() - input.requestTimestamp;
+        if (age > 60_000 || age < -10_000) {
+          // Token request is stale (>60s old) or from the future (clock skew > 10s)
+          console.warn(`[Voice] Stale token request rejected. Age: ${age}ms, User: ${ctx.user.id}`);
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Token request expired. Please try again.",
+          });
+        }
+      }
       if (!GEMINI_API_KEY) {
         console.error("[Voice] GEMINI_API_KEY not configured");
         throw new TRPCError({
@@ -119,6 +134,7 @@ export const voiceRouter = router({
           user: ctx.user.name || ctx.user.openId || "User",
           sessionId,
           conversationId,
+          issuedAt: Date.now(), // For client-side freshness validation
           monthlyCostPence: await getTotalMonthlyVoiceCost(currentYear, currentMonth).catch(() => 0),
           ceilingPence: MONTHLY_CEILING_PENCE,
         };

@@ -2084,11 +2084,11 @@
 - [x] Add missing tool endpoints: get_qarde_hasan_register, get_calendar, set_user_preference
 - [x] Audible progress for complex queries (progress messages + "Let me look that up")
 - [x] Feature flag updated to enable voice for all staff roles (not just superadmin)
-- [ ] Add cost-per-session tracking and weekly cost report (future enhancement)
-- [ ] Add monthly ceiling check (£500) — pause non-superadmin sessions if exceeded (future)
-- [ ] Add session token freshness validation (prevent replay attacks) (future)
-- [ ] Enhanced runtime context: pass form_fields, entity_type, entity_id with every request (future)
-- [ ] Add speaker mode detection with sensitive content warning (future)
+- [x] Add cost-per-session tracking and weekly cost report (implemented in db.voice.ts + voice router)
+- [x] Add monthly ceiling check (£500) — pause non-superadmin sessions if exceeded (voice router checkCeiling)
+- [x] Add session token freshness validation (prevent replay attacks) — requestTimestamp + 60s server-side check
+- [x] Enhanced runtime context: pass form_fields, entity_type, entity_id with every request — dynamic system instruction
+- [x] Add speaker mode detection with sensitive content warning — enumerateDevices heuristic + SPEAKER MODE section in system instruction
 
 ## Bug Fix — Email Compose Timestamp Crash
 - [x] Fix "timestamp.toLocaleTimeString is not a function" error when creating/viewing emails (progress msg used Date.now() instead of new Date(), added safety guard)
