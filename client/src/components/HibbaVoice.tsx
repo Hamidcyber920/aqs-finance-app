@@ -228,15 +228,15 @@ const HIBBA_TOOLS = [{
     },
     {
       name: "fill_form",
-      description: "Fill form fields on the current page by voice. Use when user dictates data like 'set the amount to 500', 'the vendor is Tesco', 'donor name is Ahmed Khan', 'set salary to 2500'. Extract field names and values from what the user says.",
+      description: "Fill form fields on the current page by voice. Use when user dictates data. IMPORTANT: You MUST navigate to the correct page first using navigate_to before calling fill_form. Supported pages and their field names: /loans (applicantName, applicantEmail, applicantPhone, applicantAddress, amount, purpose, guarantorName, notes, termValue), /payroll (employeeName, niNumber, taxCode, grossPay, incomeTax, netPay, paymentMethod), /income (amount, incomeDate, description, category, subcategory, reference), /capture (amount, date, description, vendor, category, paymentMethod), /bills-utilities (amount, billDate, notes, periodStart, periodEnd), /accommodation (tenantName, email, phone, roomNumber, monthlyRent).",
       parameters: {
         type: "OBJECT" as const,
         properties: {
-          fields: { type: "STRING" as const, description: "JSON string of field-value pairs to fill, e.g. '{\"amount\":\"500\",\"vendor\":\"Tesco\",\"category\":\"Groceries\"}'. Use camelCase field names." },
-          page: { type: "STRING" as const, description: "The page path where the form is, e.g. '/receipts', '/payroll', '/donors'. Use current page if not specified." },
+          fields: { type: "STRING" as const, description: "JSON string of field-value pairs to fill, e.g. '{\"amount\":\"500\",\"vendor\":\"Tesco\"}'. Use the exact camelCase field names listed in the tool description for each page." },
+          page: { type: "STRING" as const, description: "The page path. MUST match one of: /loans, /payroll, /income, /capture, /bills-utilities, /accommodation. If not specified, uses current page path." },
           action: { type: "STRING" as const, description: "'fill' to just fill fields, 'fill_and_confirm' to fill and submit. Default: fill" },
         },
-        required: ["fields"],
+        required: ["fields", "page"],
       },
     },
   ],
@@ -708,12 +708,19 @@ export function HibbaVoice() {
               const fields = typeof fieldsStr === "string" ? JSON.parse(fieldsStr) : fieldsStr;
               const page = fc.args?.page || window.location.pathname;
               const action = fc.args?.action || "fill";
-              // Dispatch the form fill event that useHibbaFormFill listens for
-              window.dispatchEvent(new CustomEvent("hibba:fill_form", {
-                detail: { fields, page, action }
-              }));
+              // Navigate to the target page first if not already there
+              const currentPath = window.location.pathname;
+              if (page && page !== currentPath) {
+                setLocation(page);
+              }
+              // Dispatch the form fill event after a delay to let the page mount
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent("hibba:fill_form", {
+                  detail: { fields, page, action }
+                }));
+              }, page !== currentPath ? 600 : 100);
               const fieldNames = Object.keys(fields).join(", ");
-              result = { success: true, message: `Filled fields: ${fieldNames} on ${page}` };
+              result = { success: true, message: `Navigated to ${page} and filled fields: ${fieldNames}` };
             } catch (parseErr) {
               result = { error: "Could not parse form fields. Please try again." };
             }

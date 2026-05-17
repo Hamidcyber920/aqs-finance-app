@@ -77,7 +77,7 @@ export default function CapturePage() {
   const watchedAmount = watch("amount");
 
   // Listen for Hibba voice form-fill commands
-  useHibbaFormFill("/", useCallback((fields: Record<string, any>) => {
+  useHibbaFormFill("/capture", useCallback((fields: Record<string, any>) => {
     if (fields.amount) setValue("amount", String(fields.amount));
     if (fields.date) setValue("date", fields.date);
     if (fields.description) setValue("description", fields.description);

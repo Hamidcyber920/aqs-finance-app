@@ -145,14 +145,20 @@ export default function PayrollPage() {
   const { register, handleSubmit, reset, setValue } = useForm<any>();
   // Listen for Hibba voice form-fill commands
   useHibbaFormFill("/payroll", useCallback((fields: Record<string, any>) => {
-    if (fields.employeeName) setValue("employeeName", fields.employeeName);
-    if (fields.niNumber) setValue("niNumber", fields.niNumber);
-    if (fields.taxCode) setValue("taxCode", fields.taxCode);
-    if (fields.grossPay || fields.amount) setValue("grossPay", String(fields.grossPay || fields.amount));
-    if (fields.incomeTax || fields.tax) setValue("incomeTax", String(fields.incomeTax || fields.tax));
-    if (fields.netPay) setValue("netPay", String(fields.netPay));
-    if (fields.paymentMethod) setValue("paymentMethod", fields.paymentMethod);
-  }, [setValue]));
+    // Auto-open the dialog first
+    setOpen(true);
+    // Fill fields after a short delay to let the dialog mount
+    setTimeout(() => {
+      if (fields.employeeName) setValue("employeeName", fields.employeeName);
+      if (fields.niNumber) setValue("niNumber", fields.niNumber);
+      if (fields.taxCode) setValue("taxCode", fields.taxCode);
+      if (fields.grossPay || fields.amount) setValue("grossPay", String(fields.grossPay || fields.amount));
+      if (fields.incomeTax || fields.tax) setValue("incomeTax", String(fields.incomeTax || fields.tax));
+      if (fields.netPay) setValue("netPay", String(fields.netPay));
+      if (fields.paymentMethod) setValue("paymentMethod", fields.paymentMethod);
+      toast.success("Hibba filled the form \u2014 please review");
+    }, 300);
+  }, [setValue, setOpen]));
 
 
   const records: any[] = Array.isArray(data) ? data : [];

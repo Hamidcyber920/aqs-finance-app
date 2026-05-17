@@ -421,13 +421,19 @@ export default function IncomePage() {
   });
   // Listen for Hibba voice form-fill commands
   useHibbaFormFill("/income", useCallback((fields: Record<string, any>) => {
-    if (fields.amount) setValue("amount", String(fields.amount));
-    if (fields.date || fields.incomeDate) setValue("incomeDate", fields.date || fields.incomeDate);
-    if (fields.source || fields.description) setValue("description", fields.source || fields.description);
-    if (fields.category || fields.type) setValue("category", fields.category || fields.type);
-    if (fields.subcategory) setValue("subcategory", fields.subcategory);
-    if (fields.reference) setValue("reference", fields.reference);
-  }, [setValue]));
+    // Auto-open the dialog first
+    openDialog(fields.category || fields.type || "");
+    // Fill fields after a short delay to let the dialog mount
+    setTimeout(() => {
+      if (fields.amount) setValue("amount", String(fields.amount));
+      if (fields.date || fields.incomeDate) setValue("incomeDate", fields.date || fields.incomeDate);
+      if (fields.source || fields.description) setValue("description", fields.source || fields.description);
+      if (fields.category || fields.type) setValue("category", fields.category || fields.type);
+      if (fields.subcategory) setValue("subcategory", fields.subcategory);
+      if (fields.reference) setValue("reference", fields.reference);
+      toast.success("Hibba filled the form \u2014 please review");
+    }, 300);
+  }, [setValue, openDialog]));
 
   const [selectedCat, setSelectedCat] = useState<string>(dialogInitialCat);
   const watchCat = selectedCat; // driven by state, not watch(), to ensure reliable re-renders
