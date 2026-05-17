@@ -2428,3 +2428,5 @@
 - [x] Fix Safari res.json() crash in SmartUpload.tsx upload fetch
 - [x] Fix Safari res.json() crash in checkCrmByPhone fetch
 - [x] Separate file selection (preview) from processing (upload+extract) with auto-trigger useEffect + manual Scan button fallback
+## Bug Fix — AI extraction not populating receipt form fields (May 2026)
+- [x] Fix field name mismatch: AI returns vendorName/totalAmount/purchaseDate/items but form expects vendor/amount/description/date

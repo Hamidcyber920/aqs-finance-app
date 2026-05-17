@@ -177,10 +177,16 @@ export default function CapturePage() {
         } else {
           setExtracted(aiData);
           if (docType === "receipt") {
-            if ((aiData as any).amount) setValue("amount", (aiData as any).amount);
-            if ((aiData as any).description) setValue("description", (aiData as any).description);
-            if ((aiData as any).vendor) setValue("vendor", (aiData as any).vendor);
-            if ((aiData as any).date) setValue("date", (aiData as any).date);
+            // AI returns: vendorName, totalAmount, purchaseDate, items
+            // Form expects: vendor, amount, description, date
+            const amount = (aiData as any).totalAmount || (aiData as any).amount;
+            const vendor = (aiData as any).vendorName || (aiData as any).vendor;
+            const description = (aiData as any).items || (aiData as any).description;
+            const date = (aiData as any).purchaseDate || (aiData as any).date;
+            if (amount) setValue("amount", String(amount));
+            if (description) setValue("description", String(description));
+            if (vendor) setValue("vendor", String(vendor));
+            if (date) setValue("date", String(date));
           }
           const phone = (aiData as any).donorPhone || (aiData as any).phone;
           if (phone) await checkCrmByPhone(phone);
