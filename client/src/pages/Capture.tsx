@@ -144,7 +144,7 @@ export default function CapturePage() {
         data = JSON.parse(resText);
       } catch (parseErr) {
         console.error("[Capture] Failed to parse upload response:", resText.substring(0, 500));
-        throw new Error("Upload failed — server returned invalid response");
+        throw new Error(`Upload error (${res.status}): ${resText.substring(0, 100) || "empty response"}`);
       }
       if (!res.ok) {
         throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
