@@ -2453,3 +2453,7 @@
 - [x] safariSafeFetch: catch JSON.parse errors and show clear "Server unavailable" message instead of cryptic parse error
 - [x] Capture.tsx: uploadWithRetry helper with auto-retry (3s, 6s delays) for 503 cold-start errors
 - [x] Capture.tsx: user-friendly error messages for 503 errors
+
+## Bug Fix — AI extraction not filling form fields after successful receipt scan (May 2026)
+- [x] Investigate why AI extraction returns data but form fields remain empty
+- [x] Fix form-fill logic to correctly map AI response to form fields (extractedData was nested, code was looking at top level)

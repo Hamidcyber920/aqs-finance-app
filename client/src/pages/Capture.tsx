@@ -194,28 +194,33 @@ export default function CapturePage() {
         mimeType: file.type || "image/jpeg",
         moduleType: docType,
       });
-      console.log("[Capture] AI extraction result:", aiData);
+      console.log("[Capture] AI extraction result:", JSON.stringify(aiData).substring(0, 500));
       if (aiData) {
-        if (docType === "handwritten_collection" && (aiData as any).records) {
-          const records = (aiData as any).records as any[];
+        // The extract procedure returns { extractedData, discrepancies, confidence, moduleType, isBulk }
+        const extracted = (aiData as any).extractedData || aiData;
+        const isBulk = (aiData as any).isBulk;
+
+        if ((docType === "handwritten_collection" || isBulk) && extracted?.records) {
+          const records = extracted.records as any[];
           setMultiRecords(records);
           if (records.length > 0) { setExtracted(records[0]); setSelectedRecord(0); }
           toast.success(`AI found ${records.length} donor entries`);
         } else {
-          setExtracted(aiData);
+          setExtracted(extracted);
           if (docType === "receipt") {
             // AI returns: vendorName, totalAmount, purchaseDate, items
             // Form expects: vendor, amount, description, date
-            const amount = (aiData as any).totalAmount || (aiData as any).amount;
-            const vendor = (aiData as any).vendorName || (aiData as any).vendor;
-            const description = (aiData as any).items || (aiData as any).description;
-            const date = (aiData as any).purchaseDate || (aiData as any).date;
+            const amount = extracted?.totalAmount || extracted?.amount;
+            const vendor = extracted?.vendorName || extracted?.vendor;
+            const description = extracted?.items || extracted?.description;
+            const date = extracted?.purchaseDate || extracted?.date;
+            console.log("[Capture] Form fill values:", { amount, vendor, description, date });
             if (amount) setValue("amount", String(amount));
             if (description) setValue("description", String(description));
             if (vendor) setValue("vendor", String(vendor));
             if (date) setValue("date", String(date));
           }
-          const phone = (aiData as any).donorPhone || (aiData as any).phone;
+          const phone = extracted?.donorPhone || extracted?.phone;
           if (phone) await checkCrmByPhone(phone);
           toast.success("AI extracted data — review and save below");
         }
