@@ -1,5 +1,5 @@
 /**
- * Tests for Voice Router — Ephemeral Token Endpoint
+ * Tests for Voice Router — Ephemeral Token + Session Tracking
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -11,24 +11,50 @@ vi.mock("@google/genai", () => ({
   })),
 }));
 
-// Mock the tRPC context
+// Mock db.voice helpers
+vi.mock("../db.voice", () => ({
+  createVoiceSession: vi.fn().mockResolvedValue(1),
+  endVoiceSession: vi.fn().mockResolvedValue(undefined),
+  errorVoiceSession: vi.fn().mockResolvedValue(undefined),
+  recordVoiceCost: vi.fn().mockResolvedValue(undefined),
+  getMonthlyVoiceCost: vi.fn().mockResolvedValue(0),
+  getTotalMonthlyVoiceCost: vi.fn().mockResolvedValue(0),
+  logVoiceToolCall: vi.fn().mockResolvedValue(undefined),
+  logVoiceTranscript: vi.fn().mockResolvedValue(undefined),
+  getRecentVoiceSessions: vi.fn().mockResolvedValue([]),
+}));
+
+// Mock the tRPC context — support .input().mutation() chain
 vi.mock("../_core/trpc", () => {
   const mockRouter = vi.fn((routes: any) => routes);
-  const mockProcedure = {
-    mutation: (fn: any) => ({ _mutation: fn }),
-    query: (fn: any) => ({ _query: fn }),
+  const createProcedure = () => {
+    const proc: any = {
+      mutation: (fn: any) => ({ _mutation: fn }),
+      query: (fn: any) => ({ _query: fn }),
+      input: (schema: any) => {
+        // Return a new procedure-like object that also has mutation/query
+        return {
+          mutation: (fn: any) => ({ _mutation: fn, _inputSchema: schema }),
+          query: (fn: any) => ({ _query: fn, _inputSchema: schema }),
+          input: (schema2: any) => ({
+            mutation: (fn: any) => ({ _mutation: fn, _inputSchema: schema2 }),
+            query: (fn: any) => ({ _query: fn, _inputSchema: schema2 }),
+          }),
+        };
+      },
+    };
+    return proc;
   };
   return {
     router: mockRouter,
-    publicProcedure: mockProcedure,
-    protectedProcedure: mockProcedure,
+    publicProcedure: createProcedure(),
+    protectedProcedure: createProcedure(),
   };
 });
 
 describe("Voice Router", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Set GEMINI_API_KEY
     process.env.GEMINI_API_KEY = "test-gemini-key-12345";
   });
 
@@ -38,27 +64,48 @@ describe("Voice Router", () => {
     expect(voiceRouter.getEphemeralToken).toBeDefined();
   });
 
-  it("should return token, model, and user on success", async () => {
+  it("should return token, model, user, and sessionId on success", async () => {
     mockCreate.mockResolvedValueOnce({
       name: "auth_tokens/test-ephemeral-token-abc123",
     });
 
-    // Re-import to get fresh module
     vi.resetModules();
     vi.mock("@google/genai", () => ({
       GoogleGenAI: vi.fn().mockImplementation(() => ({
         authTokens: { create: mockCreate },
       })),
     }));
+    vi.mock("../db.voice", () => ({
+      createVoiceSession: vi.fn().mockResolvedValue(42),
+      getTotalMonthlyVoiceCost: vi.fn().mockResolvedValue(100),
+      endVoiceSession: vi.fn(),
+      errorVoiceSession: vi.fn(),
+      recordVoiceCost: vi.fn(),
+      getMonthlyVoiceCost: vi.fn().mockResolvedValue(0),
+      logVoiceToolCall: vi.fn(),
+      logVoiceTranscript: vi.fn(),
+      getRecentVoiceSessions: vi.fn().mockResolvedValue([]),
+    }));
     vi.mock("../_core/trpc", () => {
-      const mockRouter = vi.fn((routes: any) => routes);
-      const mockProcedure = {
-        mutation: (fn: any) => ({ _mutation: fn }),
+      const createProcedure = () => {
+        const proc: any = {
+          mutation: (fn: any) => ({ _mutation: fn }),
+          query: (fn: any) => ({ _query: fn }),
+          input: (schema: any) => ({
+            mutation: (fn: any) => ({ _mutation: fn }),
+            query: (fn: any) => ({ _query: fn }),
+            input: (s2: any) => ({
+              mutation: (fn: any) => ({ _mutation: fn }),
+              query: (fn: any) => ({ _query: fn }),
+            }),
+          }),
+        };
+        return proc;
       };
       return {
-        router: mockRouter,
-        publicProcedure: mockProcedure,
-        protectedProcedure: mockProcedure,
+        router: vi.fn((routes: any) => routes),
+        publicProcedure: createProcedure(),
+        protectedProcedure: createProcedure(),
       };
     });
 
@@ -69,11 +116,13 @@ describe("Voice Router", () => {
       ctx: {
         user: { id: 1, name: "TestUser", openId: "test-open-id", role: "admin" },
       },
+      input: { device: "mobile", screenContext: "/dashboard" },
     });
 
     expect(result).toHaveProperty("token");
     expect(result).toHaveProperty("model");
     expect(result).toHaveProperty("user", "TestUser");
+    expect(result).toHaveProperty("sessionId");
     expect(result.token).toBe("auth_tokens/test-ephemeral-token-abc123");
   });
 
@@ -84,7 +133,6 @@ describe("Voice Router", () => {
 
   it("should use v1alpha API version for ephemeral tokens", async () => {
     const { GoogleGenAI } = await import("@google/genai");
-    // Verify the constructor was called (or will be called) with v1alpha
     expect(GoogleGenAI).toBeDefined();
   });
 
@@ -99,15 +147,37 @@ describe("Voice Router", () => {
         authTokens: { create: mockCreate },
       })),
     }));
+    vi.mock("../db.voice", () => ({
+      createVoiceSession: vi.fn().mockResolvedValue(1),
+      getTotalMonthlyVoiceCost: vi.fn().mockResolvedValue(0),
+      endVoiceSession: vi.fn(),
+      errorVoiceSession: vi.fn(),
+      recordVoiceCost: vi.fn(),
+      getMonthlyVoiceCost: vi.fn().mockResolvedValue(0),
+      logVoiceToolCall: vi.fn(),
+      logVoiceTranscript: vi.fn(),
+      getRecentVoiceSessions: vi.fn().mockResolvedValue([]),
+    }));
     vi.mock("../_core/trpc", () => {
-      const mockRouter = vi.fn((routes: any) => routes);
-      const mockProcedure = {
-        mutation: (fn: any) => ({ _mutation: fn }),
+      const createProcedure = () => {
+        const proc: any = {
+          mutation: (fn: any) => ({ _mutation: fn }),
+          query: (fn: any) => ({ _query: fn }),
+          input: (schema: any) => ({
+            mutation: (fn: any) => ({ _mutation: fn }),
+            query: (fn: any) => ({ _query: fn }),
+            input: (s2: any) => ({
+              mutation: (fn: any) => ({ _mutation: fn }),
+              query: (fn: any) => ({ _query: fn }),
+            }),
+          }),
+        };
+        return proc;
       };
       return {
-        router: mockRouter,
-        publicProcedure: mockProcedure,
-        protectedProcedure: mockProcedure,
+        router: vi.fn((routes: any) => routes),
+        publicProcedure: createProcedure(),
+        protectedProcedure: createProcedure(),
       };
     });
 
@@ -118,8 +188,17 @@ describe("Voice Router", () => {
       ctx: {
         user: { id: 1, name: "TestUser", openId: "test-open-id", role: "admin" },
       },
+      input: {},
     });
 
     expect(result.model).toBe("gemini-2.5-flash-native-audio-latest");
+  });
+
+  it("should export endSession, logToolCall, logTranscript, and getUsageStats", async () => {
+    const { voiceRouter } = await import("./voice");
+    expect(voiceRouter.endSession).toBeDefined();
+    expect(voiceRouter.logToolCall).toBeDefined();
+    expect(voiceRouter.logTranscript).toBeDefined();
+    expect(voiceRouter.getUsageStats).toBeDefined();
   });
 });

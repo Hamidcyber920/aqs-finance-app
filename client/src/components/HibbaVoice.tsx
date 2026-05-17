@@ -378,6 +378,10 @@ export function HibbaVoice() {
   const endRef = useRef<HTMLDivElement>(null);
   const connectingRef = useRef(false);
 
+  // Session tracking refs
+  const voiceSessionIdRef = useRef<number | null>(null);
+  const sessionStartTimeRef = useRef<number>(0);
+
   // Transcript buffering refs — accumulate words, flush on sentence boundary
   const hibbaBufferRef = useRef("");
   const userBufferRef = useRef("");
@@ -388,6 +392,8 @@ export function HibbaVoice() {
   const speakingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const getToken = trpc.voice.getEphemeralToken.useMutation();
+  const endSessionMut = trpc.voice.endSession.useMutation();
+  const logToolCallMut = trpc.voice.logToolCall.useMutation();
   const utils = trpc.useUtils();
 
   // Auto-scroll to bottom when messages change (only when panel is expanded)
@@ -453,8 +459,14 @@ export function HibbaVoice() {
     try {
       // 1. Get ephemeral token
       setStatusText("Authenticating...");
-      const result = await getToken.mutateAsync();
-      const { token, model, user } = result;
+      const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      const result = await getToken.mutateAsync({
+        device: isMobileDevice ? "mobile" : "desktop",
+        screenContext: window.location.pathname,
+      });
+      const { token, model, user, sessionId: sId } = result;
+      voiceSessionIdRef.current = sId ?? null;
+      sessionStartTimeRef.current = Date.now();
 
       upsertMessage("sys-auth", "system", `Connected as ${user}`, true);
 
@@ -626,6 +638,7 @@ export function HibbaVoice() {
     const responses: any[] = [];
     for (const fc of functionCalls) {
       console.log(`[Hibba] Tool call: ${fc.name}`, fc.args);
+      const toolStartTime = Date.now();
       try {
         let result: any;
         switch (fc.name) {
@@ -784,9 +797,31 @@ export function HibbaVoice() {
             result = { error: `Unknown tool: ${fc.name}` };
         }
         responses.push({ id: fc.id, name: fc.name, response: result });
+        // Log successful tool call
+        if (voiceSessionIdRef.current) {
+          logToolCallMut.mutateAsync({
+            sessionId: voiceSessionIdRef.current,
+            toolName: fc.name,
+            params: JSON.stringify(fc.args || {}),
+            resultSummary: JSON.stringify(result).substring(0, 200),
+            success: true,
+            latencyMs: Date.now() - toolStartTime,
+          }).catch(() => {});
+        }
       } catch (err: any) {
         console.error(`[Hibba] Tool ${fc.name} error:`, err);
         responses.push({ id: fc.id, name: fc.name, response: { error: err?.message || "Tool execution failed" } });
+        // Log failed tool call
+        if (voiceSessionIdRef.current) {
+          logToolCallMut.mutateAsync({
+            sessionId: voiceSessionIdRef.current,
+            toolName: fc.name,
+            params: JSON.stringify(fc.args || {}),
+            success: false,
+            errorMessage: err?.message || "Unknown error",
+            latencyMs: Date.now() - toolStartTime,
+          }).catch(() => {});
+        }
       }
     }
     // Send all tool responses back to Gemini
@@ -810,6 +845,17 @@ export function HibbaVoice() {
     }
     playerRef.current?.destroy();
     playerRef.current = null;
+    // End session tracking
+    if (voiceSessionIdRef.current) {
+      const durationSeconds = Math.round((Date.now() - sessionStartTimeRef.current) / 1000);
+      endSessionMut.mutateAsync({
+        sessionId: voiceSessionIdRef.current,
+        tokenCount: 0,
+        durationSeconds,
+        error: state === "error",
+      }).catch(() => {});
+      voiceSessionIdRef.current = null;
+    }
     setState("idle");
     setStatusText("Tap mic to start");
     connectingRef.current = false;
