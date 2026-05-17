@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -40,8 +40,10 @@ export default function CapturePage() {
   const galleryRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState<DocType>("receipt");
   const [preview, setPreview] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [extracted, setExtracted] = useState<any>(null);
   const [crmMatch, setCrmMatch] = useState<any>(null);
   const [checkingCrm, setCheckingCrm] = useState(false);
@@ -98,79 +100,100 @@ export default function CapturePage() {
     finally { setCheckingCrm(false); }
   }, []);
 
-  const handleFile = async (file: File) => {
-    // Use URL.createObjectURL for preview — avoids iOS conflict with arrayBuffer()
-    setPreview(URL.createObjectURL(file));
+  // Step 1: File selection — only sets preview, stores file for processing
+  const handleFileSelect = useCallback((file: File) => {
+    try {
+      console.log("[Capture] File selected:", file.name, file.type, file.size);
+      const objectUrl = URL.createObjectURL(file);
+      setPreview(objectUrl);
+      setPendingFile(file);
+      setScanError(null);
+      setExtracted(null);
+      setCrmMatch(null);
+      setMultiRecords([]);
+      setSavedToCrm(false);
+      setImageHash("");
+      setDuplicateWarning(null);
+    } catch (err: any) {
+      console.error("[Capture] File select error:", err);
+      toast.error("Could not load file: " + (err?.message || "unknown error"));
+    }
+  }, []);
+
+  // Step 2: Upload + AI extraction — triggered automatically or by button tap
+  const processFile = useCallback(async (file: File) => {
+    if (uploading || analyzing) return; // prevent double-tap
     setUploading(true);
     setAnalyzing(false);
-    setExtracted(null); setCrmMatch(null); setMultiRecords([]); setSavedToCrm(false);
-    setImageHash("");
-    setDuplicateWarning(null);
+    setScanError(null);
 
     try {
-      // Step 1: Upload file to S3
+      // Upload file to S3
       console.log("[Capture] Starting upload, file:", file.name, file.type, file.size);
       const fd = new FormData();
       fd.append("file", file);
-      let uploadUrl: string;
-      try {
-        const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({ error: "Upload failed" }));
-          throw new Error(errBody.error || `Upload failed (HTTP ${res.status})`);
-        }
-        const data = await res.json();
-        uploadUrl = data.url;
-        console.log("[Capture] Upload success:", uploadUrl);
-      } catch (uploadErr: any) {
-        console.error("[Capture] Upload error:", uploadErr);
-        toast.error("Upload failed: " + (uploadErr?.message || "Could not upload file"));
-        setUploading(false);
-        return;
+      const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(errBody.error || `Upload failed (HTTP ${res.status})`);
       }
+      const data = await res.json();
+      const uploadUrl = data.url;
+      console.log("[Capture] Upload success:", uploadUrl);
 
-      // Step 2: AI extraction
+      // AI extraction
       setUploading(false);
       setAnalyzing(true);
       console.log("[Capture] Starting AI extraction, moduleType:", docType);
-      try {
-        const aiData = await extractMutation.mutateAsync({
-          fileUrl: uploadUrl,
-          mimeType: file.type || "image/jpeg",
-          moduleType: docType,
-        });
-        console.log("[Capture] AI extraction result:", aiData);
-        if (aiData) {
-          if (docType === "handwritten_collection" && (aiData as any).records) {
-            const records = (aiData as any).records as any[];
-            setMultiRecords(records);
-            if (records.length > 0) { setExtracted(records[0]); setSelectedRecord(0); }
-            toast.success(`AI found ${records.length} donor entries`);
-          } else {
-            setExtracted(aiData);
-            if (docType === "receipt") {
-              if ((aiData as any).amount) setValue("amount", (aiData as any).amount);
-              if ((aiData as any).description) setValue("description", (aiData as any).description);
-              if ((aiData as any).vendor) setValue("vendor", (aiData as any).vendor);
-              if ((aiData as any).date) setValue("date", (aiData as any).date);
-            }
-            const phone = (aiData as any).donorPhone || (aiData as any).phone;
-            if (phone) await checkCrmByPhone(phone);
-            toast.success("AI extracted data — review and save below");
+      const aiData = await extractMutation.mutateAsync({
+        fileUrl: uploadUrl,
+        mimeType: file.type || "image/jpeg",
+        moduleType: docType,
+      });
+      console.log("[Capture] AI extraction result:", aiData);
+      if (aiData) {
+        if (docType === "handwritten_collection" && (aiData as any).records) {
+          const records = (aiData as any).records as any[];
+          setMultiRecords(records);
+          if (records.length > 0) { setExtracted(records[0]); setSelectedRecord(0); }
+          toast.success(`AI found ${records.length} donor entries`);
+        } else {
+          setExtracted(aiData);
+          if (docType === "receipt") {
+            if ((aiData as any).amount) setValue("amount", (aiData as any).amount);
+            if ((aiData as any).description) setValue("description", (aiData as any).description);
+            if ((aiData as any).vendor) setValue("vendor", (aiData as any).vendor);
+            if ((aiData as any).date) setValue("date", (aiData as any).date);
           }
+          const phone = (aiData as any).donorPhone || (aiData as any).phone;
+          if (phone) await checkCrmByPhone(phone);
+          toast.success("AI extracted data — review and save below");
         }
-      } catch (extractErr: any) {
-        console.error("[Capture] AI extraction error:", extractErr);
-        toast.error("AI extraction failed: " + (extractErr?.message || "Could not analyse document"));
       }
+      setPendingFile(null); // clear pending after success
     } catch (err: any) {
-      console.error("[Capture] Unexpected error:", err);
-      toast.error("Could not process: " + (err?.message || "unknown error"));
+      console.error("[Capture] Process error:", err);
+      const msg = err?.message || "Could not process document";
+      setScanError(msg);
+      toast.error(msg);
     } finally {
       setUploading(false);
       setAnalyzing(false);
     }
-  };
+  }, [uploading, analyzing, docType, extractMutation, setValue, checkCrmByPhone]);
+
+  // Auto-trigger processing when a file is selected
+  const hasTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (pendingFile && !uploading && !analyzing && !extracted && !hasTriggeredRef.current) {
+      hasTriggeredRef.current = true;
+      // Small delay to ensure React has rendered the preview + spinner first
+      const timer = setTimeout(() => {
+        processFile(pendingFile).finally(() => { hasTriggeredRef.current = false; });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveToCrm = async (record: any) => {
     setSavingToCrm(true);
@@ -252,7 +275,7 @@ export default function CapturePage() {
         <p style={{ color:T.muted,fontSize:12,marginBottom:8 }}>DOCUMENT TYPE</p>
         <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth:"none" }}>
           {DOC_TYPES.map(dt => (
-            <button key={dt.id} onClick={() => { setDocType(dt.id); setExtracted(null); setCrmMatch(null); setMultiRecords([]); setPreview(null); setSavedToCrm(false); }}
+            <button key={dt.id} onClick={() => { setDocType(dt.id); setExtracted(null); setCrmMatch(null); setMultiRecords([]); setPreview(null); setPendingFile(null); setScanError(null); setSavedToCrm(false); }}
               style={{ background:docType===dt.id?dt.color:T.glass,border:`1px solid ${docType===dt.id?dt.color:T.border}`,borderRadius:12,padding:"8px 14px",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6,flexShrink:0,color:T.white }}>
               <dt.icon size={14}/><span style={{ fontSize:13,fontWeight:500 }}>{dt.label}</span>
             </button>
@@ -263,12 +286,12 @@ export default function CapturePage() {
 
       {/* Upload Zone */}
       <div className="px-4 mb-4">
-        <div onDrop={(e)=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)handleFile(f);}} onDragOver={(e)=>e.preventDefault()} onClick={()=>fileRef.current?.click()}
+        <div onDrop={(e)=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)handleFileSelect(f);}} onDragOver={(e)=>e.preventDefault()} onClick={()=>fileRef.current?.click()}
           style={{ border:`2px dashed ${preview?currentDocType.color:T.border}`,borderRadius:16,padding:preview?0:24,textAlign:"center",background:preview?"rgba(0,0,0,0.3)":T.glass,cursor:"pointer",position:"relative",overflow:"hidden",transition:"all 0.3s" }}>
           {preview ? (
             <>
               <img src={preview} alt="preview" style={{ maxHeight:200,width:"100%",borderRadius:14,objectFit:"contain" }}/>
-              <button onClick={(e)=>{e.stopPropagation();setPreview(null);setExtracted(null);setCrmMatch(null);setMultiRecords([]);setSavedToCrm(false);}}
+              <button onClick={(e)=>{e.stopPropagation();setPreview(null);setPendingFile(null);setScanError(null);setExtracted(null);setCrmMatch(null);setMultiRecords([]);setSavedToCrm(false);}}
                 style={{ position:"absolute",top:8,right:8,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:T.white,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
                 <X size={14}/>
               </button>
@@ -276,6 +299,15 @@ export default function CapturePage() {
                 <div style={{ position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12 }}>
                   <Loader2 size={32} className="animate-spin" style={{ color:currentDocType.color }}/>
                   <p style={{ color:T.white,fontSize:14 }}>{uploading?"Uploading...":"AI analysing..."}</p>
+                </div>
+              )}
+              {/* Scan button — shown when file is pending but not processing */}
+              {!uploading && !analyzing && !extracted && pendingFile && (
+                <div style={{ position:"absolute",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10 }}>
+                  <button onClick={(e)=>{e.stopPropagation();processFile(pendingFile);}} style={{ background:currentDocType.color,border:"none",borderRadius:12,padding:"12px 24px",color:T.white,fontWeight:600,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",gap:8 }}>
+                    <Sparkles size={18}/> Scan with AI
+                  </button>
+                  {scanError && <p style={{ color:"#ff6b6b",fontSize:12,textAlign:"center",maxWidth:"80%" }}>{scanError}</p>}
                 </div>
               )}
             </>
@@ -291,9 +323,9 @@ export default function CapturePage() {
           )}
         </div>
         {/* Camera input — forces camera on mobile */}
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFile(f);e.target.value="";}} />
+        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFileSelect(f);e.target.value="";}} />
         {/* Gallery input — opens file picker (no capture attribute) */}
-        <input ref={galleryRef} type="file" accept="image/*,application/pdf" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFile(f);e.target.value="";}} />
+        <input ref={galleryRef} type="file" accept="image/*,application/pdf" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFileSelect(f);e.target.value="";}} />
       </div>
 
       {/* Multi-record selector — Collection Sheet Verification Table */}
@@ -511,7 +543,7 @@ export default function CapturePage() {
                     </Button>
                   </form>
                 )}
-                <Button variant="outline" onClick={()=>{setPreview(null);setExtracted(null);setCrmMatch(null);setMultiRecords([]);setSavedToCrm(false);}} style={{ borderColor:T.border,color:T.muted,borderRadius:12,width:"100%",background:"transparent" }}>
+                <Button variant="outline" onClick={()=>{setPreview(null);setPendingFile(null);setScanError(null);setExtracted(null);setCrmMatch(null);setMultiRecords([]);setSavedToCrm(false);}} style={{ borderColor:T.border,color:T.muted,borderRadius:12,width:"100%",background:"transparent" }}>
                   <Camera size={16} className="mr-2"/> Scan Another
                 </Button>
               </div>
