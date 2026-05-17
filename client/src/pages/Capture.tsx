@@ -104,20 +104,13 @@ export default function CapturePage() {
     setUploading(true);
     setExtracted(null); setCrmMatch(null); setMultiRecords([]); setSavedToCrm(false);
     try {
-      // Compute SHA-256 hash of file for duplicate detection (non-blocking)
-      try {
-        const arrayBuf = await file.arrayBuffer();
-        const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuf);
-        const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
-        setImageHash(hashHex);
-      } catch {
-        // Hash computation can fail on some mobile browsers — skip duplicate detection
-        setImageHash("");
-      }
+      // Skip hash computation on mobile — reading arrayBuffer() can corrupt the File
+      // object on iOS Safari, causing subsequent FormData upload to fail
+      setImageHash("");
       setDuplicateWarning(null);
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({ error: "Upload failed" }));
         throw new Error(errBody.error || `Upload failed (${res.status})`);
