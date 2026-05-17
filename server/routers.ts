@@ -4163,7 +4163,7 @@ export const appRouter = router({
 
   // ─── UNIVERSAL AI DOCUMENT EXTRACTION ────────────────────────────────────
   documents: router({
-    extract: seniorProcedure
+    extract: protectedProcedure
       .input(z.object({
         fileUrl: z.string(),
         mimeType: z.string(),

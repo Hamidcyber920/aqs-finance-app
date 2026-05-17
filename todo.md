@@ -2414,3 +2414,6 @@
 
 ## Bug Fix — Receipt scanning "string did not match expected pattern" (May 2026)
 - [x] Fix receipt scanning error "Could not process: The string did not match the expected pattern" — iOS Safari conflict between FileReader.readAsDataURL and file.arrayBuffer() on same File object. Fixed by using URL.createObjectURL for preview + wrapping hash in try-catch
+## Bug Fix — Receipt AI extraction not working for staff role (May 2026)
+- [x] Change documents.extract from seniorProcedure to protectedProcedure so all logged-in users can scan receipts
+- [x] Improve error handling in Capture.tsx so upload/extract failures show clear error messages instead of silently failing

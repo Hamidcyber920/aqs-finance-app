@@ -70,20 +70,20 @@ describe("documents.extract — role gate", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects regular user (role: user)", async () => {
+  it("allows regular user (role: user) — all logged-in users can scan", async () => {
     const caller = appRouter.createCaller(createContext("user"));
-    await expect(
-      caller.documents.extract({
-        fileUrl: "https://example.com/doc.jpg",
-        mimeType: "image/jpeg",
-        moduleType: "income_rental",
-      })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const result = await caller.documents.extract({
+      fileUrl: "https://example.com/doc.jpg",
+      mimeType: "image/jpeg",
+      moduleType: "income_rental",
+    });
+    expect(result).toBeDefined();
+    expect(result.moduleType).toBe("income_rental");
   });
 
-  it("allows manager role (seniorProcedure includes managers)", async () => {
+  it("allows manager role", async () => {
     const caller = appRouter.createCaller(createContext("manager"));
-    // managers are in SENIOR_ROLES — call should succeed (not throw FORBIDDEN)
+    // managers can extract
     const result = await caller.documents.extract({
       fileUrl: "https://example.com/doc.jpg",
       mimeType: "image/jpeg",
@@ -92,9 +92,9 @@ describe("documents.extract — role gate", () => {
     expect(result).toBeDefined();
   });
 
-  it("allows admin role (seniorProcedure includes admins)", async () => {
+  it("allows admin role", async () => {
     const caller = appRouter.createCaller(createContext("admin"));
-    // admins are in SENIOR_ROLES — call should succeed (not throw FORBIDDEN)
+    // admins can extract
     const result = await caller.documents.extract({
       fileUrl: "https://example.com/doc.jpg",
       mimeType: "image/jpeg",

@@ -102,43 +102,74 @@ export default function CapturePage() {
     // Use URL.createObjectURL for preview — avoids iOS conflict with arrayBuffer()
     setPreview(URL.createObjectURL(file));
     setUploading(true);
+    setAnalyzing(false);
     setExtracted(null); setCrmMatch(null); setMultiRecords([]); setSavedToCrm(false);
+    setImageHash("");
+    setDuplicateWarning(null);
+
     try {
-      // Skip hash computation on mobile — reading arrayBuffer() can corrupt the File
-      // object on iOS Safari, causing subsequent FormData upload to fail
-      setImageHash("");
-      setDuplicateWarning(null);
+      // Step 1: Upload file to S3
+      console.log("[Capture] Starting upload, file:", file.name, file.type, file.size);
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({ error: "Upload failed" }));
-        throw new Error(errBody.error || `Upload failed (${res.status})`);
-      }
-      const { url } = await res.json();
-      setUploading(false); setAnalyzing(true);
-      const aiData = await extractMutation.mutateAsync({ fileUrl: url, mimeType: file.type || 'image/jpeg', moduleType: docType });
-      if (aiData) {
-        if (docType === "handwritten_collection" && (aiData as any).records) {
-          const records = (aiData as any).records as any[];
-          setMultiRecords(records);
-          if (records.length > 0) { setExtracted(records[0]); setSelectedRecord(0); }
-          toast.success(`AI found ${records.length} donor entries`);
-        } else {
-          setExtracted(aiData);
-          if (docType === "receipt") {
-            if ((aiData as any).amount) setValue("amount", (aiData as any).amount);
-            if ((aiData as any).description) setValue("description", (aiData as any).description);
-            if ((aiData as any).vendor) setValue("vendor", (aiData as any).vendor);
-            if ((aiData as any).date) setValue("date", (aiData as any).date);
-          }
-          const phone = (aiData as any).donorPhone || (aiData as any).phone;
-          if (phone) await checkCrmByPhone(phone);
-          toast.success("AI extracted data — review and save below");
+      let uploadUrl: string;
+      try {
+        const res = await fetch("/api/upload", { method: "POST", body: fd, credentials: "include" });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({ error: "Upload failed" }));
+          throw new Error(errBody.error || `Upload failed (HTTP ${res.status})`);
         }
+        const data = await res.json();
+        uploadUrl = data.url;
+        console.log("[Capture] Upload success:", uploadUrl);
+      } catch (uploadErr: any) {
+        console.error("[Capture] Upload error:", uploadErr);
+        toast.error("Upload failed: " + (uploadErr?.message || "Could not upload file"));
+        setUploading(false);
+        return;
       }
-    } catch (err: any) { toast.error("Could not process: " + (err?.message || "unknown error")); }
-    finally { setUploading(false); setAnalyzing(false); }
+
+      // Step 2: AI extraction
+      setUploading(false);
+      setAnalyzing(true);
+      console.log("[Capture] Starting AI extraction, moduleType:", docType);
+      try {
+        const aiData = await extractMutation.mutateAsync({
+          fileUrl: uploadUrl,
+          mimeType: file.type || "image/jpeg",
+          moduleType: docType,
+        });
+        console.log("[Capture] AI extraction result:", aiData);
+        if (aiData) {
+          if (docType === "handwritten_collection" && (aiData as any).records) {
+            const records = (aiData as any).records as any[];
+            setMultiRecords(records);
+            if (records.length > 0) { setExtracted(records[0]); setSelectedRecord(0); }
+            toast.success(`AI found ${records.length} donor entries`);
+          } else {
+            setExtracted(aiData);
+            if (docType === "receipt") {
+              if ((aiData as any).amount) setValue("amount", (aiData as any).amount);
+              if ((aiData as any).description) setValue("description", (aiData as any).description);
+              if ((aiData as any).vendor) setValue("vendor", (aiData as any).vendor);
+              if ((aiData as any).date) setValue("date", (aiData as any).date);
+            }
+            const phone = (aiData as any).donorPhone || (aiData as any).phone;
+            if (phone) await checkCrmByPhone(phone);
+            toast.success("AI extracted data — review and save below");
+          }
+        }
+      } catch (extractErr: any) {
+        console.error("[Capture] AI extraction error:", extractErr);
+        toast.error("AI extraction failed: " + (extractErr?.message || "Could not analyse document"));
+      }
+    } catch (err: any) {
+      console.error("[Capture] Unexpected error:", err);
+      toast.error("Could not process: " + (err?.message || "unknown error"));
+    } finally {
+      setUploading(false);
+      setAnalyzing(false);
+    }
   };
 
   const handleSaveToCrm = async (record: any) => {

@@ -368,7 +368,7 @@ export function SmartUpload({
       const formData = new FormData();
       formData.append("file", file);
       formData.append("key", key);
-      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData, credentials: "include" });
       let fileUrl: string;
       if (uploadRes.ok) {
         const data = await uploadRes.json();
