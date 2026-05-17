@@ -2438,4 +2438,5 @@
 - [x] Revert SmartUpload.tsx to working server-based upload (undo direct upload that may have broken other sections)
 - [x] Rebuild Capture.tsx scanner to use server /api/upload with client-side compression (not direct upload)
 - [x] Test build compiles cleanly
+- [x] Fix Safari 'string did not match expected pattern' in tRPC client with safariSafeFetch proxy
 - [ ] Verify scanner works end-to-end (user testing required)

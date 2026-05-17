@@ -137,17 +137,36 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+// Safari-safe fetch wrapper: Safari throws "The string did not match the expected pattern"
+// when response.json() is called on certain responses. We intercept and use text()+JSON.parse() instead.
+async function safariSafeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const res = await globalThis.fetch(input, {
+    ...(init ?? {}),
+    credentials: "include",
+  });
+  // Clone the response and override .json() with a Safari-safe implementation
+  const cloned = res.clone();
+  const safeRes = new Proxy(res, {
+    get(target, prop) {
+      if (prop === 'json') {
+        return async () => {
+          const text = await cloned.text();
+          return JSON.parse(text);
+        };
+      }
+      const val = (target as any)[prop];
+      return typeof val === 'function' ? val.bind(target) : val;
+    }
+  });
+  return safeRes;
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
-      fetch(input, init) {
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-        });
-      },
+      fetch: safariSafeFetch,
     }),
   ],
 });
