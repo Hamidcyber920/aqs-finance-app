@@ -266,12 +266,12 @@ export const hibbaToolsRouter = router({
    */
   staffDirectory: protectedProcedure
     .query(async () => {
-      const { users } = await listAllUsers(50, 0);
+      const { rows, total } = await listAllUsers(50, 0);
       return {
-        total: users.length,
-        staff: users.map((u: any) => ({
+        total,
+        staff: rows.map((u: any) => ({
           id: u.id,
-          name: u.name,
+          name: u.fullName || u.name,
           email: u.email,
           role: u.role,
           isActive: u.isActive,
