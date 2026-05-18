@@ -2477,7 +2477,14 @@
 - [x] Move file upload to client-side (browser → S3 via Forge storage API) — scanner no longer needs server at all
 - [x] Add retry logic to Hibba voice agent for 503 errors (3 attempts, 5s/10s delays)
 - [x] Created client/src/lib/clientStorage.ts — uploads directly to S3 from browser
-- [ ] Verify full scanner + Hibba flow works end-to-end on deployed site (user to test)
+- [x] FIXED (May 2026): clientUploadFile was returning 'record not found' errors — replaced with server-side /api/upload (multer + storagePut) which is the same reliable pattern used by payroll/bills scanners
+
+## Capture Page — Full Rebuild from Scratch (May 2026)
+- [x] Deleted all old broken Capture.tsx code (clientStorage, clientUploadFile, base64 approach, safariSafeFetch, retry loops)
+- [x] Rebuilt Capture.tsx from scratch using exact Payroll scanner pattern: FormData → POST /api/upload → S3 URL → POST /api/extract → AI fields
+- [x] Added crm_donor module type to extractEndpoint.ts
+- [x] Build compiles cleanly — no TypeScript errors
+- [ ] Verify scanner works end-to-end on deployed site (user to test)
 
 ## Reconciliation Export Features (May 2026)
 - [x] Fix Print button on Month-End Reconciliation page — opens clean print window with formatted data

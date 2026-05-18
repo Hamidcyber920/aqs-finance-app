@@ -1,7 +1,15 @@
+/**
+ * AI Vision Scanner — Capture Page
+ *
+ * Upload pattern (same as Payroll scanner — proven to work):
+ *   1. User picks a file (camera or gallery)
+ *   2. compressImage() reduces size for faster upload
+ *   3. POST /api/upload with FormData (multer + storagePut on server) → get S3 URL
+ *   4. POST /api/extract with { fileUrl, mimeType, moduleType } → AI extracts fields
+ *   5. User reviews extracted data, edits if needed, then saves via tRPC
+ */
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { compressImage } from "@/lib/compressImage";
-// clientUploadFile removed — using server-side /api/upload instead (Forge Storage API was unreliable)
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -10,704 +18,590 @@ import { useForm } from "react-hook-form";
 import {
   Camera, Upload, Loader2, CheckCircle2, Sparkles, Receipt,
   FileText, CreditCard, Banknote, UserCheck, X,
-  Phone, Mail, MapPin, DollarSign, Calendar, Tag, Heart,
-  MessageCircle, Send
+  Phone, Mail, MapPin, DollarSign, Calendar, Tag,
+  RefreshCw, AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 
+// ─── Colour palette ──────────────────────────────────────────────────────────
 const T = {
-  navy: "#0A192F", purple: "#635BFF", mint: "#00FFC2",
-  white: "#FFFFFF", muted: "rgba(255,255,255,0.5)",
-  border: "rgba(255,255,255,0.08)", glass: "rgba(255,255,255,0.04)",
-  card: "rgba(13,34,64,0.8)"
+  navy: "#0A192F",
+  purple: "#635BFF",
+  mint: "#00FFC2",
+  white: "#FFFFFF",
+  muted: "rgba(255,255,255,0.5)",
+  border: "rgba(255,255,255,0.08)",
+  glass: "rgba(255,255,255,0.04)",
+  card: "rgba(13,34,64,0.8)",
 };
 
+// ─── Document types ──────────────────────────────────────────────────────────
 type DocType = "receipt" | "handwritten_collection" | "business_card" | "bank_transfer_screenshot" | "crm_donor";
 
 const DOC_TYPES: { id: DocType; label: string; icon: React.ElementType; desc: string; color: string }[] = [
-  { id: "receipt", label: "Receipt", icon: Receipt, desc: "Shop receipts, invoices, bills", color: "#635BFF" },
-  { id: "handwritten_collection", label: "Collection Sheet", icon: FileText, desc: "Handwritten donation lists", color: "#10B981" },
-  { id: "business_card", label: "Business Card", icon: CreditCard, desc: "Contact cards for CRM", color: "#F59E0B" },
-  { id: "bank_transfer_screenshot", label: "Bank Transfer", icon: Banknote, desc: "Transfer confirmation screenshots", color: "#3B82F6" },
-  { id: "crm_donor", label: "Donor Form", icon: UserCheck, desc: "Pledge cards, donor forms", color: "#EC4899" },
+  { id: "receipt",                  label: "Receipt",          icon: Receipt,    desc: "Shop receipts, invoices, bills",      color: "#635BFF" },
+  { id: "handwritten_collection",   label: "Collection Sheet", icon: FileText,   desc: "Handwritten donation lists",          color: "#10B981" },
+  { id: "business_card",            label: "Business Card",    icon: CreditCard, desc: "Contact cards for CRM",               color: "#F59E0B" },
+  { id: "bank_transfer_screenshot", label: "Bank Transfer",    icon: Banknote,   desc: "Transfer confirmation screenshots",   color: "#3B82F6" },
+  { id: "crm_donor",                label: "Donor Form",       icon: UserCheck,  desc: "Pledge cards, donor forms",           color: "#EC4899" },
 ];
 
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function CapturePage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
-  const lastUploadUrlRef = useRef<string | null>(null);
-  const [docType, setDocType] = useState<DocType>("receipt");
-  const [preview, setPreview] = useState<string | null>(null);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [extracted, setExtracted] = useState<any>(null);
-  const [crmMatch, setCrmMatch] = useState<any>(null);
-  const [checkingCrm, setCheckingCrm] = useState(false);
-  const [savingToCrm, setSavingToCrm] = useState(false);
-  const [savedToCrm, setSavedToCrm] = useState(false);
-  const [multiRecords, setMultiRecords] = useState<any[]>([]);
-  const [selectedRecord, setSelectedRecord] = useState<number>(0);
-  const [submitted, setSubmitted] = useState(false);
-  const [waSentRows, setWaSentRows] = useState<Set<number>>(new Set());
-  const [sendingWaAll, setSendingWaAll] = useState(false);
-  const [editingRow, setEditingRow] = useState<number | null>(null);
-  const [rowEdits, setRowEdits] = useState<Record<number, { name?: string; amount?: string; campaign?: string }>>({})
-  const [imageHash, setImageHash] = useState<string | null>(null)
-  const [fundAllocation, setFundAllocation] = useState<Array<{ fund: string; amount: number }>>([])
-  const [showFundAlloc, setShowFundAlloc] = useState(false)
-  const [duplicateWarning, setDuplicateWarning] = useState<any[] | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // AI extraction now uses direct /api/extract endpoint (bypasses tRPC for reliability on Cloud Run)
-  const saveCrmMutation = trpc.crm.saveScanToCRM.useMutation();
-  const pledgeWaMutation = trpc.fintech.sendPledgeWhatsApp.useMutation();
-  const { data: depts } = trpc.departments.list.useQuery();
-  const createMutation = trpc.receipts.create.useMutation({
-    onSuccess: () => { toast.success("Receipt submitted"); setSubmitted(true); setTimeout(() => setLocation("/receipts"), 1800); },
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [docType, setDocType]           = useState<DocType>("receipt");
+  const [preview, setPreview]           = useState<string | null>(null);
+  const [pendingFile, setPendingFile]   = useState<File | null>(null);
+  const [uploading, setUploading]       = useState(false);
+  const [analyzing, setAnalyzing]       = useState(false);
+  const [scanError, setScanError]       = useState<string | null>(null);
+  const [extracted, setExtracted]       = useState<any>(null);
+  const [multiRecords, setMultiRecords] = useState<any[]>([]);
+  const [submitted, setSubmitted]       = useState(false);
+  const [savingToCrm, setSavingToCrm]   = useState(false);
+  const [savedToCrm, setSavedToCrm]     = useState(false);
+
+  // ── tRPC mutations ─────────────────────────────────────────────────────────
+  const createReceiptMutation = trpc.receipts.create.useMutation({
+    onSuccess: () => {
+      toast.success("Receipt submitted successfully");
+      setSubmitted(true);
+      setTimeout(() => setLocation("/receipts"), 1800);
+    },
     onError: (e) => toast.error(e.message),
   });
-  const checkDuplicateQuery = (trpc as any).receipts.checkDuplicate.useQuery(
-    { imageHash: imageHash ?? undefined, vendor: extracted?.vendor, amount: extracted?.amount ? String(extracted.amount) : undefined, date: extracted?.date },
-    { enabled: !!(imageHash || (extracted?.vendor && extracted?.amount)), staleTime: 30000 }
-  )
-  const { register, handleSubmit, setValue, watch } = useForm<any>({
-    defaultValues: { department: "Mosque" }
-  })
-  const watchedAmount = watch("amount");
 
-  // Listen for Hibba voice form-fill commands
-  useHibbaFormFill("/capture", useCallback((fields: Record<string, any>) => {
-    if (fields.amount) setValue("amount", String(fields.amount));
-    if (fields.date) setValue("date", fields.date);
-    if (fields.description) setValue("description", fields.description);
-    if (fields.vendor) setValue("vendor", fields.vendor);
-    if (fields.category) setValue("category", fields.category);
-    if (fields.paymentMethod) setValue("paymentMethod", fields.paymentMethod);
-    toast.success("Hibba filled the form — please review and submit, Insha'Allah");
-  }, [setValue]));
+  const saveCrmMutation = trpc.crm.saveScanToCRM.useMutation();
 
-  const checkCrmByPhone = useCallback(async (phone: string) => {
-    if (!phone || phone.length < 7) return;
-    setCheckingCrm(true);
-    try {
-      const res = await fetch(`/api/trpc/crm.matchByPhone?input=${encodeURIComponent(JSON.stringify({ phone }))}`, { credentials: "include" });
-      const text = await res.text();
-      let json: any = null;
-      try { json = JSON.parse(text); } catch { /* ignore parse errors */ }
-      setCrmMatch(json?.result?.data || null);
-    } catch { setCrmMatch(null); }
-    finally { setCheckingCrm(false); }
-  }, []);
+  const { data: depts } = trpc.departments.list.useQuery();
 
-  // Step 1: File selection — only sets preview, stores file for processing
-  const handleFileSelect = useCallback((file: File) => {
-    try {
-      console.log("[Capture] File selected:", file.name, file.type, file.size);
-      const objectUrl = URL.createObjectURL(file);
-      setPreview(objectUrl);
-      setPendingFile(file);
-      setScanError(null);
-      setExtracted(null);
-      setCrmMatch(null);
-      setMultiRecords([]);
-      setSavedToCrm(false);
-      setImageHash("");
-      setDuplicateWarning(null);
-      // Clear previous upload URL so new file gets uploaded fresh
-      lastUploadUrlRef.current = null;
-    } catch (err: any) {
-      console.error("[Capture] File select error:", err);
-      toast.error("Could not load file: " + (err?.message || "unknown error"));
-    }
-  }, []);
+  // ── Form (for receipt save) ────────────────────────────────────────────────
+  const { register, handleSubmit, setValue, reset } = useForm<any>({
+    defaultValues: { department: "Mosque" },
+  });
 
-  // Helper: upload compressed image to S3 via server-side /api/upload endpoint (multer + storagePut)
-  const uploadWithRetry = useCallback(async (compressed: File, maxRetries = 2): Promise<string> => {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[Capture] Server-side upload attempt ${attempt + 1}/${maxRetries + 1}`);
-        const formData = new FormData();
-        formData.append("file", compressed, compressed.name || "receipt.jpg");
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-          credentials: "include",
-        });
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Server upload error (${res.status}): ${errText.substring(0, 100)}`);
-        }
-        const json = await res.json();
-        if (!json.url) throw new Error("Server returned no URL");
-        console.log("[Capture] Server-side upload success:", json.url);
-        return json.url as string;
-      } catch (err: any) {
-        console.error(`[Capture] Upload attempt ${attempt + 1} failed:`, err?.message);
-        if (attempt < maxRetries) {
-          const delay = (attempt + 1) * 3000;
-          toast.info(`Upload retry in ${delay / 1000}s...`);
-          await new Promise(r => setTimeout(r, delay));
-          continue;
-        }
-        throw new Error(`Upload failed: ${err?.message || "Unknown error"}. Please try again.`);
-      }
-    }
-    throw new Error("Upload failed after retries. Please try again.");
-  }, []);
-
-  // Step 2: Upload + AI extraction — triggered automatically or by button tap
-  // Helper: call AI extraction directly via Forge LLM API from the browser (bypasses server entirely)
-  const extractWithRetry = useCallback(async (fileUrl: string, mimeType: string, moduleType: string, maxRetries = 2): Promise<any> => {
-    const FORGE_API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
-    const FORGE_API_URL = (import.meta.env.VITE_FRONTEND_FORGE_API_URL || "https://forge.butterfly-effect.dev").replace(/\/$/, "");
-    const LLM_URL = `${FORGE_API_URL}/v1/chat/completions`;
-
-    const MODULE_PROMPTS: Record<string, string> = {
-      receipt: `You are a UK expense receipt extractor. Extract from this document:\n- vendorName: name of the shop/vendor\n- totalAmount: total amount paid in GBP (number)\n- purchaseDate: date of purchase (YYYY-MM-DD)\n- items: brief description of items purchased\n- category: best matching from: Food & Catering, Cleaning & Hygiene, Maintenance & Repairs, IT & Technology, Printing & Stationery, Travel & Transport, Other\n- vatAmount: VAT amount in GBP (number or null)\n- paymentMethod: cash/card or null\nReturn ONLY valid JSON with these exact fields. Use null for missing fields.`,
-      handwritten_collection: `You are an expert at reading handwritten UK charity collection sheets. Extract ALL donor entries. For each entry extract:\n- donorName: full name\n- donorPhone: phone number (UK format) or null\n- amount: donation amount in GBP (number)\n- donationDate: date (YYYY-MM-DD) or null\n- campaignName: campaign name or null\n- giftAid: true if ticked, false otherwise\n- paymentMethod: cash/cheque/bank_transfer or null\n- notes: any notes\nReturn JSON with key "records" containing an array. Use null for missing fields.`,
-      business_card: `You are an expert at reading business cards. Extract:\n- donorName: full name\n- donorPhone: phone number (mobile, UK format)\n- donorEmail: email address\n- organisation: company name\n- jobTitle: job title\n- website: website URL if shown\nReturn ONLY valid JSON. Use null for missing fields.`,
-      fundraising_donation: `You are a donation extractor for a UK Islamic charity. Extract:\n- donorName: full name\n- donorPhone: UK phone number or null\n- amount: donation amount in GBP (number)\n- donationDate: date (YYYY-MM-DD)\n- paymentMethod: cash/bank_transfer/cheque/online or null\n- campaignName: campaign name or null\n- giftAid: true/false or null\n- notes: any notes\nReturn ONLY valid JSON. Use null for missing fields.`,
-      bank_transfer_screenshot: `You are an expert at reading UK bank transfer screenshots. Extract:\n- donorName: sender name\n- amount: amount in GBP (number)\n- donationDate: date (YYYY-MM-DD)\n- reference: payment reference\n- recipientName: recipient name\nReturn ONLY valid JSON. Use null for missing fields.`,
-      invoice: `You are a UK invoice extractor. Extract:\n- vendorName: supplier name\n- invoiceNumber: invoice number\n- amount: total in GBP (number)\n- vatAmount: VAT in GBP or null\n- invoiceDate: date (YYYY-MM-DD)\n- description: description of goods/services\n- category: best from Restaurant/Bistro, Cleaning & Hygiene, Events, Wholesale, Travel, Maintenance, Utilities, Professional Services, IT, Printing, Staff Welfare, Ramadan, Other\nReturn ONLY valid JSON. Use null for missing fields.`,
-    };
-
-    const systemPrompt = MODULE_PROMPTS[moduleType] || MODULE_PROMPTS["receipt"];
-    const isPdf = mimeType === "application/pdf";
-
-    const userContent = isPdf
-      ? [{ type: "file_url", file_url: { url: fileUrl, mime_type: "application/pdf" } }]
-      : [{ type: "image_url", image_url: { url: fileUrl, detail: "auto" } }];
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[Capture] AI extraction attempt ${attempt + 1}/${maxRetries + 1} via Forge API (client-side)`);
-        const res = await fetch(LLM_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${FORGE_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: "gemini-2.5-flash",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userContent },
-            ],
-            max_tokens: 4096,
-          }),
-        });
-
-        const text = await res.text();
-        console.log("[Capture] Forge API response:", res.status, text.substring(0, 300));
-
-        if (!res.ok) {
-          if (res.status === 429 && attempt < maxRetries) {
-            const delay = (attempt + 1) * 3000;
-            toast.info(`Rate limited, retrying in ${delay / 1000}s...`);
-            await new Promise(r => setTimeout(r, delay));
-            continue;
-          }
-          throw new Error(`AI API error (${res.status}): ${text.substring(0, 100)}`);
-        }
-
-        const json = JSON.parse(text);
-        const content = json?.choices?.[0]?.message?.content;
-        if (!content) throw new Error("AI returned empty response");
-
-        let extractedData: Record<string, unknown> = {};
-        try {
-          extractedData = JSON.parse(content);
-        } catch {
-          // Try to extract JSON from markdown code blocks or raw text
-          const match = content.match(/```(?:json)?\s*([\s\S]*?)```/) || content.match(/\{[\s\S]*\}/);
-          if (match) {
-            extractedData = JSON.parse(match[1] || match[0]);
-          } else {
-            throw new Error("AI returned non-JSON response");
-          }
-        }
-
-        return {
-          extractedData,
-          confidence: 0.85,
-          moduleType,
-          isBulk: "records" in extractedData,
-        };
-      } catch (err: any) {
-        console.error(`[Capture] Extraction attempt ${attempt + 1} failed:`, err?.message);
-        if (attempt < maxRetries) {
-          const delay = (attempt + 1) * 3000;
-          toast.info(`Retrying AI scan in ${delay / 1000}s...`);
-          await new Promise(r => setTimeout(r, delay));
-          continue;
-        }
-        throw err;
-      }
-    }
-    throw new Error("AI extraction failed after retries.");
-  }, []);
-
-  const processFile = useCallback(async (file: File) => {
-    if (uploading || analyzing) return; // prevent double-tap
-    setUploading(true);
-    setAnalyzing(false);
+  // ── Reset all state ────────────────────────────────────────────────────────
+  const resetAll = useCallback(() => {
+    setPreview(null);
+    setPendingFile(null);
     setScanError(null);
+    setExtracted(null);
+    setMultiRecords([]);
+    setSavedToCrm(false);
+    reset({ department: "Mosque" });
+  }, [reset]);
+
+  // ── Step 1: File selected ──────────────────────────────────────────────────
+  const handleFileSelect = useCallback((file: File) => {
+    resetAll();
+    const objectUrl = URL.createObjectURL(file);
+    setPreview(objectUrl);
+    setPendingFile(file);
+  }, [resetAll]);
+
+  // ── Step 2: Upload → /api/upload (same as Payroll) ─────────────────────────
+  const uploadFile = useCallback(async (file: File): Promise<{ url: string; mimeType: string }> => {
+    const compressed = await compressImage(file);
+    console.log(`[Capture] Compressed: ${(compressed.size / 1024).toFixed(0)}KB (original: ${(file.size / 1024).toFixed(0)}KB)`);
+
+    const fd = new FormData();
+    fd.append("file", compressed);
+
+    const res = await fetch("/api/upload", {
+      method: "POST",
+      body: fd,
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Upload failed (${res.status}): ${text.slice(0, 120)}`);
+    }
+
+    const json = await res.json();
+    if (!json.url) throw new Error("Server returned no URL after upload");
+
+    console.log("[Capture] Upload success:", json.url);
+    return { url: json.url, mimeType: json.mimeType || compressed.type || "image/jpeg" };
+  }, []);
+
+  // ── Step 3: AI extraction → /api/extract (server-side, same endpoint as other scanners) ──
+  const extractData = useCallback(async (fileUrl: string, mimeType: string, moduleType: string): Promise<any> => {
+    const res = await fetch("/api/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ fileUrl, mimeType, moduleType }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`AI extraction failed (${res.status}): ${text.slice(0, 120)}`);
+    }
+
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    return json;
+  }, []);
+
+  // ── Main scan flow ─────────────────────────────────────────────────────────
+  const runScan = useCallback(async (file: File) => {
+    if (uploading || analyzing) return;
+    setScanError(null);
+    setExtracted(null);
+    setMultiRecords([]);
 
     try {
-      let uploadUrl = lastUploadUrlRef.current;
-
-      // Skip upload if we already have a URL from a previous successful upload of the same file
-      if (!uploadUrl) {
-        // Compress image before upload to reduce from 3-8MB to ~200-400KB
-        const compressed = await compressImage(file);
-        console.log("[Capture] Compressed:", compressed.name, compressed.type, (compressed.size / 1024).toFixed(0) + "KB", `(original: ${(file.size / 1024).toFixed(0)}KB)`);
-
-        // Upload with automatic retry for 503 (cold start)
-        uploadUrl = await uploadWithRetry(compressed);
-        console.log("[Capture] Upload success:", uploadUrl);
-        lastUploadUrlRef.current = uploadUrl;
-      } else {
-        console.log("[Capture] Reusing previous upload URL:", uploadUrl);
-      }
-
-      // AI extraction — calls Forge LLM API directly from browser (no server involved)
+      // Step 1: Upload
+      setUploading(true);
+      const { url: fileUrl, mimeType } = await uploadFile(file);
       setUploading(false);
-      setAnalyzing(true);
-      console.log("[Capture] Starting AI extraction (client-side), moduleType:", docType);
-      const aiData = await extractWithRetry(uploadUrl, file.type || "image/jpeg", docType);
-      console.log("[Capture] AI extraction result:", JSON.stringify(aiData).substring(0, 500));
-      if (aiData) {
-        // The extract procedure returns { extractedData, discrepancies, confidence, moduleType, isBulk }
-        const extracted = (aiData as any).extractedData || aiData;
-        const isBulk = (aiData as any).isBulk;
 
-        if ((docType === "handwritten_collection" || isBulk) && extracted?.records) {
-          const records = extracted.records as any[];
-          setMultiRecords(records);
-          if (records.length > 0) { setExtracted(records[0]); setSelectedRecord(0); }
-          toast.success(`AI found ${records.length} donor entries`);
-        } else {
-          setExtracted(extracted);
-          if (docType === "receipt") {
-            // AI returns: vendorName, totalAmount, purchaseDate, items
-            // Form expects: vendor, amount, description, date
-            const amount = extracted?.totalAmount || extracted?.amount;
-            const vendor = extracted?.vendorName || extracted?.vendor;
-            const description = extracted?.items || extracted?.description;
-            const date = extracted?.purchaseDate || extracted?.date;
-            console.log("[Capture] Form fill values:", { amount, vendor, description, date });
-            if (amount) setValue("amount", String(amount));
-            if (description) setValue("description", String(description));
-            if (vendor) setValue("vendor", String(vendor));
-            if (date) setValue("date", String(date));
-          }
-          const phone = extracted?.donorPhone || extracted?.phone;
-          if (phone) await checkCrmByPhone(phone);
-          toast.success("AI extracted data \u2014 review and save below");
+      // Step 2: AI extraction
+      setAnalyzing(true);
+      toast.info("AI is analysing the document…");
+      const result = await extractData(fileUrl, mimeType, docType);
+      setAnalyzing(false);
+
+      console.log("[Capture] Extraction result:", JSON.stringify(result).slice(0, 400));
+
+      const data = result.extractedData || result;
+      const isBulk = result.isBulk || "records" in data;
+
+      if (isBulk && Array.isArray(data.records)) {
+        setMultiRecords(data.records);
+        toast.success(`Found ${data.records.length} entries`);
+      } else {
+        setExtracted(data);
+        // Auto-fill receipt form fields
+        if (docType === "receipt") {
+          if (data.vendorName)   setValue("vendor",      data.vendorName);
+          if (data.totalAmount)  setValue("amount",      String(data.totalAmount));
+          if (data.purchaseDate) setValue("date",        data.purchaseDate);
+          if (data.items)        setValue("description", data.items);
+          if (data.category)     setValue("categoryName", data.category);
         }
+        toast.success("Document scanned successfully");
       }
-      setPendingFile(null); // clear pending after success
     } catch (err: any) {
-      console.error("[Capture] Process error:", err);
-      const msg = err?.message || "Could not process document";
-      // Make 503 errors more user-friendly
-      const friendlyMsg = msg.includes("503") || msg.includes("temporarily unavailable")
-        ? "Server is busy \u2014 please tap 'Scan with AI' to try again"
-        : msg;
-      setScanError(friendlyMsg);
-      toast.error(friendlyMsg);
-    } finally {
       setUploading(false);
       setAnalyzing(false);
+      const msg = err?.message || "Scan failed — please try again";
+      setScanError(msg);
+      toast.error(msg);
+      console.error("[Capture] Scan error:", err);
     }
-  }, [uploading, analyzing, docType, extractWithRetry, setValue, checkCrmByPhone, uploadWithRetry]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [uploading, analyzing, docType, uploadFile, extractData, setValue]);
 
-  // Auto-trigger processing when a file is selected
-  const hasTriggeredRef = useRef(false);
+  // Auto-trigger scan when a file is selected
   useEffect(() => {
-    if (pendingFile && !uploading && !analyzing && !extracted && !hasTriggeredRef.current) {
-      hasTriggeredRef.current = true;
-      // Small delay to ensure React has rendered the preview + spinner first
-      const timer = setTimeout(() => {
-        processFile(pendingFile).finally(() => { hasTriggeredRef.current = false; });
-      }, 100);
-      return () => clearTimeout(timer);
+    if (pendingFile && !uploading && !analyzing && !extracted && multiRecords.length === 0) {
+      runScan(pendingFile);
     }
   }, [pendingFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSaveToCrm = async (record: any) => {
-    setSavingToCrm(true);
-    try {
-      const result = await saveCrmMutation.mutateAsync({
-        donorName: record.donorName || record.name || "Unknown",
-        donorPhone: record.donorPhone || record.phone,
-        donorEmail: record.donorEmail || record.email,
-        donorAddress: record.donorAddress || record.address,
-        amount: record.amount ? parseFloat(String(record.amount)) : undefined,
-        donationDate: record.donationDate || record.date,
-        campaignName: record.campaignName,
-        giftAid: record.giftAid === true,
-        beneficiaryName: record.beneficiaryName,
-        notes: record.notes || record.reference,
-        sourceType: docType === "receipt" ? "fundraising_donation" : docType as any,
-        existingLeadId: crmMatch?.lead?.id,
-      });
-      setSavedToCrm(true);
-      toast.success(result.action === "updated" ? `Updated CRM: ${record.donorName}` : `Saved ${record.donorName} to CRM`);
-    } catch (err: any) { toast.error("Failed: " + (err?.message || "unknown")); }
-    finally { setSavingToCrm(false); }
-  };
-
-  const handleSaveAllToCrm = async () => {
+  // ── Save all CRM records (bulk) ────────────────────────────────────────────
+  const saveAllToCrm = useCallback(async () => {
+    if (savingToCrm || multiRecords.length === 0) return;
     setSavingToCrm(true);
     let saved = 0;
     for (const record of multiRecords) {
       try {
         await saveCrmMutation.mutateAsync({
-          donorName: record.donorName || record.name || "Unknown",
-          donorPhone: record.donorPhone || record.phone,
-          amount: record.amount ? parseFloat(String(record.amount)) : undefined,
-          donationDate: record.donationDate,
-          campaignName: record.campaignName,
-          giftAid: record.giftAid === true,
-          notes: record.notes,
-          sourceType: "handwritten_collection",
+          donorName:    record.donorName || "Unknown",
+          donorPhone:   record.donorPhone  || undefined,
+          donorEmail:   record.donorEmail  || undefined,
+          amount:       record.amount ? parseFloat(String(record.amount)) : undefined,
+          donationDate: record.donationDate || undefined,
+          campaignName: record.campaignName || undefined,
+          giftAid:      record.giftAid === true,
+          notes:        record.notes || undefined,
+          sourceType:   "handwritten_collection",
         });
         saved++;
-      } catch { /* skip */ }
+      } catch (e) {
+        console.warn("[Capture] CRM save error:", e);
+      }
     }
-    setSavedToCrm(true); setSavingToCrm(false);
+    setSavedToCrm(true);
+    setSavingToCrm(false);
     toast.success(`Saved ${saved}/${multiRecords.length} donors to CRM`);
-  };
+  }, [savingToCrm, multiRecords, saveCrmMutation]);
 
-  const currentRecord = multiRecords.length > 0 ? multiRecords[selectedRecord] : extracted;
+  // ── Save single CRM record ─────────────────────────────────────────────────
+  const saveSingleToCrm = useCallback(async () => {
+    if (!extracted || savingToCrm) return;
+    setSavingToCrm(true);
+    try {
+      await saveCrmMutation.mutateAsync({
+        donorName:    extracted.donorName || "Unknown",
+        donorPhone:   extracted.donorPhone  || undefined,
+        donorEmail:   extracted.donorEmail  || undefined,
+        donorAddress: extracted.donorAddress || undefined,
+        amount:       extracted.amount ? parseFloat(String(extracted.amount)) : undefined,
+        donationDate: extracted.donationDate || undefined,
+        campaignName: extracted.campaignName || undefined,
+        giftAid:      extracted.giftAid === true,
+        notes:        extracted.notes || undefined,
+        sourceType:   docType === "crm_donor" ? "crm_donor"
+                    : docType === "business_card" ? "business_card"
+                    : docType === "bank_transfer_screenshot" ? "bank_transfer_screenshot"
+                    : "crm_donor",
+      });
+      setSavedToCrm(true);
+      toast.success("Saved to CRM");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to save to CRM");
+    } finally {
+      setSavingToCrm(false);
+    }
+  }, [extracted, savingToCrm, docType, saveCrmMutation]);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
   const currentDocType = DOC_TYPES.find(d => d.id === docType)!;
+  const isProcessing   = uploading || analyzing;
 
+  // ── Submitted screen ───────────────────────────────────────────────────────
   if (submitted) {
     return (
-      <div style={{ minHeight:"100vh",background:`linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`,display:"flex",alignItems:"center",justifyContent:"center" }}>
-        <div style={{ textAlign:"center" }}>
-          <div style={{ width:80,height:80,borderRadius:"50%",background:"rgba(0,255,194,0.15)",border:"2px solid rgba(0,255,194,0.4)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px" }}>
-            <CheckCircle2 size={40} style={{ color:T.mint }}/>
+      <div style={{ minHeight: "100vh", background: `linear-gradient(160deg,#0E2244 0%,${T.navy} 50%,#070F1E 100%)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(0,255,194,0.15)", border: "2px solid rgba(0,255,194,0.4)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+            <CheckCircle2 size={40} style={{ color: T.mint }} />
           </div>
-          <h2 style={{ fontSize:24,fontWeight:800,color:T.white,margin:"0 0 8px" }}>Receipt Submitted!</h2>
-          <p style={{ fontSize:14,color:T.muted }}>Redirecting to expenses…</p>
+          <h2 style={{ fontSize: 24, fontWeight: 800, color: T.white, margin: "0 0 8px" }}>Receipt Submitted!</h2>
+          <p style={{ fontSize: 14, color: T.muted }}>Redirecting to expenses…</p>
         </div>
       </div>
     );
   }
 
+  // ── Main render ────────────────────────────────────────────────────────────
   return (
-    <div style={{ background:`linear-gradient(135deg,${T.navy} 0%,#0D2240 100%)`,minHeight:"100vh" }} className="text-white pb-24">
+    <div style={{ background: `linear-gradient(135deg,${T.navy} 0%,#0D2240 100%)`, minHeight: "100vh" }} className="text-white pb-24">
+
       {/* Header */}
       <div className="px-4 pt-6 pb-4">
         <div className="flex items-center gap-3">
-          <div style={{ background:T.purple,borderRadius:12,padding:8 }}><Sparkles size={20} color={T.white}/></div>
+          <div style={{ background: T.purple, borderRadius: 12, padding: 8 }}>
+            <Sparkles size={20} color={T.white} />
+          </div>
           <div>
             <h1 className="text-xl font-bold">AI Vision Scanner</h1>
-            <p style={{ color:T.muted,fontSize:13 }}>Receipts, collection sheets, business cards & more</p>
+            <p style={{ color: T.muted, fontSize: 13 }}>Receipts, collection sheets, business cards &amp; more</p>
           </div>
         </div>
       </div>
 
-      {/* Doc Type Selector */}
+      {/* Doc type selector */}
       <div className="px-4 mb-4">
-        <p style={{ color:T.muted,fontSize:12,marginBottom:8 }}>DOCUMENT TYPE</p>
-        <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth:"none" }}>
+        <p style={{ color: T.muted, fontSize: 12, marginBottom: 8 }}>DOCUMENT TYPE</p>
+        <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
           {DOC_TYPES.map(dt => (
-            <button key={dt.id} onClick={() => { setDocType(dt.id); setExtracted(null); setCrmMatch(null); setMultiRecords([]); setPreview(null); setPendingFile(null); setScanError(null); setSavedToCrm(false); }}
-              style={{ background:docType===dt.id?dt.color:T.glass,border:`1px solid ${docType===dt.id?dt.color:T.border}`,borderRadius:12,padding:"8px 14px",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6,flexShrink:0,color:T.white }}>
-              <dt.icon size={14}/><span style={{ fontSize:13,fontWeight:500 }}>{dt.label}</span>
+            <button
+              key={dt.id}
+              onClick={() => { setDocType(dt.id); resetAll(); }}
+              style={{
+                background: docType === dt.id ? dt.color : T.glass,
+                border: `1px solid ${docType === dt.id ? dt.color : T.border}`,
+                borderRadius: 12, padding: "8px 14px", whiteSpace: "nowrap",
+                display: "flex", alignItems: "center", gap: 6, flexShrink: 0, color: T.white,
+              }}
+            >
+              <dt.icon size={14} />
+              <span style={{ fontSize: 13, fontWeight: 500 }}>{dt.label}</span>
             </button>
           ))}
         </div>
-        <p style={{ color:T.muted,fontSize:12,marginTop:6 }}>{currentDocType.desc}</p>
+        <p style={{ color: T.muted, fontSize: 12, marginTop: 6 }}>{currentDocType.desc}</p>
       </div>
 
-      {/* Upload Zone */}
+      {/* Upload zone */}
       <div className="px-4 mb-4">
-        <div onDrop={(e)=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f)handleFileSelect(f);}} onDragOver={(e)=>e.preventDefault()} onClick={()=>fileRef.current?.click()}
-          style={{ border:`2px dashed ${preview?currentDocType.color:T.border}`,borderRadius:16,padding:preview?0:24,textAlign:"center",background:preview?"rgba(0,0,0,0.3)":T.glass,cursor:"pointer",position:"relative",overflow:"hidden",transition:"all 0.3s" }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          capture="environment"
+          style={{ display: "none" }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
+        />
+
+        <div
+          onClick={() => !isProcessing && fileInputRef.current?.click()}
+          style={{
+            border: `2px dashed ${preview ? currentDocType.color : T.border}`,
+            borderRadius: 16, padding: preview ? 0 : 24, textAlign: "center",
+            background: preview ? "rgba(0,0,0,0.3)" : T.glass,
+            cursor: isProcessing ? "default" : "pointer",
+            position: "relative", overflow: "hidden", transition: "all 0.3s",
+          }}
+        >
           {preview ? (
             <>
-              <img src={preview} alt="preview" style={{ maxHeight:200,width:"100%",borderRadius:14,objectFit:"contain" }}/>
-              <button onClick={(e)=>{e.stopPropagation();setPreview(null);setPendingFile(null);setScanError(null);setExtracted(null);setCrmMatch(null);setMultiRecords([]);setSavedToCrm(false);}}
-                style={{ position:"absolute",top:8,right:8,width:28,height:28,borderRadius:"50%",background:"rgba(0,0,0,0.6)",border:"none",color:T.white,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center" }}>
-                <X size={14}/>
-              </button>
-              {(uploading||analyzing)&&(
-                <div style={{ position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12 }}>
-                  <Loader2 size={32} className="animate-spin" style={{ color:currentDocType.color }}/>
-                  <p style={{ color:T.white,fontSize:14 }}>{uploading?"Uploading...":"AI analysing..."}</p>
+              <img src={preview} alt="preview" style={{ maxHeight: 220, width: "100%", borderRadius: 14, objectFit: "contain" }} />
+
+              {/* Clear button */}
+              {!isProcessing && (
+                <button
+                  onClick={e => { e.stopPropagation(); resetAll(); }}
+                  style={{ position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: "50%", background: "rgba(0,0,0,0.6)", border: "none", color: T.white, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+
+              {/* Processing overlay */}
+              {isProcessing && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                  <Loader2 size={36} className="animate-spin" style={{ color: currentDocType.color }} />
+                  <p style={{ color: T.white, fontSize: 14, fontWeight: 600 }}>
+                    {uploading ? "Uploading…" : "AI analysing…"}
+                  </p>
+                  <p style={{ color: T.muted, fontSize: 12 }}>
+                    {uploading ? "Sending to server" : "Extracting data from document"}
+                  </p>
                 </div>
               )}
-              {/* Scan button — shown when file is pending but not processing */}
-              {!uploading && !analyzing && !extracted && pendingFile && (
-                <div style={{ position:"absolute",inset:0,background:"rgba(0,0,0,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10 }}>
-                  <button onClick={(e)=>{e.stopPropagation();processFile(pendingFile);}} style={{ background:currentDocType.color,border:"none",borderRadius:12,padding:"12px 24px",color:T.white,fontWeight:600,fontSize:15,cursor:"pointer",display:"flex",alignItems:"center",gap:8 }}>
-                    <Sparkles size={18}/> Scan with AI
+
+              {/* Retry scan button — shown when file loaded but not yet scanned */}
+              {!isProcessing && !extracted && multiRecords.length === 0 && !scanError && (
+                <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, display: "flex", justifyContent: "center" }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); if (pendingFile) runScan(pendingFile); }}
+                    style={{ background: currentDocType.color, border: "none", borderRadius: 12, padding: "10px 22px", color: T.white, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <Sparkles size={15} /> Scan Document
                   </button>
-                  {scanError && <p style={{ color:"#ff6b6b",fontSize:12,textAlign:"center",maxWidth:"80%" }}>{scanError}</p>}
                 </div>
               )}
             </>
           ) : (
-            <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:12,padding:"12px 0" }}>
-              <div style={{ background:`${currentDocType.color}22`,borderRadius:"50%",padding:16 }}><Camera size={28} style={{ color:currentDocType.color }}/></div>
-              <div><p style={{ fontWeight:600,marginBottom:4,color:T.white }}>Tap to scan or upload</p><p style={{ color:T.muted,fontSize:13 }}>Photo, PDF, or image file</p></div>
-              <div style={{ display:"flex",gap:8 }}>
-                <span onClick={(e)=>{e.stopPropagation();fileRef.current?.click();}} style={{ background:T.glass,border:`1px solid ${T.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:T.white,cursor:"pointer" }}><Camera size={12} style={{ display:"inline",marginRight:4 }}/>Camera</span>
-                <span onClick={(e)=>{e.stopPropagation();galleryRef.current?.click();}} style={{ background:T.glass,border:`1px solid ${T.border}`,borderRadius:8,padding:"4px 10px",fontSize:12,color:T.white,cursor:"pointer" }}><Upload size={12} style={{ display:"inline",marginRight:4 }}/>Gallery</span>
+            <>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: `${currentDocType.color}22`, border: `2px solid ${currentDocType.color}44`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                <Camera size={24} style={{ color: currentDocType.color }} />
               </div>
-            </div>
+              <p style={{ color: T.white, fontSize: 15, fontWeight: 600, margin: "0 0 4px" }}>Tap to take photo or upload</p>
+              <p style={{ color: T.muted, fontSize: 13 }}>Images and PDFs supported</p>
+            </>
           )}
         </div>
-        {/* Camera input — forces camera on mobile */}
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFileSelect(f);e.target.value="";}} />
-        {/* Gallery input — opens file picker (no capture attribute) */}
-        <input ref={galleryRef} type="file" accept="image/*,application/pdf" style={{ display:"none" }} onChange={(e)=>{const f=e.target.files?.[0];if(f)handleFileSelect(f);e.target.value="";}} />
+
+        {/* Gallery / file upload button */}
+        {!preview && (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{ marginTop: 10, width: "100%", background: T.glass, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 16px", color: T.muted, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+          >
+            <Upload size={14} /> Choose from gallery or files
+          </button>
+        )}
       </div>
 
-      {/* Multi-record selector — Collection Sheet Verification Table */}
+      {/* Error display */}
+      {scanError && (
+        <div className="px-4 mb-4">
+          <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 12, padding: 14, display: "flex", gap: 10, alignItems: "flex-start" }}>
+            <AlertTriangle size={18} style={{ color: "#EF4444", flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ color: "#EF4444", fontSize: 13, fontWeight: 600, margin: "0 0 4px" }}>Scan Failed</p>
+              <p style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, margin: 0 }}>{scanError}</p>
+            </div>
+            {pendingFile && (
+              <button
+                onClick={() => { setScanError(null); runScan(pendingFile); }}
+                style={{ background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 8, padding: "6px 12px", color: "#EF4444", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
+              >
+                <RefreshCw size={12} /> Retry
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── RESULTS: Bulk (collection sheet) ── */}
       {multiRecords.length > 0 && (
         <div className="px-4 mb-4">
-          <div style={{ background:T.card,borderRadius:12,padding:12,border:`1px solid #10B98144` }}>
-            {/* Header */}
-            <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8 }}>
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, overflow: "hidden" }}>
+            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
-                <p style={{ color:T.mint,fontSize:14,fontWeight:700,margin:0 }}>✅ Ready for verification</p>
-                <p style={{ color:T.muted,fontSize:12,margin:"2px 0 0" }}>Analyzing Amanah entries — {multiRecords.length} donors found</p>
+                <p style={{ color: T.white, fontSize: 15, fontWeight: 700, margin: 0 }}>
+                  {multiRecords.length} Entries Found
+                </p>
+                <p style={{ color: T.muted, fontSize: 12, margin: "2px 0 0" }}>Review before saving to CRM</p>
               </div>
-              <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
-                <Button onClick={handleSaveAllToCrm} disabled={savingToCrm||savedToCrm}
-                  style={{ background:"#10B981",color:T.white,borderRadius:10,fontSize:12,padding:"6px 12px",height:"auto" }}>
-                  {savingToCrm?<Loader2 size={14} className="animate-spin mr-1"/>:<CheckCircle2 size={14} className="mr-1"/>}
-                  Save All to CRM
-                </Button>
-                <Button
-                  disabled={sendingWaAll}
-                  onClick={async () => {
-                    setSendingWaAll(true);
-                    let sent = 0;
-                    for (let i = 0; i < multiRecords.length; i++) {
-                      const r = multiRecords[i];
-                      const phone = r.donorPhone || r.phone;
-                      if (!phone) continue;
-                      try {
-                        const res = await pledgeWaMutation.mutateAsync({
-                          donorName: r.donorName || r.name || "Donor",
-                          donorPhone: phone,
-                          campaignName: r.campaignName,
-                          amount: r.amount ? parseFloat(String(r.amount)) : undefined,
-                          origin: window.location.origin,
-                          giftAidDeclared: r.giftAid === true,
-                        });
-                        window.open(res.whatsAppUrl, "_blank");
-                        setWaSentRows(prev => new Set(Array.from(prev).concat(i)));
-                        sent++;
-                        await new Promise(resolve => setTimeout(resolve, 700));
-                      } catch { /* skip */ }
-                    }
-                    setSendingWaAll(false);
-                    toast.success(`JazakAllah — WhatsApp pledge links opened for ${sent} donors`);
-                  }}
-                  style={{ background:"#25D366",color:T.white,borderRadius:10,fontSize:12,padding:"6px 12px",height:"auto" }}>
-                  {sendingWaAll?<Loader2 size={14} className="animate-spin mr-1"/>:<Send size={14} className="mr-1"/>}
-                  Send All WhatsApp
-                </Button>
-              </div>
+              {!savedToCrm ? (
+                <button
+                  onClick={saveAllToCrm}
+                  disabled={savingToCrm}
+                  style={{ background: "#10B981", border: "none", borderRadius: 10, padding: "8px 16px", color: T.white, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  {savingToCrm ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                  {savingToCrm ? "Saving…" : "Save All to CRM"}
+                </button>
+              ) : (
+                <span style={{ color: "#10B981", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+                  <CheckCircle2 size={14} /> Saved
+                </span>
+              )}
             </div>
-            {/* Verification table */}
-            <div style={{ overflowX:"auto" }}>
-              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12 }}>
-                <thead>
-                  <tr style={{ borderBottom:`1px solid ${T.border}` }}>
-                    {["#","Name","Phone","Amount","Campaign","Gift Aid","WA","Edit"].map(h=>(
-                      <th key={h} style={{ padding:"6px 8px",textAlign:"left",color:T.muted,fontWeight:600,whiteSpace:"nowrap" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {multiRecords.map((r,i)=>{
-                    const conf = typeof r.confidence === "number" ? r.confidence : undefined;
-                    const confColor = conf === undefined ? T.muted : conf >= 0.85 ? "#10B981" : conf >= 0.6 ? "#F59E0B" : "#EF4444";
-                    const confLabel = conf === undefined ? "" : conf >= 0.85 ? "High" : conf >= 0.6 ? "Med" : "Low";
-                    const edit = rowEdits[i] || {};
-                    const isEditing = editingRow === i;
-                    return (
-                    <tr key={i}
-                      onClick={()=>{ if(!isEditing){setSelectedRecord(i);setExtracted({...r,...(rowEdits[i]||{})});} }}
-                      style={{ borderBottom:`1px solid ${T.border}`,cursor:"pointer",background:selectedRecord===i?"rgba(16,185,129,0.08)":"transparent" }}>
-                      <td style={{ padding:"8px",color:T.muted }}>
-                        <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:2 }}>
-                          <span>{i+1}</span>
-                          {confLabel && <span style={{ fontSize:9,fontWeight:700,color:confColor,background:`${confColor}22`,borderRadius:4,padding:"1px 4px" }}>{confLabel}</span>}
-                        </div>
-                      </td>
-                      <td style={{ padding:"8px",color:T.white,fontWeight:500 }}>
-                        {isEditing ? (
-                          <input value={edit.name ?? (r.donorName||r.name||"")} onChange={e=>setRowEdits(prev=>({...prev,[i]:{...prev[i],name:e.target.value}}))} onClick={e=>e.stopPropagation()} style={{ background:"#1a1a2e",border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 6px",color:T.white,fontSize:12,width:"100%" }}/>
-                        ) : (edit.name ?? r.donorName ?? r.name ?? "—")}
-                      </td>
-                      <td style={{ padding:"8px",color:T.muted,whiteSpace:"nowrap" }}>{r.donorPhone||r.phone||"—"}</td>
-                      <td style={{ padding:"8px",color:"#10B981",fontWeight:600,whiteSpace:"nowrap" }}>
-                        {isEditing ? (
-                          <input value={edit.amount ?? (r.amount ? String(r.amount) : "")} onChange={e=>setRowEdits(prev=>({...prev,[i]:{...prev[i],amount:e.target.value}}))} onClick={e=>e.stopPropagation()} style={{ background:"#1a1a2e",border:`1px solid #10B98166`,borderRadius:6,padding:"2px 6px",color:"#10B981",fontSize:12,width:70 }}/>
-                        ) : (edit.amount ? `£${edit.amount}` : r.amount ? `£${r.amount}` : "—")}
-                      </td>
-                      <td style={{ padding:"8px",color:T.muted,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>
-                        {isEditing ? (
-                          <input value={edit.campaign ?? (r.campaignName||"")} onChange={e=>setRowEdits(prev=>({...prev,[i]:{...prev[i],campaign:e.target.value}}))} onClick={e=>e.stopPropagation()} style={{ background:"#1a1a2e",border:`1px solid ${T.border}`,borderRadius:6,padding:"2px 6px",color:T.white,fontSize:12,width:"100%" }}/>
-                        ) : (edit.campaign ?? r.campaignName ?? "—")}
-                      </td>
-                      <td style={{ padding:"8px",textAlign:"center" }}>{r.giftAid===true?<span style={{ color:"#10B981" }}>✓</span>:<span style={{ color:T.muted }}>—</span>}</td>
-                      <td style={{ padding:"8px" }}>
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            const phone = r.donorPhone || r.phone;
-                            if (!phone) { toast.error("No phone for this donor"); return; }
-                            try {
-                              const res = await pledgeWaMutation.mutateAsync({
-                                donorName: r.donorName || r.name || "Donor",
-                                donorPhone: phone,
-                                campaignName: r.campaignName,
-                                amount: r.amount ? parseFloat(String(r.amount)) : undefined,
-                                origin: window.location.origin,
-                                giftAidDeclared: r.giftAid === true,
-                              });
-                              window.open(res.whatsAppUrl, "_blank");
-                              setWaSentRows(prev => new Set(Array.from(prev).concat(i)));
-                              toast.success(`WhatsApp opened for ${r.donorName||"donor"}`);
-                            } catch (err: any) { toast.error(err?.message || "Failed"); }
-                          }}
-                          style={{ background:waSentRows.has(i)?"#16a34a":"#25D366",color:"#fff",border:"none",borderRadius:8,padding:"4px 8px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,fontSize:11,whiteSpace:"nowrap" }}>
-                          <MessageCircle size={12}/>{waSentRows.has(i)?"Sent":"WhatsApp"}
-                        </button>
-                      </td>
-                      <td style={{ padding:"8px" }}>
-                        <button
-                          onClick={e=>{ e.stopPropagation(); setEditingRow(isEditing ? null : i); }}
-                          style={{ background:isEditing?"#635BFF":"rgba(255,255,255,0.08)",color:"#fff",border:"none",borderRadius:8,padding:"4px 8px",cursor:"pointer",fontSize:11,whiteSpace:"nowrap" }}>
-                          {isEditing ? "Done" : "Edit"}
-                        </button>
-                      </td>
-                    </tr>
-                  );})}
-                </tbody>
-              </table>
+            <div style={{ maxHeight: 320, overflowY: "auto" }}>
+              {multiRecords.map((rec, i) => (
+                <div key={i} style={{ padding: "12px 16px", borderBottom: i < multiRecords.length - 1 ? `1px solid ${T.border}` : "none" }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <p style={{ color: T.white, fontSize: 14, fontWeight: 600, margin: 0 }}>{rec.donorName || "Unknown donor"}</p>
+                    {rec.amount && <span style={{ color: "#10B981", fontSize: 14, fontWeight: 700 }}>£{Number(rec.amount).toFixed(2)}</span>}
+                  </div>
+                  <div className="flex gap-3 mt-1 flex-wrap">
+                    {rec.donorPhone && <span style={{ color: T.muted, fontSize: 12 }}>📞 {rec.donorPhone}</span>}
+                    {rec.campaignName && <span style={{ color: T.muted, fontSize: 12 }}>🎯 {rec.campaignName}</span>}
+                    {rec.giftAid && <span style={{ color: "#F59E0B", fontSize: 12 }}>✓ Gift Aid</span>}
+                    {rec.paymentMethod && <span style={{ color: T.muted, fontSize: 12 }}>💳 {rec.paymentMethod}</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
+          <button
+            onClick={resetAll}
+            style={{ marginTop: 10, width: "100%", background: T.glass, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 16px", color: T.muted, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+          >
+            <Camera size={14} /> Scan Another
+          </button>
         </div>
       )}
 
-      {/* Extracted Data */}
-      {currentRecord && !analyzing && (
+      {/* ── RESULTS: Single extracted record ── */}
+      {extracted && multiRecords.length === 0 && (
         <div className="px-4 mb-4">
-          <div style={{ background:T.card,borderRadius:16,border:`1px solid ${currentDocType.color}44`,overflow:"hidden" }}>
-            <div style={{ background:`${currentDocType.color}22`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between" }}>
-              <div style={{ display:"flex",alignItems:"center",gap:8 }}>
-                <Sparkles size={16} style={{ color:currentDocType.color }}/><span style={{ fontWeight:600,fontSize:14,color:T.white }}>AI Extracted Data</span>
+          <div style={{ background: T.card, border: `1px solid ${currentDocType.color}44`, borderRadius: 16, overflow: "hidden" }}>
+
+            {/* Result header */}
+            <div style={{ padding: "14px 16px", borderBottom: `1px solid ${T.border}`, background: `${currentDocType.color}11` }}>
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={16} style={{ color: currentDocType.color }} />
+                <p style={{ color: T.white, fontSize: 14, fontWeight: 700, margin: 0 }}>Scan Complete</p>
               </div>
-              <Badge style={{ background:`${currentDocType.color}33`,color:currentDocType.color,border:"none",fontSize:11 }}>{currentDocType.label}</Badge>
+              <p style={{ color: T.muted, fontSize: 12, margin: "4px 0 0" }}>Review the extracted data below</p>
             </div>
-            {crmMatch?.matched&&(
-              <div style={{ background:"#10B98122",borderBottom:"1px solid #10B98144",padding:"8px 16px",display:"flex",alignItems:"center",gap:8 }}>
-                <CheckCircle2 size={16} style={{ color:"#10B981" }}/><span style={{ fontSize:13,color:"#10B981",fontWeight:500 }}>CRM Match: {crmMatch.lead?.name||crmMatch.donor?.name}</span>
-              </div>
-            )}
-            {checkingCrm&&(
-              <div style={{ background:"#635BFF22",borderBottom:"1px solid #635BFF44",padding:"8px 16px",display:"flex",alignItems:"center",gap:8 }}>
-                <Loader2 size={14} className="animate-spin" style={{ color:T.purple }}/><span style={{ fontSize:13,color:T.muted }}>Checking CRM...</span>
-              </div>
-            )}
-            <div style={{ padding:16 }}>
-              <div className="grid grid-cols-1 gap-3">
-                {(currentRecord.donorName||currentRecord.name)&&<FieldRow icon={UserCheck} label="Name" value={currentRecord.donorName||currentRecord.name} color={currentDocType.color}/>}
-                {(currentRecord.donorPhone||currentRecord.phone)&&<FieldRow icon={Phone} label="Phone / WhatsApp" value={currentRecord.donorPhone||currentRecord.phone} color={currentDocType.color} action={<button onClick={()=>checkCrmByPhone(currentRecord.donorPhone||currentRecord.phone)} style={{ fontSize:11,color:T.purple,textDecoration:"underline" }}>Check CRM</button>}/>}
-                {(currentRecord.donorEmail||currentRecord.email)&&<FieldRow icon={Mail} label="Email" value={currentRecord.donorEmail||currentRecord.email} color={currentDocType.color}/>}
-                {(currentRecord.donorAddress||currentRecord.address)&&<FieldRow icon={MapPin} label="Address" value={currentRecord.donorAddress||currentRecord.address} color={currentDocType.color}/>}
-                {currentRecord.amount&&<FieldRow icon={DollarSign} label="Amount" value={`\u00a3${currentRecord.amount}`} color="#10B981" highlight/>}
-                {(currentRecord.donationDate||currentRecord.date)&&<FieldRow icon={Calendar} label="Date" value={currentRecord.donationDate||currentRecord.date} color={currentDocType.color}/>}
-                {currentRecord.campaignName&&<FieldRow icon={Tag} label="Campaign" value={currentRecord.campaignName} color={currentDocType.color}/>}
-                {currentRecord.giftAid!==undefined&&<FieldRow icon={CheckCircle2} label="Gift Aid" value={currentRecord.giftAid?"Yes \u2713":"No"} color={currentRecord.giftAid?"#10B981":T.muted}/>}
-                {currentRecord.beneficiaryName&&<FieldRow icon={Heart} label="Sadaqah Jariyah For" value={currentRecord.beneficiaryName} color="#EC4899"/>}
-                {currentRecord.reference&&<FieldRow icon={FileText} label="Reference" value={currentRecord.reference} color={currentDocType.color}/>}
-                {currentRecord.transactionId&&<FieldRow icon={FileText} label="Transaction ID" value={currentRecord.transactionId} color={currentDocType.color}/>}
-                {currentRecord.organisation&&<FieldRow icon={Tag} label="Organisation" value={currentRecord.organisation} color={currentDocType.color}/>}
-                {currentRecord.jobTitle&&<FieldRow icon={UserCheck} label="Job Title" value={currentRecord.jobTitle} color={currentDocType.color}/>}
-              </div>
-              <div style={{ marginTop:16,display:"flex",flexDirection:"column",gap:8 }}>
-                {docType!=="receipt"&&!savedToCrm&&(
-                  <Button onClick={()=>handleSaveToCrm(currentRecord)} disabled={savingToCrm} style={{ background:currentDocType.color,color:T.white,borderRadius:12,width:"100%" }}>
-                    {savingToCrm?<Loader2 size={16} className="animate-spin mr-2"/>:<UserCheck size={16} className="mr-2"/>}
-                    {crmMatch?.matched?"Update CRM Record":"Save to Donor CRM"}
-                  </Button>
-                )}
-                {savedToCrm&&(
-                  <div style={{ background:"#10B98122",border:"1px solid #10B98144",borderRadius:12,padding:"10px 16px",display:"flex",alignItems:"center",gap:8 }}>
-                    <CheckCircle2 size={16} style={{ color:"#10B981" }}/><span style={{ fontSize:14,color:"#10B981",fontWeight:500 }}>Saved to Donor CRM</span>
-                    <button onClick={()=>setLocation("/donor-crm")} style={{ marginLeft:"auto",fontSize:12,color:T.purple,textDecoration:"underline" }}>View in CRM →</button>
-                  </div>
-                )}
-                {docType==="receipt"&&checkDuplicateQuery.data?.isDuplicate&&(
-                  <div style={{ background:"rgba(245,158,11,0.12)",border:"1px solid rgba(245,158,11,0.4)",borderRadius:12,padding:"12px 16px",display:"flex",gap:10,alignItems:"flex-start" }}>
-                    <span style={{ fontSize:18 }}>⚠️</span>
+
+            {/* Extracted fields display */}
+            <div style={{ padding: "12px 16px" }}>
+              <ExtractedFields data={extracted} docType={docType} color={currentDocType.color} />
+            </div>
+
+            {/* ── Receipt save form ── */}
+            {docType === "receipt" && (
+              <div style={{ padding: "0 16px 16px" }}>
+                <p style={{ color: T.muted, fontSize: 11, textTransform: "uppercase", marginBottom: 10, letterSpacing: "0.05em" }}>Confirm &amp; Submit Receipt</p>
+                <form
+                  onSubmit={handleSubmit(d => {
+                    createReceiptMutation.mutate({
+                      amount:       d.amount,
+                      description:  d.description,
+                      vendor:       d.vendor,
+                      date:         d.date,
+                      categoryName: d.categoryName,
+                      department:   d.department,
+                    });
+                  })}
+                  style={{ display: "flex", flexDirection: "column", gap: 10 }}
+                >
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                     <div>
-                      <p style={{ fontWeight:700,color:"#f59e0b",fontSize:13,margin:"0 0 4px" }}>Possible Duplicate Receipt</p>
-                      <p style={{ color:"rgba(255,255,255,0.6)",fontSize:12,margin:0 }}>
-                        {checkDuplicateQuery.data.matches.length} similar receipt{checkDuplicateQuery.data.matches.length!==1?"s":""} found
-                        {checkDuplicateQuery.data.matches[0]?.matchType==="exact_hash" ? " (identical image)" : " (same vendor & amount within 7 days)"}.
-                        Please verify before submitting.
-                      </p>
+                      <Label style={{ fontSize: 11, color: T.muted, textTransform: "uppercase" }}>Amount (£) *</Label>
+                      <Input {...register("amount", { required: true })} type="number" step="0.01" placeholder="0.00"
+                        style={{ marginTop: 4, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40 }} />
+                    </div>
+                    <div>
+                      <Label style={{ fontSize: 11, color: T.muted, textTransform: "uppercase" }}>Date</Label>
+                      <Input {...register("date")} type="date"
+                        style={{ marginTop: 4, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40, colorScheme: "dark" }} />
                     </div>
                   </div>
-                )}
-                {docType==="receipt"&&(
-                  <form onSubmit={handleSubmit(d => {
-                    const amountNum = parseFloat(d.amount || "0");
-                    if (amountNum >= 500 && fundAllocation.length === 0 && !showFundAlloc) {
-                      setShowFundAlloc(true);
-                      return;
-                    }
-                    createMutation.mutate({ ...d, imageHash: imageHash ?? undefined, fundAllocation: fundAllocation.length > 0 ? fundAllocation : undefined });
-                  })} style={{ display:"flex",flexDirection:"column",gap:10 }}>
-                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10 }}>
-                      <div><Label style={{ fontSize:11,color:T.muted,textTransform:"uppercase" }}>Amount (£) *</Label><Input {...register("amount",{required:true})} type="number" step="0.01" placeholder="0.00" style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:40 }}/></div>
-                      <div><Label style={{ fontSize:11,color:T.muted,textTransform:"uppercase" }}>Date</Label><Input {...register("date")} type="date" style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:40,colorScheme:"dark" }}/></div>
+                  <div>
+                    <Label style={{ fontSize: 11, color: T.muted, textTransform: "uppercase" }}>Description *</Label>
+                    <Input {...register("description", { required: true })} placeholder="What was purchased?"
+                      style={{ marginTop: 4, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40 }} />
+                  </div>
+                  <div>
+                    <Label style={{ fontSize: 11, color: T.muted, textTransform: "uppercase" }}>Vendor</Label>
+                    <Input {...register("vendor")} placeholder="Shop or supplier name"
+                      style={{ marginTop: 4, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40 }} />
+                  </div>
+                  {depts && depts.length > 0 && (
+                    <div>
+                      <Label style={{ fontSize: 11, color: T.muted, textTransform: "uppercase" }}>Department</Label>
+                      <select {...register("department")}
+                        style={{ marginTop: 4, width: "100%", background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40, padding: "0 12px" }}>
+                        {depts.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                      </select>
                     </div>
-                    <div><Label style={{ fontSize:11,color:T.muted,textTransform:"uppercase" }}>Description *</Label><Input {...register("description",{required:true})} placeholder="What was purchased?" style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:40 }}/></div>
-                    <div><Label style={{ fontSize:11,color:T.muted,textTransform:"uppercase" }}>Vendor</Label><Input {...register("vendor")} placeholder="Shop or supplier name" style={{ marginTop:4,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:40 }}/></div>
-                    <Button type="submit" disabled={createMutation.isPending} style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:48,borderRadius:12,border:"none" }}>
-                      {createMutation.isPending?<><Loader2 size={16} className="animate-spin mr-2"/>Submitting\u2026</>:<><Receipt size={16} className="mr-2"/>Submit Receipt</>}
-                    </Button>
-                  </form>
-                )}
-                <Button variant="outline" onClick={()=>{setPreview(null);setPendingFile(null);setScanError(null);setExtracted(null);setCrmMatch(null);setMultiRecords([]);setSavedToCrm(false);}} style={{ borderColor:T.border,color:T.muted,borderRadius:12,width:"100%",background:"transparent" }}>
-                  <Camera size={16} className="mr-2"/> Scan Another
-                </Button>
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={createReceiptMutation.isPending}
+                    style={{ background: `linear-gradient(135deg,${T.mint},#00DDB0)`, color: "#081526", fontWeight: 700, height: 48, borderRadius: 12, border: "none" }}
+                  >
+                    {createReceiptMutation.isPending
+                      ? <><Loader2 size={16} className="animate-spin mr-2" />Submitting…</>
+                      : <><Receipt size={16} className="mr-2" />Submit Receipt</>}
+                  </Button>
+                </form>
               </div>
-            </div>
+            )}
+
+            {/* ── CRM save (business card / donor form / bank transfer) ── */}
+            {(docType === "business_card" || docType === "crm_donor" || docType === "bank_transfer_screenshot") && (
+              <div style={{ padding: "0 16px 16px" }}>
+                {!savedToCrm ? (
+                  <button
+                    onClick={saveSingleToCrm}
+                    disabled={savingToCrm}
+                    style={{ width: "100%", background: currentDocType.color, border: "none", borderRadius: 12, padding: "12px 16px", color: T.white, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+                  >
+                    {savingToCrm ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                    {savingToCrm ? "Saving to CRM…" : "Save to CRM"}
+                  </button>
+                ) : (
+                  <div style={{ textAlign: "center", padding: "8px 0", color: "#10B981", fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    <CheckCircle2 size={16} /> Saved to CRM
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          <button
+            onClick={resetAll}
+            style={{ marginTop: 10, width: "100%", background: T.glass, border: `1px solid ${T.border}`, borderRadius: 12, padding: "10px 16px", color: T.muted, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+          >
+            <Camera size={14} /> Scan Another
+          </button>
         </div>
       )}
 
-      {/* Empty state */}
-      {!currentRecord&&!analyzing&&!uploading&&(
+      {/* ── Empty state ── */}
+      {!extracted && multiRecords.length === 0 && !isProcessing && !scanError && (
         <div className="px-4">
-          <div style={{ background:T.glass,border:`1px solid ${T.border}`,borderRadius:12,padding:16 }}>
-            <p style={{ color:T.muted,fontSize:13,fontWeight:600,marginBottom:8 }}>What can I scan?</p>
+          <div style={{ background: T.glass, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16 }}>
+            <p style={{ color: T.muted, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>What can I scan?</p>
             <div className="grid grid-cols-1 gap-3">
-              {DOC_TYPES.map(dt=>(
-                <div key={dt.id} style={{ display:"flex",alignItems:"center",gap:10 }}>
-                  <div style={{ background:`${dt.color}22`,borderRadius:8,padding:6 }}><dt.icon size={14} style={{ color:dt.color }}/></div>
-                  <div><p style={{ fontSize:13,fontWeight:500,color:T.white }}>{dt.label}</p><p style={{ fontSize:11,color:T.muted }}>{dt.desc}</p></div>
+              {DOC_TYPES.map(dt => (
+                <div key={dt.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ background: `${dt.color}22`, borderRadius: 8, padding: 6 }}>
+                    <dt.icon size={14} style={{ color: dt.color }} />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 500, color: T.white }}>{dt.label}</p>
+                    <p style={{ fontSize: 11, color: T.muted }}>{dt.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -718,18 +612,67 @@ export default function CapturePage() {
   );
 }
 
-function FieldRow({ icon: Icon, label, value, color, highlight, action }: {
-  icon: React.ElementType; label: string; value: string;
-  color: string; highlight?: boolean; action?: React.ReactNode;
-}) {
-  return (
-    <div style={{ display:"flex",alignItems:"flex-start",gap:10,background:highlight?`${color}11`:"transparent",borderRadius:8,padding:highlight?"8px 10px":"4px 0" }}>
-      <Icon size={15} style={{ color,flexShrink:0,marginTop:2 }}/>
-      <div style={{ flex:1,minWidth:0 }}>
-        <p style={{ fontSize:11,color:"rgba(255,255,255,0.4)",marginBottom:1 }}>{label}</p>
-        <p style={{ fontSize:14,fontWeight:highlight?700:400,color:highlight?color:"rgba(255,255,255,0.9)",wordBreak:"break-word" }}>{value}</p>
+// ─── Extracted fields display component ─────────────────────────────────────
+function ExtractedFields({ data, docType, color }: { data: any; docType: DocType; color: string }) {
+  if (!data) return null;
+
+  const fields: { icon: React.ElementType; label: string; value: string | null }[] = [];
+
+  if (docType === "receipt") {
+    if (data.vendorName)   fields.push({ icon: Tag,       label: "Vendor",   value: data.vendorName });
+    if (data.totalAmount)  fields.push({ icon: DollarSign, label: "Amount",  value: `£${Number(data.totalAmount).toFixed(2)}` });
+    if (data.purchaseDate) fields.push({ icon: Calendar,  label: "Date",     value: data.purchaseDate });
+    if (data.items)        fields.push({ icon: Receipt,   label: "Items",    value: data.items });
+    if (data.category)     fields.push({ icon: Tag,       label: "Category", value: data.category });
+    if (data.vatAmount)    fields.push({ icon: DollarSign, label: "VAT",     value: `£${Number(data.vatAmount).toFixed(2)}` });
+  } else if (docType === "business_card") {
+    if (data.donorName)    fields.push({ icon: UserCheck, label: "Name",         value: data.donorName });
+    if (data.organisation) fields.push({ icon: Tag,       label: "Organisation", value: data.organisation });
+    if (data.jobTitle)     fields.push({ icon: Tag,       label: "Role",         value: data.jobTitle });
+    if (data.donorPhone)   fields.push({ icon: Phone,     label: "Phone",        value: data.donorPhone });
+    if (data.donorEmail)   fields.push({ icon: Mail,      label: "Email",        value: data.donorEmail });
+    if (data.website)      fields.push({ icon: Tag,       label: "Website",      value: data.website });
+  } else if (docType === "bank_transfer_screenshot") {
+    if (data.donorName)     fields.push({ icon: UserCheck,  label: "Sender",    value: data.donorName });
+    if (data.amount)        fields.push({ icon: DollarSign, label: "Amount",    value: `£${Number(data.amount).toFixed(2)}` });
+    if (data.donationDate)  fields.push({ icon: Calendar,   label: "Date",      value: data.donationDate });
+    if (data.reference)     fields.push({ icon: Tag,        label: "Reference", value: data.reference });
+    if (data.recipientName) fields.push({ icon: UserCheck,  label: "Recipient", value: data.recipientName });
+  } else if (docType === "crm_donor") {
+    if (data.donorName)    fields.push({ icon: UserCheck,  label: "Name",     value: data.donorName });
+    if (data.donorPhone)   fields.push({ icon: Phone,      label: "Phone",    value: data.donorPhone });
+    if (data.donorEmail)   fields.push({ icon: Mail,       label: "Email",    value: data.donorEmail });
+    if (data.donorAddress) fields.push({ icon: MapPin,     label: "Address",  value: data.donorAddress });
+    if (data.amount)       fields.push({ icon: DollarSign, label: "Amount",   value: `£${Number(data.amount).toFixed(2)}` });
+    if (data.campaignName) fields.push({ icon: Tag,        label: "Campaign", value: data.campaignName });
+    if (data.giftAid)      fields.push({ icon: CheckCircle2, label: "Gift Aid", value: "Yes — Gift Aid declared" });
+  }
+
+  if (fields.length === 0) {
+    // Fallback: show all non-null fields as key-value pairs
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {Object.entries(data).map(([k, v]) => v != null && (
+          <div key={k} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <span style={{ color: T.muted, fontSize: 12, minWidth: 100, flexShrink: 0 }}>{k}</span>
+            <span style={{ color: T.white, fontSize: 13 }}>{String(v)}</span>
+          </div>
+        ))}
       </div>
-      {action&&<div style={{ flexShrink:0 }}>{action}</div>}
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {fields.map(({ icon: Icon, label, value }) => value && (
+        <div key={label} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <Icon size={15} style={{ color, flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ color: T.muted, fontSize: 11, margin: "0 0 1px", textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</p>
+            <p style={{ color: T.white, fontSize: 14, fontWeight: 500, margin: 0, wordBreak: "break-word" }}>{value}</p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

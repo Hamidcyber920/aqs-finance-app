@@ -66,6 +66,19 @@ Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 - recipientName: recipient account name
 Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
 
+  crm_donor: `You are an expert at reading UK charity donor pledge cards and donor forms. Extract:
+- donorName: full name of donor
+- donorPhone: UK phone number or null
+- donorEmail: email address or null
+- donorAddress: home address or null
+- amount: pledge or donation amount in GBP (number) or null
+- donationDate: date (YYYY-MM-DD) or null
+- campaignName: campaign or project name or null
+- giftAid: true if gift aid box is ticked, false otherwise
+- paymentMethod: cash/bank_transfer/cheque/standing_order or null
+- notes: any additional notes or instructions
+Return ONLY valid JSON with these exact fields. Use null for missing fields.`,
+
   invoice: `You are a UK invoice/expense extractor. Extract:
 - vendorName: name of the supplier/vendor
 - invoiceNumber: invoice number or reference
