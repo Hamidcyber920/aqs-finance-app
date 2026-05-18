@@ -16,10 +16,10 @@ import {
   Plus, Zap, Droplets, Flame, Wifi, Phone, Shield, MoreHorizontal,
   AlertTriangle, CheckCircle, Clock, Trash2, Edit2, FileText,
   ChevronLeft, ChevronRight, CalendarDays, Settings, Building2, Tag,
-  Receipt, ScanLine, Users,
+  Receipt, ScanLine, Users, Download, Calendar,
 } from "lucide-react";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
-import { LineChart, Line, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
 
 const FALLBACK_BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"];
 const FALLBACK_CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"];
@@ -573,6 +573,13 @@ export default function BillsUtilities() {
   const [scannedFileUrl, setScannedFileUrl] = useState("");
   const [quickBuilding, setQuickBuilding] = useState("QLH");
 
+  // Date range filter for bills history
+  const [dateFrom, setDateFrom] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1); d.setDate(1);
+    return d.toISOString().split("T")[0];
+  });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
+
   const [accountForm, setAccountForm] = useState({
     building: "QLH",
     supplier: "",
@@ -629,6 +636,9 @@ export default function BillsUtilities() {
       : undefined
   );
   const { data: allAccounts = [] } = trpc.bills.listAccounts.useQuery(undefined);
+
+  // All bills with date range for category breakdown + export
+  const { data: allBills = [] } = trpc.bills.listBills.useQuery({ from: dateFrom, to: dateTo });
 
   const { data: accountDetail } = trpc.bills.getAccount.useQuery(
     { id: selectedAccountId! },
@@ -751,6 +761,79 @@ export default function BillsUtilities() {
             ))}
           </div>
         )}
+
+        {/* ── Category Breakdown (Bills Paid) ── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <CardTitle className="text-base">Bills Paid by Category</CardTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 h-8 text-xs" />
+                <span className="text-xs text-muted-foreground">to</span>
+                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 h-8 text-xs" />
+                <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+                  if (!allBills.length) { toast.info("No bills in selected range"); return; }
+                  const rows = allBills.map((b: any) => `${b.billDate ? new Date(b.billDate).toLocaleDateString() : ""},${b.accountSupplier},${b.accountCategory},${b.accountBuilding},£${parseFloat(b.amount).toFixed(2)},${b.notes || ""}`);
+                  const csv = "Date,Supplier,Category,Building,Amount,Notes\n" + rows.join("\n");
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a"); a.href = url; a.download = `bills_${dateFrom}_to_${dateTo}.csv`; a.click();
+                  URL.revokeObjectURL(url);
+                }}>
+                  <Download className="w-3 h-3" /> CSV
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+                  if (!allBills.length) { toast.info("No bills in selected range"); return; }
+                  const totalAmount = allBills.reduce((s: number, b: any) => s + parseFloat(b.amount), 0);
+                  let html = `<html><head><title>Bills ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
+                  html += `<h2>Bills & Utilities Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total: £${totalAmount.toFixed(2)}</p>`;
+                  html += `<table><tr><th>Date</th><th>Supplier</th><th>Category</th><th>Building</th><th>Amount</th><th>Notes</th></tr>`;
+                  allBills.forEach((b: any) => { html += `<tr><td>${b.billDate ? new Date(b.billDate).toLocaleDateString() : ""}</td><td>${b.accountSupplier}</td><td>${b.accountCategory}</td><td>${b.accountBuilding}</td><td>£${parseFloat(b.amount).toFixed(2)}</td><td>${b.notes || ""}</td></tr>`; });
+                  html += `</table></body></html>`;
+                  const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+                }}>
+                  <FileText className="w-3 h-3" /> PDF
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const CATEGORY_COLORS: Record<string, string> = { electricity: "#f59e0b", gas: "#ef4444", water: "#3b82f6", broadband: "#8b5cf6", telephone: "#06b6d4", insurance: "#10b981", other: "#6b7280" };
+              const byCategory = allBills.reduce((acc: Record<string, number>, b: any) => {
+                const cat = b.accountCategory || "other";
+                acc[cat] = (acc[cat] || 0) + parseFloat(b.amount);
+                return acc;
+              }, {} as Record<string, number>);
+              const total = Object.values(byCategory).reduce((s, v) => s + v, 0);
+              const entries = Object.entries(byCategory).sort((a, b) => b[1] - a[1]);
+              if (entries.length === 0) return <p className="text-sm text-muted-foreground">No bills in selected date range.</p>;
+              return (
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Total: <span className="text-lg font-bold">£{total.toFixed(2)}</span></p>
+                  {/* Stacked bar */}
+                  <div className="flex h-6 rounded-full overflow-hidden">
+                    {entries.map(([cat, amt]) => (
+                      <div key={cat} style={{ width: `${(amt / total) * 100}%`, backgroundColor: CATEGORY_COLORS[cat] || "#6b7280" }} className="relative group">
+                        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity">{cat}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Legend */}
+                  <div className="flex flex-wrap gap-3">
+                    {entries.map(([cat, amt]) => (
+                      <div key={cat} className="flex items-center gap-1.5">
+                        <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: CATEGORY_COLORS[cat] || "#6b7280" }} />
+                        <span className="text-xs capitalize">{cat}</span>
+                        <span className="text-xs font-semibold">£{amt.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
 
         {/* Main Tabs */}
         <Tabs defaultValue="accounts">
@@ -883,30 +966,45 @@ export default function BillsUtilities() {
                       </div>
                       {accountDetail.account.notes && <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded">{accountDetail.account.notes}</p>}
 
-                      {/* Sparkline: last 6 bills */}
-                      {accountDetail.bills.length >= 2 && (() => {
-                        const sparkData = [...accountDetail.bills]
-                          .sort((a: any, b: any) => new Date(a.billDate).getTime() - new Date(b.billDate).getTime())
-                          .slice(-6)
-                          .map((b: any) => ({ date: new Date(b.billDate).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }), amount: parseFloat(b.amount) }));
+                      {/* 12-Month Bill Trend Bar Chart */}
+                      {accountDetail.bills.length >= 1 && (() => {
+                        // Build 12-month trend data
+                        const now = new Date();
+                        const months: { label: string; amount: number }[] = [];
+                        for (let i = 11; i >= 0; i--) {
+                          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                          const label = d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
+                          const monthBills = accountDetail.bills.filter((b: any) => {
+                            const bd = new Date(b.billDate);
+                            return bd.getMonth() === d.getMonth() && bd.getFullYear() === d.getFullYear();
+                          });
+                          const amount = monthBills.reduce((s: number, b: any) => s + parseFloat(b.amount), 0);
+                          months.push({ label, amount });
+                        }
                         const budget = accountDetail.account.monthlyBudget ? parseFloat(accountDetail.account.monthlyBudget) : null;
-                        const latest = sparkData[sparkData.length - 1]?.amount ?? 0;
+                        const latest = months[months.length - 1]?.amount ?? 0;
                         const overBudget = budget !== null && latest > budget;
                         return (
                           <div className="p-3 bg-muted/30 rounded-lg">
-                            <div className="flex items-center justify-between mb-1">
-                              <p className="text-xs font-medium text-muted-foreground">Bill trend (last {sparkData.length})</p>
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-medium text-muted-foreground">12-Month Bill Trend</p>
                               {budget !== null && (
                                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${overBudget ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
                                   {overBudget ? "Over budget" : "Within budget"}
                                 </span>
                               )}
                             </div>
-                            <ResponsiveContainer width="100%" height={60}>
-                              <LineChart data={sparkData}>
-                                <Line type="monotone" dataKey="amount" stroke={overBudget ? "#dc2626" : "#1a4731"} strokeWidth={2} dot={{ r: 3 }} />
-                                <RechartsTooltip formatter={(v: number) => [`£${v.toFixed(2)}`, "Amount"]} labelFormatter={(l) => l} />
-                              </LineChart>
+                            <ResponsiveContainer width="100%" height={120}>
+                              <BarChart data={months}>
+                                <XAxis dataKey="label" tick={{ fontSize: 9 }} interval={0} angle={-45} textAnchor="end" height={35} />
+                                <YAxis tick={{ fontSize: 9 }} width={40} tickFormatter={(v) => `\u00a3${v}`} />
+                                <RechartsTooltip formatter={(v: number) => [`\u00a3${v.toFixed(2)}`, "Amount"]} labelFormatter={(l) => l} />
+                                <Bar dataKey="amount" radius={[3, 3, 0, 0]}>
+                                  {months.map((m, i) => (
+                                    <Cell key={i} fill={budget && m.amount > budget ? "#dc2626" : m.amount > 0 ? "#1a4731" : "#e5e7eb"} />
+                                  ))}
+                                </Bar>
+                              </BarChart>
                             </ResponsiveContainer>
                           </div>
                         );

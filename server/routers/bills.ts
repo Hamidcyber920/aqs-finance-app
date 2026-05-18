@@ -159,16 +159,27 @@ export const billsRouter = router({
       accountId: z.number().optional(),
       from: z.string().optional(),
       to: z.string().optional(),
-      limit: z.number().optional().default(50),
+      limit: z.number().optional().default(500),
     }).optional())
     .query(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       let rows = await db.select().from(utilityBills)
         .orderBy(desc(utilityBills.billDate))
-        .limit(input?.limit ?? 50);
+        .limit(input?.limit ?? 500);
       if (input?.accountId) rows = rows.filter(r => r.accountId === input.accountId);
-      return rows;
+      if (input?.from) rows = rows.filter(r => new Date(r.billDate) >= new Date(input.from!));
+      if (input?.to) rows = rows.filter(r => new Date(r.billDate) <= new Date(input.to!));
+
+      // Enrich with account info for category breakdown
+      const accounts = await db.select().from(utilityAccounts);
+      const accountMap = Object.fromEntries(accounts.map(a => [a.id, a]));
+      return rows.map(r => ({
+        ...r,
+        accountCategory: accountMap[r.accountId]?.category ?? "other",
+        accountSupplier: accountMap[r.accountId]?.supplier ?? "Unknown",
+        accountBuilding: accountMap[r.accountId]?.building ?? "Unknown",
+      }));
     }),
 
   addBill: protectedProcedure

@@ -2498,3 +2498,10 @@
 
 ## Bills & Utilities Bug Fix (May 2026)
 - [x] Fix: Bills scanned/extracted but don't save — added quickCreateAndBill procedure + Quick Save confirmation dialog that auto-creates account and saves bill in one step
+
+## Bills & Utilities Enhancements (May 2026)
+- [x] Add category breakdown box showing different bill types paid this month as colored bars with amounts
+- [x] Add date range filter (From/To) to view bills paid in any historical period
+- [x] Add CSV download filtered by selected date range
+- [x] Add PDF download filtered by selected date range
+- [x] Replace bill trend line chart with 12-month bar chart (shows amounts on tap)
