@@ -491,7 +491,7 @@ export default function MonthlyExpenses() {
   const invoices = filterByDateRange(data?.receipts ?? []);
   const volunteers = filterByDateRange(data?.volunteers ?? []);
   const loans = filterByDateRange(data?.loans ?? []);
-  const allItemsFlat = [...payroll.map((i:any)=>({...i,_type:"payroll"})), ...invoices.map((i:any)=>({...i,_type:"invoice"})), ...volunteers.map((i:any)=>({...i,_type:"volunteer"})), ...loans.map((i:any)=>({...i,_type:"loan"}))];
+  const allItemsFlat = [...payroll.map((i:any)=>({...i,_type:"payroll"})), ...invoices.map((i:any)=>({...i,_type:"receipt"})), ...volunteers.map((i:any)=>({...i,_type:"volunteer"})), ...loans.map((i:any)=>({...i,_type:"loan"}))];
   const dateRangeLabel = dateFrom || dateTo ? ` (${dateFrom || 'start'} to ${dateTo || 'end'})` : '';
   const dateRangeFile = dateFrom || dateTo ? `-${dateFrom || 'start'}-to-${dateTo || 'end'}` : '';
 
@@ -555,9 +555,9 @@ export default function MonthlyExpenses() {
     .filter((i: any) => i.status === "approved" || i.paymentStatus === "paid")
     .reduce((s: number, i: any) => s + Number(i.amount ?? i.grossPay ?? i.netPay ?? 0), 0);
 
-  const handleAuthorise = (item: any) => authoriseMutation.mutate({ id: item.id, type: item._type ?? "invoice" });
+  const handleAuthorise = (item: any) => authoriseMutation.mutate({ id: item.id, type: item._type ?? "receipt" });
   const handleReject = (item: any) => { setRejectItem(item); setRejectOpen(true); };
-  const handlePay = (item: any) => markPaidMutation.mutate({ id: item.id, type: item._type ?? "invoice" });
+  const handlePay = (item: any) => markPaidMutation.mutate({ id: item.id, type: item._type ?? "receipt" });
 
   return (
     <>
@@ -667,7 +667,7 @@ export default function MonthlyExpenses() {
 
             {/* Sections */}
             <SectionCard title="Payroll" items={payroll.map((i:any)=>({...i,_type:"payroll"}))} color={SECTION_COLORS.payroll} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
-            <SectionCard title="Invoices & Receipts" items={invoices.map((i:any)=>({...i,_type:"invoice"}))} color={SECTION_COLORS.invoices} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
+            <SectionCard title="Invoices & Receipts" items={invoices.map((i:any)=>({...i,_type:"receipt"}))} color={SECTION_COLORS.invoices} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
             <SectionCard title="Volunteer Payments" items={volunteers.map((i:any)=>({...i,_type:"volunteer"}))} color={SECTION_COLORS.volunteers} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
             <SectionCard title="Qarde Hasan Repayments" items={loans.map((i:any)=>({...i,_type:"loan"}))} color={SECTION_COLORS.loans} onAuthorise={handleAuthorise} onReject={handleReject} onPay={handlePay} onWithhold={()=>{}} canEdit={canEdit}/>
           </>
@@ -688,7 +688,7 @@ export default function MonthlyExpenses() {
                 <textarea value={rejectComment} onChange={e=>setRejectComment(e.target.value)} rows={3} placeholder="e.g. Insufficient funds this month"
                   style={{ marginTop:6,width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,padding:"10px 14px",fontSize:14,resize:"vertical",boxSizing:"border-box" }}/>
               </div>
-              <Button onClick={() => rejectMutation?.mutate?.({ id:rejectItem?.id, type:rejectItem?._type??"invoice", comment:rejectComment, month, year })}
+              <Button onClick={() => rejectMutation?.mutate?.({ id:rejectItem?.id, type:rejectItem?._type??"receipt", comment:rejectComment, month, year })}
                 disabled={!rejectComment||rejectMutation?.isPending}
                 style={{ background:"rgba(255,80,80,0.15)",border:"1px solid rgba(255,80,80,0.3)",color:"#ff5050",fontWeight:700,height:46,borderRadius:12,fontSize:15 }}>
                 {rejectMutation?.isPending?"Deferring…":"Defer to Next Month"}
