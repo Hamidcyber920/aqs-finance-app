@@ -71,6 +71,16 @@ function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWith
                     {item.departmentName && <span style={{ fontSize:12,color:T.muted }}>{item.departmentName}</span>}
                     {item.notes && <span style={{ fontSize:12,color:T.muted,fontStyle:"italic" }}>{item.notes.slice(0,80)}{item.notes.length>80?"…":""}</span>}
                   </div>
+                  {item.authorisedAt && (
+                    <div style={{ marginTop:5,fontSize:11,color:"#00FFC2" }}>
+                      ✓ Authorised by <strong>{item.authorisedByName ?? "Admin"}</strong> · {new Date(item.authorisedAt).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}
+                    </div>
+                  )}
+                  {item.rejectedAt && !item.authorisedAt && (
+                    <div style={{ marginTop:5,fontSize:11,color:"#f43f5e" }}>
+                      ✗ Deferred by <strong>{item.rejectedByName ?? "Admin"}</strong> · {new Date(item.rejectedAt).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}{item.rejectionComment ? ` — ${item.rejectionComment}` : ""}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display:"flex",alignItems:"center",gap:10,flexShrink:0 }}>
                   <span style={{ fontSize:16,fontWeight:800,color:T.white }}>{`£${Number(item.amount??item.grossPay??item.netPay??0).toLocaleString("en-GB",{minimumFractionDigits:2})}`}</span>

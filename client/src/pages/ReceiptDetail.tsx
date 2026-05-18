@@ -155,6 +155,12 @@ export default function ReceiptDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={statusColor[receipt.status] ?? "secondary"}>{receipt.status}</Badge>
+          {(receipt as any).authorisedAt && (
+            <span className="text-xs text-emerald-500 font-medium flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Authorised by {(receipt as any).authorisedByName ?? "Admin"} · {new Date((receipt as any).authorisedAt).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}
+            </span>
+          )}
           {receipt.status === "failed" || receipt.status === "pending" ? (
             <Button
               size="sm"

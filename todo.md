@@ -2493,6 +2493,13 @@
 - [x] Add department dropdown in Capture.tsx with create-new-department support
 - [x] Add category dropdown in Capture.tsx (deduplicated via Map by name)
 
+## Approval Timestamp on Receipts (May 2026)
+- [x] Confirmed authorisedAt, authorisedByName, authorisedById columns already exist in receipts table
+- [x] Confirmed expenses.authorise procedure already writes these fields when Auth is clicked
+- [x] Added approval timestamp display in MonthlyExpenses.tsx SectionCard (green ✓ Authorised by X · date)
+- [x] Added deferred timestamp display in MonthlyExpenses.tsx SectionCard (red ✗ Deferred by X · date)
+- [x] Added approval timestamp display in ReceiptDetail.tsx header (CheckCircle + name + datetime)
+
 ## Image URL Not Saved Bugs (May 2026)
 - [x] Capture.tsx: S3 URL from upload was not stored — fixed by adding uploadedUrlRef and passing imageUrl to receipts.create
 - [x] BillsUtilities.tsx: billUrl from scan not passed to addBill — fixed by adding billUrl field to billForm state and setting it in onExtracted callback
