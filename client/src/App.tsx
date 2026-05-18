@@ -66,6 +66,7 @@ const TrainingTrackerPage = lazy(() => import("./pages/TrainingTracker"));
 const LbmwCorrespondencePage = lazy(() => import("./pages/LbmwCorrespondence"));
 const TrusteeDashboardPage = lazy(() => import("./pages/TrusteeDashboard"));
 const FacilitiesPage = lazy(() => import("./pages/Facilities"));
+const UpcomingBookingsPage = lazy(() => import("./pages/UpcomingBookings"));
 const Bistro87Page = lazy(() => import("./pages/Bistro87"));
 const DonatePage = lazy(() => import("./pages/DonatePage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -161,6 +162,7 @@ function Router() {
           <Route path="/bistro87" component={Bistro87Page} />
           <Route path="/accommodation" component={StudentAccommodationPage} />
           <Route path="/facilities" component={FacilitiesPage} />
+          <Route path="/upcoming-bookings" component={UpcomingBookingsPage} />
           <Route path="/training-tracker" component={TrainingTrackerPage} />
 
           {/* ── GOVERNANCE ── */}

@@ -26,7 +26,7 @@ import {
   Settings, ShieldCheck, Users, Wallet, GitBranch, ClipboardCheck, Gavel,
   ChevronRight, PanelLeft, Menu, Database, MessageSquare, Home, CreditCard, UserCheck, Inbox, History,
   Gift, CalendarDays, Send, UserPlus, MailOpen, Shield, Activity, Mic,
-  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark, Zap, GraduationCap, MailSearch, UtensilsCrossed, Globe,
+  TrendingUp, Flag, Handshake, QrCode, Trophy, AlertTriangle, Bookmark, Zap, GraduationCap, MailSearch, UtensilsCrossed, Globe, Timer,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";

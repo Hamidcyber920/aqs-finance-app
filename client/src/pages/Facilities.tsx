@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import {
   Building2, CalendarDays, Plus, Users, PoundSterling, Clock, Edit2,
   Download, FileText, Trash2, Settings, ChevronLeft, ChevronRight,
-  AlertTriangle, CheckCircle2, MapPin
+  AlertTriangle, CheckCircle2, MapPin, Timer, RefreshCw
 } from "lucide-react";
 import FacilitiesEnquiries from "./FacilitiesEnquiries";
 
@@ -603,6 +603,220 @@ function UpcomingSummary() {
   );
 }
 
+// ─── Upcoming Bookings Tab ────────────────────────────────────────────────────
+function useCountdown(startDatetime: string | Date) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const start = new Date(startDatetime).getTime();
+  const diffMs = start - now;
+  if (diffMs <= 0) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0, label: "In progress", urgent: true, inProgress: true };
+  }
+  const days = Math.floor(diffMs / 86400000);
+  const hours = Math.floor((diffMs % 86400000) / 3600000);
+  const minutes = Math.floor((diffMs % 3600000) / 60000);
+  const seconds = Math.floor((diffMs % 60000) / 1000);
+  const label = days === 0 && hours === 0 ? `${minutes}m ${seconds}s` : days === 0 ? `${hours}h ${minutes}m` : days === 1 ? "Tomorrow" : `${days} days`;
+  return { days, hours, minutes, seconds, label, urgent: days === 0, inProgress: false };
+}
+
+function LiveTicker({ startDatetime }: { startDatetime: string | Date }) {
+  const cd = useCountdown(startDatetime);
+  if (cd.inProgress) return <span className="text-blue-300 font-mono text-sm animate-pulse">● In progress</span>;
+  if (cd.days === 0) {
+    return (
+      <span className="text-red-300 font-mono text-sm tabular-nums">
+        {String(cd.hours).padStart(2, "0")}:{String(cd.minutes).padStart(2, "0")}:{String(cd.seconds).padStart(2, "0")}
+      </span>
+    );
+  }
+  return (
+    <span className="font-mono text-sm tabular-nums text-white/70">
+      {cd.days}d {String(cd.hours).padStart(2, "0")}:{String(cd.minutes).padStart(2, "0")}:{String(cd.seconds).padStart(2, "0")}
+    </span>
+  );
+}
+
+function CountdownRing({ startDatetime }: { startDatetime: string | Date }) {
+  const cd = useCountdown(startDatetime);
+  const ringColor = cd.inProgress ? "text-blue-400 border-blue-400/40" : cd.days === 0 ? "text-red-400 border-red-400/40" : cd.days === 1 ? "text-orange-400 border-orange-400/40" : cd.days <= 3 ? "text-yellow-400 border-yellow-400/40" : "text-green-400 border-green-400/40";
+  const bgColor = cd.inProgress ? "bg-blue-500/10" : cd.days === 0 ? "bg-red-500/10" : cd.days === 1 ? "bg-orange-500/10" : cd.days <= 3 ? "bg-yellow-500/10" : "bg-green-500/10";
+  const textColor = ringColor.split(" ")[0];
+  return (
+    <div className={`flex flex-col items-center justify-center w-16 h-16 rounded-full border-2 ${ringColor} ${bgColor} shrink-0`}>
+      {cd.inProgress ? (
+        <><Timer className={`w-4 h-4 ${textColor} mb-0.5`} /><span className={`text-xs font-bold ${textColor}`}>Live</span></>
+      ) : cd.days === 0 ? (
+        <><span className={`text-base font-black leading-none ${textColor}`}>{cd.hours}h</span><span className={`text-xs font-semibold ${textColor}`}>{cd.minutes}m</span></>
+      ) : (
+        <><span className={`text-xl font-black leading-none ${textColor}`}>{cd.days}</span><span className={`text-xs font-semibold ${textColor}`}>days</span></>
+      )}
+    </div>
+  );
+}
+
+function UpcomingBookingsTab() {
+  const [days, setDays] = useState(7);
+  const [filterBuilding, setFilterBuilding] = useState("all");
+  const { data: bookings, isLoading, refetch, dataUpdatedAt } = trpc.facilities.upcomingBookings.useQuery(
+    { days },
+    { refetchInterval: 60000 }
+  );
+  const buildings = useMemo(() => Array.from(new Set((bookings || []).map((b: any) => b.building).filter(Boolean))), [bookings]);
+  const filtered = useMemo(() => (bookings || []).filter((b: any) => filterBuilding === "all" || b.building === filterBuilding), [bookings, filterBuilding]);
+
+  const grouped = useMemo(() => {
+    const g: Record<string, any[]> = {};
+    for (const b of filtered) {
+      const key = new Date(b.startDatetime).toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+      if (!g[key]) g[key] = [];
+      g[key].push(b);
+    }
+    return g;
+  }, [filtered]);
+
+  const today = new Date().toDateString();
+  const tomorrow = new Date(Date.now() + 86400000).toDateString();
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
+
+  return (
+    <div className="space-y-5">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm text-white/60">
+          Live countdown for confirmed &amp; pending bookings
+          {lastUpdated && <span className="ml-2 text-white/40">· Updated {lastUpdated}</span>}
+        </div>
+        <div className="flex flex-wrap gap-2 items-center">
+          <select value={String(days)} onChange={e => setDays(Number(e.target.value))}
+            className="bg-white/10 border border-white/20 text-white text-xs rounded-md px-2 py-1.5 h-8">
+            <option value="3">Next 3 days</option>
+            <option value="7">Next 7 days</option>
+            <option value="14">Next 14 days</option>
+            <option value="30">Next 30 days</option>
+          </select>
+          {buildings.length > 0 && (
+            <select value={filterBuilding} onChange={e => setFilterBuilding(e.target.value)}
+              className="bg-white/10 border border-white/20 text-white text-xs rounded-md px-2 py-1.5 h-8">
+              <option value="all">All buildings</option>
+              {buildings.map((b: string) => <option key={b} value={b}>{b}</option>)}
+            </select>
+          )}
+          <Button variant="outline" size="sm" className="h-8 border-white/20 text-white hover:bg-white/10" onClick={() => refetch()}>
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary strip */}
+      {!isLoading && bookings && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Total upcoming", value: filtered.length, color: "text-indigo-400" },
+            { label: "Today", value: filtered.filter((b: any) => new Date(b.startDatetime).toDateString() === today).length, color: "text-red-400" },
+            { label: "Tomorrow", value: filtered.filter((b: any) => new Date(b.startDatetime).toDateString() === tomorrow).length, color: "text-orange-400" },
+            { label: "Total revenue", value: `£${filtered.reduce((s: number, b: any) => s + Number(b.agreedAmount || 0), 0).toFixed(2)}`, color: "text-emerald-400" },
+          ].map(s => (
+            <Card key={s.label} className="bg-white/5 border-white/10">
+              <CardContent className="p-3">
+                <div className="text-xs text-white/60 mb-1">{s.label}</div>
+                <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Loading */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-16">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-white/60 text-sm">Loading upcoming bookings...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && filtered.length === 0 && (
+        <Card className="bg-white/5 border-white/10">
+          <CardContent className="py-14 text-center">
+            <CalendarDays className="w-10 h-10 mx-auto mb-3 text-white/20" />
+            <p className="text-white/60 font-medium">No upcoming bookings</p>
+            <p className="text-white/40 text-sm mt-1">No confirmed or pending bookings in the next {days} days.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Grouped by day */}
+      {!isLoading && Object.entries(grouped).map(([day, dayBookings]) => {
+        const isToday = new Date((dayBookings as any[])[0].startDatetime).toDateString() === today;
+        const isTomorrow = new Date((dayBookings as any[])[0].startDatetime).toDateString() === tomorrow;
+        return (
+          <div key={day} className="space-y-2">
+            {/* Day header */}
+            <div className="flex items-center gap-3">
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold
+                ${isToday ? "bg-red-500/20 text-red-300 border border-red-500/30" :
+                  isTomorrow ? "bg-orange-500/20 text-orange-300 border border-orange-500/30" :
+                  "bg-white/10 text-white/80 border border-white/10"}`}>
+                <CalendarDays className="w-3.5 h-3.5" />
+                {isToday ? "Today — " : isTomorrow ? "Tomorrow — " : ""}{day}
+                <span className="ml-1 text-xs opacity-70">{(dayBookings as any[]).length} booking{(dayBookings as any[]).length !== 1 ? "s" : ""}</span>
+              </div>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+            {/* Booking cards */}
+            {(dayBookings as any[]).map((b: any) => {
+              const cd_days = Math.max(0, Math.floor((new Date(b.startDatetime).getTime() - Date.now()) / 86400000));
+              const badgeColor = cd_days === 0 ? "bg-red-500/20 text-red-300 border-red-500/30" : cd_days === 1 ? "bg-orange-500/20 text-orange-300 border-orange-500/30" : cd_days <= 3 ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" : "bg-green-500/20 text-green-300 border-green-500/30";
+              return (
+                <div key={b.id} className="space-y-0">
+                  <Card className="bg-white/5 border-white/10 hover:border-white/20 transition-all rounded-b-none border-b-0">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <CountdownRing startDatetime={b.startDatetime} />
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <h3 className="font-semibold text-white text-sm leading-tight">{b.title}</h3>
+                              <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <Badge className={`text-xs border ${badgeColor}`}>{countdownLabel(b.startDatetime)}</Badge>
+                                <Badge className={`text-xs border ${STATUS_COLORS[b.status] || "bg-white/10 text-white/70 border-white/20"}`}>{b.status}</Badge>
+                              </div>
+                            </div>
+                            {b.agreedAmount && parseFloat(b.agreedAmount) > 0 && (
+                              <span className="text-emerald-400 font-mono font-semibold text-sm shrink-0">{fmt(b.agreedAmount)}</span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-xs text-white/60">
+                            <div className="flex items-center gap-1.5"><Building2 className="w-3 h-3 text-indigo-400" />{b.roomName || "Room TBC"}{b.building ? ` · ${b.building}` : ""}</div>
+                            <div className="flex items-center gap-1.5"><Users className="w-3 h-3 text-indigo-400" />{b.bookerName}{b.attendeeCount ? ` · ${b.attendeeCount} guests` : ""}</div>
+                            <div className="flex items-center gap-1.5"><CalendarDays className="w-3 h-3 text-indigo-400" />{new Date(b.startDatetime).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" })}</div>
+                            <div className="flex items-center gap-1.5"><Clock className="w-3 h-3 text-indigo-400" />{new Date(b.startDatetime).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} – {new Date(b.endDatetime).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  {/* Live ticker */}
+                  <div className="flex items-center justify-between px-4 py-1.5 rounded-b-lg bg-white/3 border border-t-0 border-white/5 text-xs text-white/50">
+                    <span className="flex items-center gap-1.5"><Timer className="w-3 h-3" /> Live countdown:</span>
+                    <LiveTicker startDatetime={b.startDatetime} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Facilities() {
   const [tab, setTab] = useState("enquiries");
@@ -703,15 +917,13 @@ export default function Facilities() {
         </div>
       )}
 
-      {/* 7-Day Upcoming Summary */}
-      <UpcomingSummary />
-
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
         <div className="overflow-x-auto -mx-1 px-1 pb-1">
           <TabsList className="bg-white/5 border border-white/10 inline-flex w-max min-w-full h-auto gap-1 p-1">
             <TabsTrigger value="enquiries" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Enquiries</TabsTrigger>
             <TabsTrigger value="bookings" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Bookings</TabsTrigger>
+            <TabsTrigger value="upcoming" className="whitespace-nowrap data-[state=active]:bg-indigo-600 flex items-center gap-1"><Timer className="w-3.5 h-3.5" />Upcoming</TabsTrigger>
             <TabsTrigger value="calendar" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Calendar</TabsTrigger>
             <TabsTrigger value="rooms" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Rooms</TabsTrigger>
           </TabsList>
@@ -770,6 +982,11 @@ export default function Facilities() {
               </tbody>
             </table>
           </div>
+        </TabsContent>
+
+        {/* Upcoming Bookings Tab */}
+        <TabsContent value="upcoming" className="mt-4">
+          <UpcomingBookingsTab />
         </TabsContent>
 
         {/* Calendar Tab */}

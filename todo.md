@@ -2549,3 +2549,13 @@
 - [x] UI: Availability calendar tab showing all rooms with bookings by day/week/month
 - [x] UI: Conflict detection when creating a booking (warn if room already booked in that time slot)
 - [x] UI: 7-day upcoming bookings summary panel with countdown (e.g. "3 days away")
+
+## Upcoming Bookings Dedicated Page (May 2026)
+- [x] Create /upcoming-bookings page with live countdown timers (seconds ticking)
+- [x] Group bookings by day with Today/Tomorrow highlighted headers
+- [x] Countdown ring per booking (red=today, orange=tomorrow, yellow=≤3 days, green=4-7 days)
+- [x] Live ticker row showing HH:MM:SS countdown below each card
+- [x] Summary strip: total upcoming, today count, tomorrow count, total revenue
+- [x] Day range selector (3/7/14/30 days), building filter, refresh button
+- [x] Add "Upcoming Bookings" to sidebar navigation under OPERATIONS
+- [x] Auto-refresh every 60 seconds
