@@ -8,7 +8,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { eq, and, gte, lte, desc, or, sql } from "drizzle-orm";
-import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail, facilityBuildings, enquiryReplies, commMessages, commChannels } from "../../drizzle/schema";
+import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail, facilityBuildings, enquiryReplies, commMessages, commChannels, facilitySettings } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
@@ -1045,6 +1045,238 @@ export const facilitiesRouter = router({
       const msg = input.message || `AssalamuAlaikum ${enquiry.contactName},\n\nThank you for your enquiry regarding our facilities. We are pleased to follow up with you regarding your booking request.\n\nPlease let us know if you have any questions.\n\nJazakAllah Khair,\nAbdullah Quilliam Society`;
       const waLink = `https://wa.me/${phone.replace("+", "")}?text=${encodeURIComponent(msg)}`;
       return { phone, waLink, contactName: enquiry.contactName };
+    }),
+
+  // ── Facility Settings ─────────────────────────────────────────────────────────
+  getFacilitySettings: protectedProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const rows = await db.select().from(facilitySettings);
+      const map: Record<string, string> = {};
+      for (const r of rows) map[r.key] = r.value || "";
+      return map;
+    }),
+
+  updateFacilitySetting: protectedProcedure
+    .input(z.object({ key: z.string(), value: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.update(facilitySettings)
+        .set({ value: input.value })
+        .where(eq(facilitySettings.key, input.key));
+      return { success: true };
+    }),
+
+  // ── Generate Blank Enquiry PDF ────────────────────────────────────────────────
+  generateBlankEnquiryPdf: protectedProcedure
+    .mutation(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const settingsRows = await db.select().from(facilitySettings);
+      const settings: Record<string, string> = {};
+      for (const r of settingsRows) settings[r.key] = r.value || "";
+      const orgName = settings["org_name"] || "Abdullah Quilliam Society";
+      const orgAddress = settings["org_address"] || "8-10 West Derby Street, Liverpool, L7 8TN";
+      const orgPhone = settings["org_phone"] || "";
+      const orgEmail = settings["org_email"] || "";
+      const googleFormUrl = settings["google_form_url"] || "";
+
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ margin: 50, size: "A4" });
+      const chunks: Buffer[] = [];
+      doc.on("data", (c: Buffer) => chunks.push(c));
+      await new Promise<void>((resolve) => {
+        doc.on("end", resolve);
+
+        // Header
+        doc.fontSize(18).font("Helvetica-Bold").text(orgName, { align: "center" });
+        doc.fontSize(11).font("Helvetica").text("Facilities Booking Enquiry Form", { align: "center" });
+        if (orgAddress) doc.fontSize(9).fillColor("#555").text(orgAddress, { align: "center" });
+        const contactLine = [orgPhone, orgEmail].filter(Boolean).join("  |  ");
+        if (contactLine) doc.text(contactLine, { align: "center" });
+        doc.fillColor("#000");
+        doc.moveDown(0.5);
+        doc.fontSize(8).fillColor("#888").text(`Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "center" });
+        doc.fillColor("#000");
+        doc.moveDown(1);
+
+        const section = (title: string) => {
+          doc.moveDown(0.5);
+          doc.fontSize(11).font("Helvetica-Bold").fillColor("#1e3a5f").text(title.toUpperCase());
+          doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#1e3a5f").stroke();
+          doc.fillColor("#000").moveDown(0.3);
+        };
+        const blankLine = (label: string, lines = 1) => {
+          doc.fontSize(10).font("Helvetica-Bold").text(`${label}:`, { continued: false });
+          for (let i = 0; i < lines; i++) {
+            doc.moveDown(0.2);
+            doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#aaa").lineWidth(0.5).stroke();
+            doc.moveDown(0.5);
+          }
+          doc.lineWidth(1);
+        };
+        const checkBox = (label: string) => {
+          doc.fontSize(10).font("Helvetica").text(`\u25a1  ${label}`, { indent: 10 });
+        };
+
+        // SECTION 1: Contact Details
+        section("1. Contact Details");
+        blankLine("Full Name");
+        blankLine("Email Address");
+        blankLine("Telephone / Mobile");
+        blankLine("Home Address", 2);
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Booking on behalf of an organisation?");
+        checkBox("Yes"); checkBox("No");
+        doc.moveDown(0.3);
+        blankLine("Organisation Name (if applicable)");
+        blankLine("Lead Contact Name & Role");
+
+        // SECTION 2: Event Details
+        section("2. Event Details");
+        doc.fontSize(10).font("Helvetica-Bold").text("Event Type:");
+        ["Wedding", "Conference", "Community Event", "Funeral / Janazah", "Birthday / Celebration", "Corporate Event", "Charity Event", "Religious Event", "Other (please specify):"].forEach(t => checkBox(t));
+        doc.moveDown(0.3);
+        blankLine("Event Date");
+        blankLine("Start Time");
+        blankLine("End Time");
+        blankLine("Expected Number of Attendees");
+        blankLine("Room / Venue Preference");
+
+        // SECTION 3: Food & Catering
+        section("3. Food & Catering");
+        doc.fontSize(10).font("Helvetica-Bold").text("Food Required?");
+        checkBox("Yes"); checkBox("No");
+        doc.moveDown(0.3);
+        blankLine("Number of Guests Requiring Food");
+        doc.fontSize(10).font("Helvetica-Bold").text("Catering Type:");
+        ["Internal (AQS Catering)", "External Caterer", "Self Catering", "None"].forEach(t => checkBox(t));
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Dietary Requirements (tick all that apply):");
+        ["Halal", "Vegetarian", "Vegan"].forEach(t => checkBox(t));
+        blankLine("Allergy Notes");
+        blankLine("Food Preferences / Special Requests", 2);
+        blankLine("Menu Choices (if known)", 2);
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Tea & Coffee Facilities Required?");
+        checkBox("Yes"); checkBox("No");
+
+        // SECTION 4: Linen (mandatory)
+        section("4. Linen & Table Covers  \u2014  MANDATORY CHARGEABLE SERVICE");
+        doc.fontSize(9).fillColor("#c0392b").font("Helvetica-Bold").text("All events must either hire linen from AQS (chargeable) or bring their own linen and table covers.");
+        doc.fillColor("#000");
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Linen Option (please select one):");
+        checkBox("Hire from AQS (chargeable) \u2014 please specify colours, style, quantity below");
+        checkBox("Own linen / table covers");
+        blankLine("Linen Notes (colours, style, quantity)", 2);
+
+        // SECTION 5: Equipment & Furniture
+        section("5. Equipment & Furniture");
+        doc.fontSize(10).font("Helvetica-Bold").text("Tables Required?");
+        checkBox("Yes  \u2014  How many? ____"); checkBox("No");
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Chairs Required?");
+        checkBox("Yes  \u2014  How many? ____"); checkBox("No");
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Cutlery & Plates Required?");
+        checkBox("Yes  \u2014  How many settings? ____"); checkBox("No");
+
+        // SECTION 6: AV & Sound
+        section("6. AV & Sound");
+        doc.fontSize(10).font("Helvetica-Bold").text("Speakers Required?");
+        checkBox("Yes"); checkBox("No");
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Microphone System Required?");
+        checkBox("Yes"); checkBox("No");
+        blankLine("AV Notes");
+
+        // SECTION 7: Decor
+        section("7. Decor");
+        doc.fontSize(10).font("Helvetica-Bold").text("Decor Required?");
+        checkBox("Yes"); checkBox("No");
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Decor Type:");
+        ["Balloons", "Flowers", "Themed", "Minimal", "Other"].forEach(t => checkBox(t));
+        blankLine("Decor Notes");
+
+        // SECTION 8: Additional Rooms
+        section("8. Additional Rooms");
+        ["Meet & Greet Room", "Groom's Room", "Bride's Room"].forEach(t => {
+          doc.fontSize(10).font("Helvetica-Bold").text(`${t}?`);
+          checkBox("Yes"); checkBox("No"); doc.moveDown(0.2);
+        });
+        blankLine("Additional Room Notes");
+
+        // SECTION 9: Parking & Beverages
+        section("9. Parking & Beverages");
+        doc.fontSize(10).font("Helvetica-Bold").text("Parking Required?");
+        checkBox("Yes  \u2014  How many spaces? ____"); checkBox("No");
+        doc.moveDown(0.3);
+        doc.fontSize(10).font("Helvetica-Bold").text("Beverages Required?");
+        checkBox("Yes"); checkBox("No");
+        blankLine("Beverages Notes");
+
+        // SECTION 10: Pricing & Notes
+        section("10. Pricing & Additional Notes");
+        blankLine("Agreed Hire Amount (\u00a3)");
+        blankLine("Deposit Amount (\u00a3)");
+        blankLine("Additional Notes / Requirements", 3);
+
+        // Google Form link
+        if (googleFormUrl) {
+          doc.moveDown(1);
+          doc.fontSize(10).font("Helvetica-Bold").fillColor("#1e3a5f").text("You can also complete this form online:");
+          doc.fontSize(10).font("Helvetica").fillColor("#0000ee").text(googleFormUrl, { link: googleFormUrl, underline: true });
+          doc.fillColor("#000");
+        }
+
+        // Signature
+        doc.moveDown(1);
+        section("Declaration");
+        doc.fontSize(9).font("Helvetica").text("I confirm that the information provided above is accurate and I agree to the terms and conditions of the Abdullah Quilliam Society facilities hire.");
+        doc.moveDown(1);
+        doc.fontSize(10).font("Helvetica-Bold").text("Signature: ", { continued: true }).font("Helvetica").text("_______________________________   Date: ________________");
+        doc.end();
+      });
+
+      const pdfBuffer = Buffer.concat(chunks);
+      const key = `facility-forms/blank-enquiry-form-${Date.now()}.pdf`;
+      const { url } = await storagePut(key, pdfBuffer, "application/pdf");
+
+      // Save URL to settings
+      await db.update(facilitySettings)
+        .set({ value: url })
+        .where(eq(facilitySettings.key, "blank_pdf_url"));
+
+      return { url };
+    }),
+
+  // ── Send Blank Form via Email ─────────────────────────────────────────────────
+  sendBlankFormEmail: protectedProcedure
+    .input(z.object({
+      toEmail: z.string().email(),
+      toName: z.string(),
+      subject: z.string().optional(),
+      body: z.string().optional(),
+      pdfUrl: z.string().optional(),
+      googleFormUrl: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const { sendGmailMessage } = await import("../googleServices");
+      const subject = input.subject || "Facilities Booking Enquiry Form \u2014 Abdullah Quilliam Society";
+      let body = input.body || `AssalamuAlaikum wa Rahmatullahi wa Barakatuh,\n\nDear ${input.toName},\n\nThank you for your interest in hiring our facilities at the Abdullah Quilliam Society.\n\nPlease find our Facilities Booking Enquiry Form linked below. Kindly complete all sections and return it to us at your earliest convenience.`;
+      if (input.pdfUrl) {
+        body += `\n\n\ud83d\udcc4 Download / Print the form here:\n${input.pdfUrl}`;
+      }
+      if (input.googleFormUrl) {
+        body += `\n\n\ud83d\udcbb Or complete the form online here:\n${input.googleFormUrl}`;
+      }
+      body += `\n\nIf you have any questions, please do not hesitate to contact us.\n\nJazakAllah Khair,\nAQS Facilities Team`;
+      const result = await sendGmailMessage(input.toEmail, subject, body);
+      return { success: result.success, messageId: result.messageId };
     }),
 });
 

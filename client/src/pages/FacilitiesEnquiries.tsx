@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Plus, Search, Eye, Send, Upload, CheckCircle2, Clock, ArrowRight, FileText, MessageSquare, Camera, Users, Calendar, Utensils, Armchair, Mic, Car, GlassWater, Sparkles } from "lucide-react";
+import { Plus, Search, Eye, Send, Upload, CheckCircle2, Clock, ArrowRight, FileText, MessageSquare, Camera, Users, Calendar, Utensils, Armchair, Mic, Car, GlassWater, Sparkles, Download, Link, Settings, Mail, MessageCircle, ExternalLink } from "lucide-react";
 
 const STAGE_LABELS: Record<string, string> = {
   general_enquiry: "General Enquiry",
@@ -945,11 +945,31 @@ export default function FacilitiesEnquiries({ rooms }: { rooms: any[] }) {
   const [search, setSearch] = useState("");
   const [showScanDialog, setShowScanDialog] = useState(false);
   const [scanPrefill, setScanPrefill] = useState<any>(null);
+  const [showSendBlankForm, setShowSendBlankForm] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [blankFormPdfUrl, setBlankFormPdfUrl] = useState("");
+  const [sendBlankTo, setSendBlankTo] = useState({ name: "", email: "", phone: "" });
+  const [sendBlankSubject, setSendBlankSubject] = useState("Facilities Booking Enquiry Form \u2014 Abdullah Quilliam Society");
+  const [sendBlankBody, setSendBlankBody] = useState("");
+  const [settingsValues, setSettingsValues] = useState<Record<string, string>>({});
 
   const utils = trpc.useUtils();
   const enquiries = trpc.facilities.listEnquiries.useQuery(
     stageFilter !== "all" ? { stage: stageFilter as any } : undefined
   );
+  const facilitySettingsQ = trpc.facilities.getFacilitySettings.useQuery();
+  const updateSetting = trpc.facilities.updateFacilitySetting.useMutation({
+    onSuccess: () => { toast.success("Setting saved"); facilitySettingsQ.refetch(); },
+    onError: (e) => toast.error("Failed to save: " + e.message),
+  });
+  const generateBlankPdf = trpc.facilities.generateBlankEnquiryPdf.useMutation({
+    onSuccess: (data) => { setBlankFormPdfUrl(data.url); toast.success("Blank enquiry form PDF generated"); },
+    onError: (e) => toast.error("PDF generation failed: " + e.message),
+  });
+  const sendBlankEmail = trpc.facilities.sendBlankFormEmail.useMutation({
+    onSuccess: () => { toast.success("Enquiry form sent by email"); setShowSendBlankForm(false); },
+    onError: (e) => toast.error("Email failed: " + e.message),
+  });
   const scanForm = trpc.facilities.scanEnquiryForm.useMutation({
     onSuccess: (result) => {
       toast.success("Form scanned successfully");
@@ -961,6 +981,9 @@ export default function FacilitiesEnquiries({ rooms }: { rooms: any[] }) {
   });
 
   const refetch = () => { utils.facilities.listEnquiries.invalidate(); utils.facilities.stats.invalidate(); };
+  const currentSettings = facilitySettingsQ.data || {};
+  const googleFormUrl = currentSettings["google_form_url"] || "";
+  const savedPdfUrl = currentSettings["blank_pdf_url"] || blankFormPdfUrl;
 
   const filtered = (enquiries.data || []).filter((e: any) => {
     if (!search) return true;
@@ -1005,6 +1028,12 @@ export default function FacilitiesEnquiries({ rooms }: { rooms: any[] }) {
         <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10" onClick={() => setShowScanDialog(true)}>
           <Camera className="w-4 h-4 mr-1" /> Scan Form
         </Button>
+        <Button size="sm" variant="outline" className="border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10" onClick={() => setShowSendBlankForm(true)}>
+          <Send className="w-4 h-4 mr-1" /> Send Blank Form
+        </Button>
+        <Button size="sm" variant="outline" className="border-white/20 text-white/60 hover:bg-white/10 px-2" onClick={() => { setSettingsValues({ ...currentSettings }); setShowSettings(true); }}>
+          <Settings className="w-4 h-4" />
+        </Button>
         <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700" onClick={() => { setScanPrefill(null); setShowNewEnquiry(true); }}>
           <Plus className="w-4 h-4 mr-1" /> New Enquiry
         </Button>
@@ -1047,6 +1076,155 @@ export default function FacilitiesEnquiries({ rooms }: { rooms: any[] }) {
       {/* Dialogs */}
       {showNewEnquiry && <EnquiryFormDialog rooms={rooms} onClose={() => setShowNewEnquiry(false)} onCreated={refetch} prefill={scanPrefill} />}
       {selectedEnquiryId && <EnquiryDetailDialog enquiryId={selectedEnquiryId} rooms={rooms} onClose={() => setSelectedEnquiryId(null)} onRefresh={refetch} />}
+
+      {/* Send Blank Form Dialog */}
+      {showSendBlankForm && (
+        <Dialog open onOpenChange={() => setShowSendBlankForm(false)}>
+          <DialogContent className="max-w-lg bg-[#0d1b2a] border-white/10 text-white max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-400" /> Send Blank Enquiry Form</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-2">
+              {/* PDF Section */}
+              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Blank PDF Form</p>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" className="border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10" onClick={() => generateBlankPdf.mutate()} disabled={generateBlankPdf.isPending}>
+                    <FileText className="w-4 h-4 mr-1" /> {generateBlankPdf.isPending ? "Generating..." : "Generate PDF"}
+                  </Button>
+                  {savedPdfUrl && (
+                    <Button size="sm" variant="outline" className="border-green-500/40 text-green-300 hover:bg-green-500/10" onClick={() => window.open(savedPdfUrl, "_blank")}>
+                      <Download className="w-4 h-4 mr-1" /> Download PDF
+                    </Button>
+                  )}
+                </div>
+                {savedPdfUrl && <p className="text-xs text-white/40 break-all">{savedPdfUrl.substring(0, 70)}...</p>}
+              </div>
+
+              {/* Google Form Section */}
+              {googleFormUrl ? (
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                  <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Online Google Form</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-300 hover:bg-blue-500/10" onClick={() => window.open(googleFormUrl, "_blank")}>
+                      <ExternalLink className="w-4 h-4 mr-1" /> Open Google Form
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-white/20 text-white/60 hover:bg-white/10" onClick={() => { navigator.clipboard.writeText(googleFormUrl); toast.success("Link copied!"); }}>
+                      <Link className="w-4 h-4 mr-1" /> Copy Link
+                    </Button>
+                  </div>
+                  <p className="text-xs text-white/40 break-all">{googleFormUrl.substring(0, 70)}...</p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                  No Google Form URL configured. Click the <Settings className="w-3 h-3 inline" /> settings icon to add one.
+                </div>
+              )}
+
+              {/* WhatsApp Quick Send */}
+              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Send via WhatsApp</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs text-white/60">Recipient Name</Label>
+                    <Input className="bg-white/5 border-white/10 mt-1 text-sm" placeholder="e.g. Ahmed Ali" value={sendBlankTo.name} onChange={e => setSendBlankTo(p => ({ ...p, name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-white/60">Phone (with country code)</Label>
+                    <Input className="bg-white/5 border-white/10 mt-1 text-sm" placeholder="447700900000" value={sendBlankTo.phone} onChange={e => setSendBlankTo(p => ({ ...p, phone: e.target.value }))} />
+                  </div>
+                </div>
+                <Button size="sm" className="bg-green-600 hover:bg-green-700 w-full" disabled={!sendBlankTo.phone} onClick={() => {
+                  const phone = sendBlankTo.phone.replace(/[^0-9]/g, "");
+                  let msg = `AssalamuAlaikum${sendBlankTo.name ? " " + sendBlankTo.name : ""},\n\nThank you for your interest in our facilities at the Abdullah Quilliam Society.\n\nPlease find our Facilities Booking Enquiry Form below:`;
+                  if (savedPdfUrl) msg += `\n\n\ud83d\udcc4 Download form: ${savedPdfUrl}`;
+                  if (googleFormUrl) msg += `\n\n\ud83d\udcbb Complete online: ${googleFormUrl}`;
+                  msg += `\n\nPlease complete and return it to us.\n\nJazakAllah Khair,\nAQS Facilities Team`;
+                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+                }}>
+                  <MessageCircle className="w-4 h-4 mr-1" /> Open WhatsApp
+                </Button>
+              </div>
+
+              {/* Email Send */}
+              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-3">
+                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Send via Email</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs text-white/60">Recipient Name</Label>
+                    <Input className="bg-white/5 border-white/10 mt-1 text-sm" placeholder="e.g. Ahmed Ali" value={sendBlankTo.name} onChange={e => setSendBlankTo(p => ({ ...p, name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-white/60">Email Address</Label>
+                    <Input type="email" className="bg-white/5 border-white/10 mt-1 text-sm" placeholder="email@example.com" value={sendBlankTo.email} onChange={e => setSendBlankTo(p => ({ ...p, email: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-white/60">Subject</Label>
+                  <Input className="bg-white/5 border-white/10 mt-1 text-sm" value={sendBlankSubject} onChange={e => setSendBlankSubject(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs text-white/60">Additional Message (optional)</Label>
+                  <Textarea className="bg-white/5 border-white/10 mt-1 text-sm" rows={3} placeholder="Any additional notes..." value={sendBlankBody} onChange={e => setSendBlankBody(e.target.value)} />
+                </div>
+                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 w-full" disabled={!sendBlankTo.email || sendBlankEmail.isPending} onClick={() => sendBlankEmail.mutate({
+                  toEmail: sendBlankTo.email,
+                  toName: sendBlankTo.name || sendBlankTo.email,
+                  subject: sendBlankSubject,
+                  body: sendBlankBody || undefined,
+                  pdfUrl: savedPdfUrl || undefined,
+                  googleFormUrl: googleFormUrl || undefined,
+                })}>
+                  <Mail className="w-4 h-4 mr-1" /> {sendBlankEmail.isPending ? "Sending..." : "Send Email"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Settings Dialog */}
+      {showSettings && (
+        <Dialog open onOpenChange={() => setShowSettings(false)}>
+          <DialogContent className="max-w-md bg-[#0d1b2a] border-white/10 text-white">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><Settings className="w-5 h-5" /> Enquiry Form Settings</DialogTitle></DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <Label className="text-xs text-white/60">Google Form URL</Label>
+                <p className="text-xs text-white/40 mb-1">Paste your Google Form link. It will be included in emails and the blank PDF.</p>
+                <Input className="bg-white/5 border-white/10 text-sm" placeholder="https://forms.google.com/..." value={settingsValues["google_form_url"] ?? currentSettings["google_form_url"] ?? ""} onChange={e => setSettingsValues(p => ({ ...p, google_form_url: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs text-white/60">Organisation Name (on PDF)</Label>
+                <Input className="bg-white/5 border-white/10 text-sm" value={settingsValues["org_name"] ?? currentSettings["org_name"] ?? ""} onChange={e => setSettingsValues(p => ({ ...p, org_name: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs text-white/60">Organisation Address (on PDF)</Label>
+                <Input className="bg-white/5 border-white/10 text-sm" value={settingsValues["org_address"] ?? currentSettings["org_address"] ?? ""} onChange={e => setSettingsValues(p => ({ ...p, org_address: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs text-white/60">Phone (on PDF)</Label>
+                  <Input className="bg-white/5 border-white/10 text-sm" value={settingsValues["org_phone"] ?? currentSettings["org_phone"] ?? ""} onChange={e => setSettingsValues(p => ({ ...p, org_phone: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs text-white/60">Email (on PDF)</Label>
+                  <Input className="bg-white/5 border-white/10 text-sm" value={settingsValues["org_email"] ?? currentSettings["org_email"] ?? ""} onChange={e => setSettingsValues(p => ({ ...p, org_email: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" className="border-white/20 text-white" onClick={() => setShowSettings(false)}>Cancel</Button>
+              <Button className="bg-indigo-600 hover:bg-indigo-700" disabled={updateSetting.isPending} onClick={async () => {
+                for (const [key, value] of Object.entries(settingsValues)) {
+                  await updateSetting.mutateAsync({ key, value });
+                }
+                setShowSettings(false);
+              }}>
+                {updateSetting.isPending ? "Saving..." : "Save Settings"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Scan Dialog */}
       {showScanDialog && (

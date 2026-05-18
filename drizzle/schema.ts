@@ -2609,3 +2609,14 @@ export const enquiryReplies = mysqlTable("enquiry_replies", {
 });
 export type EnquiryReply = typeof enquiryReplies.$inferSelect;
 export type InsertEnquiryReply = typeof enquiryReplies.$inferInsert;
+
+// ─── FACILITY SETTINGS ────────────────────────────────────────────────────────
+export const facilitySettings = mysqlTable("facility_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value"),
+  label: varchar("label", { length: 200 }),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type FacilitySetting = typeof facilitySettings.$inferSelect;
+export type InsertFacilitySetting = typeof facilitySettings.$inferInsert;
