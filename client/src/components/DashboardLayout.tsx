@@ -56,7 +56,7 @@ const NAVIGATION: NavSection[] = [
   {
     label: "DAILY",
     items: [
-      { icon: Camera, label: "Scan Receipt", path: "/", visibleTo: ["superadmin", "staff"] },
+      { icon: Camera, label: "Scan Receipt", path: "/capture", visibleTo: ["superadmin", "staff"] },
       { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", visibleTo: ["superadmin", "trustee", "staff"] },
       { icon: Receipt, label: "My Expenses", path: "/receipts", visibleTo: ["superadmin", "staff"] },
     ],
@@ -125,7 +125,7 @@ const NAVIGATION: NavSection[] = [
 const mobileBottomNav = [
   { icon: LayoutDashboard, label: "Home", path: "/dashboard" },
   { icon: DollarSign, label: "Income", path: "/income" },
-  { icon: Camera, label: "Scan", path: "/", isCentral: true },
+  { icon: Camera, label: "Scan", path: "/capture", isCentral: true },
   { icon: ClipboardList, label: "Expenses", path: "/monthly-expenses" },
   { icon: Menu, label: "More", path: "/__more__" },
 ];

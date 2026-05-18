@@ -336,11 +336,11 @@ export default function CapturePage() {
 
       {/* Upload zone */}
       <div className="px-4 mb-4">
+        {/* No capture attr — iOS shows full action sheet: Take Photo | Photo Library | Browse Files */}
         <input
           ref={fileInputRef}
           type="file"
           accept="image/*,application/pdf"
-          capture="environment"
           style={{ display: "none" }}
           onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); e.target.value = ""; }}
         />
