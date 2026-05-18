@@ -2460,3 +2460,13 @@
 ## Bug Fix — AI extraction not filling form fields after successful receipt scan (May 2026)
 - [x] Investigate why AI extraction returns data but form fields remain empty
 - [x] Fix form-fill logic to correctly map AI response to form fields (extractedData was nested, code was looking at top level)
+
+## Fix — Persistent 503 on AI extraction (May 2026)
+- [x] Root cause: Cloud Run 512MB instance crashes/OOMs when tRPC extraction procedure is called
+- [x] Solution: Move AI extraction to client-side — browser calls Forge LLM API directly (no server involved)
+- [x] Created /api/extract Express endpoint as server-side fallback (kept for future use)
+- [x] Capture.tsx: extractWithRetry now calls VITE_FRONTEND_FORGE_API_URL/v1/chat/completions directly
+- [x] Removed warm-up ping (no longer needed since extraction bypasses server)
+- [x] Uses detail: "auto" instead of "high" for faster/lighter image processing
+- [x] Handles markdown code blocks in LLM response (```json...```)
+- [ ] Verify scanner works end-to-end on deployed site (user to test on iPhone)

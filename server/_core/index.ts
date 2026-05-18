@@ -11,6 +11,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { uploadRouter } from "../uploadHandler";
+import { extractRouter } from "../extractEndpoint";
 import { registerScheduledBackupRoute } from "./scheduledBackup";
 import { registerBackupOnMutationMiddleware } from "./backupMiddleware";
 import { registerScheduledJobs } from "../scheduledJobs";
@@ -110,6 +111,8 @@ async function startServer() {
   registerOAuthRoutes(app);
   // File upload endpoint
   app.use(uploadRouter);
+  // Lightweight AI extraction endpoint (bypasses tRPC for lower memory usage)
+  app.use(extractRouter);
   // Scheduled backup endpoint (POST /api/scheduled/backup)
   registerScheduledBackupRoute(app);
   // Real-time backup: fires triggerBackupSoon() after every successful tRPC mutation

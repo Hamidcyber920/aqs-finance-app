@@ -64,7 +64,7 @@ export default function CapturePage() {
   const [showFundAlloc, setShowFundAlloc] = useState(false)
   const [duplicateWarning, setDuplicateWarning] = useState<any[] | null>(null);
 
-  const extractMutation = trpc.documents.extract.useMutation();
+  // AI extraction now uses direct /api/extract endpoint (bypasses tRPC for reliability on Cloud Run)
   const saveCrmMutation = trpc.crm.saveScanToCRM.useMutation();
   const pledgeWaMutation = trpc.fintech.sendPledgeWhatsApp.useMutation();
   const { data: depts } = trpc.departments.list.useQuery();
@@ -173,32 +173,96 @@ export default function CapturePage() {
   }, []);
 
   // Step 2: Upload + AI extraction — triggered automatically or by button tap
-  // Helper: call AI extraction with retry for 503 errors
-  const extractWithRetry = useCallback(async (fileUrl: string, mimeType: string, moduleType: string, maxRetries = 3): Promise<any> => {
+  // Helper: call AI extraction directly via Forge LLM API from the browser (bypasses server entirely)
+  const extractWithRetry = useCallback(async (fileUrl: string, mimeType: string, moduleType: string, maxRetries = 2): Promise<any> => {
+    const FORGE_API_KEY = import.meta.env.VITE_FRONTEND_FORGE_API_KEY;
+    const FORGE_API_URL = (import.meta.env.VITE_FRONTEND_FORGE_API_URL || "https://forge.butterfly-effect.dev").replace(/\/$/, "");
+    const LLM_URL = `${FORGE_API_URL}/v1/chat/completions`;
+
+    const MODULE_PROMPTS: Record<string, string> = {
+      receipt: `You are a UK expense receipt extractor. Extract from this document:\n- vendorName: name of the shop/vendor\n- totalAmount: total amount paid in GBP (number)\n- purchaseDate: date of purchase (YYYY-MM-DD)\n- items: brief description of items purchased\n- category: best matching from: Food & Catering, Cleaning & Hygiene, Maintenance & Repairs, IT & Technology, Printing & Stationery, Travel & Transport, Other\n- vatAmount: VAT amount in GBP (number or null)\n- paymentMethod: cash/card or null\nReturn ONLY valid JSON with these exact fields. Use null for missing fields.`,
+      handwritten_collection: `You are an expert at reading handwritten UK charity collection sheets. Extract ALL donor entries. For each entry extract:\n- donorName: full name\n- donorPhone: phone number (UK format) or null\n- amount: donation amount in GBP (number)\n- donationDate: date (YYYY-MM-DD) or null\n- campaignName: campaign name or null\n- giftAid: true if ticked, false otherwise\n- paymentMethod: cash/cheque/bank_transfer or null\n- notes: any notes\nReturn JSON with key "records" containing an array. Use null for missing fields.`,
+      business_card: `You are an expert at reading business cards. Extract:\n- donorName: full name\n- donorPhone: phone number (mobile, UK format)\n- donorEmail: email address\n- organisation: company name\n- jobTitle: job title\n- website: website URL if shown\nReturn ONLY valid JSON. Use null for missing fields.`,
+      fundraising_donation: `You are a donation extractor for a UK Islamic charity. Extract:\n- donorName: full name\n- donorPhone: UK phone number or null\n- amount: donation amount in GBP (number)\n- donationDate: date (YYYY-MM-DD)\n- paymentMethod: cash/bank_transfer/cheque/online or null\n- campaignName: campaign name or null\n- giftAid: true/false or null\n- notes: any notes\nReturn ONLY valid JSON. Use null for missing fields.`,
+      bank_transfer_screenshot: `You are an expert at reading UK bank transfer screenshots. Extract:\n- donorName: sender name\n- amount: amount in GBP (number)\n- donationDate: date (YYYY-MM-DD)\n- reference: payment reference\n- recipientName: recipient name\nReturn ONLY valid JSON. Use null for missing fields.`,
+      invoice: `You are a UK invoice extractor. Extract:\n- vendorName: supplier name\n- invoiceNumber: invoice number\n- amount: total in GBP (number)\n- vatAmount: VAT in GBP or null\n- invoiceDate: date (YYYY-MM-DD)\n- description: description of goods/services\n- category: best from Restaurant/Bistro, Cleaning & Hygiene, Events, Wholesale, Travel, Maintenance, Utilities, Professional Services, IT, Printing, Staff Welfare, Ramadan, Other\nReturn ONLY valid JSON. Use null for missing fields.`,
+    };
+
+    const systemPrompt = MODULE_PROMPTS[moduleType] || MODULE_PROMPTS["receipt"];
+    const isPdf = mimeType === "application/pdf";
+
+    const userContent = isPdf
+      ? [{ type: "file_url", file_url: { url: fileUrl, mime_type: "application/pdf" } }]
+      : [{ type: "image_url", image_url: { url: fileUrl, detail: "auto" } }];
+
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[Capture] AI extraction attempt ${attempt + 1}/${maxRetries + 1}`);
-        const result = await extractMutation.mutateAsync({
-          fileUrl,
-          mimeType,
+        console.log(`[Capture] AI extraction attempt ${attempt + 1}/${maxRetries + 1} via Forge API (client-side)`);
+        const res = await fetch(LLM_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${FORGE_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "gemini-2.5-flash",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userContent },
+            ],
+            max_tokens: 4096,
+          }),
+        });
+
+        const text = await res.text();
+        console.log("[Capture] Forge API response:", res.status, text.substring(0, 300));
+
+        if (!res.ok) {
+          if (res.status === 429 && attempt < maxRetries) {
+            const delay = (attempt + 1) * 3000;
+            toast.info(`Rate limited, retrying in ${delay / 1000}s...`);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+          throw new Error(`AI API error (${res.status}): ${text.substring(0, 100)}`);
+        }
+
+        const json = JSON.parse(text);
+        const content = json?.choices?.[0]?.message?.content;
+        if (!content) throw new Error("AI returned empty response");
+
+        let extractedData: Record<string, unknown> = {};
+        try {
+          extractedData = JSON.parse(content);
+        } catch {
+          // Try to extract JSON from markdown code blocks or raw text
+          const match = content.match(/```(?:json)?\s*([\s\S]*?)```/) || content.match(/\{[\s\S]*\}/);
+          if (match) {
+            extractedData = JSON.parse(match[1] || match[0]);
+          } else {
+            throw new Error("AI returned non-JSON response");
+          }
+        }
+
+        return {
+          extractedData,
+          confidence: 0.85,
           moduleType,
-        } as any);
-        return result;
+          isBulk: "records" in extractedData,
+        };
       } catch (err: any) {
-        const msg = err?.message || "";
-        const is503 = msg.includes("503") || msg.includes("temporarily unavailable") || msg.includes("Server error");
-        if (is503 && attempt < maxRetries) {
-          const delay = (attempt + 1) * 5000; // 5s, 10s, 15s
-          console.log(`[Capture] AI extraction got 503, retrying in ${delay / 1000}s...`);
-          toast.info(`Server warming up... retrying AI scan in ${delay / 1000}s`);
+        console.error(`[Capture] Extraction attempt ${attempt + 1} failed:`, err?.message);
+        if (attempt < maxRetries) {
+          const delay = (attempt + 1) * 3000;
+          toast.info(`Retrying AI scan in ${delay / 1000}s...`);
           await new Promise(r => setTimeout(r, delay));
           continue;
         }
         throw err;
       }
     }
-    throw new Error("AI extraction failed after retries. The server may be overloaded — please try again in a minute.");
-  }, [extractMutation]);
+    throw new Error("AI extraction failed after retries.");
+  }, []);
 
   const processFile = useCallback(async (file: File) => {
     if (uploading || analyzing) return; // prevent double-tap
@@ -223,24 +287,10 @@ export default function CapturePage() {
         console.log("[Capture] Reusing previous upload URL:", uploadUrl);
       }
 
-      // AI extraction with retry
+      // AI extraction — calls Forge LLM API directly from browser (no server involved)
       setUploading(false);
       setAnalyzing(true);
-
-      // Warm-up ping: make a lightweight request to ensure server is ready before heavy AI call
-      try {
-        console.log("[Capture] Sending warm-up ping...");
-        const pingRes = await fetch("/api/trpc/auth.me", { credentials: "include" });
-        console.log("[Capture] Warm-up ping status:", pingRes.status);
-        if (pingRes.status === 503) {
-          // Server is cold-starting, wait for it
-          console.log("[Capture] Server cold-starting, waiting 5s...");
-          toast.info("Waking up server... please wait");
-          await new Promise(r => setTimeout(r, 5000));
-        }
-      } catch { /* ignore ping errors */ }
-
-      console.log("[Capture] Starting AI extraction, moduleType:", docType);
+      console.log("[Capture] Starting AI extraction (client-side), moduleType:", docType);
       const aiData = await extractWithRetry(uploadUrl, file.type || "image/jpeg", docType);
       console.log("[Capture] AI extraction result:", JSON.stringify(aiData).substring(0, 500));
       if (aiData) {
