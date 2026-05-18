@@ -194,7 +194,7 @@ export default function Facilities() {
   const refetch = () => { utils.facilities.listBookings.invalidate(); utils.facilities.stats.invalidate(); utils.facilities.listRooms.invalidate(); };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 text-white">
+    <div className="p-4 md:p-6 space-y-6 text-white min-h-screen" style={{ background: "linear-gradient(160deg, #0E2244 0%, #0A192F 50%, #070F1E 100%)" }}>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
