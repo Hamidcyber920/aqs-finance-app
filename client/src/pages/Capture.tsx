@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { compressImage } from "@/lib/compressImage";
-import { clientUploadFile } from "@/lib/clientStorage";
+// clientUploadFile removed — using server-side /api/upload instead (Forge Storage API was unreliable)
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -127,18 +127,26 @@ export default function CapturePage() {
     }
   }, []);
 
-  // Helper: upload compressed image directly to S3 via Forge Storage API (bypasses server entirely)
+  // Helper: upload compressed image to S3 via server-side /api/upload endpoint (multer + storagePut)
   const uploadWithRetry = useCallback(async (compressed: File, maxRetries = 2): Promise<string> => {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[Capture] Client-side upload attempt ${attempt + 1}/${maxRetries + 1}`);
-        const { url } = await clientUploadFile(
-          compressed,
-          compressed.name || "receipt.jpg",
-          compressed.type || "image/jpeg"
-        );
-        console.log("[Capture] Client-side upload success:", url);
-        return url;
+        console.log(`[Capture] Server-side upload attempt ${attempt + 1}/${maxRetries + 1}`);
+        const formData = new FormData();
+        formData.append("file", compressed, compressed.name || "receipt.jpg");
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Server upload error (${res.status}): ${errText.substring(0, 100)}`);
+        }
+        const json = await res.json();
+        if (!json.url) throw new Error("Server returned no URL");
+        console.log("[Capture] Server-side upload success:", json.url);
+        return json.url as string;
       } catch (err: any) {
         console.error(`[Capture] Upload attempt ${attempt + 1} failed:`, err?.message);
         if (attempt < maxRetries) {
