@@ -1183,6 +1183,19 @@ export const facilitiesRouter = router({
           .text(`Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "right" });
         doc.fillColor("#000");
         doc.moveDown(0.5);
+        // ── Assalamu Alaikum intro ──────────────────────────────────────────────
+        doc.fontSize(10).font("Helvetica-Bold").fillColor("#1e3a5f")
+          .text("Assalamu Alaikum wa Rahmatullahi wa Barakatuh,");
+        doc.moveDown(0.3);
+        doc.fontSize(9.5).font("Helvetica").fillColor("#333")
+          .text("Thank you for your enquiry regarding our facilities at the Abdullah Quilliam Society — Home of Britain's First Mosque. Please complete all sections of this form clearly and return it to us at your earliest convenience.");
+        doc.moveDown(0.25);
+        doc.fontSize(9.5).font("Helvetica").fillColor("#333")
+          .text("Please email the completed form to: ", { continued: true })
+          .font("Helvetica-Bold").fillColor("#1e3a5f").text("admin@abdullahquilliam.org", { continued: true })
+          .font("Helvetica").fillColor("#333").text("  or call us on 0151 260 3986 if you need any assistance.");
+        doc.moveDown(0.5);
+        doc.fillColor("#000");
 
         const section = (title: string) => {
           doc.moveDown(0.5);
