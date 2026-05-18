@@ -722,19 +722,61 @@ export const facilitiesRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       const [enquiry] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.enquiryId));
       if (!enquiry) throw new TRPCError({ code: "NOT_FOUND" });
+      // Fetch AQS logo for embedding
+      const _logoUrl = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663490667955/JVWlqjXdBONOHBPY.png";
+      let _logoBuffer: Buffer | null = null;
+      try {
+        const _https = await import("https");
+        _logoBuffer = await new Promise<Buffer>((res, rej) => {
+          _https.default.get(_logoUrl, (response: any) => {
+            const parts: Buffer[] = [];
+            response.on("data", (c: Buffer) => parts.push(c));
+            response.on("end", () => res(Buffer.concat(parts)));
+            response.on("error", rej);
+          }).on("error", rej);
+        });
+      } catch { _logoBuffer = null; }
+
       const PDFDocument = (await import("pdfkit")).default;
-      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      const doc = new PDFDocument({ size: "A4", margin: 50, autoFirstPage: true });
       const chunks: Buffer[] = [];
       doc.on("data", (c: Buffer) => chunks.push(c));
       await new Promise<void>((resolve) => {
         doc.on("end", resolve);
-        // Header
-        doc.fontSize(20).font("Helvetica-Bold").text("Abdullah Quilliam Society", { align: "center" });
-        doc.fontSize(12).font("Helvetica").text("Facilities Booking Enquiry Form", { align: "center" });
-        doc.moveDown(0.5);
-        doc.fontSize(9).fillColor("#666").text(`Enquiry #${enquiry.id}  |  Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "center" });
+        // ── Top colour bar
+        doc.rect(0, 0, 595, 8).fill("#1e3a5f");
+        doc.rect(0, 8, 595, 3).fill("#c9a84c");
+        // ── Logo
+        const _logoW = 160;
+        const _logoH = Math.round(_logoW * (467 / 500));
+        let _afterLogoY = 18;
+        if (_logoBuffer) {
+          doc.image(_logoBuffer, (595 - _logoW) / 2, 18, { width: _logoW, height: _logoH });
+          _afterLogoY = 18 + _logoH + 6;
+        }
+        doc.y = _afterLogoY;
+        // ── Gold rule
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#c9a84c").lineWidth(1).stroke();
+        doc.lineWidth(1);
+        doc.moveDown(0.25);
+        // ── Address block
+        doc.fontSize(8.5).font("Helvetica").fillColor("#333")
+          .text("1-12 Brougham Terrace, Liverpool, Merseyside, L6 1AE", { align: "center" });
+        doc.fontSize(7.5).fillColor("#555")
+          .text("Tel: 0151 260 3986   |   admin@abdullahquilliam.org   |   Charity No: 1194942", { align: "center" });
+        doc.moveDown(0.4);
+        // ── Form title banner
+        const _bannerY = doc.y;
+        doc.rect(50, _bannerY, 495, 22).fill("#1e3a5f");
+        doc.fontSize(11).font("Helvetica-Bold").fillColor("#ffffff")
+          .text("FACILITIES BOOKING ENQUIRY FORM", 50, _bannerY + 5, { width: 495, align: "center" });
         doc.fillColor("#000");
-        doc.moveDown(1);
+        doc.y = _bannerY + 28;
+        // ── Enquiry ref + date
+        doc.fontSize(7.5).fillColor("#888")
+          .text(`Enquiry #${enquiry.id}   |   Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "right" });
+        doc.fillColor("#000");
+        doc.moveDown(0.5);
         // Section helper
         const section = (title: string) => {
           doc.moveDown(0.5);
@@ -1077,30 +1119,70 @@ export const facilitiesRouter = router({
       const settingsRows = await db.select().from(facilitySettings);
       const settings: Record<string, string> = {};
       for (const r of settingsRows) settings[r.key] = r.value || "";
-      const orgName = settings["org_name"] || "Abdullah Quilliam Society";
-      const orgAddress = settings["org_address"] || "8-10 West Derby Street, Liverpool, L7 8TN";
-      const orgPhone = settings["org_phone"] || "";
-      const orgEmail = settings["org_email"] || "";
-      const googleFormUrl = settings["google_form_url"] || "";
+            const googleFormUrl = settings["google_form_url"] || "";
+
+      // Fetch AQS logo for embedding (new official black-and-white crest)
+      const logoUrl = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663490667955/JVWlqjXdBONOHBPY.png";
+      let logoBuffer: Buffer | null = null;
+      try {
+        const https = await import("https");
+        logoBuffer = await new Promise<Buffer>((res, rej) => {
+          https.default.get(logoUrl, (response: any) => {
+            const parts: Buffer[] = [];
+            response.on("data", (c: Buffer) => parts.push(c));
+            response.on("end", () => res(Buffer.concat(parts)));
+            response.on("error", rej);
+          }).on("error", rej);
+        });
+      } catch { logoBuffer = null; }
 
       const PDFDocument = (await import("pdfkit")).default;
-      const doc = new PDFDocument({ margin: 50, size: "A4" });
+      const doc = new PDFDocument({ margin: 50, size: "A4", autoFirstPage: true });
       const chunks: Buffer[] = [];
       doc.on("data", (c: Buffer) => chunks.push(c));
       await new Promise<void>((resolve) => {
         doc.on("end", resolve);
 
-        // Header
-        doc.fontSize(18).font("Helvetica-Bold").text(orgName, { align: "center" });
-        doc.fontSize(11).font("Helvetica").text("Facilities Booking Enquiry Form", { align: "center" });
-        if (orgAddress) doc.fontSize(9).fillColor("#555").text(orgAddress, { align: "center" });
-        const contactLine = [orgPhone, orgEmail].filter(Boolean).join("  |  ");
-        if (contactLine) doc.text(contactLine, { align: "center" });
+        // ── Top colour bar ────────────────────────────────────────────────────────
+        doc.rect(0, 0, 595, 8).fill("#1e3a5f");
+        doc.rect(0, 8, 595, 3).fill("#c9a84c");
+
+        // ── Logo (includes org name + tagline) ──────────────────────────────────
+        // Logo image is 500x467 (ratio ~0.934 h/w)
+        const logoW = 160;
+        const logoH = Math.round(logoW * (467 / 500));
+        let afterLogoY = 18;
+        if (logoBuffer) {
+          doc.image(logoBuffer, (595 - logoW) / 2, 18, { width: logoW, height: logoH });
+          afterLogoY = 18 + logoH + 6;
+        }
+        doc.y = afterLogoY;
+
+        // ── Gold rule ────────────────────────────────────────────────────────────
+        doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#c9a84c").lineWidth(1).stroke();
+        doc.lineWidth(1);
+        doc.moveDown(0.25);
+
+        // ── Address block ────────────────────────────────────────────────────────
+        doc.fontSize(8.5).font("Helvetica").fillColor("#333")
+          .text("1-12 Brougham Terrace, Liverpool, Merseyside, L6 1AE", { align: "center" });
+        doc.fontSize(7.5).fillColor("#555")
+          .text("Tel: 0151 260 3986   |   admin@abdullahquilliam.org   |   Charity No: 1194942", { align: "center" });
+        doc.moveDown(0.4);
+
+        // ── Form title banner ────────────────────────────────────────────────────
+        const bannerY = doc.y;
+        doc.rect(50, bannerY, 495, 22).fill("#1e3a5f");
+        doc.fontSize(11).font("Helvetica-Bold").fillColor("#ffffff")
+          .text("FACILITIES BOOKING ENQUIRY FORM", 50, bannerY + 5, { width: 495, align: "center" });
+        doc.fillColor("#000");
+        doc.y = bannerY + 28;
+
+        // ── Date ─────────────────────────────────────────────────────────────────
+        doc.fontSize(7.5).fillColor("#888")
+          .text(`Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "right" });
         doc.fillColor("#000");
         doc.moveDown(0.5);
-        doc.fontSize(8).fillColor("#888").text(`Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "center" });
-        doc.fillColor("#000");
-        doc.moveDown(1);
 
         const section = (title: string) => {
           doc.moveDown(0.5);
