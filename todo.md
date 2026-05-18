@@ -2495,3 +2495,6 @@
 - [x] Income & Rentals: add date range filter + CSV/PDF download
 - [ ] Fundraising: skipped — campaign-based (no transaction list to filter)
 - [x] Payroll: add date range filter + CSV/PDF download
+
+## Bills & Utilities Bug Fix (May 2026)
+- [x] Fix: Bills scanned/extracted but don't save — added quickCreateAndBill procedure + Quick Save confirmation dialog that auto-creates account and saves bill in one step

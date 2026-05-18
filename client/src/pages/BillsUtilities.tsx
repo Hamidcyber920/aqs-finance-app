@@ -568,6 +568,10 @@ export default function BillsUtilities() {
   const [editAccount, setEditAccount] = useState<any>(null);
   const [autoFillExpense, setAutoFillExpense] = useState(true);
   const [billScannerOpen, setBillScannerOpen] = useState(false);
+  const [showQuickSave, setShowQuickSave] = useState(false);
+  const [scannedFields, setScannedFields] = useState<Record<string, any>>({});
+  const [scannedFileUrl, setScannedFileUrl] = useState("");
+  const [quickBuilding, setQuickBuilding] = useState("QLH");
 
   const [accountForm, setAccountForm] = useState({
     building: "QLH",
@@ -673,6 +677,25 @@ export default function BillsUtilities() {
       } else {
         const expMsg = data.autoExpenseId ? " Auto-filled into Monthly Expenses." : "";
         toast.success(`Bill recorded.${expMsg}`);
+      }
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const quickCreateAndBill = trpc.bills.quickCreateAndBill.useMutation({
+    onSuccess: (data) => {
+      utils.bills.listAccounts.invalidate();
+      utils.bills.summary.invalidate();
+      setShowQuickSave(false);
+      setScannedFields({});
+      setScannedFileUrl("");
+      setSelectedAccountId(data.accountId);
+      const accountMsg = data.accountCreated ? "Account created & " : "";
+      if (data.isAnomaly) {
+        toast.warning(`⚠️ ${accountMsg}Bill saved — Anomaly detected (50%+ above 3-month avg £${data.avg3m}).`);
+      } else {
+        const expMsg = data.autoExpenseId ? " Auto-filled into Monthly Expenses." : "";
+        toast.success(`${accountMsg}Bill saved successfully.${expMsg}`);
       }
     },
     onError: (e) => toast.error(e.message),
@@ -954,11 +977,14 @@ export default function BillsUtilities() {
                 unitType: fields.unitType || f.unitType,
                 notes: fields.notes ? `[Scanned] ${fields.notes}` : f.notes,
               }));
-              // If an account is selected, open the bill dialog; otherwise prompt to select one
+              // If an account is selected, open the bill dialog; otherwise show quick-save confirmation
               if (selectedAccountId) {
                 setShowAddBill(true);
               } else {
-                toast.info("Bill fields extracted — select an account then click \"+ Bill\" to record it.");
+                // Show quick-save dialog with extracted data for confirmation
+                setScannedFields(fields);
+                setScannedFileUrl(fileUrl);
+                setShowQuickSave(true);
               }
             }}
           />
@@ -1125,6 +1151,85 @@ export default function BillsUtilities() {
             <Button variant="outline" onClick={() => setShowAddBill(false)}>Cancel</Button>
             <Button onClick={() => addBill.mutate({ ...billForm, accountId: selectedAccountId!, autoFillExpense })} disabled={!billForm.amount || !billForm.billDate || addBill.isPending}>
               {addBill.isPending ? "Saving..." : "Record Bill"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Save Dialog — shown after scanning when no account is selected */}
+      <Dialog open={showQuickSave} onOpenChange={setShowQuickSave}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-green-600" /> Confirm & Save Bill
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">We extracted the following from your scan. Confirm the details and we'll create the account + record the bill automatically.</p>
+          <div className="space-y-3">
+            <div>
+              <Label>Supplier *</Label>
+              <Input value={scannedFields.supplierName || ""} onChange={e => setScannedFields(f => ({ ...f, supplierName: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Building</Label>
+                <Select value={quickBuilding} onValueChange={setQuickBuilding}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(buildingNames.length > 0 ? buildingNames : FALLBACK_BUILDINGS).map((b: string) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Category</Label>
+                <Select value={scannedFields.utilityType || "other"} onValueChange={v => setScannedFields(f => ({ ...f, utilityType: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(categoryNames.length > 0 ? categoryNames : FALLBACK_CATEGORIES).map((c: string) => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Bill Date *</Label><Input type="date" value={scannedFields.billDate || new Date().toISOString().split("T")[0]} onChange={e => setScannedFields(f => ({ ...f, billDate: e.target.value }))} /></div>
+              <div><Label>Amount (£) *</Label><Input type="number" step="0.01" value={scannedFields.amount ?? ""} onChange={e => setScannedFields(f => ({ ...f, amount: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Period Start</Label><Input type="date" value={scannedFields.periodStart || ""} onChange={e => setScannedFields(f => ({ ...f, periodStart: e.target.value }))} /></div>
+              <div><Label>Period End</Label><Input type="date" value={scannedFields.periodEnd || ""} onChange={e => setScannedFields(f => ({ ...f, periodEnd: e.target.value }))} /></div>
+            </div>
+            {scannedFields.accountNumber && (
+              <div><Label>Account Number</Label><Input value={scannedFields.accountNumber} onChange={e => setScannedFields(f => ({ ...f, accountNumber: e.target.value }))} /></div>
+            )}
+            <div className="flex items-center justify-between p-3 bg-muted/30 rounded">
+              <div>
+                <p className="text-sm font-medium">Auto-fill into Monthly Expenses</p>
+                <p className="text-xs text-muted-foreground">Creates a matching expense entry automatically</p>
+              </div>
+              <Switch checked={autoFillExpense} onCheckedChange={setAutoFillExpense} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowQuickSave(false)}>Cancel</Button>
+            <Button
+              onClick={() => quickCreateAndBill.mutate({
+                supplierName: scannedFields.supplierName || "Unknown Supplier",
+                accountNumber: scannedFields.accountNumber || undefined,
+                category: scannedFields.utilityType || "other",
+                building: quickBuilding,
+                billDate: scannedFields.billDate || new Date().toISOString().split("T")[0],
+                periodStart: scannedFields.periodStart || undefined,
+                periodEnd: scannedFields.periodEnd || undefined,
+                amount: String(scannedFields.amount || "0"),
+                consumptionUnits: scannedFields.consumptionUnits ? String(scannedFields.consumptionUnits) : undefined,
+                unitType: scannedFields.unitType || undefined,
+                billUrl: scannedFileUrl || undefined,
+                notes: scannedFields.notes ? `[Scanned] ${scannedFields.notes}` : undefined,
+                autoFillExpense,
+              })}
+              disabled={!scannedFields.supplierName || !scannedFields.amount || quickCreateAndBill.isPending}
+            >
+              {quickCreateAndBill.isPending ? "Saving..." : "Confirm & Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

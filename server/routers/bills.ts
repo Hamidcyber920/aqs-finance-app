@@ -725,4 +725,139 @@ export const billsRouter = router({
         .slice(0, 20);
       return { anomalies };
     }),
+
+  // ── Quick Create Account + Record Bill (from scan) ──────────────────────────
+  // Creates an account from scanned fields (if no matching account exists) and
+  // immediately records the bill against it. This enables a seamless scan-to-save
+  // flow even when no accounts exist yet.
+  quickCreateAndBill: protectedProcedure
+    .input(z.object({
+      // Account fields (from scan)
+      supplierName: z.string().min(1),
+      accountNumber: z.string().optional(),
+      category: z.string().default("other"),
+      building: z.string().default("QLH"),
+      // Bill fields (from scan)
+      billDate: z.string(),
+      periodStart: z.string().optional(),
+      periodEnd: z.string().optional(),
+      amount: z.string(),
+      consumptionUnits: z.string().optional(),
+      unitType: z.string().optional(),
+      billUrl: z.string().optional(),
+      notes: z.string().optional(),
+      autoFillExpense: z.boolean().default(true),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+      // Normalize category to match enum
+      const validCategories = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"];
+      let category = input.category.toLowerCase().trim();
+      // Map scanner's "phone" to schema's "telephone"
+      if (category === "phone") category = "telephone";
+      if (category === "rates") category = "other";
+      if (!validCategories.includes(category)) category = "other";
+
+      // Try to find an existing account with same supplier + building + category
+      const existingAccounts = await db.select().from(utilityAccounts);
+      const match = existingAccounts.find(a =>
+        a.supplier.toLowerCase() === input.supplierName.toLowerCase() &&
+        a.building.toLowerCase() === input.building.toLowerCase() &&
+        a.category === category
+      );
+
+      let accountId: number;
+      if (match) {
+        accountId = match.id;
+      } else {
+        // Create a new account
+        const [result] = await db.insert(utilityAccounts).values({
+          building: input.building,
+          supplier: input.supplierName,
+          accountNumber: input.accountNumber ?? null,
+          category: category as any,
+          tariff: null,
+          contractStartDate: null,
+          contractEndDate: null,
+          mpan: null,
+          directDebitAmount: null,
+          billingDay: null,
+          notes: "Auto-created from scanned bill",
+          supplierContactId: null,
+          monthlyBudget: null,
+          supplierNotes: null,
+        }).$returningId();
+        accountId = result.id;
+      }
+
+      // Now record the bill against this account
+      // Anomaly detection
+      const recentBills = await db.select().from(utilityBills)
+        .where(eq(utilityBills.accountId, accountId))
+        .orderBy(desc(utilityBills.billDate))
+        .limit(3);
+      const avg3m = recentBills.length > 0
+        ? recentBills.reduce((s, b) => s + parseFloat(b.amount), 0) / recentBills.length
+        : null;
+      const currentAmount = parseFloat(input.amount);
+      const isAnomaly = avg3m !== null && currentAmount > avg3m * 1.5;
+
+      const [account] = await db.select().from(utilityAccounts).where(eq(utilityAccounts.id, accountId)).limit(1);
+
+      const [billResult] = await db.insert(utilityBills).values({
+        accountId,
+        billDate: new Date(input.billDate),
+        periodStart: input.periodStart ? new Date(input.periodStart) : null,
+        periodEnd: input.periodEnd ? new Date(input.periodEnd) : null,
+        amount: input.amount,
+        consumptionUnits: input.consumptionUnits ?? null,
+        unitType: input.unitType ?? null,
+        billUrl: input.billUrl ?? null,
+        notes: input.notes ?? null,
+        uploadedById: ctx.user.id,
+      }).$returningId();
+      const billId = billResult.id;
+
+      // Update lastBillDate and lastBillAmount on the account
+      await db.update(utilityAccounts).set({
+        lastBillDate: new Date(input.billDate),
+        lastBillAmount: input.amount,
+      }).where(eq(utilityAccounts.id, accountId));
+
+      // Auto-fill into monthly expenses
+      let autoExpenseId: number | null = null;
+      if (input.autoFillExpense && account) {
+        const { receipts } = await import("../../drizzle/schema");
+        const vendor = account.supplier;
+        const categoryName = `Bills & Utilities — ${account.category.charAt(0).toUpperCase() + account.category.slice(1)}`;
+        const [expResult] = await db.insert(receipts).values({
+          userId: ctx.user.id,
+          vendor,
+          receiptDate: new Date(input.billDate),
+          amount: input.amount,
+          departmentName: account.building,
+          categoryName,
+          status: "approved",
+          notes: `Auto-filled from Bills & Utilities: ${account.building} — ${account.supplier} (${account.category})${input.notes ? `\n${input.notes}` : ""}`,
+          currency: "GBP",
+          paymentStatus: "pending",
+        } as any);
+        autoExpenseId = (expResult as any).insertId as number;
+
+        await db.update(utilityBills)
+          .set({ autoExpenseLinkedId: autoExpenseId })
+          .where(eq(utilityBills.id, billId));
+      }
+
+      return {
+        accountId,
+        accountCreated: !match,
+        billId,
+        isAnomaly,
+        avg3m: avg3m?.toFixed(2) ?? null,
+        autoExpenseId,
+      };
+    }),
 });
