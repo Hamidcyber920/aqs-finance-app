@@ -2470,3 +2470,11 @@
 - [x] Uses detail: "auto" instead of "high" for faster/lighter image processing
 - [x] Handles markdown code blocks in LLM response (```json...```)
 - [ ] Verify scanner works end-to-end on deployed site (user to test on iPhone)
+
+## Critical Fix — Server 503 crash loop (May 2026)
+- [x] Diagnose: server uses 276MB RSS at startup (152MB heap) — leaves only ~236MB for requests on 512MB Cloud Run
+- [x] Reduce server memory: lazy-load scheduled jobs (deferred 10s), Stripe (lazy getStripe()), nodemailer (dynamic import)
+- [x] Move file upload to client-side (browser → S3 via Forge storage API) — scanner no longer needs server at all
+- [x] Add retry logic to Hibba voice agent for 503 errors (3 attempts, 5s/10s delays)
+- [x] Created client/src/lib/clientStorage.ts — uploads directly to S3 from browser
+- [ ] Verify full scanner + Hibba flow works end-to-end on deployed site (user to test)

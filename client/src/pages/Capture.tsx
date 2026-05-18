@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { compressImage } from "@/lib/compressImage";
-// Server upload via /api/upload (server has correct S3 credentials)
+import { clientUploadFile } from "@/lib/clientStorage";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -127,47 +127,28 @@ export default function CapturePage() {
     }
   }, []);
 
-  // Helper: upload compressed image to /api/upload with retry for 503 (cold start)
-  const uploadWithRetry = useCallback(async (compressed: File, maxRetries = 3): Promise<string> => {
+  // Helper: upload compressed image directly to S3 via Forge Storage API (bypasses server entirely)
+  const uploadWithRetry = useCallback(async (compressed: File, maxRetries = 2): Promise<string> => {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const formData = new FormData();
-      formData.append("file", compressed, compressed.name);
-      console.log(`[Capture] Upload attempt ${attempt + 1}/${maxRetries + 1}`);
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
-      });
-      // Safari-safe: always use text() + JSON.parse() instead of response.json()
-      const uploadText = await uploadRes.text();
-      console.log("[Capture] Upload response:", uploadRes.status, uploadText.substring(0, 200));
-
-      if (uploadRes.status === 503 && attempt < maxRetries) {
-        // Server cold-starting — wait longer each retry (5s, 10s, 15s)
-        const delay = (attempt + 1) * 5000;
-        console.log(`[Capture] 503 \u2014 server warming up, retrying in ${delay / 1000}s...`);
-        toast.info(`Server is warming up... retrying in ${delay / 1000}s`);
-        await new Promise(r => setTimeout(r, delay));
-        continue;
-      }
-
-      if (!uploadRes.ok) {
-        throw new Error(
-          uploadRes.status === 503
-            ? "Server is temporarily unavailable. Please wait a moment and tap 'Scan with AI' again."
-            : `Upload failed (${uploadRes.status}): ${uploadText.substring(0, 100)}`
-        );
-      }
-
-      let uploadJson: any;
       try {
-        uploadJson = JSON.parse(uploadText);
-      } catch {
-        throw new Error(`Server returned invalid response: ${uploadText.substring(0, 100)}`);
+        console.log(`[Capture] Client-side upload attempt ${attempt + 1}/${maxRetries + 1}`);
+        const { url } = await clientUploadFile(
+          compressed,
+          compressed.name || "receipt.jpg",
+          compressed.type || "image/jpeg"
+        );
+        console.log("[Capture] Client-side upload success:", url);
+        return url;
+      } catch (err: any) {
+        console.error(`[Capture] Upload attempt ${attempt + 1} failed:`, err?.message);
+        if (attempt < maxRetries) {
+          const delay = (attempt + 1) * 3000;
+          toast.info(`Upload retry in ${delay / 1000}s...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw new Error(`Upload failed: ${err?.message || "Unknown error"}. Please try again.`);
       }
-      const url = uploadJson.url;
-      if (!url) throw new Error("Upload succeeded but no URL returned");
-      return url;
     }
     throw new Error("Upload failed after retries. Please try again.");
   }, []);

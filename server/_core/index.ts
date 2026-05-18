@@ -14,7 +14,7 @@ import { uploadRouter } from "../uploadHandler";
 import { extractRouter } from "../extractEndpoint";
 import { registerScheduledBackupRoute } from "./scheduledBackup";
 import { registerBackupOnMutationMiddleware } from "./backupMiddleware";
-import { registerScheduledJobs } from "../scheduledJobs";
+// scheduledJobs lazy-loaded after server starts to reduce cold-start memory
 import { registerStripeWebhook } from "../stripeWebhook";
 import { registerGmailWebhook } from "../gmailWebhook";
 import { registerGoogleReauthRoutes } from "../googleReauth";
@@ -150,8 +150,15 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  // Register scheduled cron jobs (weekly repayment alert + monthly trustee report)
-  registerScheduledJobs();
+  // Lazy-load scheduled cron jobs 10s after server starts to reduce cold-start memory
+  setTimeout(async () => {
+    try {
+      const { registerScheduledJobs } = await import("../scheduledJobs");
+      registerScheduledJobs();
+    } catch (e) {
+      console.error("[Scheduled] Failed to register jobs:", e);
+    }
+  }, 10000);
 
   // Voice gateway now uses SSE + HTTP POST (no WebSocket needed)
 

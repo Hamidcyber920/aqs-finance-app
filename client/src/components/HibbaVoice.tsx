@@ -560,14 +560,30 @@ export function HibbaVoice() {
     userIdRef.current = 0;
 
     try {
-      // 1. Get ephemeral token (with freshness timestamp for anti-replay)
+      // 1. Get ephemeral token with retry for 503 (cold start)
       setStatusText("Authenticating...");
       const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-      const result = await getToken.mutateAsync({
-        device: isMobileDevice ? "mobile" : "desktop",
-        screenContext: window.location.pathname,
-        requestTimestamp: Date.now(),
-      });
+      let result: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          result = await getToken.mutateAsync({
+            device: isMobileDevice ? "mobile" : "desktop",
+            screenContext: window.location.pathname,
+            requestTimestamp: Date.now(),
+          });
+          break; // success
+        } catch (tokenErr: any) {
+          const is503 = tokenErr?.message?.includes("503") || tokenErr?.message?.includes("unavailable") || tokenErr?.message?.includes("temporarily");
+          if (is503 && attempt < 2) {
+            const delay = (attempt + 1) * 5000;
+            setStatusText(`Server warming up... retry in ${delay / 1000}s`);
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+          throw tokenErr;
+        }
+      }
+      if (!result) throw new Error("Failed to get token after retries");
       const { token, model, user, sessionId: sId } = result;
       voiceSessionIdRef.current = sId ?? null;
       sessionStartTimeRef.current = Date.now();

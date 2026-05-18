@@ -5,9 +5,15 @@ import { getDb } from "../db";
 import { pledges, pledgePayments, donors } from "../../drizzle/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { logAudit } from "./auditTrail";
-import Stripe from "stripe";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-04-22.dahlia" });
+// Lazy-load Stripe to reduce cold-start memory
+let _stripe: any = null;
+function getStripe() {
+  if (!_stripe) {
+    const Stripe = require("stripe");
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-04-22.dahlia" });
+  }
+  return _stripe;
+}
 
 export const pledgesRouter = router({
   // List all pledges, optionally filtered by donorId or status
@@ -187,7 +193,7 @@ export const pledgesRouter = router({
         const [donor] = await db.select({ email: donors.email }).from(donors).where(eq(donors.id, pledge.donorId));
         donorEmail = donor?.email ?? undefined;
       }
-      const session = await stripe.checkout.sessions.create({
+      const session = await getStripe().checkout.sessions.create({
         payment_method_types: ["card", "bacs_debit"],
         line_items: [{
           price_data: {

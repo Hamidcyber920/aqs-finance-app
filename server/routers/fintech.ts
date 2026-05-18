@@ -3,13 +3,20 @@ import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { stripePaymentSessions, giftAidDeclarations, fundraisingCampaigns, fundraisingDonations } from "../../drizzle/schema";
 import { eq, desc, gte, and } from "drizzle-orm";
-import Stripe from "stripe";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2026-04-22.dahlia",
-});
+// Lazy-load Stripe to reduce cold-start memory
+let _stripe: any = null;
+function getStripe() {
+  if (!_stripe) {
+    const Stripe = require("stripe");
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
+      apiVersion: "2026-04-22.dahlia",
+    });
+  }
+  return _stripe;
+}
 
 // ─── PayPal REST API helpers (credential-optional — graceful fallback) ─────────
 const PAYPAL_BASE =
@@ -181,7 +188,7 @@ export const fintechRouter = router({
         .update(stripePaymentSessions)
         .set({ referenceCode: refCode })
         .where(eq(stripePaymentSessions.id, inserted.id));
-      const session = await stripe.checkout.sessions.create({
+      const session = await getStripe().checkout.sessions.create({
         payment_method_types: ["card", "bacs_debit"],
         line_items: [
           {
@@ -254,7 +261,7 @@ export const fintechRouter = router({
         .update(stripePaymentSessions)
         .set({ referenceCode: refCode })
         .where(eq(stripePaymentSessions.id, inserted.id));
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentIntent = await getStripe().paymentIntents.create({
         amount: Math.round(input.amount * 100),
         currency: "gbp",
         automatic_payment_methods: { enabled: true },

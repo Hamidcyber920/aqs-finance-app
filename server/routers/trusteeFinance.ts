@@ -12,14 +12,14 @@ import {
   incomeRecords,
 } from "../../drizzle/schema";
 import { storagePut } from "../storage";
-import nodemailer from "nodemailer";
 
 async function sendGmail(to: string, name: string, subject: string, htmlBody: string) {
+  const nodemailer = await import("nodemailer");
   const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.GMAIL_FROM_EMAIL || "noreply@example.com";
   const smtpUser = process.env.SMTP_USER || process.env.GMAIL_FROM_EMAIL || fromEmail;
   const envPass = process.env.SMTP_PASSWORD;
   const smtpPass = (envPass && envPass.length === 16) ? envPass : "njvigzynhdcxusik";
-  const transporter = nodemailer.createTransport({
+  const transporter = nodemailer.default.createTransport({
     host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: parseInt(process.env.SMTP_PORT || "587"),
     secure: false,
