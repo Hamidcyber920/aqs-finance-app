@@ -2505,3 +2505,19 @@
 - [x] Add CSV download filtered by selected date range
 - [x] Add PDF download filtered by selected date range
 - [x] Replace bill trend line chart with 12-month bar chart (shows amounts on tap)
+
+## Date Range + CSV/PDF Export for All Sections (May 2026)
+- [x] Payment Hub: add date range filter + CSV/PDF download
+- [x] Qarde Hasan Loans: add date range filter + CSV/PDF download
+- [x] Donors: add date range filter + CSV/PDF download
+- [x] Campaigns: add date range filter + CSV/PDF download
+- [x] Gift Aid & CRM+: add date range filter + CSV/PDF download
+- [x] Bistro 87: add date range filter + CSV/PDF download
+- [x] Student Accommodation: add date range filter + CSV/PDF download
+- [x] Facilities & Bookings: add date range filter + CSV/PDF download
+- [x] Training Tracker: add date range filter + CSV/PDF download
+- [x] Trustee Dashboard: add date range filter + CSV/PDF download
+- [x] Compliance Cockpit: add date range filter + CSV/PDF download
+- [x] People: add date range filter + CSV/PDF download
+- [x] Communications: add date range filter + CSV/PDF download
+- [x] Meetings & Onboarding: add date range filter + CSV/PDF download

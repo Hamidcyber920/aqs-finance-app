@@ -10,7 +10,7 @@ import {
   ChevronDown, ChevronRight, Mail, Phone, MessageCircle,
   Upload, FileText, X, Edit2, Check, Calendar,
   DollarSign, Building2, User, Shield, ExternalLink,
-  RefreshCw, Search, Filter,
+  RefreshCw, Search, Filter, Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -899,6 +899,8 @@ export default function StudentAccommodationPage() {
   const [selectedTenantId, setSelectedTenantId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
   }, []);
@@ -931,11 +933,40 @@ export default function StudentAccommodationPage() {
           <h1 style={{ fontSize: 28, fontWeight: 800, color: T.white, margin: 0, letterSpacing: "-0.03em" }}>Student Accommodation</h1>
           <p style={{ color: T.muted, fontSize: 14, margin: "4px 0 0" }}>Tenant management, rent tracking & automated reminders</p>
         </div>
-        {canAdd && (
-          <Button onClick={() => setAddTenantOpen(true)} style={{ background: T.purple, color: T.white, border: "none", fontWeight: 600, gap: 8 }}>
-            <Plus size={16} /> Add Tenant
-          </Button>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ height: 32, borderRadius: 8, border: `1px solid ${T.border}`, background: T.glass, color: T.white, padding: "0 8px", fontSize: 11 }} />
+          <span style={{ color: T.muted, fontSize: 11 }}>to</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ height: 32, borderRadius: 8, border: `1px solid ${T.border}`, background: T.glass, color: T.white, padding: "0 8px", fontSize: 11 }} />
+          <button onClick={() => {
+            const allTenants = tenants ?? [];
+            const rows = allTenants.filter((t: any) => { const d = new Date(t.leaseStart || t.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); }).map((t: any) => `${t.fullName},${t.roomNumber || ""},${t.propertyAddress || ""},${t.status},\u00a3${Number(t.monthlyRent ?? 0).toFixed(2)},${t.leaseStart ? new Date(t.leaseStart).toLocaleDateString() : ""},${t.leaseEnd ? new Date(t.leaseEnd).toLocaleDateString() : ""}`);
+            if (!rows.length) { toast.info("No tenants in selected range"); return; }
+            const csv = "Name,Room,Property,Status,Monthly Rent,Lease Start,Lease End\n" + rows.join("\n");
+            const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = `accommodation_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+          }} style={{ height: 32, borderRadius: 8, border: `1px solid ${T.border}`, background: T.glass, color: T.white, padding: "0 10px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+            <Download size={12} /> CSV
+          </button>
+          <button onClick={() => {
+            const allTenants = tenants ?? [];
+            const filtered = allTenants.filter((t: any) => { const d = new Date(t.leaseStart || t.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+            if (!filtered.length) { toast.info("No tenants in selected range"); return; }
+            const totalRent = filtered.reduce((s: number, t: any) => s + Number(t.monthlyRent ?? 0), 0);
+            let html = `<html><head><title>Accommodation ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
+            html += `<h2>Student Accommodation Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Tenants: ${filtered.length} | Total Monthly Rent: \u00a3${totalRent.toFixed(2)}</p>`;
+            html += `<table><tr><th>Name</th><th>Room</th><th>Property</th><th>Status</th><th>Monthly Rent</th><th>Lease Start</th><th>Lease End</th></tr>`;
+            filtered.forEach((t: any) => { html += `<tr><td>${t.fullName}</td><td>${t.roomNumber || ""}</td><td>${t.propertyAddress || ""}</td><td>${t.status}</td><td>\u00a3${Number(t.monthlyRent ?? 0).toFixed(2)}</td><td>${t.leaseStart ? new Date(t.leaseStart).toLocaleDateString() : ""}</td><td>${t.leaseEnd ? new Date(t.leaseEnd).toLocaleDateString() : ""}</td></tr>`; });
+            html += `</table></body></html>`;
+            const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+          }} style={{ height: 32, borderRadius: 8, border: `1px solid ${T.border}`, background: T.glass, color: T.white, padding: "0 10px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+            <FileText size={12} /> PDF
+          </button>
+          {canAdd && (
+            <Button onClick={() => setAddTenantOpen(true)} style={{ background: T.purple, color: T.white, border: "none", fontWeight: 600, gap: 8 }}>
+              <Plus size={16} /> Add Tenant
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Summary Stats */}

@@ -862,6 +862,8 @@ function BankTransferPanel() {
 // ─── PAYMENT HISTORY ──────────────────────────────────────────────────────────
 function PaymentHistoryPanel() {
   const [statusFilter, setStatusFilter] = useState<"pending" | "completed" | "failed" | "cancelled" | undefined>();
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() - 1); d.setDate(1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
   const { data: sessions, refetch, isLoading } = trpc.fintech.listPaymentSessions.useQuery({
     status: statusFilter,
     limit: 100,
@@ -897,7 +899,7 @@ function PaymentHistoryPanel() {
         ))}
       </div>
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         {(["all", "completed", "pending", "failed"] as const).map((s) => (
           <Button
             key={s}
@@ -912,6 +914,32 @@ function PaymentHistoryPanel() {
         <Button size="sm" variant="ghost" onClick={() => refetch()}>
           <RefreshCw className="w-3 h-3 mr-1" /> Refresh
         </Button>
+      </div>
+
+      {/* Date range + CSV/PDF */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 h-8 text-xs" />
+        <span className="text-xs text-muted-foreground">to</span>
+        <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 h-8 text-xs" />
+        <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+          const filtered = (sessions || []).filter((s: any) => { const d = new Date(s.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+          if (!filtered.length) { toast.info("No payments in selected range"); return; }
+          const rows = filtered.map((s: any) => `${fmtDateTime(s.createdAt)},${s.donorName},${s.donorEmail || ""},${s.status},${s.campaignName || ""},${fmtGBP(s.amount)},${s.referenceCode || ""}`);
+          const csv = "Date,Donor,Email,Status,Campaign,Amount,Reference\n" + rows.join("\n");
+          const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+          const a = document.createElement("a"); a.href = url; a.download = `payments_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+        }}><Download className="w-3 h-3" /> CSV</Button>
+        <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+          const filtered = (sessions || []).filter((s: any) => { const d = new Date(s.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+          if (!filtered.length) { toast.info("No payments in selected range"); return; }
+          const total = filtered.filter((s: any) => s.status === "completed").reduce((sum: number, s: any) => sum + Number(s.amount ?? 0), 0);
+          let html = `<html><head><title>Payments ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
+          html += `<h2>Payment History Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total Completed: ${fmtGBP(total)}</p>`;
+          html += `<table><tr><th>Date</th><th>Donor</th><th>Email</th><th>Status</th><th>Campaign</th><th>Amount</th><th>Reference</th></tr>`;
+          filtered.forEach((s: any) => { html += `<tr><td>${fmtDateTime(s.createdAt)}</td><td>${s.donorName}</td><td>${s.donorEmail || ""}</td><td>${s.status}</td><td>${s.campaignName || ""}</td><td>${fmtGBP(s.amount)}</td><td>${s.referenceCode || ""}</td></tr>`; });
+          html += `</table></body></html>`;
+          const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+        }}><FileText className="w-3 h-3" /> PDF</Button>
       </div>
 
       {isLoading ? (

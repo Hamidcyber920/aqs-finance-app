@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { Plus, Search, Users, Heart, Star, Mail, ScanLine, ExternalLink, BarChart2 } from "lucide-react";
+import { Plus, Search, Users, Heart, Star, Mail, ScanLine, ExternalLink, BarChart2, Download, FileText } from "lucide-react";
 import { Link } from "wouter";
 import { SmartUpload } from "@/components/SmartUpload";
 import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
@@ -22,9 +22,11 @@ export default function DonorsPage() {
   const [premergeSnapshot, setPremergeSnapshot] = useState<Record<string, unknown> | null>(null);
   const [appliedFields, setAppliedFields] = useState<Record<string, unknown> | null>(null);
   const [showDocScan, setShowDocScan] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
-  }, []);
+  }, []); 
 
   const { data, refetch } = trpc.donors.list.useQuery({ limit:100 });
   const computeRfmMut = (trpc as any).donorsV3.computeRfmScores.useMutation({
@@ -96,6 +98,30 @@ export default function DonorsPage() {
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Community donors — Sadaqah, Zakat, regular giving</p>
           </div>
           <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            {/* Date range + CSV/PDF export */}
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 8px",fontSize:11}} />
+            <span style={{color:T.muted,fontSize:11}}>to</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 8px",fontSize:11}} />
+            <button onClick={() => {
+              const rows = donors.map((d: any) => `${d.name},${d.email || ""},${d.phone || ""},\u00a3${Number(d.totalGiven ?? 0).toFixed(2)},${d.isRegular ? "Regular" : "One-off"},${d.lastGiftDate ? new Date(d.lastGiftDate).toLocaleDateString() : ""}`);
+              if (!rows.length) { toast.info("No donors to export"); return; }
+              const csv = "Name,Email,Phone,Total Given,Type,Last Gift\n" + rows.join("\n");
+              const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = `donors_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+            }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+              <Download size={12} /> CSV
+            </button>
+            <button onClick={() => {
+              if (!donors.length) { toast.info("No donors to export"); return; }
+              let html = `<html><head><title>Donors Report ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
+              html += `<h2>Donor Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total Donors: ${donors.length} | Total Given: \u00a3${totalGiven.toFixed(2)}</p>`;
+              html += `<table><tr><th>Name</th><th>Email</th><th>Phone</th><th>Total Given</th><th>Type</th><th>Last Gift</th></tr>`;
+              donors.forEach((d: any) => { html += `<tr><td>${d.name}</td><td>${d.email || ""}</td><td>${d.phone || ""}</td><td>\u00a3${Number(d.totalGiven ?? 0).toFixed(2)}</td><td>${d.isRegular ? "Regular" : "One-off"}</td><td>${d.lastGiftDate ? new Date(d.lastGiftDate).toLocaleDateString() : ""}</td></tr>`; });
+              html += `</table></body></html>`;
+              const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+            }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+              <FileText size={12} /> PDF
+            </button>
             {/* SmartDocumentUpload — scan a donor letter / Gift Aid form */}
             <Button
               variant="outline"

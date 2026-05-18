@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, BookOpen, Clock, CheckCircle2, Mail,
-  ChevronRight, Download, Send, AlertCircle, Users, TrendingDown, BarChart2
+  ChevronRight, Download, Send, AlertCircle, Users, TrendingDown, BarChart2, FileText
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,8 @@ export default function LoansPage() {
   const [termUnit, setTermUnit] = useState<"months" | "years">("months");
   const [forecastDrilldown, setForecastDrilldown] = useState<{ label: string; donors: { name: string; email: string; amount: number; dueDate: Date }[] } | null>(null);
   const [tableFilter, setTableFilter] = useState<"all" | "active" | "pending" | "donors">("all");
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
   }, []);
@@ -260,7 +262,34 @@ export default function LoansPage() {
             </h1>
             <p style={{ fontSize: 13, color: T.muted, margin: "4px 0 0" }}>Interest-free loans — Amanah of the community</p>
           </div>
-          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+            {/* Date range + CSV/PDF export */}
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 8px",fontSize:11}} />
+            <span style={{color:T.muted,fontSize:11}}>to</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 8px",fontSize:11}} />
+            <button onClick={() => {
+              const filtered = loans.filter((l: any) => { const d = new Date(l.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+              if (!filtered.length) { toast.info("No loans in selected range"); return; }
+              const rows = filtered.map((l: any) => `${new Date(l.createdAt).toLocaleDateString()},${l.borrowerName},${l.borrowerEmail || ""},\u00a3${Number(l.amount).toFixed(2)},${l.status},${l.purpose || ""}`);
+              const csv = "Date,Borrower,Email,Amount,Status,Purpose\n" + rows.join("\n");
+              const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = `loans_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+            }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+              <Download size={12} /> CSV
+            </button>
+            <button onClick={() => {
+              const filtered = loans.filter((l: any) => { const d = new Date(l.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+              if (!filtered.length) { toast.info("No loans in selected range"); return; }
+              const total = filtered.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
+              let html = `<html><head><title>Loans ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
+              html += `<h2>Qarde Hasan Loans Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total: \u00a3${total.toFixed(2)}</p>`;
+              html += `<table><tr><th>Date</th><th>Borrower</th><th>Email</th><th>Amount</th><th>Status</th><th>Purpose</th></tr>`;
+              filtered.forEach((l: any) => { html += `<tr><td>${new Date(l.createdAt).toLocaleDateString()}</td><td>${l.borrowerName}</td><td>${l.borrowerEmail || ""}</td><td>\u00a3${Number(l.amount).toFixed(2)}</td><td>${l.status}</td><td>${l.purpose || ""}</td></tr>`; });
+              html += `</table></body></html>`;
+              const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+            }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+              <FileText size={12} /> PDF
+            </button>
             {isAdmin&&(
               <Button onClick={() => monthlyReportMutation.mutate()}
                 disabled={monthlyReportMutation.isPending}

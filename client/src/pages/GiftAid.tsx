@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Gift, Users, Heart, Clock, Download, CheckCircle, AlertCircle, RefreshCw, Send, Tag } from "lucide-react";
+import { Gift, Users, Heart, Clock, Download, CheckCircle, AlertCircle, RefreshCw, Send, Tag, FileText } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -51,6 +51,8 @@ export default function GiftAidPage() {
   const [markHmrcRef, setMarkHmrcRef] = useState("");
   const [showMarkSubmittedDialog, setShowMarkSubmittedDialog] = useState(false);
   const [lapsedDays, setLapsedDays] = useState(90);
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
   const [reEngageDonorId, setReEngageDonorId] = useState<number | null>(null);
   const [reEngageMsg, setReEngageMsg] = useState("");
   const [thankYouDonorId, setThankYouDonorId] = useState<number | null>(null);
@@ -161,6 +163,33 @@ export default function GiftAidPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Enhanced Donor CRM</h1>
           <p className="text-sm text-gray-500 mt-1">Gift Aid, donor segments, lapsed donors & thank-you log</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-36 h-8 text-xs" />
+          <span className="text-xs text-muted-foreground">to</span>
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 h-8 text-xs" />
+          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+            const allClaims = claims.data ?? [];
+            const filtered = allClaims.filter((c: any) => { const d = new Date(c.donationDate); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+            if (!filtered.length) { toast.info("No claims in selected range"); return; }
+            const rows = filtered.map((c: any) => `${c.donorName},${new Date(c.donationDate).toLocaleDateString()},\u00a3${Number(c.amount).toFixed(2)},\u00a3${(Number(c.amount) * 0.25).toFixed(2)},${c.claimStatus},${c.hmrcRef || ""}`);
+            const csv = "Donor,Donation Date,Amount,Gift Aid (25%),Status,HMRC Ref\n" + rows.join("\n");
+            const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = `gift_aid_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+          }}><Download className="w-3 h-3" /> CSV</Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+            const allClaims = claims.data ?? [];
+            const filtered = allClaims.filter((c: any) => { const d = new Date(c.donationDate); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+            if (!filtered.length) { toast.info("No claims in selected range"); return; }
+            const total = filtered.reduce((s: number, c: any) => s + Number(c.amount ?? 0), 0);
+            const giftAidTotal = total * 0.25;
+            let html = `<html><head><title>Gift Aid ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
+            html += `<h2>Gift Aid Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total Donations: \u00a3${total.toFixed(2)} | Gift Aid Claimable: \u00a3${giftAidTotal.toFixed(2)}</p>`;
+            html += `<table><tr><th>Donor</th><th>Date</th><th>Amount</th><th>Gift Aid</th><th>Status</th><th>HMRC Ref</th></tr>`;
+            filtered.forEach((c: any) => { html += `<tr><td>${c.donorName}</td><td>${new Date(c.donationDate).toLocaleDateString()}</td><td>\u00a3${Number(c.amount).toFixed(2)}</td><td>\u00a3${(Number(c.amount) * 0.25).toFixed(2)}</td><td>${c.claimStatus}</td><td>${c.hmrcRef || ""}</td></tr>`; });
+            html += `</table></body></html>`;
+            const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+          }}><FileText className="w-3 h-3" /> PDF</Button>
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { Plus, Send, Mail, Users, Clock, CheckCircle2, Calendar, Eye } from "lucide-react";
+import { Plus, Send, Mail, Users, Clock, CheckCircle2, Calendar, Eye, Download, FileText } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,9 @@ export default function CampaignsPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCampaign, setPreviewCampaign] = useState<any>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<string|null>(null);
+
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
   }, []);
@@ -80,6 +83,32 @@ export default function CampaignsPage() {
             <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>Communicate with donors — Ramadan appeals, Zakat, thank-yous</p>
           </div>
           <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            {/* Date range + CSV/PDF export */}
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 8px",fontSize:11}} />
+            <span style={{color:T.muted,fontSize:11}}>to</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 8px",fontSize:11}} />
+            <button onClick={() => {
+              const filtered = campaigns.filter((c: any) => { const d = c.scheduledAt ? new Date(c.scheduledAt) : new Date(c.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+              if (!filtered.length) { toast.info("No campaigns in selected range"); return; }
+              const rows = filtered.map((c: any) => `${c.name},${c.type || "email"},${c.subject || ""},${c.status},${c.sentCount ?? 0},${c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : ""}`);
+              const csv = "Name,Type,Subject,Status,Sent Count,Scheduled\n" + rows.join("\n");
+              const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = `campaigns_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+            }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+              <Download size={12} /> CSV
+            </button>
+            <button onClick={() => {
+              const filtered = campaigns.filter((c: any) => { const d = c.scheduledAt ? new Date(c.scheduledAt) : new Date(c.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+              if (!filtered.length) { toast.info("No campaigns in selected range"); return; }
+              let html = `<html><head><title>Campaigns ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}</style></head><body>`;
+              html += `<h2>Campaign Report</h2><p>${dateFrom} to ${dateTo}</p><p><strong>Total Campaigns: ${filtered.length} | Emails Sent: ${filtered.reduce((s: number, c: any) => s + Number(c.sentCount ?? 0), 0)}</strong></p>`;
+              html += `<table><tr><th>Name</th><th>Type</th><th>Subject</th><th>Status</th><th>Sent</th><th>Scheduled</th></tr>`;
+              filtered.forEach((c: any) => { html += `<tr><td>${c.name}</td><td>${c.type || "email"}</td><td>${c.subject || ""}</td><td>${c.status}</td><td>${c.sentCount ?? 0}</td><td>${c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : ""}</td></tr>`; });
+              html += `</table></body></html>`;
+              const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+            }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+              <FileText size={12} /> PDF
+            </button>
             <SmartUpload
               moduleType="fundraising_donation"
               buttonLabel="Scan / Upload"

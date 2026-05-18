@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
   Mail, Phone, Pencil, ChevronDown, ChevronUp, MapPin, Heart,
-  Plus, X, Check, Users, Shield, Briefcase,
+  Plus, X, Check, Users, Shield, Briefcase, Download, FileText,
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
@@ -393,6 +393,8 @@ function AddMemberForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: (
 
 export default function TrusteesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
   const [lastMergedId, setLastMergedId] = useState<number | null>(null);
   const [premergeSnapshot, setPremergeSnapshot] = useState<Record<string, unknown> | null>(null);
   const [appliedFields, setAppliedFields] = useState<Record<string, unknown> | null>(null);
@@ -448,6 +450,31 @@ export default function TrusteesPage() {
             <p style={{ fontSize:12,color:T.muted,margin:"4px 0 0" }}>AQS trustees, managers and staff — contact directory &amp; emergency details</p>
           </div>
           <div style={{ display:"flex",gap:10,alignItems:"center",flexWrap:"wrap" }}>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ height:32,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(255,255,255,0.04)",color:T.white,padding:"0 8px",fontSize:11 }} />
+            <span style={{ color:T.muted,fontSize:11 }}>to</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ height:32,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(255,255,255,0.04)",color:T.white,padding:"0 8px",fontSize:11 }} />
+            <button onClick={() => {
+              const filtered = allMembers.filter((t: any) => { const d = new Date(t.createdAt || t.updatedAt || Date.now()); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+              if (!filtered.length) { toast.info("No records in selected range"); return; }
+              const rows = filtered.map((t: any) => `${t.fullName},${t.role || ""},${t.email || ""},${t.phone || ""},${t.isActive !== false ? "Active" : "Inactive"}`);
+              const csv = "Name,Role,Email,Phone,Status\n" + rows.join("\n");
+              const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = `people_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+            }} style={{ height:32,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(255,255,255,0.04)",color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4 }}>
+              <Download size={12} /> CSV
+            </button>
+            <button onClick={() => {
+              const filtered = allMembers.filter((t: any) => { const d = new Date(t.createdAt || t.updatedAt || Date.now()); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+              if (!filtered.length) { toast.info("No records in selected range"); return; }
+              let html = `<html><head><title>People ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}</style></head><body>`;
+              html += `<h2>People Directory Report</h2><p>${dateFrom} to ${dateTo}</p><p><strong>Total: ${filtered.length}</strong></p>`;
+              html += `<table><tr><th>Name</th><th>Role</th><th>Email</th><th>Phone</th><th>Status</th></tr>`;
+              filtered.forEach((t: any) => { html += `<tr><td>${t.fullName}</td><td>${t.role || ""}</td><td>${t.email || ""}</td><td>${t.phone || ""}</td><td>${t.isActive !== false ? "Active" : "Inactive"}</td></tr>`; });
+              html += `</table></body></html>`;
+              const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+            }} style={{ height:32,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(255,255,255,0.04)",color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4 }}>
+              <FileText size={12} /> PDF
+            </button>
             <SmartUpload
               moduleType="staff_profile"
               buttonLabel="Scan / Upload"

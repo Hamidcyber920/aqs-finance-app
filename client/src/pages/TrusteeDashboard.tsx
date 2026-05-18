@@ -144,6 +144,43 @@ export default function TrusteeDashboard() {
               {getMonthName(month)} {year}
             </span>
             <Button variant="outline" size="icon" onClick={nextMonth}><ChevronRight className="w-4 h-4" /></Button>
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+              if (!data) { toast.info("No data loaded"); return; }
+              const rows: string[] = [];
+              rows.push(`Trustee Dashboard - ${getMonthName(month)} ${year}`);
+              rows.push(`Income,${totals?.income ?? 0}`);
+              rows.push(`Expenses,${totals?.expenses ?? 0}`);
+              rows.push(`Bills,${totals?.bills ?? 0}`);
+              rows.push(`Net Position,${totals?.netPosition ?? 0}`);
+              rows.push("");
+              rows.push("Category,Amount");
+              (data.expensesByCategory ?? []).forEach((c: any) => rows.push(`${c.category},${c.amount}`));
+              rows.push("");
+              rows.push("Pending Approvals");
+              rows.push("Description,Amount,Date,Status");
+              (data.pendingApprovals ?? []).forEach((p: any) => rows.push(`${p.description || p.vendor || ""},${p.amount},${p.date ? new Date(p.date).toLocaleDateString() : ""},${p.status}`));
+              const csv = rows.join("\n");
+              const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = `trustee_dashboard_${year}_${month}.csv`; a.click(); URL.revokeObjectURL(url);
+            }}><Download className="w-3 h-3" /> CSV</Button>
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+              if (!data) { toast.info("No data loaded"); return; }
+              let html = `<html><head><title>Trustee Dashboard ${getMonthName(month)} ${year}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
+              html += `<h2>Trustee Financial Dashboard</h2><p>${getMonthName(month)} ${year}</p>`;
+              html += `<p class="total">Income: ${fmtGBP(totals?.income ?? 0)} | Expenses: ${fmtGBP(totals?.expenses ?? 0)} | Bills: ${fmtGBP(totals?.bills ?? 0)} | Net: ${fmtGBP(totals?.netPosition ?? 0)}</p>`;
+              if (data.expensesByCategory?.length) {
+                html += `<h3>Expenses by Category</h3><table><tr><th>Category</th><th>Amount</th></tr>`;
+                data.expensesByCategory.forEach((c: any) => { html += `<tr><td>${c.category}</td><td>${fmtGBP(Number(c.amount))}</td></tr>`; });
+                html += `</table>`;
+              }
+              if (data.pendingApprovals?.length) {
+                html += `<h3>Pending Approvals</h3><table><tr><th>Description</th><th>Amount</th><th>Date</th><th>Status</th></tr>`;
+                data.pendingApprovals.forEach((p: any) => { html += `<tr><td>${p.description || p.vendor || ""}</td><td>${fmtGBP(Number(p.amount))}</td><td>${p.date ? new Date(p.date).toLocaleDateString() : ""}</td><td>${p.status}</td></tr>`; });
+                html += `</table>`;
+              }
+              html += `</body></html>`;
+              const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+            }}><FileText className="w-3 h-3" /> PDF</Button>
             <Button
               className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white text-xs sm:text-sm"
               onClick={() => setCloseReportOpen(true)}

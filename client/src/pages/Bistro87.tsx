@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   UtensilsCrossed, Plus, Edit, Trash2, ShoppingCart, CheckCircle,
-  TrendingUp, Clock, ChefHat, BarChart3, X, RefreshCw
+  TrendingUp, Clock, ChefHat, BarChart3, X, RefreshCw, Download, FileText
 } from "lucide-react";
 
 const ORDER_TYPES = ["dine_in", "takeaway", "delivery", "event_catering"] as const;
@@ -46,6 +46,10 @@ export default function Bistro87() {
     name: "", category: "Main", description: "", price: "",
     costPrice: "", isAvailable: true, isHalal: true, allergens: "", sortOrder: 0,
   });
+
+  // --- Date range for reporting ---
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
 
   // --- New Order state ---
   const [orderDialog, setOrderDialog] = useState(false);
@@ -149,7 +153,29 @@ export default function Bistro87() {
             <p className="text-sm text-slate-400">Restaurant & Cafe Management</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-32 h-8 text-xs bg-slate-800 border-slate-700 text-white" />
+          <span className="text-xs text-slate-400">to</span>
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-32 h-8 text-xs bg-slate-800 border-slate-700 text-white" />
+          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+            const filtered = orders.filter((o: any) => { const d = new Date(o.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+            if (!filtered.length) { toast.info("No orders in selected range"); return; }
+            const rows = filtered.map((o: any) => `${new Date(o.createdAt).toLocaleDateString()},${o.orderRef || ""},${o.customerName || o.tableNumber || ""},${o.orderType},${o.status},${o.paymentStatus || ""},\u00a3${Number(o.total ?? 0).toFixed(2)}`);
+            const csv = "Date,Ref,Customer/Table,Type,Status,Payment,Total\n" + rows.join("\n");
+            const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url; a.download = `bistro_orders_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+          }}><Download className="h-3 w-3" /> CSV</Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+            const filtered = orders.filter((o: any) => { const d = new Date(o.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+            if (!filtered.length) { toast.info("No orders in selected range"); return; }
+            const total = filtered.reduce((s: number, o: any) => s + Number(o.total ?? 0), 0);
+            let html = `<html><head><title>Bistro 87 Orders ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
+            html += `<h2>Bistro 87 — Orders Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total Revenue: \u00a3${total.toFixed(2)} | Orders: ${filtered.length}</p>`;
+            html += `<table><tr><th>Date</th><th>Ref</th><th>Customer/Table</th><th>Type</th><th>Status</th><th>Payment</th><th>Total</th></tr>`;
+            filtered.forEach((o: any) => { html += `<tr><td>${new Date(o.createdAt).toLocaleDateString()}</td><td>${o.orderRef || ""}</td><td>${o.customerName || o.tableNumber || ""}</td><td>${o.orderType}</td><td>${o.status}</td><td>${o.paymentStatus || ""}</td><td>\u00a3${Number(o.total ?? 0).toFixed(2)}</td></tr>`; });
+            html += `</table></body></html>`;
+            const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+          }}><FileText className="h-3 w-3" /> PDF</Button>
           <Button variant="outline" size="sm" onClick={() => { refetchOrders(); refetchMenu(); }}>
             <RefreshCw className="h-4 w-4 mr-1" /> Refresh
           </Button>

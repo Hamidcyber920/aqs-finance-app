@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, CheckCircle, AlertTriangle, XCircle, Clock, Search, Trash2, Edit2, Award, Users, BookOpen, Grid3X3, UserPlus } from "lucide-react";
+import { Plus, CheckCircle, AlertTriangle, XCircle, Clock, Search, Trash2, Edit2, Award, Users, BookOpen, Grid3X3, UserPlus, Download, FileText } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   valid: "bg-green-100 text-green-800",
@@ -52,6 +52,8 @@ export default function TrainingTracker() {
   const [showAdd, setShowAdd] = useState(false);
   const [showBulkEnrol, setShowBulkEnrol] = useState(false);
   const [editRecord, setEditRecord] = useState<any>(null);
+  const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; });
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
 
   const [form, setForm] = useState({
     userName: "",
@@ -166,7 +168,28 @@ export default function TrainingTracker() {
             <h1 className="text-2xl font-bold text-foreground">Training Tracker</h1>
             <p className="text-muted-foreground text-sm mt-1">Track mandatory and optional training completions for all staff, volunteers, and trustees</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
+            <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-32 h-8 text-xs" />
+            <span className="text-xs text-muted-foreground">to</span>
+            <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-32 h-8 text-xs" />
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+              const filtered = records.filter((r: any) => { const d = new Date(r.completedAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+              if (!filtered.length) { toast("No records in selected range"); return; }
+              const rows = filtered.map((r: any) => `${r.userName},${r.module},${r.provider || ""},${new Date(r.completedAt).toLocaleDateString()},${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : ""},${r.liveStatus || r.status}`);
+              const csv = "Staff,Module,Provider,Completed,Expires,Status\n" + rows.join("\n");
+              const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = `training_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+            }}><Download className="w-3 h-3" /> CSV</Button>
+            <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
+              const filtered = records.filter((r: any) => { const d = new Date(r.completedAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+              if (!filtered.length) { toast("No records in selected range"); return; }
+              let html = `<html><head><title>Training ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}</style></head><body>`;
+              html += `<h2>Training Records Report</h2><p>${dateFrom} to ${dateTo}</p><p><strong>Total Records: ${filtered.length}</strong></p>`;
+              html += `<table><tr><th>Staff</th><th>Module</th><th>Provider</th><th>Completed</th><th>Expires</th><th>Status</th></tr>`;
+              filtered.forEach((r: any) => { html += `<tr><td>${r.userName}</td><td>${r.module}</td><td>${r.provider || ""}</td><td>${new Date(r.completedAt).toLocaleDateString()}</td><td>${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : ""}</td><td>${r.liveStatus || r.status}</td></tr>`; });
+              html += `</table></body></html>`;
+              const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
+            }}><FileText className="w-3 h-3" /> PDF</Button>
             <Button variant="outline" onClick={() => setShowBulkEnrol(true)} className="gap-2">
               <UserPlus className="w-4 h-4" /> Bulk Enrol
             </Button>
