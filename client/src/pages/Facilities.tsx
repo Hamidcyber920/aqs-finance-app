@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Building2, CalendarDays, Plus, Users, PoundSterling, CheckCircle2, Clock, XCircle, RefreshCw, Edit2, Download, FileText } from "lucide-react";
+import {
+  Building2, CalendarDays, Plus, Users, PoundSterling, Clock, Edit2,
+  Download, FileText, Trash2, Settings, ChevronLeft, ChevronRight,
+  AlertTriangle, CheckCircle2, MapPin
+} from "lucide-react";
 import FacilitiesEnquiries from "./FacilitiesEnquiries";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -18,6 +22,7 @@ const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-green-500/20 text-green-300 border-green-500/30",
   cancelled: "bg-red-500/20 text-red-300 border-red-500/30",
   completed: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  pending: "bg-orange-500/20 text-orange-300 border-orange-500/30",
 };
 const PAY_COLORS: Record<string, string> = {
   unpaid: "bg-red-500/20 text-red-300 border-red-500/30",
@@ -34,6 +39,38 @@ function fmt(v: string | null | undefined) {
 function fmtDt(v: string | Date | null | undefined) {
   if (!v) return "-";
   return new Date(v).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtDate(v: string | Date | null | undefined) {
+  if (!v) return "-";
+  return new Date(v).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+/** Returns a human-readable countdown label */
+function countdownLabel(startDatetime: string | Date): string {
+  const now = new Date();
+  const start = new Date(startDatetime);
+  const diffMs = start.getTime() - now.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffMs < 0) return "In progress";
+  if (diffHours < 1) return "< 1 hour";
+  if (diffHours < 24) return `${diffHours}h away`;
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  return `${diffDays} days`;
+}
+
+function countdownColor(startDatetime: string | Date): string {
+  const now = new Date();
+  const start = new Date(startDatetime);
+  const diffMs = start.getTime() - now.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffMs < 0) return "bg-blue-500/20 text-blue-300 border-blue-500/30";
+  if (diffDays === 0) return "bg-red-500/20 text-red-300 border-red-500/30";
+  if (diffDays === 1) return "bg-orange-500/20 text-orange-300 border-orange-500/30";
+  if (diffDays <= 3) return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
+  return "bg-green-500/20 text-green-300 border-green-500/30";
 }
 
 // ─── New Booking Dialog ───────────────────────────────────────────────────────
@@ -53,10 +90,27 @@ function NewBookingDialog({ rooms, onClose, onCreated }: { rooms: any[]; onClose
     agreedAmount: "0",
     internalNotes: "",
   });
+
+  const conflictInput = useMemo(() => {
+    if (!form.roomId || !form.startDatetime || !form.endDatetime) return null;
+    return {
+      roomId: parseInt(form.roomId),
+      startDatetime: new Date(form.startDatetime),
+      endDatetime: new Date(form.endDatetime),
+    };
+  }, [form.roomId, form.startDatetime, form.endDatetime]);
+
+  const conflicts = trpc.facilities.checkConflicts.useQuery(
+    conflictInput ?? { roomId: 0, startDatetime: new Date(), endDatetime: new Date() },
+    { enabled: !!conflictInput }
+  );
+
   const create = trpc.facilities.createBooking.useMutation({
     onSuccess: () => { toast.success("Booking created"); onCreated(); onClose(); },
     onError: (e) => toast.error(e.message),
   });
+
+  const hasConflict = conflictInput && conflicts.data?.hasConflict;
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -76,27 +130,49 @@ function NewBookingDialog({ rooms, onClose, onCreated }: { rooms: any[]; onClose
             <div><Label>Start *</Label><Input type="datetime-local" className="bg-white/5 border-white/10" value={form.startDatetime} onChange={e => setForm(f => ({ ...f, startDatetime: e.target.value }))} /></div>
             <div><Label>End *</Label><Input type="datetime-local" className="bg-white/5 border-white/10" value={form.endDatetime} onChange={e => setForm(f => ({ ...f, endDatetime: e.target.value }))} /></div>
           </div>
+
+          {/* Conflict warning */}
+          {hasConflict && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div>
+                <div className="font-semibold">Booking conflict detected!</div>
+                <div className="text-xs mt-1 text-red-300/80">
+                  {conflicts.data?.conflicts.map((c: any) => (
+                    <div key={c.id}>{c.title} — {fmtDt(c.startDatetime)} to {fmtDt(c.endDatetime)}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {conflictInput && !conflicts.isLoading && !hasConflict && form.roomId && form.startDatetime && form.endDatetime && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-300 text-xs">
+              <CheckCircle2 className="w-4 h-4 shrink-0" /> Room is available for this time slot
+            </div>
+          )}
+
           <div><Label>Booking Title *</Label><Input className="bg-white/5 border-white/10" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
           <div><Label>Booker Name *</Label><Input className="bg-white/5 border-white/10" value={form.bookerName} onChange={e => setForm(f => ({ ...f, bookerName: e.target.value }))} /></div>
           <div className="grid grid-cols-2 gap-2">
-            <div><Label>Email</Label><Input className="bg-white/5 border-white/10" value={form.bookerEmail} onChange={e => setForm(f => ({ ...f, bookerEmail: e.target.value }))} /></div>
+            <div><Label>Email</Label><Input type="email" className="bg-white/5 border-white/10" value={form.bookerEmail} onChange={e => setForm(f => ({ ...f, bookerEmail: e.target.value }))} /></div>
             <div><Label>Phone</Label><Input className="bg-white/5 border-white/10" value={form.bookerPhone} onChange={e => setForm(f => ({ ...f, bookerPhone: e.target.value }))} /></div>
           </div>
           <div><Label>Organisation</Label><Input className="bg-white/5 border-white/10" value={form.organisation} onChange={e => setForm(f => ({ ...f, organisation: e.target.value }))} /></div>
+          <div><Label>Purpose</Label><Textarea className="bg-white/5 border-white/10" rows={2} value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} /></div>
           <div className="grid grid-cols-2 gap-2">
+            <div><Label>Attendees</Label><Input type="number" className="bg-white/5 border-white/10" value={form.attendeeCount} onChange={e => setForm(f => ({ ...f, attendeeCount: e.target.value }))} /></div>
             <div>
               <Label>Rate Type</Label>
               <Select value={form.rateType} onValueChange={v => setForm(f => ({ ...f, rateType: v as any }))}>
                 <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-[#0d1b2a] border-white/10 text-white">
-                  {["hourly", "half_day", "full_day", "custom", "free"].map(r => <SelectItem key={r} value={r}>{r.replace("_", " ")}</SelectItem>)}
+                  {["hourly", "half_day", "full_day", "custom"].map(r => <SelectItem key={r} value={r}>{r.replace("_", " ")}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Agreed Amount (£)</Label><Input type="number" className="bg-white/5 border-white/10" value={form.agreedAmount} onChange={e => setForm(f => ({ ...f, agreedAmount: e.target.value }))} /></div>
           </div>
-          <div><Label>Attendees</Label><Input type="number" className="bg-white/5 border-white/10" value={form.attendeeCount} onChange={e => setForm(f => ({ ...f, attendeeCount: e.target.value }))} /></div>
-          <div><Label>Purpose / Notes</Label><Textarea className="bg-white/5 border-white/10" value={form.purpose} onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))} /></div>
+          <div><Label>Agreed Amount (£)</Label><Input type="number" className="bg-white/5 border-white/10" value={form.agreedAmount} onChange={e => setForm(f => ({ ...f, agreedAmount: e.target.value }))} /></div>
+          <div><Label>Internal Notes</Label><Textarea className="bg-white/5 border-white/10" rows={2} value={form.internalNotes} onChange={e => setForm(f => ({ ...f, internalNotes: e.target.value }))} /></div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -117,8 +193,9 @@ function NewBookingDialog({ rooms, onClose, onCreated }: { rooms: any[]; onClose
               internalNotes: form.internalNotes || undefined,
             })}
             disabled={create.isPending || !form.roomId || !form.bookerName || !form.title || !form.startDatetime || !form.endDatetime}
+            className={hasConflict ? "bg-orange-600 hover:bg-orange-700" : ""}
           >
-            {create.isPending ? "Creating..." : "Create Booking"}
+            {create.isPending ? "Creating..." : hasConflict ? "Create Anyway (Conflict!)" : "Create Booking"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -127,8 +204,18 @@ function NewBookingDialog({ rooms, onClose, onCreated }: { rooms: any[]; onClose
 }
 
 // ─── New Room Dialog ──────────────────────────────────────────────────────────
-function NewRoomDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ name: "", building: "QLH", capacity: "", description: "", amenities: "", hourlyRate: "", halfDayRate: "", fullDayRate: "", notes: "" });
+function NewRoomDialog({ buildings, onClose, onCreated }: { buildings: any[]; onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({
+    name: "",
+    building: buildings[0]?.name || "QLH",
+    capacity: "",
+    description: "",
+    amenities: "",
+    hourlyRate: "",
+    halfDayRate: "",
+    fullDayRate: "",
+    notes: ""
+  });
   const create = trpc.facilities.createRoom.useMutation({
     onSuccess: () => { toast.success("Room created"); onCreated(); onClose(); },
     onError: (e) => toast.error(e.message),
@@ -144,7 +231,7 @@ function NewRoomDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
             <Select value={form.building} onValueChange={v => setForm(f => ({ ...f, building: v }))}>
               <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-[#0d1b2a] border-white/10 text-white">
-                {["QLH", "Bistro 87", "Accommodation", "Other"].map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                {buildings.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -170,29 +257,379 @@ function NewRoomDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
   );
 }
 
+// ─── Buildings Management Dialog ──────────────────────────────────────────────
+function ManageBuildingsDialog({ onClose }: { onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const buildings = trpc.facilities.listBuildings.useQuery();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", address: "", notes: "", sortOrder: 0 });
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ name: "", address: "", notes: "", sortOrder: 0 });
+
+  const createBuilding = trpc.facilities.createBuilding.useMutation({
+    onSuccess: () => { toast.success("Building added"); utils.facilities.listBuildings.invalidate(); setShowAdd(false); setAddForm({ name: "", address: "", notes: "", sortOrder: 0 }); },
+    onError: (e) => toast.error(e.message),
+  });
+  const updateBuilding = trpc.facilities.updateBuilding.useMutation({
+    onSuccess: () => { toast.success("Building updated"); utils.facilities.listBuildings.invalidate(); setEditingId(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteBuilding = trpc.facilities.deleteBuilding.useMutation({
+    onSuccess: () => { toast.success("Building removed"); utils.facilities.listBuildings.invalidate(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const startEdit = (b: any) => {
+    setEditingId(b.id);
+    setEditForm({ name: b.name, address: b.address || "", notes: b.notes || "", sortOrder: b.sortOrder || 0 });
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto bg-[#0d1b2a] border-white/10 text-white">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings className="w-4 h-4 text-indigo-400" /> Manage Buildings
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-xs text-white/60">Add, edit or remove buildings. These appear as options when creating rooms and bookings.</p>
+
+          {buildings.isLoading && <p className="text-white/60 text-sm">Loading...</p>}
+          {buildings.data?.map((b: any) => (
+            <div key={b.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
+              {editingId === b.id ? (
+                <div className="space-y-2">
+                  <Input className="bg-white/5 border-white/10 text-sm" placeholder="Building name *" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+                  <Input className="bg-white/5 border-white/10 text-sm" placeholder="Address (optional)" value={editForm.address} onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))} />
+                  <Input className="bg-white/5 border-white/10 text-sm" placeholder="Notes (optional)" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+                  <Input type="number" className="bg-white/5 border-white/10 text-sm w-24" placeholder="Sort order" value={editForm.sortOrder} onChange={e => setEditForm(f => ({ ...f, sortOrder: parseInt(e.target.value) || 0 }))} />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => updateBuilding.mutate({ id: b.id, ...editForm })} disabled={updateBuilding.isPending || !editForm.name}>Save</Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">{b.name}</div>
+                    {b.address && <div className="text-xs text-white/60 flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3" />{b.address}</div>}
+                    {b.notes && <div className="text-xs text-white/50 mt-0.5">{b.notes}</div>}
+                  </div>
+                  <div className="flex gap-1 shrink-0">
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 hover:bg-white/10" onClick={() => startEdit(b)}>
+                      <Edit2 className="w-3 h-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 hover:bg-red-500/20 text-red-400" onClick={() => {
+                      if (confirm(`Remove "${b.name}"? Rooms assigned to it will keep their building label.`)) {
+                        deleteBuilding.mutate({ id: b.id });
+                      }
+                    }}>
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Add new building */}
+          {showAdd ? (
+            <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-3 space-y-2">
+              <div className="text-xs font-semibold text-indigo-300 mb-1">New Building</div>
+              <Input className="bg-white/5 border-white/10 text-sm" placeholder="Building name *" value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} />
+              <Input className="bg-white/5 border-white/10 text-sm" placeholder="Address (optional)" value={addForm.address} onChange={e => setAddForm(f => ({ ...f, address: e.target.value }))} />
+              <Input className="bg-white/5 border-white/10 text-sm" placeholder="Notes (optional)" value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))} />
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => createBuilding.mutate(addForm)} disabled={createBuilding.isPending || !addForm.name}>Add Building</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" className="w-full border-dashed border-white/20 text-white/70 hover:bg-white/5" onClick={() => setShowAdd(true)}>
+              <Plus className="w-4 h-4 mr-1" /> Add Building
+            </Button>
+          )}
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Availability Calendar ────────────────────────────────────────────────────
+function AvailabilityCalendar({ bookings, rooms }: { bookings: any[]; rooms: any[] }) {
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth());
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [filterRoom, setFilterRoom] = useState<string>("all");
+
+  const monthName = new Date(calYear, calMonth, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+  const firstDay = new Date(calYear, calMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  // Adjust so week starts on Monday
+  const startOffset = (firstDay + 6) % 7;
+
+  const prevMonth = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); } else setCalMonth(m => m - 1); };
+  const nextMonth = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); } else setCalMonth(m => m + 1); };
+
+  // Group bookings by day (YYYY-MM-DD)
+  const bookingsByDay = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    const filtered = filterRoom === "all" ? bookings : bookings.filter((b: any) => String(b.booking?.roomId || b.roomId) === filterRoom);
+    for (const b of filtered) {
+      const dt = b.booking?.startDatetime || b.startDatetime;
+      if (!dt) continue;
+      const key = new Date(dt).toISOString().split("T")[0];
+      if (!map[key]) map[key] = [];
+      map[key].push(b);
+    }
+    return map;
+  }, [bookings, filterRoom]);
+
+  // Detect conflicts: same room, overlapping times
+  const conflictDays = useMemo(() => {
+    const days = new Set<string>();
+    const filtered = filterRoom === "all" ? bookings : bookings.filter((b: any) => String(b.booking?.roomId || b.roomId) === filterRoom);
+    for (let i = 0; i < filtered.length; i++) {
+      for (let j = i + 1; j < filtered.length; j++) {
+        const a = filtered[i];
+        const b = filtered[j];
+        const aRoomId = a.booking?.roomId || a.roomId;
+        const bRoomId = b.booking?.roomId || b.roomId;
+        if (aRoomId !== bRoomId) continue;
+        const aStart = new Date(a.booking?.startDatetime || a.startDatetime).getTime();
+        const aEnd = new Date(a.booking?.endDatetime || a.endDatetime).getTime();
+        const bStart = new Date(b.booking?.startDatetime || b.startDatetime).getTime();
+        const bEnd = new Date(b.booking?.endDatetime || b.endDatetime).getTime();
+        if (aStart < bEnd && aEnd > bStart) {
+          const key = new Date(aStart).toISOString().split("T")[0];
+          days.add(key);
+        }
+      }
+    }
+    return days;
+  }, [bookings, filterRoom]);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const selectedDayKey = selectedDay ? selectedDay.toISOString().split("T")[0] : null;
+  const selectedBookings = selectedDayKey ? (bookingsByDay[selectedDayKey] || []) : [];
+
+  const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+  // Build calendar grid
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <div className="space-y-4">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-white/10" onClick={prevMonth}><ChevronLeft className="w-4 h-4" /></Button>
+          <span className="text-sm font-semibold text-white min-w-[140px] text-center">{monthName}</span>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-white/10" onClick={nextMonth}><ChevronRight className="w-4 h-4" /></Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={filterRoom} onValueChange={setFilterRoom}>
+            <SelectTrigger className="bg-white/5 border-white/10 h-8 text-xs w-40"><SelectValue placeholder="All rooms" /></SelectTrigger>
+            <SelectContent className="bg-[#0d1b2a] border-white/10 text-white">
+              <SelectItem value="all">All rooms</SelectItem>
+              {rooms.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3 text-xs text-white/60">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-indigo-500/40 inline-block" /> Booked</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-500/40 inline-block" /> Conflict</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-white/10 border border-white/20 inline-block" /> Today</span>
+      </div>
+
+      {/* Calendar grid */}
+      <div className="rounded-xl border border-white/10 overflow-hidden">
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 bg-white/5">
+          {WEEKDAYS.map(d => (
+            <div key={d} className="py-2 text-center text-xs font-semibold text-white/60">{d}</div>
+          ))}
+        </div>
+        {/* Day cells */}
+        <div className="grid grid-cols-7 divide-x divide-y divide-white/5">
+          {cells.map((day, idx) => {
+            if (day === null) return <div key={`empty-${idx}`} className="h-14 md:h-16 bg-white/2" />;
+            const dateKey = `${calYear}-${String(calMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+            const dayBookings = bookingsByDay[dateKey] || [];
+            const isToday = new Date(calYear, calMonth, day).getTime() === today.getTime();
+            const isSelected = selectedDayKey === dateKey;
+            const hasConflict = conflictDays.has(dateKey);
+            const hasBookings = dayBookings.length > 0;
+
+            return (
+              <div
+                key={dateKey}
+                onClick={() => setSelectedDay(isSelected ? null : new Date(calYear, calMonth, day))}
+                className={`h-14 md:h-16 p-1 cursor-pointer transition-colors relative
+                  ${isSelected ? "bg-indigo-600/30 ring-1 ring-inset ring-indigo-400/50" : "hover:bg-white/5"}
+                  ${isToday ? "ring-1 ring-inset ring-white/30" : ""}
+                `}
+              >
+                <div className={`text-xs font-medium mb-0.5 ${isToday ? "text-white font-bold" : "text-white/70"}`}>{day}</div>
+                {hasConflict && (
+                  <div className="text-[10px] bg-red-500/30 text-red-300 rounded px-1 truncate">⚠ Conflict</div>
+                )}
+                {!hasConflict && hasBookings && (
+                  <div className="space-y-0.5">
+                    {dayBookings.slice(0, 2).map((b: any, i: number) => (
+                      <div key={i} className="text-[10px] bg-indigo-500/30 text-indigo-200 rounded px-1 truncate leading-tight">
+                        {b.booking?.title || b.title || "Booking"}
+                      </div>
+                    ))}
+                    {dayBookings.length > 2 && (
+                      <div className="text-[10px] text-white/40">+{dayBookings.length - 2} more</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Selected day detail */}
+      {selectedDay && (
+        <Card className="bg-white/5 border-white/10">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-white/90">
+              {selectedDay.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              {selectedBookings.length === 0 && <span className="ml-2 text-xs text-white/50 font-normal">— No bookings</span>}
+            </CardTitle>
+          </CardHeader>
+          {selectedBookings.length > 0 && (
+            <CardContent>
+              <div className="space-y-2">
+                {selectedBookings.map((b: any, i: number) => {
+                  const booking = b.booking || b;
+                  return (
+                    <div key={i} className="flex flex-wrap items-start justify-between gap-2 p-2 rounded-lg bg-white/5 text-sm">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{booking.title}</div>
+                        <div className="text-xs text-white/60">{b.roomName || ""} · {booking.bookerName}</div>
+                        <div className="text-xs text-white/50 mt-0.5">{fmtDt(booking.startDatetime)} → {fmtDt(booking.endDatetime)}</div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge className={`text-xs border ${STATUS_COLORS[booking.status] || ""}`}>{booking.status}</Badge>
+                        {booking.agreedAmount && <span className="text-xs font-mono text-white/70">{fmt(booking.agreedAmount)}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── 7-Day Upcoming Summary ────────────────────────────────────────────────────
+function UpcomingSummary() {
+  const upcoming = trpc.facilities.upcomingBookings.useQuery({ days: 7 });
+
+  if (upcoming.isLoading) return (
+    <Card className="bg-white/5 border-white/10">
+      <CardContent className="p-4 text-white/60 text-sm">Loading upcoming bookings...</CardContent>
+    </Card>
+  );
+
+  if (!upcoming.data || upcoming.data.length === 0) return (
+    <Card className="bg-white/5 border-white/10">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold text-white/90 flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-indigo-400" /> Next 7 Days
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pb-4">
+        <p className="text-white/50 text-sm">No confirmed bookings in the next 7 days.</p>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <Card className="bg-white/5 border-white/10">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold text-white/90 flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-indigo-400" /> Next 7 Days — {upcoming.data.length} booking{upcoming.data.length !== 1 ? "s" : ""}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {upcoming.data.map((b: any) => (
+            <div key={b.id} className="flex flex-wrap items-start justify-between gap-2 p-3 rounded-lg bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm">{b.title}</div>
+                <div className="text-xs text-white/60 mt-0.5">
+                  <span className="font-medium text-white/80">{b.roomName || "Room"}</span>
+                  {b.building && <span className="text-white/40"> ({b.building})</span>}
+                  {" · "}{b.bookerName}
+                </div>
+                <div className="text-xs text-white/50 mt-0.5">
+                  {fmtDt(b.startDatetime)}
+                  {b.attendeeCount && <span className="ml-2"><Users className="w-3 h-3 inline" /> {b.attendeeCount}</span>}
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <Badge className={`text-xs border ${countdownColor(b.startDatetime)}`}>
+                  {countdownLabel(b.startDatetime)}
+                </Badge>
+                {b.agreedAmount && parseFloat(b.agreedAmount) > 0 && (
+                  <span className="text-xs font-mono text-white/60">{fmt(b.agreedAmount)}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Facilities() {
   const [tab, setTab] = useState("enquiries");
   const [showNewBooking, setShowNewBooking] = useState(false);
   const [showNewRoom, setShowNewRoom] = useState(false);
+  const [showManageBuildings, setShowManageBuildings] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split("T")[0]; });
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
 
-  useEffect(() => {
-  }, [tab]);
-
   const utils = trpc.useUtils();
   const stats = trpc.facilities.stats.useQuery();
   const rooms = trpc.facilities.listRooms.useQuery({ activeOnly: false });
-  const bookings = trpc.facilities.listBookings.useQuery({ limit: 100 });
+  const buildings = trpc.facilities.listBuildings.useQuery();
+  const bookings = trpc.facilities.listBookings.useQuery({ limit: 200 });
 
   const updateBooking = trpc.facilities.updateBooking.useMutation({
     onSuccess: () => { toast.success("Booking updated"); utils.facilities.listBookings.invalidate(); utils.facilities.stats.invalidate(); setSelectedBooking(null); },
     onError: (e) => toast.error(e.message),
   });
 
-  const refetch = () => { utils.facilities.listBookings.invalidate(); utils.facilities.stats.invalidate(); utils.facilities.listRooms.invalidate(); };
+  const refetch = () => {
+    utils.facilities.listBookings.invalidate();
+    utils.facilities.stats.invalidate();
+    utils.facilities.listRooms.invalidate();
+    utils.facilities.upcomingBookings.invalidate();
+  };
 
   return (
     <div className="p-4 md:p-6 space-y-6 text-white min-h-screen" style={{ background: "linear-gradient(160deg, #0E2244 0%, #0A192F 50%, #070F1E 100%)" }}>
@@ -204,7 +641,7 @@ export default function Facilities() {
           </div>
           <div>
             <h1 className="text-xl font-bold">Facilities & Room Booking</h1>
-            <p className="text-sm text-white/70">Manage bookable spaces across QLH, Bistro 87 & Accommodation</p>
+            <p className="text-sm text-white/70">Manage bookable spaces across all buildings</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
@@ -213,25 +650,28 @@ export default function Facilities() {
           <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-32 h-8 text-xs bg-white/10 border-white/30 text-white" />
           <Button variant="outline" size="sm" className="h-8 gap-1 text-xs border-white/20 text-white hover:bg-white/10" onClick={() => {
             const allBookings = bookings.data ?? [];
-            const filtered = allBookings.filter((b: any) => { const d = new Date(b.startDatetime); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+            const filtered = allBookings.filter((b: any) => { const d = new Date(b.booking?.startDatetime || b.startDatetime); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
             if (!filtered.length) { toast.info("No bookings in selected range"); return; }
-            const rows = filtered.map((b: any) => `${fmtDt(b.startDatetime)},${fmtDt(b.endDatetime)},${b.roomName || ""},${b.title || ""},${b.bookerName || ""},${b.status},${b.paymentStatus || ""},${fmt(b.agreedAmount)}`);
+            const rows = filtered.map((b: any) => `${fmtDt(b.booking?.startDatetime || b.startDatetime)},${fmtDt(b.booking?.endDatetime || b.endDatetime)},${b.roomName || ""},${(b.booking?.title || b.title) || ""},${(b.booking?.bookerName || b.bookerName) || ""},${(b.booking?.status || b.status)},${(b.booking?.paymentStatus || b.paymentStatus) || ""},${fmt(b.booking?.agreedAmount || b.agreedAmount)}`);
             const csv = "Start,End,Room,Title,Booker,Status,Payment,Amount\n" + rows.join("\n");
             const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
             const a = document.createElement("a"); a.href = url; a.download = `bookings_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
           }}><Download className="w-3 h-3" /> CSV</Button>
           <Button variant="outline" size="sm" className="h-8 gap-1 text-xs border-white/20 text-white hover:bg-white/10" onClick={() => {
             const allBookings = bookings.data ?? [];
-            const filtered = allBookings.filter((b: any) => { const d = new Date(b.startDatetime); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
+            const filtered = allBookings.filter((b: any) => { const d = new Date(b.booking?.startDatetime || b.startDatetime); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
             if (!filtered.length) { toast.info("No bookings in selected range"); return; }
-            const total = filtered.reduce((s: number, b: any) => s + Number(b.agreedAmount ?? 0), 0);
+            const total = filtered.reduce((s: number, b: any) => s + Number(b.booking?.agreedAmount || b.agreedAmount || 0), 0);
             let html = `<html><head><title>Bookings ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
             html += `<h2>Facilities & Bookings Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total Revenue: \u00a3${total.toFixed(2)} | Bookings: ${filtered.length}</p>`;
             html += `<table><tr><th>Start</th><th>End</th><th>Room</th><th>Title</th><th>Booker</th><th>Status</th><th>Payment</th><th>Amount</th></tr>`;
-            filtered.forEach((b: any) => { html += `<tr><td>${fmtDt(b.startDatetime)}</td><td>${fmtDt(b.endDatetime)}</td><td>${b.roomName || ""}</td><td>${b.title || ""}</td><td>${b.bookerName || ""}</td><td>${b.status}</td><td>${b.paymentStatus || ""}</td><td>${fmt(b.agreedAmount)}</td></tr>`; });
+            filtered.forEach((b: any) => { html += `<tr><td>${fmtDt(b.booking?.startDatetime || b.startDatetime)}</td><td>${fmtDt(b.booking?.endDatetime || b.endDatetime)}</td><td>${b.roomName || ""}</td><td>${b.booking?.title || b.title || ""}</td><td>${b.booking?.bookerName || b.bookerName || ""}</td><td>${b.booking?.status || b.status}</td><td>${b.booking?.paymentStatus || b.paymentStatus || ""}</td><td>${fmt(b.booking?.agreedAmount || b.agreedAmount)}</td></tr>`; });
             html += `</table></body></html>`;
             const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
           }}><FileText className="w-3 h-3" /> PDF</Button>
+          <Button size="sm" variant="outline" onClick={() => setShowManageBuildings(true)} className="border-white/20 text-white hover:bg-white/10">
+            <Settings className="w-4 h-4 mr-1" /> Buildings
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setShowNewRoom(true)} className="border-white/20 text-white hover:bg-white/10">
             <Plus className="w-4 h-4 mr-1" /> Add Room
           </Button>
@@ -263,25 +703,8 @@ export default function Facilities() {
         </div>
       )}
 
-      {/* Upcoming */}
-      {stats.data?.upcoming && stats.data.upcoming.length > 0 && (
-        <Card className="bg-white/5 border-white/10">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-white/90">Upcoming Bookings</CardTitle></CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {stats.data.upcoming.map((u: any) => (
-                <div key={u.booking.id} className="flex flex-wrap items-start justify-between gap-1 p-2 rounded-lg bg-white/5 text-sm">
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium">{u.booking.title}</span>
-                    <span className="text-white/70 ml-2">{u.roomName}</span>
-                  </div>
-                  <span className="text-white/80 text-xs whitespace-nowrap">{fmtDt(u.booking.startDatetime)}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* 7-Day Upcoming Summary */}
+      <UpcomingSummary />
 
       {/* Tabs */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -289,6 +712,7 @@ export default function Facilities() {
           <TabsList className="bg-white/5 border border-white/10 inline-flex w-max min-w-full h-auto gap-1 p-1">
             <TabsTrigger value="enquiries" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Enquiries</TabsTrigger>
             <TabsTrigger value="bookings" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Bookings</TabsTrigger>
+            <TabsTrigger value="calendar" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Calendar</TabsTrigger>
             <TabsTrigger value="rooms" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Rooms</TabsTrigger>
           </TabsList>
         </div>
@@ -346,6 +770,11 @@ export default function Facilities() {
               </tbody>
             </table>
           </div>
+        </TabsContent>
+
+        {/* Calendar Tab */}
+        <TabsContent value="calendar" className="mt-4">
+          <AvailabilityCalendar bookings={bookings.data || []} rooms={rooms.data || []} />
         </TabsContent>
 
         {/* Rooms Tab */}
@@ -435,7 +864,14 @@ export default function Facilities() {
       {showNewBooking && rooms.data && (
         <NewBookingDialog rooms={rooms.data} onClose={() => setShowNewBooking(false)} onCreated={refetch} />
       )}
-      {showNewRoom && <NewRoomDialog onClose={() => setShowNewRoom(false)} onCreated={refetch} />}
+      {showNewRoom && (
+        <NewRoomDialog
+          buildings={buildings.data || [{ id: 0, name: "QLH" }, { id: 1, name: "Bistro 87" }, { id: 2, name: "Accommodation" }, { id: 3, name: "Other" }]}
+          onClose={() => setShowNewRoom(false)}
+          onCreated={refetch}
+        />
+      )}
+      {showManageBuildings && <ManageBuildingsDialog onClose={() => { setShowManageBuildings(false); utils.facilities.listBuildings.invalidate(); }} />}
     </div>
   );
 }

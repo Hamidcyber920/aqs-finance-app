@@ -2540,3 +2540,12 @@
 - [x] AI OCR: Scan/upload enquiry forms with AI extraction into the enquiry record
 - [x] Audit trail: Log all actions with date/time/user stamps
 - [x] Data capture: All enquiries stored for future campaign use
+
+## Facilities - Buildings, Calendar & Summary (May 2026)
+- [x] DB: facility_buildings table with CRUD (add/edit/delete buildings)
+- [x] Backend: listBuildings, createBuilding, updateBuilding, deleteBuilding procedures
+- [x] UI: Buildings management dialog (add/edit/delete buildings with names)
+- [x] UI: Add Room form uses dynamic buildings from DB (not hardcoded dropdown)
+- [x] UI: Availability calendar tab showing all rooms with bookings by day/week/month
+- [x] UI: Conflict detection when creating a booking (warn if room already booked in that time slot)
+- [x] UI: 7-day upcoming bookings summary panel with countdown (e.g. "3 days away")

@@ -2544,3 +2544,17 @@ export const enquiryAuditTrail = mysqlTable("enquiry_audit_trail", {
 });
 export type EnquiryAuditTrail = typeof enquiryAuditTrail.$inferSelect;
 export type InsertEnquiryAuditTrail = typeof enquiryAuditTrail.$inferInsert;
+
+// ─── FACILITY BUILDINGS ───────────────────────────────────────────────────────
+export const facilityBuildings = mysqlTable("facility_buildings", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  address: text("address"),
+  notes: text("notes"),
+  isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type FacilityBuilding = typeof facilityBuildings.$inferSelect;
+export type InsertFacilityBuilding = typeof facilityBuildings.$inferInsert;

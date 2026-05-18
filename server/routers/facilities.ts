@@ -8,7 +8,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { eq, and, gte, lte, desc, or, sql } from "drizzle-orm";
-import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail } from "../../drizzle/schema";
+import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail, facilityBuildings } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
@@ -591,5 +591,126 @@ export const facilitiesRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       return db.select().from(enquiryAuditTrail).where(eq(enquiryAuditTrail.enquiryId, input.enquiryId)).orderBy(desc(enquiryAuditTrail.timestamp));
+    }),
+
+  // ── Buildings CRUD ─────────────────────────────────────────────────────────────
+  listBuildings: protectedProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      return db.select().from(facilityBuildings).where(eq(facilityBuildings.isActive, true)).orderBy(facilityBuildings.sortOrder, facilityBuildings.name);
+    }),
+
+  createBuilding: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1),
+      address: z.string().optional(),
+      notes: z.string().optional(),
+      sortOrder: z.number().default(0),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ADMIN_ROLES.includes(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [result] = await db.insert(facilityBuildings).values({
+        name: input.name,
+        address: input.address,
+        notes: input.notes,
+        sortOrder: input.sortOrder,
+      });
+      return { id: (result as any).insertId, ...input };
+    }),
+
+  updateBuilding: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(1).optional(),
+      address: z.string().optional(),
+      notes: z.string().optional(),
+      sortOrder: z.number().optional(),
+      isActive: z.boolean().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ADMIN_ROLES.includes(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const { id, ...updates } = input;
+      await db.update(facilityBuildings).set(updates).where(eq(facilityBuildings.id, id));
+      return { success: true };
+    }),
+
+  deleteBuilding: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ADMIN_ROLES.includes(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      // Soft delete
+      await db.update(facilityBuildings).set({ isActive: false }).where(eq(facilityBuildings.id, input.id));
+      return { success: true };
+    }),
+
+  // ── Upcoming Bookings (7-day summary) ─────────────────────────────────────────
+  upcomingBookings: protectedProcedure
+    .input(z.object({ days: z.number().default(7) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const now = new Date();
+      const future = new Date(now.getTime() + input.days * 24 * 60 * 60 * 1000);
+      return db.select({
+        id: facilityBookings.id,
+        title: facilityBookings.title,
+        bookerName: facilityBookings.bookerName,
+        startDatetime: facilityBookings.startDatetime,
+        endDatetime: facilityBookings.endDatetime,
+        attendeeCount: facilityBookings.attendeeCount,
+        status: facilityBookings.status,
+        agreedAmount: facilityBookings.agreedAmount,
+        roomId: facilityBookings.roomId,
+        roomName: facilityRooms.name,
+        building: facilityRooms.building,
+      })
+        .from(facilityBookings)
+        .leftJoin(facilityRooms, eq(facilityBookings.roomId, facilityRooms.id))
+        .where(and(
+          gte(facilityBookings.startDatetime, now),
+          lte(facilityBookings.startDatetime, future),
+          or(
+            eq(facilityBookings.status, "confirmed"),
+            eq(facilityBookings.status, "pending")
+          )
+        ))
+        .orderBy(facilityBookings.startDatetime);
+    }),
+
+  // ── Conflict Detection ─────────────────────────────────────────────────────────
+  checkConflicts: protectedProcedure
+    .input(z.object({
+      roomId: z.number(),
+      startDatetime: z.date(),
+      endDatetime: z.date(),
+      excludeBookingId: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      let q = db.select().from(facilityBookings).where(
+        and(
+          eq(facilityBookings.roomId, input.roomId),
+          or(
+            eq(facilityBookings.status, "confirmed"),
+            eq(facilityBookings.status, "pending")
+          ),
+          // Overlapping: existing.start < new.end AND existing.end > new.start
+          lte(facilityBookings.startDatetime, input.endDatetime),
+          gte(facilityBookings.endDatetime, input.startDatetime),
+        )
+      ).$dynamic();
+      const conflicts = await q;
+      const filtered = input.excludeBookingId
+        ? conflicts.filter(b => b.id !== input.excludeBookingId)
+        : conflicts;
+      return { hasConflict: filtered.length > 0, conflicts: filtered };
     }),
 });
