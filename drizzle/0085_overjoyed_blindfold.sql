@@ -1,0 +1,21 @@
+CREATE TABLE `enquiry_replies` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`enquiryId` int NOT NULL,
+	`direction` enum('sent','received') NOT NULL DEFAULT 'received',
+	`method` enum('email','whatsapp','phone','in_person','manual_entry','scanned') NOT NULL DEFAULT 'email',
+	`fromName` varchar(200),
+	`fromEmail` varchar(320),
+	`fromPhone` varchar(30),
+	`subject` varchar(500),
+	`body` text,
+	`scanUrl` text,
+	`commMessageId` int,
+	`gmailMessageId` varchar(200),
+	`gmailThreadId` varchar(200),
+	`isRead` boolean NOT NULL DEFAULT false,
+	`recordedByUserId` int,
+	`recordedByName` varchar(200),
+	`receivedAt` timestamp NOT NULL DEFAULT (now()),
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `enquiry_replies_id` PRIMARY KEY(`id`)
+);

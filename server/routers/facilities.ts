@@ -8,7 +8,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { eq, and, gte, lte, desc, or, sql } from "drizzle-orm";
-import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail, facilityBuildings } from "../../drizzle/schema";
+import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail, facilityBuildings, enquiryReplies, commMessages, commChannels } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
@@ -713,4 +713,338 @@ export const facilitiesRouter = router({
         : conflicts;
       return { hasConflict: filtered.length > 0, conflicts: filtered };
     }),
+
+  // ── PDF Generation ────────────────────────────────────────────────────────────
+  generateEnquiryPdf: protectedProcedure
+    .input(z.object({ enquiryId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [enquiry] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.enquiryId));
+      if (!enquiry) throw new TRPCError({ code: "NOT_FOUND" });
+      const PDFDocument = (await import("pdfkit")).default;
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      const chunks: Buffer[] = [];
+      doc.on("data", (c: Buffer) => chunks.push(c));
+      await new Promise<void>((resolve) => {
+        doc.on("end", resolve);
+        // Header
+        doc.fontSize(20).font("Helvetica-Bold").text("Abdullah Quilliam Society", { align: "center" });
+        doc.fontSize(12).font("Helvetica").text("Facilities Booking Enquiry Form", { align: "center" });
+        doc.moveDown(0.5);
+        doc.fontSize(9).fillColor("#666").text(`Enquiry #${enquiry.id}  |  Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "center" });
+        doc.fillColor("#000");
+        doc.moveDown(1);
+        // Section helper
+        const section = (title: string) => {
+          doc.moveDown(0.5);
+          doc.fontSize(11).font("Helvetica-Bold").fillColor("#1e3a5f").text(title.toUpperCase());
+          doc.moveTo(50, doc.y).lineTo(545, doc.y).strokeColor("#1e3a5f").stroke();
+          doc.fillColor("#000").moveDown(0.3);
+        };
+        const field = (label: string, value: string | null | undefined) => {
+          doc.fontSize(10).font("Helvetica-Bold").text(`${label}: `, { continued: true });
+          doc.font("Helvetica").text(value || "—");
+        };
+        const yesNo = (v: boolean | null | undefined) => v ? "Yes" : "No";
+        // Contact
+        section("Contact Details");
+        field("Full Name", enquiry.contactName);
+        field("Email", enquiry.contactEmail);
+        field("Phone", enquiry.contactPhone);
+        field("Address", enquiry.contactAddress);
+        if (enquiry.isOrganisation) {
+          field("Organisation", enquiry.organisationName);
+          field("Lead Contact", enquiry.leadContactName);
+          field("Role", enquiry.leadContactRole);
+        }
+        // Event
+        section("Event Details");
+        field("Event Type", enquiry.eventTypeOther || enquiry.eventType);
+        field("Date", enquiry.eventDate ? new Date(enquiry.eventDate).toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }) : null);
+        field("Start Time", enquiry.eventStartTime);
+        field("End Time", enquiry.eventEndTime);
+        field("Expected Attendees", enquiry.expectedAttendees?.toString());
+        field("Room Preference", enquiry.roomPreference);
+        // Food & Catering
+        section("Food & Catering");
+        field("Food Required", yesNo(enquiry.foodRequired));
+        if (enquiry.foodRequired) {
+          field("Headcount", enquiry.foodHeadcount?.toString());
+          field("Catering Type", enquiry.cateringType);
+          field("Food Preferences", enquiry.foodPreferences);
+          field("Halal Required", yesNo(enquiry.halalRequired));
+          field("Vegetarian Required", yesNo(enquiry.vegetarianRequired));
+          field("Vegan Required", yesNo(enquiry.veganRequired));
+          field("Allergy Notes", enquiry.allergyNotes);
+          field("Menu Choices", enquiry.menuChoices);
+        }
+        field("Tea / Coffee", yesNo(enquiry.teaCoffeeRequired));
+        // Linen
+        section("Linen & Table Covers");
+        doc.fontSize(10).font("Helvetica-Bold").fillColor("#c0392b").text("MANDATORY CHARGEABLE SERVICE");
+        doc.fillColor("#000");
+        field("Linen Hire", enquiry.linenHireRequired === "hire" ? "Hire from AQS (chargeable)" : "Own linen / table covers");
+        field("Linen Notes", enquiry.linenHireNotes);
+        // Equipment
+        section("Equipment & Furniture");
+        field("Tables", enquiry.tablesRequired ? `Yes (${enquiry.tablesCount || "TBC"})` : "No");
+        field("Chairs", enquiry.chairsRequired ? `Yes (${enquiry.chairsCount || "TBC"})` : "No");
+        field("Cutlery / Plates", enquiry.cutleryPlatesRequired ? `Yes (${enquiry.cutleryPlatesCount || "TBC"})` : "No");
+        // AV
+        section("AV & Sound");
+        field("Speakers", yesNo(enquiry.speakersRequired));
+        field("Microphone System", yesNo(enquiry.micSystemRequired));
+        field("AV Notes", enquiry.avNotes);
+        // Decor
+        section("Decor");
+        field("Decor Required", yesNo(enquiry.decorRequired));
+        field("Decor Type", enquiry.decorType);
+        field("Decor Notes", enquiry.decorNotes);
+        // Additional Rooms
+        section("Additional Rooms");
+        field("Meet & Greet Room", yesNo(enquiry.meetAndGreetRoom));
+        field("Groom Room", yesNo(enquiry.groomRoom));
+        field("Bride Room", yesNo(enquiry.brideRoom));
+        field("Notes", enquiry.additionalRoomNotes);
+        // Parking
+        section("Parking & Beverages");
+        field("Parking Required", enquiry.parkingRequired ? `Yes (${enquiry.parkingSpaces || "TBC"} spaces)` : "No");
+        field("Beverages", yesNo(enquiry.beveragesRequired));
+        field("Beverages Notes", enquiry.beveragesNotes);
+        // Pricing
+        section("Pricing");
+        field("Agreed Amount", enquiry.agreedAmount ? `£${parseFloat(enquiry.agreedAmount).toFixed(2)}` : null);
+        field("Deposit Amount", enquiry.depositAmount ? `£${parseFloat(enquiry.depositAmount).toFixed(2)}` : null);
+        // Notes
+        if (enquiry.notes) {
+          section("Additional Notes");
+          doc.fontSize(10).font("Helvetica").text(enquiry.notes);
+        }
+        // Signature block
+        doc.moveDown(2);
+        doc.fontSize(10).font("Helvetica").text("Client Signature: ________________________     Date: _______________");
+        doc.moveDown(1);
+        doc.text("AQS Representative: ____________________     Date: _______________");
+        doc.moveDown(2);
+        doc.fontSize(8).fillColor("#888").text("Abdullah Quilliam Society · Facilities Booking · This form is confidential", { align: "center" });
+        doc.end();
+      });
+      const pdfBuffer = Buffer.concat(chunks);
+      const key = `enquiry-forms/enquiry-${enquiry.id}-${Date.now()}.pdf`;
+      const { url } = await storagePut(key, pdfBuffer, "application/pdf");
+      await db.update(facilityEnquiries).set({ pdfUrl: url, pdfGeneratedAt: new Date() }).where(eq(facilityEnquiries.id, input.enquiryId));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "pdf_generated",
+        description: `Enquiry form PDF generated`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { url };
+    }),
+
+  // ── Sync to Google Drive ──────────────────────────────────────────────────────
+  syncEnquiryToDrive: protectedProcedure
+    .input(z.object({ enquiryId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [enquiry] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.enquiryId));
+      if (!enquiry) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!enquiry.pdfUrl) throw new TRPCError({ code: "BAD_REQUEST", message: "Generate PDF first" });
+      try {
+        const { uploadToDrive } = await import("../googleServices");
+        const response = await fetch(enquiry.pdfUrl);
+        const pdfBuffer = Buffer.from(await response.arrayBuffer());
+        const fileName = `Enquiry-${enquiry.id}-${enquiry.contactName.replace(/[^a-z0-9]/gi, "-")}-${new Date().toISOString().split("T")[0]}.pdf`;
+        const { fileId, webViewLink } = await uploadToDrive(fileName, pdfBuffer, "application/pdf");
+        await db.update(facilityEnquiries).set({
+          driveFileId: fileId,
+          driveFileUrl: webViewLink,
+          driveSyncedAt: new Date(),
+        }).where(eq(facilityEnquiries.id, input.enquiryId));
+        await db.insert(enquiryAuditTrail).values({
+          enquiryId: input.enquiryId,
+          action: "synced_to_drive",
+          description: `PDF synced to Google Drive: ${fileName}`,
+          performedByUserId: ctx.user.id,
+          performedByName: ctx.user.name || "System",
+          metadata: JSON.stringify({ fileId, webViewLink }),
+        });
+        return { success: true, fileId, webViewLink };
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Drive sync failed: ${err.message}` });
+      }
+    }),
+
+  // ── Send Enquiry Email ────────────────────────────────────────────────────────
+  sendEnquiryEmail: protectedProcedure
+    .input(z.object({
+      enquiryId: z.number(),
+      subject: z.string(),
+      body: z.string(),
+      attachPdf: z.boolean().default(true),
+      linkToComms: z.boolean().default(true),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [enquiry] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.enquiryId));
+      if (!enquiry) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!enquiry.contactEmail) throw new TRPCError({ code: "BAD_REQUEST", message: "No email address on this enquiry" });
+      const { sendGmailMessage } = await import("../googleServices");
+      // Build email body with PDF link if available
+      let fullBody = input.body;
+      if (input.attachPdf && enquiry.pdfUrl) {
+        fullBody += `\n\n---\nYour enquiry form is available to view/download here:\n${enquiry.pdfUrl}`;
+      }
+      const result = await sendGmailMessage(enquiry.contactEmail, input.subject, fullBody);
+      // Record as sent reply
+      await db.insert(enquiryReplies).values({
+        enquiryId: input.enquiryId,
+        direction: "sent",
+        method: "email",
+        fromName: ctx.user.name || "AQS",
+        fromEmail: process.env.GMAIL_FROM_EMAIL || "",
+        subject: input.subject,
+        body: input.body,
+        recordedByUserId: ctx.user.id,
+        recordedByName: ctx.user.name || "System",
+        gmailMessageId: result.messageId,
+      });
+      // Update reply count
+      await db.update(facilityEnquiries).set({
+        formSentAt: new Date(),
+        formSentBy: ctx.user.id,
+        replyCount: sql`${facilityEnquiries.replyCount} + 1`,
+        lastReplyAt: new Date(),
+      }).where(eq(facilityEnquiries.id, input.enquiryId));
+      // Link to comms if requested
+      if (input.linkToComms) {
+        // Find or create a Bookings Enquiries comm channel
+        let channelId = enquiry.commChannelId;
+        if (!channelId) {
+          const [existing] = await db.select().from(commChannels).where(eq(commChannels.name, "Bookings Enquiries")).limit(1);
+          channelId = existing?.id;
+        }
+        if (channelId) {
+          const [msg] = await db.insert(commMessages).values({
+            channelId,
+            direction: "sent",
+            fromName: ctx.user.name || "AQS",
+            fromEmail: process.env.GMAIL_FROM_EMAIL || "",
+            toEmailsJson: JSON.stringify([{ name: enquiry.contactName, email: enquiry.contactEmail }]),
+            subject: input.subject,
+            body: input.body,
+            sendStatus: result.success ? "sent" : "failed",
+            sentAt: new Date(),
+          });
+          if (!enquiry.commChannelId) {
+            await db.update(facilityEnquiries).set({ commChannelId: channelId }).where(eq(facilityEnquiries.id, input.enquiryId));
+          }
+        }
+      }
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "email_sent",
+        description: `Email sent to ${enquiry.contactEmail}: ${input.subject}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { success: result.success, messageId: result.messageId, error: result.error };
+    }),
+
+  // ── Add Reply (manual / scanned) ──────────────────────────────────────────────
+  addEnquiryReply: protectedProcedure
+    .input(z.object({
+      enquiryId: z.number(),
+      direction: z.enum(["sent", "received"]).default("received"),
+      method: z.enum(["email", "whatsapp", "phone", "in_person", "manual_entry", "scanned"]),
+      fromName: z.string().optional(),
+      fromEmail: z.string().optional(),
+      fromPhone: z.string().optional(),
+      subject: z.string().optional(),
+      body: z.string(),
+      scanUrl: z.string().optional(),
+      receivedAt: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.insert(enquiryReplies).values({
+        enquiryId: input.enquiryId,
+        direction: input.direction,
+        method: input.method,
+        fromName: input.fromName,
+        fromEmail: input.fromEmail,
+        fromPhone: input.fromPhone,
+        subject: input.subject,
+        body: input.body,
+        scanUrl: input.scanUrl,
+        recordedByUserId: ctx.user.id,
+        recordedByName: ctx.user.name || "System",
+        receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date(),
+      });
+      await db.update(facilityEnquiries).set({
+        replyCount: sql`${facilityEnquiries.replyCount} + 1`,
+        lastReplyAt: new Date(),
+        formReturnedAt: input.direction === "received" ? new Date() : undefined,
+      }).where(eq(facilityEnquiries.id, input.enquiryId));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "reply_added",
+        description: `${input.direction === "received" ? "Reply received" : "Message sent"} via ${input.method}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { success: true };
+    }),
+
+  // ── List Replies ──────────────────────────────────────────────────────────────
+  listEnquiryReplies: protectedProcedure
+    .input(z.object({ enquiryId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      return db.select().from(enquiryReplies)
+        .where(eq(enquiryReplies.enquiryId, input.enquiryId))
+        .orderBy(desc(enquiryReplies.receivedAt));
+    }),
+
+  // ── Scan Reply (OCR) ──────────────────────────────────────────────────────────
+  scanReplyDocument: protectedProcedure
+    .input(z.object({ enquiryId: z.number(), fileBase64: z.string(), fileName: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const { invokeLLM } = await import("../_core/llm");
+      const buf = Buffer.from(input.fileBase64, "base64");
+      const ext = input.fileName.split(".").pop() || "jpg";
+      const mimeType = ext === "pdf" ? "application/pdf" : `image/${ext}`;
+      const key = `enquiry-replies/${Date.now()}-${input.fileName}`;
+      const { url } = await storagePut(key, buf, mimeType);
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "You are an AI assistant that reads scanned reply documents or emails from clients regarding facility booking enquiries. Extract the key information and return a JSON object with: senderName (string), senderEmail (string|null), senderPhone (string|null), subject (string), body (string — full text of the reply), receivedDate (YYYY-MM-DD or null)." },
+          { role: "user", content: [{ type: "image_url", image_url: { url, detail: "high" } }, { type: "text", text: "Extract the reply information from this document." }] },
+        ],
+        response_format: { type: "json_schema", json_schema: { name: "reply_extract", strict: true, schema: { type: "object", properties: { senderName: { type: "string" }, senderEmail: { type: ["string", "null"] }, senderPhone: { type: ["string", "null"] }, subject: { type: "string" }, body: { type: "string" }, receivedDate: { type: ["string", "null"] } }, required: ["senderName", "senderEmail", "senderPhone", "subject", "body", "receivedDate"], additionalProperties: false } } },
+      });
+      const extracted = JSON.parse(response.choices[0].message.content as string);
+      return { ...extracted, scanUrl: url };
+    }),
+
+  // ── Get WhatsApp Link ─────────────────────────────────────────────────────────
+  getWhatsAppLink: protectedProcedure
+    .input(z.object({ enquiryId: z.number(), message: z.string().optional() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [enquiry] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.enquiryId));
+      if (!enquiry) throw new TRPCError({ code: "NOT_FOUND" });
+      const phone = enquiry.contactPhone?.replace(/[^0-9+]/g, "") || "";
+      const msg = input.message || `AssalamuAlaikum ${enquiry.contactName},\n\nThank you for your enquiry regarding our facilities. We are pleased to follow up with you regarding your booking request.\n\nPlease let us know if you have any questions.\n\nJazakAllah Khair,\nAbdullah Quilliam Society`;
+      const waLink = `https://wa.me/${phone.replace("+", "")}?text=${encodeURIComponent(msg)}`;
+      return { phone, waLink, contactName: enquiry.contactName };
+    }),
 });
+

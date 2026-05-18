@@ -81,6 +81,14 @@ function EnquiryFormDialog({ rooms, onClose, onCreated, prefill }: { rooms: any[
     foodHeadcount: prefill?.foodHeadcount || "",
     cateringType: prefill?.cateringType || "none",
     teaCoffeeRequired: prefill?.teaCoffeeRequired || false,
+    foodPreferences: prefill?.foodPreferences || "",
+    halalRequired: prefill?.halalRequired !== undefined ? prefill.halalRequired : true,
+    vegetarianRequired: prefill?.vegetarianRequired || false,
+    veganRequired: prefill?.veganRequired || false,
+    allergyNotes: prefill?.allergyNotes || "",
+    menuChoices: prefill?.menuChoices || "",
+    linenHireRequired: prefill?.linenHireRequired || "hire",
+    linenHireNotes: prefill?.linenHireNotes || "",
     tablesRequired: prefill?.tablesRequired || false,
     tablesCount: prefill?.tablesCount || "",
     chairsRequired: prefill?.chairsRequired || false,
@@ -256,22 +264,53 @@ function EnquiryFormDialog({ rooms, onClose, onCreated, prefill }: { rooms: any[
                   <Label className="text-sm">Food required</Label>
                 </div>
                 {form.foodRequired && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs text-white/70">Headcount for food</Label>
-                      <Input type="number" className="bg-white/5 border-white/10" value={form.foodHeadcount} onChange={e => set("foodHeadcount", e.target.value)} />
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-white/70">Headcount for food</Label>
+                        <Input type="number" className="bg-white/5 border-white/10" value={form.foodHeadcount} onChange={e => set("foodHeadcount", e.target.value)} />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-white/70">Catering Type</Label>
+                        <Select value={form.cateringType} onValueChange={v => set("cateringType", v)}>
+                          <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-[#0d1b2a] border-white/10 text-white">
+                            <SelectItem value="internal">Internal (AQS Catering)</SelectItem>
+                            <SelectItem value="external">External Caterer</SelectItem>
+                            <SelectItem value="self_catering">Self Catering</SelectItem>
+                            <SelectItem value="none">None</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div>
-                      <Label className="text-xs text-white/70">Catering Type</Label>
-                      <Select value={form.cateringType} onValueChange={v => set("cateringType", v)}>
-                        <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
-                        <SelectContent className="bg-[#0d1b2a] border-white/10 text-white">
-                          <SelectItem value="internal">Internal</SelectItem>
-                          <SelectItem value="external">External</SelectItem>
-                          <SelectItem value="self_catering">Self Catering</SelectItem>
-                          <SelectItem value="none">None</SelectItem>
-                        </SelectContent>
-                      </Select>
+                    <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 space-y-2">
+                      <p className="text-xs font-semibold text-orange-300">Dietary Preferences</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="flex items-center gap-2">
+                          <Switch checked={form.halalRequired} onCheckedChange={v => set("halalRequired", v)} />
+                          <Label className="text-xs">Halal</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch checked={form.vegetarianRequired} onCheckedChange={v => set("vegetarianRequired", v)} />
+                          <Label className="text-xs">Vegetarian</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch checked={form.veganRequired} onCheckedChange={v => set("veganRequired", v)} />
+                          <Label className="text-xs">Vegan</Label>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-white/70">Food Preferences / Special Requests</Label>
+                        <Textarea className="bg-white/5 border-white/10 text-sm" rows={2} value={form.foodPreferences} onChange={e => set("foodPreferences", e.target.value)} placeholder="e.g. No nuts, gluten-free options needed..." />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-white/70">Allergy Notes</Label>
+                        <Input className="bg-white/5 border-white/10 text-sm" value={form.allergyNotes} onChange={e => set("allergyNotes", e.target.value)} placeholder="e.g. Nut allergy for 3 guests" />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-white/70">Menu Choices (if known)</Label>
+                        <Textarea className="bg-white/5 border-white/10 text-sm" rows={2} value={form.menuChoices} onChange={e => set("menuChoices", e.target.value)} placeholder="e.g. Starter: soup, Main: chicken biryani..." />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -279,6 +318,27 @@ function EnquiryFormDialog({ rooms, onClose, onCreated, prefill }: { rooms: any[
                   <Switch checked={form.teaCoffeeRequired} onCheckedChange={v => set("teaCoffeeRequired", v)} />
                   <Label className="text-sm">Tea & coffee facilities required</Label>
                 </div>
+              </div>
+              <Separator className="bg-white/10" />
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 space-y-3">
+                <p className="text-xs font-bold text-red-300 uppercase tracking-wide">⚠ Linen & Table Covers — Mandatory Chargeable Service</p>
+                <p className="text-xs text-white/60">All events must either hire linen from AQS (chargeable) or bring their own linen and table covers.</p>
+                <div>
+                  <Label className="text-xs text-white/70">Linen Option *</Label>
+                  <Select value={form.linenHireRequired} onValueChange={v => set("linenHireRequired", v)}>
+                    <SelectTrigger className="bg-white/5 border-white/10"><SelectValue /></SelectTrigger>
+                    <SelectContent className="bg-[#0d1b2a] border-white/10 text-white">
+                      <SelectItem value="hire">Hire from AQS (chargeable)</SelectItem>
+                      <SelectItem value="own">Own linen / table covers</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.linenHireRequired === "hire" && (
+                  <div>
+                    <Label className="text-xs text-white/70">Linen Notes (colours, style, quantity)</Label>
+                    <Textarea className="bg-white/5 border-white/10 text-sm" rows={2} value={form.linenHireNotes} onChange={e => set("linenHireNotes", e.target.value)} placeholder="e.g. White tablecloths x20, gold chair sashes x150" />
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -479,6 +539,32 @@ function EnquiryDetailDialog({ enquiryId, rooms, onClose, onRefresh }: { enquiry
   const uploadEvidence = trpc.facilities.uploadPaymentEvidence.useMutation({ onSuccess: () => { toast.success("Evidence uploaded"); refetch(); } });
   const convertToBooking = trpc.facilities.convertToBooking.useMutation({ onSuccess: () => { toast.success("Converted to booking!"); refetch(); onRefresh(); } });
 
+  // New comms mutations
+  const generatePdf = trpc.facilities.generateEnquiryPdf.useMutation({ onSuccess: (r) => { toast.success("PDF generated!"); window.open(r.url, "_blank"); refetch(); } });
+  const syncDrive = trpc.facilities.syncEnquiryToDrive.useMutation({ onSuccess: (r) => { toast.success("Synced to Google Drive!"); window.open(r.webViewLink, "_blank"); refetch(); } });
+  const sendEmail = trpc.facilities.sendEnquiryEmail.useMutation({ onSuccess: () => { toast.success("Email sent!"); setShowEmailCompose(false); refetch(); repliesQuery.refetch(); } });
+  const addReply = trpc.facilities.addEnquiryReply.useMutation({ onSuccess: () => { toast.success("Reply recorded"); setShowAddReply(false); repliesQuery.refetch(); refetch(); } });
+  const scanReply = trpc.facilities.scanReplyDocument.useMutation({ onSuccess: (r) => { setReplyForm(f => ({ ...f, fromName: r.senderName || "", fromEmail: r.senderEmail || "", fromPhone: r.senderPhone || "", subject: r.subject || "", body: r.body || "", scanUrl: r.scanUrl || "", receivedAt: r.receivedDate || "" })); toast.success("Document scanned — review and save"); } });
+  const repliesQuery = trpc.facilities.listEnquiryReplies.useQuery({ enquiryId: enquiryId });
+  const waQuery = trpc.facilities.getWhatsAppLink.useQuery({ enquiryId: enquiryId }, { enabled: false });
+
+  const [showEmailCompose, setShowEmailCompose] = useState(false);
+  const [showAddReply, setShowAddReply] = useState(false);
+  const [emailForm, setEmailForm] = useState({ subject: "", body: "", attachPdf: true });
+  const [replyForm, setReplyForm] = useState({ direction: "received" as string, method: "email" as string, fromName: "", fromEmail: "", fromPhone: "", subject: "", body: "", scanUrl: "", receivedAt: "" });
+  const scanFileRef = useRef<HTMLInputElement>(null);
+
+  const handleScanReply = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(",")[1];
+      scanReply.mutate({ enquiryId: enquiryId, fileBase64: base64, fileName: file.name });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [payForm, setPayForm] = useState({ paymentType: "deposit" as string, amount: "", dueDate: "", paymentMethod: "bank_transfer" as string, reference: "" });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -576,27 +662,158 @@ function EnquiryDetailDialog({ enquiryId, rooms, onClose, onRefresh }: { enquiry
 
           {/* Communications */}
           <Card className="bg-white/5 border-white/10">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm text-indigo-300">Communications</CardTitle>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="h-7 text-xs border-white/20 text-white hover:bg-white/10" onClick={() => sendForm.mutate({ enquiryId: data.id, method: "email" })} disabled={sendForm.isPending}>
-                  <Send className="w-3 h-3 mr-1" /> Email Form
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-indigo-300">Communications & Form</CardTitle>
+              {/* Action row */}
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10" onClick={() => generatePdf.mutate({ enquiryId: data.id })} disabled={generatePdf.isPending}>
+                  <FileText className="w-3 h-3 mr-1" /> {generatePdf.isPending ? "Generating..." : "Generate PDF"}
+                </Button>
+                {data.pdfUrl && (
+                  <>
+                    <a href={data.pdfUrl} target="_blank" rel="noreferrer">
+                      <Button size="sm" variant="outline" className="h-7 text-xs border-white/20 text-white hover:bg-white/10">
+                        <Upload className="w-3 h-3 mr-1" /> Download PDF
+                      </Button>
+                    </a>
+                    <Button size="sm" variant="outline" className="h-7 text-xs border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10" onClick={() => syncDrive.mutate({ enquiryId: data.id })} disabled={syncDrive.isPending}>
+                      <ArrowRight className="w-3 h-3 mr-1" /> {syncDrive.isPending ? "Syncing..." : "Sync to Drive"}
+                    </Button>
+                  </>
+                )}
+                <Button size="sm" variant="outline" className="h-7 text-xs border-white/20 text-white hover:bg-white/10" onClick={() => { setEmailForm({ subject: `Facilities Booking Enquiry — ${data.contactName}`, body: `AssalamuAlaikum wa Rahmatullahi wa Barakatuh,\n\nDear ${data.contactName},\n\nThank you for your enquiry regarding ${EVENT_TYPES.find(t => t.value === data.eventType)?.label || "your event"}${data.eventDate ? ` on ${data.eventDate}` : ""}.\n\nPlease find attached our booking enquiry form. Kindly complete and return at your earliest convenience.\n\nJazakAllah Khair,\nAQS Facilities Team`, attachPdf: true }); setShowEmailCompose(true); }}>
+                  <Send className="w-3 h-3 mr-1" /> Compose Email
                 </Button>
                 <Button size="sm" variant="outline" className="h-7 text-xs border-green-500/30 text-green-300 hover:bg-green-500/10" onClick={() => {
-                  const phone = data.contactPhone?.replace(/\s/g, "").replace(/^0/, "44");
-                  const msg = encodeURIComponent(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh,\n\nDear ${data.contactName},\n\nThank you for your enquiry regarding ${EVENT_TYPES.find(t => t.value === data.eventType)?.label || "your event"}${data.eventDate ? ` on ${data.eventDate}` : ""}.\n\nPlease find attached our booking enquiry form. Kindly complete and return at your earliest convenience.\n\nJazakAllah Khair,\nAQS Facilities Team`);
+                  const phone = (data.contactPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "44");
+                  const msg = encodeURIComponent(`AssalamuAlaikum wa Rahmatullahi wa Barakatuh,\n\nDear ${data.contactName},\n\nThank you for your facilities booking enquiry. We will be in touch shortly.\n\nJazakAllah Khair,\nAQS Facilities Team`);
                   window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
-                  sendForm.mutate({ enquiryId: data.id, method: "whatsapp" });
                 }}>
                   <MessageSquare className="w-3 h-3 mr-1" /> WhatsApp
                 </Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs border-purple-500/30 text-purple-300 hover:bg-purple-500/10" onClick={() => setShowAddReply(true)}>
+                  <Plus className="w-3 h-3 mr-1" /> Add Reply
+                </Button>
               </div>
             </CardHeader>
-            <CardContent className="text-xs">
-              {data.formSentAt ? (
-                <p className="text-green-300"><CheckCircle2 className="w-3 h-3 inline mr-1" />Form sent on {fmtDt(data.formSentAt)}</p>
-              ) : (
-                <p className="text-white/50">Form not yet sent</p>
+            <CardContent className="space-y-3 text-xs">
+              {/* Status row */}
+              <div className="flex flex-wrap gap-3">
+                {data.formSentAt ? (
+                  <span className="text-green-300"><CheckCircle2 className="w-3 h-3 inline mr-1" />Form sent {fmtDt(data.formSentAt)}</span>
+                ) : (
+                  <span className="text-white/50">Form not yet sent</span>
+                )}
+                {data.pdfGeneratedAt && <span className="text-indigo-300"><FileText className="w-3 h-3 inline mr-1" />PDF {fmtDt(data.pdfGeneratedAt)}</span>}
+                {data.driveSyncedAt && <a href={data.driveFileUrl || "#"} target="_blank" className="text-yellow-300 underline"><ArrowRight className="w-3 h-3 inline mr-1" />Drive {fmtDt(data.driveSyncedAt)}</a>}
+                {(data.replyCount || 0) > 0 && <span className="text-purple-300"><MessageSquare className="w-3 h-3 inline mr-1" />{data.replyCount} message{data.replyCount !== 1 ? "s" : ""}</span>}
+              </div>
+              {/* Email compose panel */}
+              {showEmailCompose && (
+                <div className="p-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 space-y-2">
+                  <p className="text-xs font-semibold text-indigo-300">Compose Email to {data.contactEmail || "(no email)"}</p>
+                  <div>
+                    <Label className="text-xs text-white/70">Subject</Label>
+                    <Input className="bg-white/5 border-white/10 text-xs" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-white/70">Body</Label>
+                    <Textarea className="bg-white/5 border-white/10 text-xs" rows={5} value={emailForm.body} onChange={e => setEmailForm(f => ({ ...f, body: e.target.value }))} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={emailForm.attachPdf} onCheckedChange={v => setEmailForm(f => ({ ...f, attachPdf: v }))} />
+                    <Label className="text-xs">Include PDF link (if generated)</Label>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-xs" onClick={() => sendEmail.mutate({ enquiryId: data.id, subject: emailForm.subject, body: emailForm.body, attachPdf: emailForm.attachPdf, linkToComms: true })} disabled={sendEmail.isPending || !data.contactEmail}>
+                      {sendEmail.isPending ? "Sending..." : "Send Email"}
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10 text-xs" onClick={() => setShowEmailCompose(false)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+              {/* Add Reply panel */}
+              {showAddReply && (
+                <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 space-y-2">
+                  <p className="text-xs font-semibold text-purple-300">Record Reply / Communication</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs text-white/70">Direction</Label>
+                      <Select value={replyForm.direction} onValueChange={v => setReplyForm(f => ({ ...f, direction: v }))}>
+                        <SelectTrigger className="bg-white/5 border-white/10 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-[#0d1b2a] border-white/10 text-white">
+                          <SelectItem value="received">Received (from client)</SelectItem>
+                          <SelectItem value="sent">Sent (by us)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-white/70">Method</Label>
+                      <Select value={replyForm.method} onValueChange={v => setReplyForm(f => ({ ...f, method: v }))}>
+                        <SelectTrigger className="bg-white/5 border-white/10 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-[#0d1b2a] border-white/10 text-white">
+                          <SelectItem value="email">Email</SelectItem>
+                          <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                          <SelectItem value="phone">Phone Call</SelectItem>
+                          <SelectItem value="in_person">In Person</SelectItem>
+                          <SelectItem value="manual_entry">Manual Entry</SelectItem>
+                          <SelectItem value="scanned">Scanned Document</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-white/70">From Name</Label>
+                      <Input className="bg-white/5 border-white/10 text-xs" value={replyForm.fromName} onChange={e => setReplyForm(f => ({ ...f, fromName: e.target.value }))} placeholder={data.contactName} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-white/70">Date Received</Label>
+                      <Input type="date" className="bg-white/5 border-white/10 text-xs" value={replyForm.receivedAt} onChange={e => setReplyForm(f => ({ ...f, receivedAt: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-white/70">Subject</Label>
+                    <Input className="bg-white/5 border-white/10 text-xs" value={replyForm.subject} onChange={e => setReplyForm(f => ({ ...f, subject: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Label className="text-xs text-white/70">Message / Notes</Label>
+                    <Textarea className="bg-white/5 border-white/10 text-xs" rows={3} value={replyForm.body} onChange={e => setReplyForm(f => ({ ...f, body: e.target.value }))} placeholder="Enter the reply content or notes from the call..." />
+                  </div>
+                  {replyForm.method === "scanned" && (
+                    <div>
+                      <Label className="text-xs text-white/70">Scan Document (AI will extract text)</Label>
+                      <div className="flex gap-2 items-center">
+                        <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10 text-xs" onClick={() => scanFileRef.current?.click()} disabled={scanReply.isPending}>
+                          <Camera className="w-3 h-3 mr-1" /> {scanReply.isPending ? "Scanning..." : "Upload & Scan"}
+                        </Button>
+                        {replyForm.scanUrl && <span className="text-green-300 text-xs">✓ Scanned</span>}
+                        <input ref={scanFileRef} type="file" className="hidden" accept="image/*,.pdf" onChange={handleScanReply} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-xs" onClick={() => addReply.mutate({ enquiryId: data.id, direction: replyForm.direction as any, method: replyForm.method as any, fromName: replyForm.fromName || data.contactName, fromEmail: replyForm.fromEmail, fromPhone: replyForm.fromPhone, subject: replyForm.subject, body: replyForm.body, scanUrl: replyForm.scanUrl || undefined, receivedAt: replyForm.receivedAt || undefined })} disabled={addReply.isPending || !replyForm.body}>
+                      {addReply.isPending ? "Saving..." : "Save Reply"}
+                    </Button>
+                    <Button size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10 text-xs" onClick={() => setShowAddReply(false)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+              {/* Reply history */}
+              {repliesQuery.data && repliesQuery.data.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-white/60">Message History</p>
+                  {repliesQuery.data.map((r: any) => (
+                    <div key={r.id} className={`p-2 rounded-lg text-xs ${r.direction === "sent" ? "bg-indigo-500/10 border border-indigo-500/20 ml-4" : "bg-white/5 border border-white/10 mr-4"}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`font-semibold ${r.direction === "sent" ? "text-indigo-300" : "text-white"}`}>{r.direction === "sent" ? "→ Sent" : "← Received"} via {r.method}</span>
+                        <span className="text-white/40">{fmtDt(r.receivedAt)}</span>
+                      </div>
+                      {r.subject && <p className="text-white/70 mt-0.5">Re: {r.subject}</p>}
+                      <p className="text-white/80 mt-1 whitespace-pre-wrap line-clamp-3">{r.body}</p>
+                      {r.scanUrl && <a href={r.scanUrl} target="_blank" className="text-indigo-300 underline text-xs">View scanned document</a>}
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

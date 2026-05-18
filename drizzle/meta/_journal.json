@@ -589,6 +589,20 @@
       "when": 1779115212841,
       "tag": "0083_lush_rictor",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "5",
+      "when": 1779117185972,
+      "tag": "0084_flashy_fallen_one",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "5",
+      "when": 1779117339448,
+      "tag": "0085_overjoyed_blindfold",
+      "breakpoints": true
     }
   ]
 }

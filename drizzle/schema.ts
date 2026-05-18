@@ -2458,6 +2458,16 @@ export const facilityEnquiries = mysqlTable("facility_enquiries", {
   foodHeadcount: int("foodHeadcount"),
   cateringType: mysqlEnum("cateringType", ["internal", "external", "self_catering", "none"]).default("none"),
   teaCoffeeRequired: boolean("teaCoffeeRequired").default(false).notNull(),
+  // Food preferences
+  foodPreferences: text("foodPreferences"),
+  halalRequired: boolean("halalRequired").default(true).notNull(),
+  vegetarianRequired: boolean("vegetarianRequired").default(false).notNull(),
+  veganRequired: boolean("veganRequired").default(false).notNull(),
+  allergyNotes: text("allergyNotes"),
+  menuChoices: text("menuChoices"),
+  // Linen hire (mandatory chargeable)
+  linenHireRequired: mysqlEnum("linenHireRequired", ["hire", "own"]).default("hire").notNull(),
+  linenHireNotes: text("linenHireNotes"),
   // Equipment & Furniture
   tablesRequired: boolean("tablesRequired").default(false).notNull(),
   tablesCount: int("tablesCount"),
@@ -2490,6 +2500,18 @@ export const facilityEnquiries = mysqlTable("facility_enquiries", {
   formSentAt: timestamp("formSentAt"),
   formSentBy: int("formSentBy"),
   formReturnedAt: timestamp("formReturnedAt"),
+  // PDF & Drive sync
+  pdfUrl: text("pdfUrl"),
+  pdfGeneratedAt: timestamp("pdfGeneratedAt"),
+  driveFileId: varchar("driveFileId", { length: 200 }),
+  driveFileUrl: text("driveFileUrl"),
+  driveSyncedAt: timestamp("driveSyncedAt"),
+  // Reply tracking
+  lastReplyAt: timestamp("lastReplyAt"),
+  replyCount: int("replyCount").default(0).notNull(),
+  // Comms linking
+  commChannelId: int("commChannelId"),
+  commMessageIds: text("commMessageIds"),
   // Linked booking (once confirmed)
   bookingId: int("bookingId"),
   // General
@@ -2558,3 +2580,32 @@ export const facilityBuildings = mysqlTable("facility_buildings", {
 });
 export type FacilityBuilding = typeof facilityBuildings.$inferSelect;
 export type InsertFacilityBuilding = typeof facilityBuildings.$inferInsert;
+
+// ─── ENQUIRY REPLIES ──────────────────────────────────────────────────────────
+export const enquiryReplies = mysqlTable("enquiry_replies", {
+  id: int("id").autoincrement().primaryKey(),
+  enquiryId: int("enquiryId").notNull(),
+  // direction: "sent" = we sent it, "received" = reply from client
+  direction: mysqlEnum("direction", ["sent", "received"]).default("received").notNull(),
+  method: mysqlEnum("method", ["email", "whatsapp", "phone", "in_person", "manual_entry", "scanned"]).default("email").notNull(),
+  fromName: varchar("fromName", { length: 200 }),
+  fromEmail: varchar("fromEmail", { length: 320 }),
+  fromPhone: varchar("fromPhone", { length: 30 }),
+  subject: varchar("subject", { length: 500 }),
+  body: text("body"),
+  // Scanned document
+  scanUrl: text("scanUrl"),
+  // Comms linking
+  commMessageId: int("commMessageId"),
+  // Gmail thread
+  gmailMessageId: varchar("gmailMessageId", { length: 200 }),
+  gmailThreadId: varchar("gmailThreadId", { length: 200 }),
+  // Metadata
+  isRead: boolean("isRead").default(false).notNull(),
+  recordedByUserId: int("recordedByUserId"),
+  recordedByName: varchar("recordedByName", { length: 200 }),
+  receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type EnquiryReply = typeof enquiryReplies.$inferSelect;
+export type InsertEnquiryReply = typeof enquiryReplies.$inferInsert;

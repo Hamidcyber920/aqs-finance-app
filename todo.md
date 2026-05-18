@@ -2559,3 +2559,24 @@
 - [x] Day range selector (3/7/14/30 days), building filter, refresh button
 - [x] Add "Upcoming Bookings" to sidebar navigation under OPERATIONS
 - [x] Auto-refresh every 60 seconds
+
+## Facilities Enquiry Enhancements (May 2026)
+
+- [x] DB: Add food preferences fields (halalRequired, vegetarianRequired, veganRequired, allergyNotes, menuChoices, foodPreferences) to facility_enquiries
+- [x] DB: Add linen hire fields (linenHireRequired enum hire/own, linenHireNotes) to facility_enquiries
+- [x] DB: Add PDF tracking fields (pdfUrl, pdfGeneratedAt, driveFileId, driveFileUrl, driveSyncedAt) to facility_enquiries
+- [x] DB: Add reply tracking fields (replyCount, lastReplyAt, commChannelId) to facility_enquiries
+- [x] DB: Create enquiry_replies table (direction, method, from details, body, scanUrl, gmailMessageId)
+- [x] Backend: generateEnquiryPdf procedure - builds full A4 PDF with all enquiry fields including food preferences and linen section
+- [x] Backend: syncEnquiryToDrive procedure - uploads PDF to Google Drive folder
+- [x] Backend: sendEnquiryEmail procedure - sends via Gmail, records as sent reply, links to comms channel
+- [x] Backend: addEnquiryReply procedure - manually record received/sent messages (email, WhatsApp, phone, in-person, scanned)
+- [x] Backend: listEnquiryReplies procedure - fetch all replies for an enquiry
+- [x] Backend: scanReplyDocument procedure - OCR scan a document/image and extract reply info via AI
+- [x] Backend: getWhatsAppLink procedure - generate wa.me link with pre-filled message
+- [x] UI: Enquiry form Step 2 - food preferences section with Halal/Vegetarian/Vegan toggles, allergy notes, menu choices
+- [x] UI: Enquiry form Step 2 - mandatory linen hire section (hire from AQS / own linen) with notes
+- [x] UI: EnquiryDetailDialog - Communications & Form card with Generate PDF, Download PDF, Sync to Drive, Compose Email, WhatsApp, Add Reply buttons
+- [x] UI: EnquiryDetailDialog - Email compose panel with subject/body/attach PDF toggle
+- [x] UI: EnquiryDetailDialog - Add Reply panel with direction/method/from/body/scan upload
+- [x] UI: EnquiryDetailDialog - Message history thread view showing sent/received messages
