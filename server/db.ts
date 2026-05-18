@@ -257,8 +257,11 @@ export async function seedDefaultCategories() {
     { name: "Cleaning & Hygiene", color: "#14b8a6", icon: "sparkles" },
     { name: "Other", color: "#6b7280", icon: "tag" },
   ];
+  // Now that expense_categories.name has a UNIQUE constraint, onDuplicateKeyUpdate
+  // correctly updates instead of inserting a new row.
   for (const cat of defaults) {
-    await db.insert(expenseCategories).values(cat).onDuplicateKeyUpdate({ set: { color: cat.color } });
+    await db.insert(expenseCategories).values(cat)
+      .onDuplicateKeyUpdate({ set: { color: cat.color, icon: cat.icon } });
   }
 }
 

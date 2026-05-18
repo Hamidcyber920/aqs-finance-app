@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // ─── Colour palette ──────────────────────────────────────────────────────────
 const T = {
@@ -81,11 +82,18 @@ export default function CapturePage() {
 
   const saveCrmMutation = trpc.crm.saveScanToCRM.useMutation();
 
-  const { data: depts } = trpc.departments.list.useQuery();
+  const { data: depts, refetch: refetchDepts } = trpc.departments.list.useQuery();
+  const { data: categories } = trpc.categories.list.useQuery();
+  const createDeptMutation = trpc.departments.create.useMutation({
+    onSuccess: () => { refetchDepts(); setNewDeptName(""); setNewDeptOpen(false); toast.success("Department created"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const [newDeptOpen, setNewDeptOpen] = useState(false);
+  const [newDeptName, setNewDeptName] = useState("");
 
   // ── Form (for receipt save) ────────────────────────────────────────────────
   const { register, handleSubmit, setValue, reset } = useForm<any>({
-    defaultValues: { department: "Mosque" },
+    defaultValues: { department: "", categoryName: "" },
   });
 
   // ── Reset all state ────────────────────────────────────────────────────────
@@ -97,7 +105,7 @@ export default function CapturePage() {
     setMultiRecords([]);
     setSavedToCrm(false);
     uploadedUrlRef.current = "";
-    reset({ department: "Mosque" });
+    reset({ department: "", categoryName: "" });
   }, [reset]);
 
   // ── Step 1: File selected ──────────────────────────────────────────────────
@@ -540,15 +548,28 @@ export default function CapturePage() {
                     <Input {...register("vendor")} placeholder="Shop or supplier name"
                       style={{ marginTop: 4, background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40 }} />
                   </div>
-                  {depts && depts.length > 0 && (
-                    <div>
+                  <div>
+                    <Label style={{ fontSize: 11, color: T.muted, textTransform: "uppercase" }}>Category</Label>
+                    <select {...register("categoryName")}
+                      style={{ marginTop: 4, width: "100%", background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40, padding: "0 12px" }}>
+                      <option value="">— Select category —</option>
+                      {categories && Array.from(new Map(categories.map((c: any) => [c.name, c])).values()).map((c: any) => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
                       <Label style={{ fontSize: 11, color: T.muted, textTransform: "uppercase" }}>Department</Label>
-                      <select {...register("department")}
-                        style={{ marginTop: 4, width: "100%", background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40, padding: "0 12px" }}>
-                        {depts.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
-                      </select>
+                      <button type="button" onClick={() => setNewDeptOpen(true)}
+                        style={{ fontSize: 10, color: T.mint, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>+ New</button>
                     </div>
-                  )}
+                    <select {...register("department")}
+                      style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: `1px solid ${T.border}`, borderRadius: 10, color: T.white, height: 40, padding: "0 12px" }}>
+                      <option value="">— Select department —</option>
+                      {depts && depts.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    </select>
+                  </div>
                   <Button
                     type="submit"
                     disabled={createReceiptMutation.isPending}
@@ -591,6 +612,34 @@ export default function CapturePage() {
           </button>
         </div>
       )}
+
+      {/* ── New Department dialog ── */}
+      <Dialog open={newDeptOpen} onOpenChange={setNewDeptOpen}>
+        <DialogContent style={{ background: "#0D2137", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: "#fff" }}>Create New Department</DialogTitle>
+          </DialogHeader>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingTop: 8 }}>
+            <div>
+              <Label style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textTransform: "uppercase" }}>Department Name *</Label>
+              <Input
+                value={newDeptName}
+                onChange={e => setNewDeptName(e.target.value)}
+                placeholder="e.g. School, Community Centre…"
+                style={{ marginTop: 4, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 10, color: "#fff", height: 40 }}
+              />
+            </div>
+            <Button
+              onClick={() => { if (newDeptName.trim()) createDeptMutation.mutate({ name: newDeptName.trim() }); }}
+              disabled={!newDeptName.trim() || createDeptMutation.isPending}
+              style={{ background: "linear-gradient(135deg,#00C896,#00DDB0)", color: "#081526", fontWeight: 700, height: 44, borderRadius: 10, border: "none" }}
+            >
+              {createDeptMutation.isPending ? <Loader2 size={16} className="animate-spin mr-2" /> : null}
+              Create Department
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Empty state ── */}
       {!extracted && multiRecords.length === 0 && !isProcessing && !scanError && (

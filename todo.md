@@ -2486,6 +2486,13 @@
 - [x] Build compiles cleanly — no TypeScript errors
 - [x] Verify scanner works end-to-end on deployed site (user to test)
 
+## Duplicate Categories & Department Selector (May 2026)
+- [x] Clean up duplicate expense_categories rows in DB (keep one per name)
+- [x] Add unique constraint on expense_categories.name to prevent re-seeding duplicates
+- [x] Fix seedDefaultCategories to use INSERT IGNORE or check-before-insert
+- [x] Add department dropdown in Capture.tsx with create-new-department support
+- [x] Add category dropdown in Capture.tsx (deduplicated via Map by name)
+
 ## Image URL Not Saved Bugs (May 2026)
 - [x] Capture.tsx: S3 URL from upload was not stored — fixed by adding uploadedUrlRef and passing imageUrl to receipts.create
 - [x] BillsUtilities.tsx: billUrl from scan not passed to addBill — fixed by adding billUrl field to billForm state and setting it in onExtracted callback

@@ -102,7 +102,7 @@ export type Department = typeof departments.$inferSelect;
 export const expenseCategories = mysqlTable("expense_categories", {
   id: int("id").autoincrement().primaryKey(),
   departmentId: int("departmentId"),
-  name: varchar("name", { length: 100 }).notNull(),
+  name: varchar("name", { length: 100 }).notNull().unique(),
   color: varchar("color", { length: 20 }).notNull().default("#6366f1"),
   icon: varchar("icon", { length: 50 }).notNull().default("tag"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
