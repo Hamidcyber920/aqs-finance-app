@@ -937,6 +937,149 @@ function EnquiryDetailDialog({ enquiryId, rooms, onClose, onRefresh }: { enquiry
   );
 }
 
+// ─── Send Blank Form Dialog ──────────────────────────────────────────────────
+function SendBlankFormDialog({
+  savedPdfUrl, googleFormUrl, generateBlankPdf, sendBlankEmail, sendBlankSubject, setSendBlankSubject, onClose
+}: {
+  savedPdfUrl: string;
+  googleFormUrl: string;
+  generateBlankPdf: any;
+  sendBlankEmail: any;
+  sendBlankSubject: string;
+  setSendBlankSubject: (v: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [extraMsg, setExtraMsg] = useState("");
+  const [pdfReady, setPdfReady] = useState(!!savedPdfUrl);
+  const [localPdfUrl, setLocalPdfUrl] = useState(savedPdfUrl);
+
+  // Auto-generate PDF if not already available
+  const handleOpen = () => {
+    if (!localPdfUrl) {
+      generateBlankPdf.mutate(undefined, {
+        onSuccess: (data: { url: string }) => { setLocalPdfUrl(data.url); setPdfReady(true); },
+      });
+    } else {
+      setPdfReady(true);
+    }
+  };
+
+  // Trigger auto-generate on mount
+  useState(() => { handleOpen(); });
+
+  const buildWaMsg = () => {
+    let msg = `AssalamuAlaikum${name ? " " + name : ""},\n\nThank you for your interest in our facilities at the Abdullah Quilliam Society.\n\nPlease find our Facilities Booking Enquiry Form below:`;
+    if (localPdfUrl) msg += `\n\n\uD83D\uDCC4 Download & print the form:\n${localPdfUrl}`;
+    if (googleFormUrl) msg += `\n\n\uD83D\uDCBB Or complete it online:\n${googleFormUrl}`;
+    if (extraMsg) msg += `\n\n${extraMsg}`;
+    msg += `\n\nPlease complete and return it to us.\n\nJazakAllah Khair,\nAQS Facilities Team`;
+    return msg;
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md bg-[#0d1b2a] border-white/10 text-white max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="w-5 h-5 text-emerald-400" /> Send Blank Enquiry Form
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+
+          {/* PDF status */}
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+            {generateBlankPdf.isPending ? (
+              <><Clock className="w-4 h-4 text-yellow-400 animate-spin" /><span className="text-sm text-yellow-300">Preparing form PDF...</span></>
+            ) : localPdfUrl ? (
+              <><CheckCircle2 className="w-4 h-4 text-green-400" /><span className="text-sm text-green-300">Form PDF ready</span>
+                <Button size="sm" variant="outline" className="ml-auto border-green-500/40 text-green-300 hover:bg-green-500/10" onClick={() => window.open(localPdfUrl, "_blank")}>
+                  <Download className="w-3 h-3 mr-1" /> Preview
+                </Button>
+              </>
+            ) : (
+              <><FileText className="w-4 h-4 text-white/40" /><span className="text-sm text-white/50">No PDF yet</span>
+                <Button size="sm" variant="outline" className="ml-auto border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10" onClick={handleOpen}>
+                  Generate
+                </Button>
+              </>
+            )}
+          </div>
+
+          {/* Google Form status */}
+          {googleFormUrl ? (
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <ExternalLink className="w-4 h-4 text-blue-400" />
+              <span className="text-sm text-blue-300 flex-1 truncate">Google Form linked</span>
+              <Button size="sm" variant="outline" className="border-white/20 text-white/60 hover:bg-white/10" onClick={() => { navigator.clipboard.writeText(googleFormUrl); toast.success("Link copied!"); }}>
+                <Link className="w-3 h-3 mr-1" /> Copy
+              </Button>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+              No Google Form URL configured. Click the <Settings className="w-3 h-3 inline" /> settings icon to add one.
+            </div>
+          )}
+
+          {/* Single recipient block */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Recipient Details</p>
+            <div>
+              <Label className="text-xs text-white/60">Full Name</Label>
+              <Input className="bg-white/5 border-white/10 mt-1" placeholder="e.g. Ahmed Ali" value={name} onChange={e => setName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs text-white/60">Phone (with country code)</Label>
+                <Input className="bg-white/5 border-white/10 mt-1" placeholder="447700900000" value={phone} onChange={e => setPhone(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-white/60">Email Address</Label>
+                <Input type="email" className="bg-white/5 border-white/10 mt-1" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-white/60">Additional Note (optional)</Label>
+              <Textarea className="bg-white/5 border-white/10 mt-1 text-sm" rows={2} placeholder="Any extra message to include..." value={extraMsg} onChange={e => setExtraMsg(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Send buttons */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              disabled={!phone || !localPdfUrl}
+              onClick={() => {
+                const cleaned = phone.replace(/[^0-9]/g, "");
+                window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(buildWaMsg())}`, "_blank");
+              }}
+            >
+              <MessageCircle className="w-4 h-4 mr-1" /> WhatsApp
+            </Button>
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700"
+              disabled={!email || !localPdfUrl || sendBlankEmail.isPending}
+              onClick={() => sendBlankEmail.mutate({
+                toEmail: email,
+                toName: name || email,
+                subject: sendBlankSubject,
+                body: extraMsg || undefined,
+                pdfUrl: localPdfUrl || undefined,
+                googleFormUrl: googleFormUrl || undefined,
+              })}
+            >
+              <Mail className="w-4 h-4 mr-1" /> {sendBlankEmail.isPending ? "Sending..." : "Send Email"}
+            </Button>
+          </div>
+          <p className="text-xs text-white/40 text-center">Both buttons include the PDF link{googleFormUrl ? " and Google Form link" : ""}.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Main Enquiries Tab Component ────────────────────────────────────────────
 export default function FacilitiesEnquiries({ rooms }: { rooms: any[] }) {
   const [showNewEnquiry, setShowNewEnquiry] = useState(false);
@@ -1079,106 +1222,15 @@ export default function FacilitiesEnquiries({ rooms }: { rooms: any[] }) {
 
       {/* Send Blank Form Dialog */}
       {showSendBlankForm && (
-        <Dialog open onOpenChange={() => setShowSendBlankForm(false)}>
-          <DialogContent className="max-w-lg bg-[#0d1b2a] border-white/10 text-white max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle className="flex items-center gap-2"><FileText className="w-5 h-5 text-emerald-400" /> Send Blank Enquiry Form</DialogTitle></DialogHeader>
-            <div className="space-y-4 py-2">
-              {/* PDF Section */}
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Blank PDF Form</p>
-                <div className="flex gap-2 flex-wrap">
-                  <Button size="sm" variant="outline" className="border-indigo-500/40 text-indigo-300 hover:bg-indigo-500/10" onClick={() => generateBlankPdf.mutate()} disabled={generateBlankPdf.isPending}>
-                    <FileText className="w-4 h-4 mr-1" /> {generateBlankPdf.isPending ? "Generating..." : "Generate PDF"}
-                  </Button>
-                  {savedPdfUrl && (
-                    <Button size="sm" variant="outline" className="border-green-500/40 text-green-300 hover:bg-green-500/10" onClick={() => window.open(savedPdfUrl, "_blank")}>
-                      <Download className="w-4 h-4 mr-1" /> Download PDF
-                    </Button>
-                  )}
-                </div>
-                {savedPdfUrl && <p className="text-xs text-white/40 break-all">{savedPdfUrl.substring(0, 70)}...</p>}
-              </div>
-
-              {/* Google Form Section */}
-              {googleFormUrl ? (
-                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-                  <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Online Google Form</p>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button size="sm" variant="outline" className="border-blue-500/40 text-blue-300 hover:bg-blue-500/10" onClick={() => window.open(googleFormUrl, "_blank")}>
-                      <ExternalLink className="w-4 h-4 mr-1" /> Open Google Form
-                    </Button>
-                    <Button size="sm" variant="outline" className="border-white/20 text-white/60 hover:bg-white/10" onClick={() => { navigator.clipboard.writeText(googleFormUrl); toast.success("Link copied!"); }}>
-                      <Link className="w-4 h-4 mr-1" /> Copy Link
-                    </Button>
-                  </div>
-                  <p className="text-xs text-white/40 break-all">{googleFormUrl.substring(0, 70)}...</p>
-                </div>
-              ) : (
-                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
-                  No Google Form URL configured. Click the <Settings className="w-3 h-3 inline" /> settings icon to add one.
-                </div>
-              )}
-
-              {/* WhatsApp Quick Send */}
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Send via WhatsApp</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs text-white/60">Recipient Name</Label>
-                    <Input className="bg-white/5 border-white/10 mt-1 text-sm" placeholder="e.g. Ahmed Ali" value={sendBlankTo.name} onChange={e => setSendBlankTo(p => ({ ...p, name: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-white/60">Phone (with country code)</Label>
-                    <Input className="bg-white/5 border-white/10 mt-1 text-sm" placeholder="447700900000" value={sendBlankTo.phone} onChange={e => setSendBlankTo(p => ({ ...p, phone: e.target.value }))} />
-                  </div>
-                </div>
-                <Button size="sm" className="bg-green-600 hover:bg-green-700 w-full" disabled={!sendBlankTo.phone} onClick={() => {
-                  const phone = sendBlankTo.phone.replace(/[^0-9]/g, "");
-                  let msg = `AssalamuAlaikum${sendBlankTo.name ? " " + sendBlankTo.name : ""},\n\nThank you for your interest in our facilities at the Abdullah Quilliam Society.\n\nPlease find our Facilities Booking Enquiry Form below:`;
-                  if (savedPdfUrl) msg += `\n\n\ud83d\udcc4 Download form: ${savedPdfUrl}`;
-                  if (googleFormUrl) msg += `\n\n\ud83d\udcbb Complete online: ${googleFormUrl}`;
-                  msg += `\n\nPlease complete and return it to us.\n\nJazakAllah Khair,\nAQS Facilities Team`;
-                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
-                }}>
-                  <MessageCircle className="w-4 h-4 mr-1" /> Open WhatsApp
-                </Button>
-              </div>
-
-              {/* Email Send */}
-              <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-3">
-                <p className="text-xs font-semibold text-white/70 uppercase tracking-wider">Send via Email</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs text-white/60">Recipient Name</Label>
-                    <Input className="bg-white/5 border-white/10 mt-1 text-sm" placeholder="e.g. Ahmed Ali" value={sendBlankTo.name} onChange={e => setSendBlankTo(p => ({ ...p, name: e.target.value }))} />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-white/60">Email Address</Label>
-                    <Input type="email" className="bg-white/5 border-white/10 mt-1 text-sm" placeholder="email@example.com" value={sendBlankTo.email} onChange={e => setSendBlankTo(p => ({ ...p, email: e.target.value }))} />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-white/60">Subject</Label>
-                  <Input className="bg-white/5 border-white/10 mt-1 text-sm" value={sendBlankSubject} onChange={e => setSendBlankSubject(e.target.value)} />
-                </div>
-                <div>
-                  <Label className="text-xs text-white/60">Additional Message (optional)</Label>
-                  <Textarea className="bg-white/5 border-white/10 mt-1 text-sm" rows={3} placeholder="Any additional notes..." value={sendBlankBody} onChange={e => setSendBlankBody(e.target.value)} />
-                </div>
-                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 w-full" disabled={!sendBlankTo.email || sendBlankEmail.isPending} onClick={() => sendBlankEmail.mutate({
-                  toEmail: sendBlankTo.email,
-                  toName: sendBlankTo.name || sendBlankTo.email,
-                  subject: sendBlankSubject,
-                  body: sendBlankBody || undefined,
-                  pdfUrl: savedPdfUrl || undefined,
-                  googleFormUrl: googleFormUrl || undefined,
-                })}>
-                  <Mail className="w-4 h-4 mr-1" /> {sendBlankEmail.isPending ? "Sending..." : "Send Email"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <SendBlankFormDialog
+          savedPdfUrl={savedPdfUrl}
+          googleFormUrl={googleFormUrl}
+          generateBlankPdf={generateBlankPdf}
+          sendBlankEmail={sendBlankEmail}
+          sendBlankSubject={sendBlankSubject}
+          setSendBlankSubject={setSendBlankSubject}
+          onClose={() => setShowSendBlankForm(false)}
+        />
       )}
 
       {/* Settings Dialog */}
