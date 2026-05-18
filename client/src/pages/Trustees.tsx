@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -90,9 +91,7 @@ function ContactCard({ person, onSaved }: { person: any; onSaved: () => void }) 
   const role = person.role ?? "Member";
   const rc = getRoleColor(role);
   const age = calcAge(person.dateOfBirth);
-  const waLink = person.phone
-    ? `https://wa.me/${person.phone.replace(/\D/g,"").replace(/^0/,"44")}`
-    : null;
+  const waLink = person.phone ? buildWhatsAppUrl(person.phone) : null;
 
   const saveRoleInline = (newRole: string) => {
     const opt = ROLE_OPTIONS.find(o => o.value === newRole);

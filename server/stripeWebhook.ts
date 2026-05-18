@@ -4,6 +4,7 @@ import { getDb } from "./db";
 import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundraisingCampaigns, loanRepayments, loanApplications, pledges, pledgePayments, donors, processedStripeEvents } from "../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import nodemailer from "nodemailer";
+import { buildWhatsAppUrl } from "./lib/whatsapp";
 
 async function sendReceiptEmail(to: string, name: string, subject: string, html: string) {
   try {
@@ -203,9 +204,7 @@ export function registerStripeWebhook(app: Express) {
                   ``,
                   `— AQ Society Finance Team`,
                 ].filter(Boolean).join("\n");
-                const cleaned = localSession.donorPhone.replace(/\D/g, "");
-                const waNumber = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
-                const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(msgLines)}`;
+                const waUrl = buildWhatsAppUrl(localSession.donorPhone, msgLines);
                 console.log(`[Stripe Webhook] WhatsApp receipt URL for ${localSession.donorName}: ${waUrl.slice(0, 100)}...`);
                 // Mark thank-you as ready to send
                 await db
@@ -255,9 +254,7 @@ export function registerStripeWebhook(app: Express) {
                       ``,
                       `— AQ Society Finance Team`,
                     ].join("\n");
-                    const cleaned = loan.borrowerPhone.replace(/\D/g, "");
-                    const waNumber = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
-                    const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+                    const waUrl = buildWhatsAppUrl(loan.borrowerPhone, msg);
                     console.log(`[Stripe Webhook] Qarde Hasan reconciled — loan ${loan.id}, repayment ${repayment.id}. WhatsApp: ${waUrl.slice(0, 80)}...`);
                   }
                 }

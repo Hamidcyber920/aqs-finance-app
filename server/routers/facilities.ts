@@ -10,6 +10,7 @@ import { getDb } from "../db";
 import { eq, and, gte, lte, desc, or, sql } from "drizzle-orm";
 import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail, facilityBuildings, enquiryReplies, commMessages, commChannels, facilitySettings } from "../../drizzle/schema";
 import { storagePut } from "../storage";
+import { buildWhatsAppUrl } from "../lib/whatsapp";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
 
@@ -1085,7 +1086,7 @@ export const facilitiesRouter = router({
       if (!enquiry) throw new TRPCError({ code: "NOT_FOUND" });
       const phone = enquiry.contactPhone?.replace(/[^0-9+]/g, "") || "";
       const msg = input.message || `AssalamuAlaikum ${enquiry.contactName},\n\nThank you for your enquiry regarding our facilities. We are pleased to follow up with you regarding your booking request.\n\nPlease let us know if you have any questions.\n\nJazakAllah Khair,\nAbdullah Quilliam Society`;
-      const waLink = `https://wa.me/${phone.replace("+", "")}?text=${encodeURIComponent(msg)}`;
+      const waLink = buildWhatsAppUrl(phone, msg);
       return { phone, waLink, contactName: enquiry.contactName };
     }),
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
+import { buildWhatsAppUrl } from "../lib/whatsapp";
 import { getDb } from "../db";
 import {
   donorLeads,
@@ -56,9 +57,7 @@ function generateToken(): string {
 
 // ─── Generate WhatsApp link ───────────────────────────────────────────────────
 function whatsappLink(phone: string, message: string): string {
-  const cleaned = phone.replace(/\D/g, "");
-  const number = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
-  return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
+  return buildWhatsAppUrl(phone, message);
 }
 
 export const crmRouter = router({
@@ -342,9 +341,8 @@ export const crmRouter = router({
       // Build WhatsApp link if phone is provided
       let waLink: string | undefined;
       if (input.whatsapp) {
-        const phone = input.whatsapp.replace(/\D/g, "").replace(/^0/, "44");
-        const msg = encodeURIComponent(`Assalamu Alaikum,\n\nHere is your personal AQ Society donor portal link:\n${portalUrl}\n\nYou can view your pledges, Gift Aid status, and make payments securely.\n\nBarakAllahu feekum,\nAQS Finance Team`);
-        waLink = `https://wa.me/${phone}?text=${msg}`;
+        const waMsg = `Assalamu Alaikum,\n\nHere is your personal AQ Society donor portal link:\n${portalUrl}\n\nYou can view your pledges, Gift Aid status, and make payments securely.\n\nBarakAllahu feekum,\nAQS Finance Team`;
+        waLink = buildWhatsAppUrl(input.whatsapp, waMsg);
       }
 
       return { token, portalUrl, whatsappLink: waLink, expiresAt: expiresAt.toISOString() };

@@ -5,6 +5,7 @@ import { stripePaymentSessions, giftAidDeclarations, fundraisingCampaigns, fundr
 import { eq, desc, gte, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { invokeLLM } from "../_core/llm";
+import { buildWhatsAppUrl } from "../lib/whatsapp";
 
 // Lazy-load Stripe to reduce cold-start memory
 let _stripe: any = null;
@@ -580,9 +581,7 @@ export const fintechRouter = router({
         `Your reference: *${refCode}*\n\n` +
         `You can pay by card, Apple Pay, Google Pay, BACS Direct Debit, PayPal, or direct bank transfer.\n\n` +
         `May Allah accept your contribution and reward you abundantly. Ameen.\n\nAQ Society`;
-      const whatsAppUrl = input.donorPhone
-        ? `https://wa.me/${input.donorPhone.replace(/\D/g, "")}?text=${encodeURIComponent(whatsAppMessage)}`
-        : `https://wa.me/?text=${encodeURIComponent(whatsAppMessage)}`;
+      const whatsAppUrl = buildWhatsAppUrl(input.donorPhone ?? "", whatsAppMessage);
       return { referenceCode: refCode, paymentUrl, whatsAppUrl, whatsAppMessage, sessionId: inserted.id };
     }),
 
@@ -753,9 +752,7 @@ export const fintechRouter = router({
         ``,
         `— AQ Society Finance Team`,
       ].filter(Boolean).join("\n");
-      const cleaned = input.donorPhone.replace(/\D/g, "");
-      const waNumber = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
-      const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(msgLines)}`;
+      const waUrl = buildWhatsAppUrl(input.donorPhone, msgLines);
       return { whatsAppUrl: waUrl, message: msgLines, paymentUrl, referenceCode: refCode };
     }),
 

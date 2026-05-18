@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -242,9 +243,7 @@ export default function DonorProfile() {
   const handleSendWhatsApp = useCallback(() => {
     if (!portalLinkData || !donor?.phone) return;
     const msg = `Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${donorFirstName}!\n\nJazakAllah Khayran for your generous support of Abdullah Quilliam Society.\n\nYou can view your donation history, pledges, and Gift Aid declarations anytime using your secure Donor Portal:\n\n${portalLinkData.url}\n\nThis link is valid for 30 days.\n\nBarakAllahu feekum,\nAQS Finance Team`;
-    const cleaned = donor.phone.replace(/\D/g, "");
-    const waNumber = cleaned.startsWith("0") ? "44" + cleaned.slice(1) : cleaned;
-    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, "_blank");
+    window.open(buildWhatsAppUrl(donor.phone, msg), "_blank");
     toast.success("WhatsApp opened with portal link");
   }, [portalLinkData, donor, donorFirstName]);
 

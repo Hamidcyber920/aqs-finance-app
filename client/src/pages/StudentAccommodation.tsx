@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { useHibbaFormFill } from "@/hooks/useHibbaFormFill";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -613,8 +614,7 @@ function TenantDetailPanel({ tenant, onClose, onRefresh }: { tenant: any; onClos
 
   // WhatsApp message
   const sendWhatsApp = (phone: string, message: string) => {
-    const clean = phone.replace(/\s+/g, "").replace(/^0/, "+44");
-    window.location.href = `https://wa.me/${clean.replace("+", "")}?text=${encodeURIComponent(message)}`;
+    window.location.href = buildWhatsAppUrl(phone, message);
   };
 
   const sendEmail = (email: string, subject: string, body: string) => {

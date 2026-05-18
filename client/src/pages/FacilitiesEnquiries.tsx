@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -685,9 +686,8 @@ function EnquiryDetailDialog({ enquiryId, rooms, onClose, onRefresh }: { enquiry
                   <Send className="w-3 h-3 mr-1" /> Compose Email
                 </Button>
                 <Button size="sm" variant="outline" className="h-7 text-xs border-green-500/30 text-green-300 hover:bg-green-500/10" onClick={() => {
-                  const phone = (data.contactPhone || "").replace(/[^0-9]/g, "").replace(/^0/, "44");
-                  const msg = encodeURIComponent(`AssalamuAlaikum wa Rahmatullahi wa Barakatuh,\n\nDear ${data.contactName},\n\nThank you for your facilities booking enquiry. We will be in touch shortly.\n\nJazakAllah Khair,\nAQS Facilities Team`);
-                  window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+                  const waMsg = `AssalamuAlaikum wa Rahmatullahi wa Barakatuh,\n\nDear ${data.contactName},\n\nThank you for your facilities booking enquiry. We will be in touch shortly.\n\nJazakAllah Khair,\nAQS Facilities Team`;
+                  window.open(buildWhatsAppUrl(data.contactPhone || "", waMsg), "_blank");
                 }}>
                   <MessageSquare className="w-3 h-3 mr-1" /> WhatsApp
                 </Button>
@@ -1052,8 +1052,7 @@ function SendBlankFormDialog({
               className="bg-green-600 hover:bg-green-700"
               disabled={!phone || !localPdfUrl}
               onClick={() => {
-                const cleaned = phone.replace(/[^0-9]/g, "");
-                window.open(`https://wa.me/${cleaned}?text=${encodeURIComponent(buildWaMsg())}`, "_blank");
+                window.open(buildWhatsAppUrl(phone, buildWaMsg()), "_blank");
               }}
             >
               <MessageCircle className="w-4 h-4 mr-1" /> WhatsApp

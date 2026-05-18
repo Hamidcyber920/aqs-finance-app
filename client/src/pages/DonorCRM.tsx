@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { buildWhatsAppUrl } from "@/lib/whatsapp";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -228,7 +229,7 @@ function DonorLeadsTable() {
     onSuccess: (data, variables) => {
       const leadId = (variables as any).donorLeadId;
       setResendingId(null);
-      setResendResult({ id: leadId, portalUrl: data.portalUrl, whatsappLink: data.whatsappLink ?? `https://wa.me/${(variables as any).whatsapp?.replace(/\D/g, "").replace(/^0/, "44")}?text=${encodeURIComponent("Your updated portal link: " + data.portalUrl)}` });
+      setResendResult({ id: leadId, portalUrl: data.portalUrl, whatsappLink: data.whatsappLink ?? buildWhatsAppUrl((variables as any).whatsapp ?? "", "Your updated portal link: " + data.portalUrl) });
       navigator.clipboard.writeText(data.portalUrl);
       toast.success("New portal link generated and copied!");
     },
@@ -288,7 +289,7 @@ function DonorLeadsTable() {
                       variant="ghost"
                       className="h-7 px-2 text-xs"
                       title="Open WhatsApp"
-                      onClick={() => window.open(`https://wa.me/${lead.whatsapp.replace(/\D/g, "").replace(/^0/, "44")}`, "_blank")}
+                      onClick={() => window.open(buildWhatsAppUrl(lead.whatsapp), "_blank")}
                     >
                       <MessageCircle className="w-3 h-3" />
                     </Button>
@@ -945,7 +946,7 @@ function DonorPortalPanel() {
                   className="bg-green-600 hover:bg-green-700"
                   onClick={() => {
                     const msg = `Assalamu Alaikum! Here is your secure AQS donor portal link:\n\n${result.portalUrl}\n\nThis link expires in 30 days. JazakAllah Khayran.`;
-                    window.location.href = `https://wa.me/${whatsapp.replace(/\D/g, "").replace(/^0/, "44")}?text=${encodeURIComponent(msg)}`;
+                    window.location.href = buildWhatsAppUrl(whatsapp, msg);
                   }}
                 >
                   <MessageCircle className="w-3.5 h-3.5 mr-1.5" /> Send via WhatsApp
