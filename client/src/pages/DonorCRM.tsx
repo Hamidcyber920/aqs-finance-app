@@ -81,12 +81,12 @@ function QuickCapturePanel() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-r from-emerald-900/40 to-teal-900/40 border border-emerald-700/40 rounded-xl p-5">
+      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/40 dark:to-teal-900/40 border border-emerald-300 dark:border-emerald-700/40 rounded-xl p-5">
         <div className="flex items-center gap-2 mb-1">
-          <Zap className="w-5 h-5 text-emerald-400" />
-          <h3 className="font-semibold text-emerald-300">Two-Click QuickCapture</h3>
+          <Zap className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+          <h3 className="font-semibold text-emerald-700 dark:text-emerald-300">Two-Click QuickCapture</h3>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">
+        <p className="text-sm text-slate-600 dark:text-muted-foreground mb-4">
           Capture a donor's Name and WhatsApp in 2 fields. The system automatically sends them a personalised welcome link to complete their full profile at their leisure.
         </p>
 
@@ -136,7 +136,7 @@ function QuickCapturePanel() {
                     className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
                       amount === String(preset)
                         ? "bg-emerald-600 border-emerald-600 text-white"
-                        : "bg-transparent border-emerald-700/50 text-emerald-400 hover:bg-emerald-900/40"
+                        : "bg-white dark:bg-transparent border-emerald-500 dark:border-emerald-700/50 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
                     }`}
                   >
                     £{preset}
@@ -148,7 +148,7 @@ function QuickCapturePanel() {
                   className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
                     amount && !["5","10","20","50","100","250"].includes(amount)
                       ? "bg-emerald-600 border-emerald-600 text-white"
-                      : "bg-transparent border-emerald-700/50 text-muted-foreground hover:bg-emerald-900/40"
+                      : "bg-white dark:bg-transparent border-emerald-500 dark:border-emerald-700/50 text-slate-600 dark:text-muted-foreground hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
                   }`}
                 >
                   Other
