@@ -575,6 +575,13 @@
       "when": 1778613956305,
       "tag": "0081_remarkable_iceman",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "5",
+      "when": 1779113191024,
+      "tag": "0082_clammy_firebrand",
+      "breakpoints": true
     }
   ]
 }

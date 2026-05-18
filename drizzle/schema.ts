@@ -2424,3 +2424,123 @@ export const userBriefingPrefs = mysqlTable("user_briefing_prefs", {
 });
 export type UserBriefingPref = typeof userBriefingPrefs.$inferSelect;
 export type InsertUserBriefingPref = typeof userBriefingPrefs.$inferInsert;
+
+
+// ─── FACILITY ENQUIRIES & BOOKING PIPELINE ──────────────────────────────────
+
+export const facilityEnquiries = mysqlTable("facility_enquiries", {
+  id: int("id").autoincrement().primaryKey(),
+  // Pipeline stage
+  stage: mysqlEnum("stage", ["general_enquiry", "interested", "going_ahead", "confirmed", "cancelled"]).default("general_enquiry").notNull(),
+  // Event details
+  eventType: mysqlEnum("eventType", ["wedding", "conference", "community_event", "funeral", "birthday", "corporate", "charity", "religious", "other"]).default("other").notNull(),
+  eventTypeOther: varchar("eventTypeOther", { length: 200 }),
+  eventDate: date("eventDate"),
+  eventStartTime: varchar("eventStartTime", { length: 10 }),
+  eventEndTime: varchar("eventEndTime", { length: 10 }),
+  expectedAttendees: int("expectedAttendees"),
+  // Contact details
+  contactName: varchar("contactName", { length: 200 }).notNull(),
+  contactEmail: varchar("contactEmail", { length: 320 }),
+  contactPhone: varchar("contactPhone", { length: 30 }),
+  contactAddress: text("contactAddress"),
+  // Organisation
+  isOrganisation: boolean("isOrganisation").default(false).notNull(),
+  organisationName: varchar("organisationName", { length: 200 }),
+  organisationAddress: text("organisationAddress"),
+  leadContactName: varchar("leadContactName", { length: 200 }),
+  leadContactRole: varchar("leadContactRole", { length: 100 }),
+  // Room selection
+  roomId: int("roomId"),
+  roomPreference: varchar("roomPreference", { length: 200 }),
+  // Catering & Food
+  foodRequired: boolean("foodRequired").default(false).notNull(),
+  foodHeadcount: int("foodHeadcount"),
+  cateringType: mysqlEnum("cateringType", ["internal", "external", "self_catering", "none"]).default("none"),
+  teaCoffeeRequired: boolean("teaCoffeeRequired").default(false).notNull(),
+  // Equipment & Furniture
+  tablesRequired: boolean("tablesRequired").default(false).notNull(),
+  tablesCount: int("tablesCount"),
+  chairsRequired: boolean("chairsRequired").default(false).notNull(),
+  chairsCount: int("chairsCount"),
+  cutleryPlatesRequired: boolean("cutleryPlatesRequired").default(false).notNull(),
+  cutleryPlatesCount: int("cutleryPlatesCount"),
+  // Decor
+  decorRequired: boolean("decorRequired").default(false).notNull(),
+  decorType: mysqlEnum("decorType", ["internal", "external", "both", "none"]).default("none"),
+  decorNotes: text("decorNotes"),
+  // AV & Sound
+  speakersRequired: boolean("speakersRequired").default(false).notNull(),
+  micSystemRequired: boolean("micSystemRequired").default(false).notNull(),
+  avNotes: text("avNotes"),
+  // Additional rooms
+  meetAndGreetRoom: boolean("meetAndGreetRoom").default(false).notNull(),
+  groomRoom: boolean("groomRoom").default(false).notNull(),
+  brideRoom: boolean("brideRoom").default(false).notNull(),
+  additionalRoomNotes: text("additionalRoomNotes"),
+  // Parking & Beverages
+  parkingRequired: boolean("parkingRequired").default(false).notNull(),
+  parkingSpaces: int("parkingSpaces"),
+  beveragesRequired: boolean("beveragesRequired").default(false).notNull(),
+  beveragesNotes: text("beveragesNotes"),
+  // Pricing
+  agreedAmount: decimal("agreedAmount", { precision: 10, scale: 2 }),
+  depositAmount: decimal("depositAmount", { precision: 10, scale: 2 }),
+  // Communication
+  formSentAt: timestamp("formSentAt"),
+  formSentBy: int("formSentBy"),
+  formReturnedAt: timestamp("formReturnedAt"),
+  // Linked booking (once confirmed)
+  bookingId: int("bookingId"),
+  // General
+  notes: text("notes"),
+  sourceDocument: text("sourceDocument"), // URL to uploaded/scanned form
+  createdByUserId: int("createdByUserId"),
+  assignedToUserId: int("assignedToUserId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type FacilityEnquiry = typeof facilityEnquiries.$inferSelect;
+export type InsertFacilityEnquiry = typeof facilityEnquiries.$inferInsert;
+
+export const enquiryPayments = mysqlTable("enquiry_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  enquiryId: int("enquiryId").notNull(),
+  // Payment type
+  paymentType: mysqlEnum("paymentType", ["deposit", "fifty_percent", "full_payment", "other"]).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  dueDate: date("dueDate"),
+  // Payment status
+  status: mysqlEnum("status", ["pending", "received", "overdue"]).default("pending").notNull(),
+  paidAt: timestamp("paidAt"),
+  // Authorisation
+  authorisedByUserId: int("authorisedByUserId"),
+  authorisedByName: varchar("authorisedByName", { length: 200 }),
+  authorisedAt: timestamp("authorisedAt"),
+  // Evidence
+  evidenceUrl: text("evidenceUrl"), // bank statement photo/file
+  evidenceNotes: text("evidenceNotes"),
+  // Payment method
+  paymentMethod: mysqlEnum("paymentMethod", ["cash", "bank_transfer", "card", "cheque"]),
+  reference: varchar("reference", { length: 200 }),
+  // Confirmation sent
+  confirmationSentAt: timestamp("confirmationSentAt"),
+  confirmationMethod: mysqlEnum("confirmationMethod", ["email", "whatsapp", "both"]),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type EnquiryPayment = typeof enquiryPayments.$inferSelect;
+export type InsertEnquiryPayment = typeof enquiryPayments.$inferInsert;
+
+export const enquiryAuditTrail = mysqlTable("enquiry_audit_trail", {
+  id: int("id").autoincrement().primaryKey(),
+  enquiryId: int("enquiryId").notNull(),
+  action: varchar("action", { length: 200 }).notNull(), // e.g. "form_sent", "form_returned", "stage_changed", "payment_received"
+  description: text("description"),
+  performedByUserId: int("performedByUserId"),
+  performedByName: varchar("performedByName", { length: 200 }),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  metadata: json("metadata"), // extra context (old stage, new stage, etc.)
+});
+export type EnquiryAuditTrail = typeof enquiryAuditTrail.$inferSelect;
+export type InsertEnquiryAuditTrail = typeof enquiryAuditTrail.$inferInsert;

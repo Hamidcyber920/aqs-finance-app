@@ -2524,3 +2524,19 @@
 
 ## UI Contrast Fix (May 2026)
 - [x] Fix Facilities page: text/labels barely visible — increased opacity from /40-/50 to /60-/70 for all labels, stat card text, table headers, and date inputs
+
+## Facilities Enquiry & Booking Management System (May 2026)
+- [x] Database schema: facility_enquiries table with all form fields (event type, attendees, contact, organisation, catering, equipment, rooms, etc.)
+- [x] Database schema: enquiry_payments table (deposit, 50%, full payment tracking with authorisation)
+- [x] Database schema: enquiry_audit_trail table (date/time stamps, who sent forms, actions taken)
+- [x] Backend: CRUD procedures for enquiries (create, list, update status, get detail)
+- [x] Backend: Payment tracking procedures (record payment, upload evidence, authorise)
+- [x] Backend: Automated email/WhatsApp send procedure with Islamic greeting template
+- [x] UI: Comprehensive Enquiry Form (event type, wedding/general, attendees, contact, address, phone, email, organisation, food requirements, tables/chairs/cutlery/plates, catering, tea/coffee, parking, decor internal/external, speakers/mic, additional rooms - meet&greet/groom/bride, beverages)
+- [x] UI: Enquiry Pipeline view with stages (General Enquiry → Interested → Going Ahead)
+- [x] UI: Enquiry detail panel showing all captured data
+- [x] UI: Payment process section (deposit → 50% 4 weeks before → full 5 days before) with authorisation dropdown, date/time stamp, evidence upload
+- [x] UI: Confirmation flow - auto email/WhatsApp thank you with payment confirmed
+- [x] AI OCR: Scan/upload enquiry forms with AI extraction into the enquiry record
+- [x] Audit trail: Log all actions with date/time/user stamps
+- [x] Data capture: All enquiries stored for future campaign use

@@ -8,7 +8,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { eq, and, gte, lte, desc, or, sql } from "drizzle-orm";
-import { facilityRooms, facilityBookings, incomeRecords, incomeCategories } from "../../drizzle/schema";
+import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail } from "../../drizzle/schema";
+import { storagePut } from "../storage";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
 
@@ -281,4 +282,314 @@ export const facilitiesRouter = router({
       upcoming,
     };
   }),
+
+  // ── Enquiries ─────────────────────────────────────────────────────────────────
+  createEnquiry: protectedProcedure
+    .input(z.object({
+      stage: z.enum(["general_enquiry", "interested", "going_ahead"]).default("general_enquiry"),
+      eventType: z.enum(["wedding", "conference", "community_event", "funeral", "birthday", "corporate", "charity", "religious", "other"]).default("other"),
+      eventTypeOther: z.string().optional(),
+      eventDate: z.string().optional(),
+      eventStartTime: z.string().optional(),
+      eventEndTime: z.string().optional(),
+      expectedAttendees: z.number().optional(),
+      contactName: z.string().min(1),
+      contactEmail: z.string().optional(),
+      contactPhone: z.string().optional(),
+      contactAddress: z.string().optional(),
+      isOrganisation: z.boolean().default(false),
+      organisationName: z.string().optional(),
+      organisationAddress: z.string().optional(),
+      leadContactName: z.string().optional(),
+      leadContactRole: z.string().optional(),
+      roomId: z.number().optional(),
+      roomPreference: z.string().optional(),
+      foodRequired: z.boolean().default(false),
+      foodHeadcount: z.number().optional(),
+      cateringType: z.enum(["internal", "external", "self_catering", "none"]).default("none"),
+      teaCoffeeRequired: z.boolean().default(false),
+      tablesRequired: z.boolean().default(false),
+      tablesCount: z.number().optional(),
+      chairsRequired: z.boolean().default(false),
+      chairsCount: z.number().optional(),
+      cutleryPlatesRequired: z.boolean().default(false),
+      cutleryPlatesCount: z.number().optional(),
+      decorRequired: z.boolean().default(false),
+      decorType: z.enum(["internal", "external", "both", "none"]).default("none"),
+      decorNotes: z.string().optional(),
+      speakersRequired: z.boolean().default(false),
+      micSystemRequired: z.boolean().default(false),
+      avNotes: z.string().optional(),
+      meetAndGreetRoom: z.boolean().default(false),
+      groomRoom: z.boolean().default(false),
+      brideRoom: z.boolean().default(false),
+      additionalRoomNotes: z.string().optional(),
+      parkingRequired: z.boolean().default(false),
+      parkingSpaces: z.number().optional(),
+      beveragesRequired: z.boolean().default(false),
+      beveragesNotes: z.string().optional(),
+      agreedAmount: z.string().optional(),
+      depositAmount: z.string().optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [result] = await db.insert(facilityEnquiries).values({
+        ...input,
+        eventDate: input.eventDate || null,
+        createdByUserId: ctx.user.id,
+      });
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: result.insertId,
+        action: "enquiry_created",
+        description: `New ${input.eventType} enquiry from ${input.contactName}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { id: result.insertId };
+    }),
+
+  listEnquiries: protectedProcedure
+    .input(z.object({
+      stage: z.enum(["general_enquiry", "interested", "going_ahead", "confirmed", "cancelled"]).optional(),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const conditions: any[] = [];
+      if (input?.stage) conditions.push(eq(facilityEnquiries.stage, input.stage));
+      if (input?.dateFrom) conditions.push(gte(facilityEnquiries.createdAt, new Date(input.dateFrom)));
+      if (input?.dateTo) conditions.push(lte(facilityEnquiries.createdAt, new Date(input.dateTo + "T23:59:59")));
+      const where = conditions.length ? and(...conditions) : undefined;
+      return db.select().from(facilityEnquiries).where(where).orderBy(desc(facilityEnquiries.createdAt));
+    }),
+
+  getEnquiry: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [enquiry] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.id));
+      if (!enquiry) throw new TRPCError({ code: "NOT_FOUND", message: "Enquiry not found" });
+      const payments = await db.select().from(enquiryPayments).where(eq(enquiryPayments.enquiryId, input.id)).orderBy(desc(enquiryPayments.createdAt));
+      const audit = await db.select().from(enquiryAuditTrail).where(eq(enquiryAuditTrail.enquiryId, input.id)).orderBy(desc(enquiryAuditTrail.timestamp));
+      return { ...enquiry, payments, audit };
+    }),
+
+  updateEnquiryStage: protectedProcedure
+    .input(z.object({ id: z.number(), stage: z.enum(["general_enquiry", "interested", "going_ahead", "confirmed", "cancelled"]) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [existing] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.id));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND" });
+      await db.update(facilityEnquiries).set({ stage: input.stage }).where(eq(facilityEnquiries.id, input.id));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.id,
+        action: "stage_changed",
+        description: `Stage changed from ${existing.stage} to ${input.stage}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+        metadata: JSON.stringify({ oldStage: existing.stage, newStage: input.stage }),
+      });
+      return { success: true };
+    }),
+
+  updateEnquiry: protectedProcedure
+    .input(z.object({ id: z.number(), data: z.record(z.any()) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.update(facilityEnquiries).set(input.data).where(eq(facilityEnquiries.id, input.id));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.id,
+        action: "enquiry_updated",
+        description: "Enquiry details updated",
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { success: true };
+    }),
+
+  // ── Enquiry Payments ───────────────────────────────────────────────────────────
+  recordPayment: protectedProcedure
+    .input(z.object({
+      enquiryId: z.number(),
+      paymentType: z.enum(["deposit", "fifty_percent", "full_payment", "other"]),
+      amount: z.string(),
+      dueDate: z.string().optional(),
+      paymentMethod: z.enum(["cash", "bank_transfer", "card", "cheque"]).optional(),
+      reference: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [result] = await db.insert(enquiryPayments).values({
+        enquiryId: input.enquiryId,
+        paymentType: input.paymentType,
+        amount: input.amount,
+        dueDate: input.dueDate || null,
+        paymentMethod: input.paymentMethod || null,
+        reference: input.reference || null,
+      });
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "payment_recorded",
+        description: `${input.paymentType} payment of \u00a3${input.amount} recorded`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { id: result.insertId };
+    }),
+
+  authorisePayment: protectedProcedure
+    .input(z.object({ paymentId: z.number(), enquiryId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.update(enquiryPayments).set({
+        status: "received",
+        paidAt: new Date(),
+        authorisedByUserId: ctx.user.id,
+        authorisedByName: ctx.user.name || "System",
+        authorisedAt: new Date(),
+      }).where(eq(enquiryPayments.id, input.paymentId));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "payment_authorised",
+        description: `Payment #${input.paymentId} authorised by ${ctx.user.name}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { success: true };
+    }),
+
+  uploadPaymentEvidence: protectedProcedure
+    .input(z.object({ paymentId: z.number(), enquiryId: z.number(), fileBase64: z.string(), fileName: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const buf = Buffer.from(input.fileBase64, "base64");
+      const ext = input.fileName.split(".").pop() || "pdf";
+      const key = `enquiry-evidence/${input.enquiryId}/${input.paymentId}-${Date.now()}.${ext}`;
+      const { url } = await storagePut(key, buf, ext === "pdf" ? "application/pdf" : `image/${ext}`);
+      await db.update(enquiryPayments).set({ evidenceUrl: url }).where(eq(enquiryPayments.id, input.paymentId));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "evidence_uploaded",
+        description: `Payment evidence uploaded for payment #${input.paymentId}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { url };
+    }),
+
+  // ── Communications ─────────────────────────────────────────────────────────────
+  sendEnquiryForm: protectedProcedure
+    .input(z.object({ enquiryId: z.number(), method: z.enum(["email", "whatsapp", "both"]) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [enquiry] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.enquiryId));
+      if (!enquiry) throw new TRPCError({ code: "NOT_FOUND" });
+      await db.update(facilityEnquiries).set({ formSentAt: new Date(), formSentBy: ctx.user.id }).where(eq(facilityEnquiries.id, input.enquiryId));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "form_sent",
+        description: `Enquiry form sent via ${input.method} to ${enquiry.contactName}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+        metadata: JSON.stringify({ method: input.method, contactEmail: enquiry.contactEmail, contactPhone: enquiry.contactPhone }),
+      });
+      return { success: true, message: `Form sent via ${input.method}` };
+    }),
+
+  sendPaymentConfirmation: protectedProcedure
+    .input(z.object({ enquiryId: z.number(), paymentId: z.number(), method: z.enum(["email", "whatsapp", "both"]) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      await db.update(enquiryPayments).set({ confirmationSentAt: new Date(), confirmationMethod: input.method }).where(eq(enquiryPayments.id, input.paymentId));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "confirmation_sent",
+        description: `Payment confirmation sent via ${input.method}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { success: true };
+    }),
+
+  // ── Enquiry → Booking Conversion ───────────────────────────────────────────────
+  convertToBooking: protectedProcedure
+    .input(z.object({ enquiryId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const [enquiry] = await db.select().from(facilityEnquiries).where(eq(facilityEnquiries.id, input.enquiryId));
+      if (!enquiry) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!enquiry.roomId) throw new TRPCError({ code: "BAD_REQUEST", message: "Room must be selected before converting to booking" });
+      const startDt = enquiry.eventDate ? new Date(`${enquiry.eventDate}T${enquiry.eventStartTime || "09:00"}`) : new Date();
+      const endDt = enquiry.eventDate ? new Date(`${enquiry.eventDate}T${enquiry.eventEndTime || "17:00"}`) : new Date();
+      const [booking] = await db.insert(facilityBookings).values({
+        roomId: enquiry.roomId,
+        bookedByUserId: ctx.user.id,
+        bookerName: enquiry.contactName,
+        bookerEmail: enquiry.contactEmail || "",
+        bookerPhone: enquiry.contactPhone || "",
+        organisation: enquiry.organisationName || "",
+        title: `${enquiry.eventType} - ${enquiry.contactName}`,
+        purpose: enquiry.notes || "",
+        startDatetime: startDt,
+        endDatetime: endDt,
+        attendeeCount: enquiry.expectedAttendees || 0,
+        rateType: "custom",
+        agreedAmount: enquiry.agreedAmount || "0",
+        depositAmount: enquiry.depositAmount || "0",
+        status: "confirmed",
+        paymentStatus: "unpaid",
+      });
+      await db.update(facilityEnquiries).set({ stage: "confirmed", bookingId: booking.insertId }).where(eq(facilityEnquiries.id, input.enquiryId));
+      await db.insert(enquiryAuditTrail).values({
+        enquiryId: input.enquiryId,
+        action: "converted_to_booking",
+        description: `Enquiry converted to booking #${booking.insertId}`,
+        performedByUserId: ctx.user.id,
+        performedByName: ctx.user.name || "System",
+      });
+      return { bookingId: booking.insertId };
+    }),
+
+  // ── AI OCR Scan ────────────────────────────────────────────────────────────────
+  scanEnquiryForm: protectedProcedure
+    .input(z.object({ fileBase64: z.string(), fileName: z.string() }))
+    .mutation(async ({ input }) => {
+      const { invokeLLM } = await import("../_core/llm");
+      const buf = Buffer.from(input.fileBase64, "base64");
+      const ext = input.fileName.split(".").pop() || "jpg";
+      const mimeType = ext === "pdf" ? "application/pdf" : `image/${ext}`;
+      const key = `enquiry-scans/${Date.now()}-${input.fileName}`;
+      const { url } = await storagePut(key, buf, mimeType);
+      const response = await invokeLLM({
+        messages: [
+          { role: "system", content: "You are an AI assistant that extracts facility booking enquiry information from scanned forms. Return a JSON object with these fields (use null for missing): contactName, contactEmail, contactPhone, contactAddress, organisationName, eventType (one of: wedding, conference, community_event, funeral, birthday, corporate, charity, religious, other), eventDate (YYYY-MM-DD), eventStartTime (HH:MM), eventEndTime (HH:MM), expectedAttendees (number), foodRequired (boolean), foodHeadcount (number), cateringType (internal/external/self_catering/none), teaCoffeeRequired (boolean), tablesRequired (boolean), tablesCount (number), chairsRequired (boolean), chairsCount (number), cutleryPlatesRequired (boolean), decorRequired (boolean), decorType (internal/external/both/none), speakersRequired (boolean), micSystemRequired (boolean), meetAndGreetRoom (boolean), groomRoom (boolean), brideRoom (boolean), parkingRequired (boolean), parkingSpaces (number), beveragesRequired (boolean), notes (string)." },
+          { role: "user", content: [{ type: "image_url", image_url: { url, detail: "high" } }, { type: "text", text: "Extract all booking enquiry information from this form/document." }] },
+        ],
+      });
+      let extracted = {};
+      try { extracted = JSON.parse(response.choices[0].message.content || "{}"); } catch { extracted = {}; }
+      return { extracted, sourceDocument: url };
+    }),
+
+  // ── Audit Trail ────────────────────────────────────────────────────────────────
+  getAuditTrail: protectedProcedure
+    .input(z.object({ enquiryId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      return db.select().from(enquiryAuditTrail).where(eq(enquiryAuditTrail.enquiryId, input.enquiryId)).orderBy(desc(enquiryAuditTrail.timestamp));
+    }),
 });

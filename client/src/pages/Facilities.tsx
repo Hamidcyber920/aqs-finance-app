@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Building2, CalendarDays, Plus, Users, PoundSterling, CheckCircle2, Clock, XCircle, RefreshCw, Edit2, Download, FileText } from "lucide-react";
+import FacilitiesEnquiries from "./FacilitiesEnquiries";
 
 const STATUS_COLORS: Record<string, string> = {
   enquiry: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
@@ -171,7 +172,7 @@ function NewRoomDialog({ onClose, onCreated }: { onClose: () => void; onCreated:
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Facilities() {
-  const [tab, setTab] = useState("bookings");
+  const [tab, setTab] = useState("enquiries");
   const [showNewBooking, setShowNewBooking] = useState(false);
   const [showNewRoom, setShowNewRoom] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
@@ -286,10 +287,16 @@ export default function Facilities() {
       <Tabs value={tab} onValueChange={setTab}>
         <div className="overflow-x-auto -mx-1 px-1 pb-1">
           <TabsList className="bg-white/5 border border-white/10 inline-flex w-max min-w-full h-auto gap-1 p-1">
+            <TabsTrigger value="enquiries" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Enquiries</TabsTrigger>
             <TabsTrigger value="bookings" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Bookings</TabsTrigger>
             <TabsTrigger value="rooms" className="whitespace-nowrap data-[state=active]:bg-indigo-600">Rooms</TabsTrigger>
           </TabsList>
         </div>
+
+        {/* Enquiries Tab */}
+        <TabsContent value="enquiries" className="mt-4">
+          <FacilitiesEnquiries rooms={rooms.data || []} />
+        </TabsContent>
 
         {/* Bookings Tab */}
         <TabsContent value="bookings" className="mt-4">
