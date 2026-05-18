@@ -261,7 +261,7 @@ export default function DashboardPage() {
                 <p style={{ fontSize: 12, fontWeight: 700, color: T.white, margin: 0, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Needs Attention Today</p>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {[{ label: 'Critical Compliance Actions', value: criticalItems, path: '/compliance', color: '#f87171' }, { label: 'Overdue Compliance Items', value: overdueItems, path: '/compliance', color: '#f59e0b' }, { label: 'Payments Awaiting Approval', value: pendingReceipts, path: '/expenses', color: '#a78bfa' }, { label: 'Loan Applications Pending', value: pendingLoans, path: '/loans', color: T.purple }].map(item => (
+                {[{ label: 'Critical Compliance Actions', value: criticalItems, path: '/compliance', color: '#f87171' }, { label: 'Overdue Compliance Items', value: overdueItems, path: '/compliance', color: '#f59e0b' }, { label: 'Payments Awaiting Approval', value: pendingReceipts, path: '/monthly-expenses', color: '#a78bfa' }, { label: 'Loan Applications Pending', value: pendingLoans, path: '/loans', color: T.purple }].map(item => (
                   <Link key={item.label} href={item.path}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', borderRadius: 8, background: item.value > 0 ? `${item.color}11` : T.glass, border: `1px solid ${item.value > 0 ? item.color + '33' : T.border}`, cursor: 'pointer' }}>
                       <p style={{ fontSize: 11, color: item.value > 0 ? T.white : T.muted, margin: 0 }}>{item.label}</p>
@@ -310,7 +310,7 @@ export default function DashboardPage() {
         {/* ── Today's action tiles ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10, marginBottom: 20, animation: 'fadeUp 0.5s ease 280ms both' }}>
           {[
-            { label: 'Pending Receipts', value: pendingReceipts || 0, path: '/expenses', color: '#f59e0b', icon: Receipt },
+            { label: 'Pending Receipts', value: pendingReceipts || 0, path: '/monthly-expenses', color: '#f59e0b', icon: Receipt },
             { label: 'Pending Loans', value: pendingLoans || 0, path: '/loans', color: T.purple, icon: HandHeart },
             { label: 'Compliance Issues', value: criticalItems + overdueItems, path: '/compliance', color: criticalItems > 0 ? '#f87171' : T.mint, icon: AlertCircle },
             { label: 'Training Gaps', value: expiredTraining, path: '/compliance', color: expiredTraining > 0 ? '#f59e0b' : T.mint, icon: BookOpen },
