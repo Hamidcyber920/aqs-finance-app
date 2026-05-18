@@ -1213,7 +1213,18 @@ export const facilitiesRouter = router({
           doc.lineWidth(1);
         };
         const checkBox = (label: string) => {
-          doc.fontSize(10).font("Helvetica").text(`\u25a1  ${label}`, { indent: 10 });
+          // Draw a real square box using vector graphics (avoids Unicode font issues)
+          const x = doc.x + 10;
+          const y = doc.y + 1;
+          const size = 9;
+          doc.save()
+            .rect(x, y, size, size)
+            .lineWidth(0.8)
+            .strokeColor("#000")
+            .stroke()
+            .restore();
+          doc.fontSize(10).font("Helvetica")
+            .text(`   ${label}`, { indent: 22, lineGap: 1 });
         };
 
         // SECTION 1: Contact Details
