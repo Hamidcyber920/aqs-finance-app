@@ -446,7 +446,15 @@ function DashboardLayoutContent({
                 return (
                   <button
                     key={path}
-                    onClick={() => { if (path === "/__more__") setOpenMobile(true); else setLocation(path); }}
+                    onClick={() => {
+                      if (path === "/__more__") { setOpenMobile(true); return; }
+                      if (path === "/capture" && location === "/capture") {
+                        // Already on the scanner — fire event to open the file picker directly
+                        window.dispatchEvent(new Event("hibba:open-scanner"));
+                        return;
+                      }
+                      setLocation(path);
+                    }}
                     className="flex-1 flex flex-col items-center justify-end gap-0.5 pb-2 pt-1 relative transition-colors"
                     style={{ minHeight: 56 }}
                   >

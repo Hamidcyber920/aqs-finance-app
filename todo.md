@@ -2605,3 +2605,8 @@
 - [x] UI: EnquiryDetailDialog - Email compose panel with subject/body/attach PDF toggle
 - [x] UI: EnquiryDetailDialog - Add Reply panel with direction/method/from/body/scan upload
 - [x] UI: EnquiryDetailDialog - Message history thread view showing sent/received messages
+
+## iOS Nav & Scanner Fixes (May 2026)
+- [x] Remove capture="environment" from file input in Capture.tsx — iOS now shows full picker (camera + gallery + files)
+- [x] Fix DashboardLayout.tsx: "Scan Receipt" sidebar nav item path "/" → "/capture"
+- [x] Fix DashboardLayout.tsx: mobile bottom "Scan" button path "/" → "/capture"

@@ -218,6 +218,14 @@ export default function CapturePage() {
     }
   }, [pendingFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Allow the bottom nav Scan button to open the file picker even when the
+  // user is already on this page (navigation is a no-op in that case).
+  useEffect(() => {
+    const handler = () => { fileInputRef.current?.click(); };
+    window.addEventListener("hibba:open-scanner", handler);
+    return () => window.removeEventListener("hibba:open-scanner", handler);
+  }, []);
+
   // ── Save all CRM records (bulk) ────────────────────────────────────────────
   const saveAllToCrm = useCallback(async () => {
     if (savingToCrm || multiRecords.length === 0) return;
