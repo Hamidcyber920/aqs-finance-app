@@ -2478,3 +2478,8 @@
 - [x] Add retry logic to Hibba voice agent for 503 errors (3 attempts, 5s/10s delays)
 - [x] Created client/src/lib/clientStorage.ts — uploads directly to S3 from browser
 - [ ] Verify full scanner + Hibba flow works end-to-end on deployed site (user to test)
+
+## Reconciliation Export Features (May 2026)
+- [x] Fix Print button on Month-End Reconciliation page — opens clean print window with formatted data
+- [x] Add CSV download button — exports payment rows + summary totals as .csv
+- [x] Add PDF download button — opens formatted report in new tab for Save as PDF

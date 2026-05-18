@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
-import { Scale, TrendingUp, TrendingDown, AlertCircle, Camera, Upload, Printer, Calendar, CheckCircle2 } from "lucide-react";
+import { Scale, TrendingUp, TrendingDown, AlertCircle, Camera, Upload, Printer, Calendar, CheckCircle2, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,6 +104,139 @@ export default function ReconciliationPage() {
     ...(data.expenditure.invoices ?? []).map((r: any) => ({ type: 'invoice', category: 'Invoice', amount: r.amount })),
   ] : [];
 
+  const monthName = new Date(year, month - 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+
+  const handlePrint = () => {
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Pop-up blocked — please allow pop-ups"); return; }
+    const incGrouped: Record<string, number> = {};
+    incomeBreakdown.forEach((item: any) => {
+      const key = item.category ?? item.source ?? "Other";
+      incGrouped[key] = (incGrouped[key] ?? 0) + Number(item.amount ?? 0);
+    });
+    const incRows = Object.entries(incGrouped).sort((a, b) => b[1] - a[1]);
+    win.document.write(`<!DOCTYPE html><html><head><title>Reconciliation - ${monthName}</title>
+      <style>body{font-family:system-ui,sans-serif;padding:24px;max-width:800px;margin:0 auto;color:#1a1a1a}
+      h1{font-size:22px;margin-bottom:4px}h2{font-size:16px;margin:24px 0 8px;border-bottom:2px solid #333;padding-bottom:4px}
+      table{width:100%;border-collapse:collapse;margin:12px 0}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #ddd}
+      th{background:#f5f5f5;font-weight:600;font-size:12px;text-transform:uppercase}
+      .summary{display:flex;gap:24px;margin:16px 0}.summary-box{flex:1;padding:16px;border:1px solid #ddd;border-radius:8px}
+      .amount{font-size:20px;font-weight:700}.positive{color:#16a34a}.negative{color:#dc2626}
+      @media print{body{padding:0}}</style></head><body>
+      <h1>Month-End Reconciliation</h1>
+      <p style="color:#666;margin:0 0 20px">${monthName}</p>
+      <div class="summary">
+        <div class="summary-box"><p style="margin:0 0 4px;font-size:12px;color:#666">Bank Balance</p><p class="amount">&pound;${bankBal.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
+        <div class="summary-box"><p style="margin:0 0 4px;font-size:12px;color:#666">Total Income</p><p class="amount positive">&pound;${income.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
+        <div class="summary-box"><p style="margin:0 0 4px;font-size:12px;color:#666">Total Expenditure</p><p class="amount negative">&pound;${expenditure.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
+        <div class="summary-box"><p style="margin:0 0 4px;font-size:12px;color:#666">Balance</p><p class="amount ${balance>=0?'positive':'negative'}">${balance>=0?'':'\u2212'}&pound;${Math.abs(balance).toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
+      </div>
+      <h2>Income Breakdown</h2>
+      <table><thead><tr><th>Category</th><th style="text-align:right">Amount</th></tr></thead><tbody>
+      ${incRows.map(([cat,amt])=>`<tr><td>${cat}</td><td style="text-align:right">&pound;${amt.toLocaleString("en-GB",{minimumFractionDigits:2})}</td></tr>`).join("")}
+      ${incRows.length===0?'<tr><td colspan="2" style="color:#999">No income records</td></tr>':''}
+      </tbody></table>
+      <h2>Payment Rows</h2>
+      <table><thead><tr><th>Payee</th><th>Type</th><th style="text-align:right">Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>
+      ${rows.map((r:any)=>`<tr><td>${r.payee??r.employeeName??r.borrowerName??'\u2014'}</td><td style="text-transform:capitalize">${r.type??'\u2014'}</td><td style="text-align:right">&pound;${Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td style="text-transform:capitalize">${r.paymentMethod??'\u2014'}</td><td style="text-transform:capitalize">${r.status??'pending'}</td></tr>`).join("")}
+      ${rows.length===0?'<tr><td colspan="5" style="color:#999">No payment rows</td></tr>':''}
+      </tbody></table>
+      <p style="margin-top:32px;font-size:11px;color:#999">Generated ${new Date().toLocaleString("en-GB")}</p>
+      <script>window.onload=()=>window.print()</script></body></html>`);
+    win.document.close();
+  };
+
+  const handleExportCSV = () => {
+    const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const header = ["Payee","Type","Amount","Payment Method","Status","Carried From"];
+    const csvRows = [header.join(",")];
+    rows.forEach((r: any) => {
+      csvRows.push([
+        escape(r.payee ?? r.employeeName ?? r.borrowerName ?? ""),
+        escape(r.type ?? ""),
+        String(Number(r.amount ?? 0).toFixed(2)),
+        escape(r.paymentMethod ?? ""),
+        escape(r.status ?? "pending"),
+        escape(r.carriedFrom ? "Yes" : "No"),
+      ].join(","));
+    });
+    // Add summary rows
+    csvRows.push("");
+    csvRows.push(`"Bank Balance",,${bankBal.toFixed(2)}`);
+    csvRows.push(`"Total Income",,${income.toFixed(2)}`);
+    csvRows.push(`"Total Expenditure",,${expenditure.toFixed(2)}`);
+    csvRows.push(`"Reconciliation Balance",,${balance.toFixed(2)}`);
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `reconciliation-${year}-${String(month).padStart(2,"0")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("CSV downloaded");
+  };
+
+  const handleExportPDF = () => {
+    const win = window.open("", "_blank");
+    if (!win) { toast.error("Pop-up blocked — please allow pop-ups"); return; }
+    const incGrouped: Record<string, number> = {};
+    incomeBreakdown.forEach((item: any) => {
+      const key = item.category ?? item.source ?? "Other";
+      incGrouped[key] = (incGrouped[key] ?? 0) + Number(item.amount ?? 0);
+    });
+    const incRows = Object.entries(incGrouped).sort((a, b) => b[1] - a[1]);
+    win.document.write(`<!DOCTYPE html><html><head><title>Reconciliation Report - ${monthName}</title>
+      <style>body{font-family:system-ui,sans-serif;padding:32px;max-width:800px;margin:0 auto;color:#1a1a1a}
+      h1{font-size:24px;margin-bottom:4px;color:#0A192F}h2{font-size:15px;margin:28px 0 8px;border-bottom:2px solid #0A192F;padding-bottom:4px;color:#0A192F}
+      table{width:100%;border-collapse:collapse;margin:12px 0}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #e5e7eb}
+      th{background:#f8fafc;font-weight:600;font-size:11px;text-transform:uppercase;color:#475569}
+      .header{border-bottom:3px solid #0A192F;padding-bottom:16px;margin-bottom:24px}
+      .grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin:20px 0}
+      .stat{padding:14px;border:1px solid #e5e7eb;border-radius:8px;text-align:center}
+      .stat-label{font-size:11px;color:#64748b;margin:0 0 4px;text-transform:uppercase}
+      .stat-value{font-size:18px;font-weight:700;margin:0}
+      .positive{color:#16a34a}.negative{color:#dc2626}
+      .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#94a3b8}
+      .btn{display:inline-block;margin:16px 8px 16px 0;padding:10px 20px;background:#0A192F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+      .btn:hover{opacity:0.9}
+      @media print{.no-print{display:none!important}}
+      </style></head><body>
+      <div class="no-print" style="margin-bottom:20px">
+        <button class="btn" onclick="window.print()">\uD83D\uDDA8\uFE0F Print / Save as PDF</button>
+        <span style="font-size:12px;color:#666">Use your browser's "Save as PDF" option in the print dialog</span>
+      </div>
+      <div class="header">
+        <h1>Month-End Reconciliation Report</h1>
+        <p style="color:#64748b;margin:4px 0 0;font-size:14px">${monthName} &mdash; Abdullah Quilliam Society</p>
+      </div>
+      <div class="grid">
+        <div class="stat"><p class="stat-label">Bank Balance</p><p class="stat-value">&pound;${bankBal.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
+        <div class="stat"><p class="stat-label">Total Income</p><p class="stat-value positive">&pound;${income.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
+        <div class="stat"><p class="stat-label">Total Expenditure</p><p class="stat-value negative">&pound;${expenditure.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
+        <div class="stat"><p class="stat-label">Net Balance</p><p class="stat-value ${balance>=0?'positive':'negative'}">${balance>=0?'':'\u2212'}&pound;${Math.abs(balance).toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
+      </div>
+      <h2>Income Breakdown</h2>
+      <table><thead><tr><th>Category</th><th style="text-align:right">Amount (&pound;)</th></tr></thead><tbody>
+      ${incRows.map(([cat,amt])=>`<tr><td>${cat}</td><td style="text-align:right">&pound;${amt.toLocaleString("en-GB",{minimumFractionDigits:2})}</td></tr>`).join("")}
+      ${incRows.length===0?'<tr><td colspan="2" style="color:#999">No income records for this period</td></tr>':''}
+      <tr style="font-weight:700;border-top:2px solid #333"><td>Total Income</td><td style="text-align:right">&pound;${income.toLocaleString("en-GB",{minimumFractionDigits:2})}</td></tr>
+      </tbody></table>
+      <h2>Expenditure &amp; Payments</h2>
+      <table><thead><tr><th>Payee</th><th>Type</th><th style="text-align:right">Amount (&pound;)</th><th>Method</th><th>Status</th></tr></thead><tbody>
+      ${rows.map((r:any)=>`<tr><td>${r.payee??r.employeeName??r.borrowerName??'\u2014'}${r.carriedFrom?' <em style="color:#94a3b8">(carried)</em>':''}</td><td style="text-transform:capitalize">${r.type??'\u2014'}</td><td style="text-align:right">&pound;${Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td style="text-transform:capitalize">${r.paymentMethod??'\u2014'}</td><td style="text-transform:capitalize">${r.status??'pending'}</td></tr>`).join("")}
+      ${rows.length===0?'<tr><td colspan="5" style="color:#999">No payment rows for this period</td></tr>':''}
+      <tr style="font-weight:700;border-top:2px solid #333"><td colspan="2">Total Expenditure</td><td style="text-align:right">&pound;${expenditure.toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td></td><td></td></tr>
+      </tbody></table>
+      <div class="footer">
+        <p>Generated: ${new Date().toLocaleString("en-GB")} | Abdullah Quilliam Society | Confidential</p>
+      </div>
+      </body></html>`);
+    win.document.close();
+    toast.success("PDF report opened — use Print > Save as PDF");
+  };
+
   return (
     <>
       <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`}</style>
@@ -138,9 +271,17 @@ export default function ReconciliationPage() {
               <input type="number" value={year} onChange={e=>setYear(Number(e.target.value))}
                 style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",width:52 }}/>
             </div>
-            <Button onClick={() => window.print()}
-              style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,borderRadius:12,padding:"9px 16px",fontWeight:600,display:"flex",alignItems:"center",gap:7,fontSize:13 }}>
-              <Printer size={14}/> Print
+            <Button onClick={handlePrint}
+              style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,borderRadius:12,padding:"9px 14px",fontWeight:600,display:"flex",alignItems:"center",gap:6,fontSize:12 }}>
+              <Printer size={13}/> Print
+            </Button>
+            <Button onClick={handleExportCSV}
+              style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,borderRadius:12,padding:"9px 14px",fontWeight:600,display:"flex",alignItems:"center",gap:6,fontSize:12 }}>
+              <Download size={13}/> CSV
+            </Button>
+            <Button onClick={handleExportPDF}
+              style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,borderRadius:12,padding:"9px 14px",fontWeight:600,display:"flex",alignItems:"center",gap:6,fontSize:12 }}>
+              <FileText size={13}/> PDF
             </Button>
           </div>
         </div>
