@@ -2451,7 +2451,10 @@
 - [x] Fix: switched from base64 tRPC to /api/upload with retry logic for 503 errors
 - [x] Add robust error handling for non-JSON responses in safariSafeFetch and Capture.tsx
 - [x] safariSafeFetch: catch JSON.parse errors and show clear "Server unavailable" message instead of cryptic parse error
-- [x] Capture.tsx: uploadWithRetry helper with auto-retry (3s, 6s delays) for 503 cold-start errors
+- [x] Capture.tsx: uploadWithRetry helper with auto-retry (5s, 10s, 15s delays) for 503 cold-start errors
+- [x] Capture.tsx: extractWithRetry helper with auto-retry (5s, 10s, 15s delays) for AI extraction 503 errors
+- [x] Capture.tsx: warm-up ping before AI extraction to wake server from cold start
+- [x] Capture.tsx: skip re-upload if image already uploaded (lastUploadUrlRef)
 - [x] Capture.tsx: user-friendly error messages for 503 errors
 
 ## Bug Fix — AI extraction not filling form fields after successful receipt scan (May 2026)

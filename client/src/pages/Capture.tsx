@@ -40,6 +40,7 @@ export default function CapturePage() {
   const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+  const lastUploadUrlRef = useRef<string | null>(null);
   const [docType, setDocType] = useState<DocType>("receipt");
   const [preview, setPreview] = useState<string | null>(null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -118,6 +119,8 @@ export default function CapturePage() {
       setSavedToCrm(false);
       setImageHash("");
       setDuplicateWarning(null);
+      // Clear previous upload URL so new file gets uploaded fresh
+      lastUploadUrlRef.current = null;
     } catch (err: any) {
       console.error("[Capture] File select error:", err);
       toast.error("Could not load file: " + (err?.message || "unknown error"));
@@ -125,7 +128,7 @@ export default function CapturePage() {
   }, []);
 
   // Helper: upload compressed image to /api/upload with retry for 503 (cold start)
-  const uploadWithRetry = useCallback(async (compressed: File, maxRetries = 2): Promise<string> => {
+  const uploadWithRetry = useCallback(async (compressed: File, maxRetries = 3): Promise<string> => {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const formData = new FormData();
       formData.append("file", compressed, compressed.name);
@@ -140,10 +143,10 @@ export default function CapturePage() {
       console.log("[Capture] Upload response:", uploadRes.status, uploadText.substring(0, 200));
 
       if (uploadRes.status === 503 && attempt < maxRetries) {
-        // Server cold-starting or OOM — wait and retry
-        const delay = (attempt + 1) * 3000; // 3s, 6s
-        console.log(`[Capture] 503 — server warming up, retrying in ${delay / 1000}s...`);
-        toast.info("Server is warming up... retrying automatically");
+        // Server cold-starting — wait longer each retry (5s, 10s, 15s)
+        const delay = (attempt + 1) * 5000;
+        console.log(`[Capture] 503 \u2014 server warming up, retrying in ${delay / 1000}s...`);
+        toast.info(`Server is warming up... retrying in ${delay / 1000}s`);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }
@@ -170,6 +173,33 @@ export default function CapturePage() {
   }, []);
 
   // Step 2: Upload + AI extraction — triggered automatically or by button tap
+  // Helper: call AI extraction with retry for 503 errors
+  const extractWithRetry = useCallback(async (fileUrl: string, mimeType: string, moduleType: string, maxRetries = 3): Promise<any> => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[Capture] AI extraction attempt ${attempt + 1}/${maxRetries + 1}`);
+        const result = await extractMutation.mutateAsync({
+          fileUrl,
+          mimeType,
+          moduleType,
+        } as any);
+        return result;
+      } catch (err: any) {
+        const msg = err?.message || "";
+        const is503 = msg.includes("503") || msg.includes("temporarily unavailable") || msg.includes("Server error");
+        if (is503 && attempt < maxRetries) {
+          const delay = (attempt + 1) * 5000; // 5s, 10s, 15s
+          console.log(`[Capture] AI extraction got 503, retrying in ${delay / 1000}s...`);
+          toast.info(`Server warming up... retrying AI scan in ${delay / 1000}s`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error("AI extraction failed after retries. The server may be overloaded — please try again in a minute.");
+  }, [extractMutation]);
+
   const processFile = useCallback(async (file: File) => {
     if (uploading || analyzing) return; // prevent double-tap
     setUploading(true);
@@ -177,23 +207,41 @@ export default function CapturePage() {
     setScanError(null);
 
     try {
-      // Compress image before upload to reduce from 3-8MB to ~200-400KB
-      const compressed = await compressImage(file);
-      console.log("[Capture] Compressed:", compressed.name, compressed.type, (compressed.size / 1024).toFixed(0) + "KB", `(original: ${(file.size / 1024).toFixed(0)}KB)`);
+      let uploadUrl = lastUploadUrlRef.current;
 
-      // Upload with automatic retry for 503 (cold start)
-      const uploadUrl = await uploadWithRetry(compressed);
-      console.log("[Capture] Upload success:", uploadUrl);
+      // Skip upload if we already have a URL from a previous successful upload of the same file
+      if (!uploadUrl) {
+        // Compress image before upload to reduce from 3-8MB to ~200-400KB
+        const compressed = await compressImage(file);
+        console.log("[Capture] Compressed:", compressed.name, compressed.type, (compressed.size / 1024).toFixed(0) + "KB", `(original: ${(file.size / 1024).toFixed(0)}KB)`);
 
-      // AI extraction
+        // Upload with automatic retry for 503 (cold start)
+        uploadUrl = await uploadWithRetry(compressed);
+        console.log("[Capture] Upload success:", uploadUrl);
+        lastUploadUrlRef.current = uploadUrl;
+      } else {
+        console.log("[Capture] Reusing previous upload URL:", uploadUrl);
+      }
+
+      // AI extraction with retry
       setUploading(false);
       setAnalyzing(true);
+
+      // Warm-up ping: make a lightweight request to ensure server is ready before heavy AI call
+      try {
+        console.log("[Capture] Sending warm-up ping...");
+        const pingRes = await fetch("/api/trpc/auth.me", { credentials: "include" });
+        console.log("[Capture] Warm-up ping status:", pingRes.status);
+        if (pingRes.status === 503) {
+          // Server is cold-starting, wait for it
+          console.log("[Capture] Server cold-starting, waiting 5s...");
+          toast.info("Waking up server... please wait");
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      } catch { /* ignore ping errors */ }
+
       console.log("[Capture] Starting AI extraction, moduleType:", docType);
-      const aiData = await extractMutation.mutateAsync({
-        fileUrl: uploadUrl,
-        mimeType: file.type || "image/jpeg",
-        moduleType: docType,
-      });
+      const aiData = await extractWithRetry(uploadUrl, file.type || "image/jpeg", docType);
       console.log("[Capture] AI extraction result:", JSON.stringify(aiData).substring(0, 500));
       if (aiData) {
         // The extract procedure returns { extractedData, discrepancies, confidence, moduleType, isBulk }
@@ -222,7 +270,7 @@ export default function CapturePage() {
           }
           const phone = extracted?.donorPhone || extracted?.phone;
           if (phone) await checkCrmByPhone(phone);
-          toast.success("AI extracted data — review and save below");
+          toast.success("AI extracted data \u2014 review and save below");
         }
       }
       setPendingFile(null); // clear pending after success
@@ -231,7 +279,7 @@ export default function CapturePage() {
       const msg = err?.message || "Could not process document";
       // Make 503 errors more user-friendly
       const friendlyMsg = msg.includes("503") || msg.includes("temporarily unavailable")
-        ? "Server is busy — please tap 'Scan with AI' to try again"
+        ? "Server is busy \u2014 please tap 'Scan with AI' to try again"
         : msg;
       setScanError(friendlyMsg);
       toast.error(friendlyMsg);
@@ -239,7 +287,7 @@ export default function CapturePage() {
       setUploading(false);
       setAnalyzing(false);
     }
-  }, [uploading, analyzing, docType, extractMutation, setValue, checkCrmByPhone, uploadWithRetry]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [uploading, analyzing, docType, extractWithRetry, setValue, checkCrmByPhone, uploadWithRetry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-trigger processing when a file is selected
   const hasTriggeredRef = useRef(false);
