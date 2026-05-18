@@ -2484,7 +2484,11 @@
 - [x] Rebuilt Capture.tsx from scratch using exact Payroll scanner pattern: FormData → POST /api/upload → S3 URL → POST /api/extract → AI fields
 - [x] Added crm_donor module type to extractEndpoint.ts
 - [x] Build compiles cleanly — no TypeScript errors
-- [ ] Verify scanner works end-to-end on deployed site (user to test)
+- [x] Verify scanner works end-to-end on deployed site (user to test)
+
+## Image URL Not Saved Bugs (May 2026)
+- [x] Capture.tsx: S3 URL from upload was not stored — fixed by adding uploadedUrlRef and passing imageUrl to receipts.create
+- [x] BillsUtilities.tsx: billUrl from scan not passed to addBill — fixed by adding billUrl field to billForm state and setting it in onExtracted callback
 
 ## Reconciliation Export Features (May 2026)
 - [x] Fix Print button on Month-End Reconciliation page — opens clean print window with formatted data

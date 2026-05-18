@@ -66,6 +66,8 @@ export default function CapturePage() {
   const [submitted, setSubmitted]       = useState(false);
   const [savingToCrm, setSavingToCrm]   = useState(false);
   const [savedToCrm, setSavedToCrm]     = useState(false);
+  // Store the S3 URL after upload so it can be attached to the saved receipt
+  const uploadedUrlRef = useRef<string>("");
 
   // ── tRPC mutations ─────────────────────────────────────────────────────────
   const createReceiptMutation = trpc.receipts.create.useMutation({
@@ -94,6 +96,7 @@ export default function CapturePage() {
     setExtracted(null);
     setMultiRecords([]);
     setSavedToCrm(false);
+    uploadedUrlRef.current = "";
     reset({ department: "Mosque" });
   }, [reset]);
 
@@ -161,6 +164,7 @@ export default function CapturePage() {
       // Step 1: Upload
       setUploading(true);
       const { url: fileUrl, mimeType } = await uploadFile(file);
+      uploadedUrlRef.current = fileUrl; // persist for form submit
       setUploading(false);
 
       // Step 2: AI extraction
@@ -509,6 +513,7 @@ export default function CapturePage() {
                       date:         d.date,
                       categoryName: d.categoryName,
                       department:   d.department,
+                      imageUrl:     uploadedUrlRef.current || undefined,
                     });
                   })}
                   style={{ display: "flex", flexDirection: "column", gap: 10 }}

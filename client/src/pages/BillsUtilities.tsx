@@ -606,6 +606,7 @@ export default function BillsUtilities() {
     consumptionUnits: "",
     unitType: "",
     notes: "",
+    billUrl: "",
   });
   // Listen for Hibba voice form-fill commands
   useHibbaFormFill("/bills-utilities", useCallback((fields: Record<string, any>) => {
@@ -681,7 +682,7 @@ export default function BillsUtilities() {
       utils.bills.getAccount.invalidate({ id: billForm.accountId });
       utils.bills.summary.invalidate();
       setShowAddBill(false);
-      setBillForm({ accountId: 0, billDate: new Date().toISOString().split("T")[0], periodStart: "", periodEnd: "", amount: "", consumptionUnits: "", unitType: "", notes: "" });
+      setBillForm({ accountId: 0, billDate: new Date().toISOString().split("T")[0], periodStart: "", periodEnd: "", amount: "", consumptionUnits: "", unitType: "", notes: "", billUrl: "" });
       if (data.isAnomaly) {
         toast.warning(`⚠️ Anomaly Detected — This bill (£${parseFloat(billForm.amount).toFixed(2)}) is 50%+ above the 3-month average (£${data.avg3m}).`);
       } else {
@@ -1074,6 +1075,7 @@ export default function BillsUtilities() {
                 consumptionUnits: fields.consumptionUnits ? String(fields.consumptionUnits) : f.consumptionUnits,
                 unitType: fields.unitType || f.unitType,
                 notes: fields.notes ? `[Scanned] ${fields.notes}` : f.notes,
+                billUrl: fileUrl || f.billUrl,
               }));
               // If an account is selected, open the bill dialog; otherwise show quick-save confirmation
               if (selectedAccountId) {
