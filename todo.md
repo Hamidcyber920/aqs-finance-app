@@ -2521,3 +2521,6 @@
 - [x] People: add date range filter + CSV/PDF download
 - [x] Communications: add date range filter + CSV/PDF download
 - [x] Meetings & Onboarding: add date range filter + CSV/PDF download
+
+## UI Contrast Fix (May 2026)
+- [x] Fix Facilities page: text/labels barely visible — increased opacity from /40-/50 to /60-/70 for all labels, stat card text, table headers, and date inputs

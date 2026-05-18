@@ -203,13 +203,13 @@ export default function Facilities() {
           </div>
           <div>
             <h1 className="text-xl font-bold">Facilities & Room Booking</h1>
-            <p className="text-sm text-white/50">Manage bookable spaces across QLH, Bistro 87 & Accommodation</p>
+            <p className="text-sm text-white/70">Manage bookable spaces across QLH, Bistro 87 & Accommodation</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-32 h-8 text-xs bg-white/5 border-white/20 text-white" />
-          <span className="text-xs text-white/50">to</span>
-          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-32 h-8 text-xs bg-white/5 border-white/20 text-white" />
+          <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-32 h-8 text-xs bg-white/10 border-white/30 text-white" />
+          <span className="text-xs text-white/70">to</span>
+          <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-32 h-8 text-xs bg-white/10 border-white/30 text-white" />
           <Button variant="outline" size="sm" className="h-8 gap-1 text-xs border-white/20 text-white hover:bg-white/10" onClick={() => {
             const allBookings = bookings.data ?? [];
             const filtered = allBookings.filter((b: any) => { const d = new Date(b.startDatetime); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
@@ -253,7 +253,7 @@ export default function Facilities() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-1">
                   <s.icon className={`w-4 h-4 ${s.color}`} />
-                  <span className="text-xs text-white/50">{s.label}</span>
+                  <span className="text-xs text-white/70 font-medium">{s.label}</span>
                 </div>
                 <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
               </CardContent>
@@ -265,16 +265,16 @@ export default function Facilities() {
       {/* Upcoming */}
       {stats.data?.upcoming && stats.data.upcoming.length > 0 && (
         <Card className="bg-white/5 border-white/10">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-white/70">Upcoming Bookings</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-white/90">Upcoming Bookings</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {stats.data.upcoming.map((u: any) => (
                 <div key={u.booking.id} className="flex flex-wrap items-start justify-between gap-1 p-2 rounded-lg bg-white/5 text-sm">
                   <div className="flex-1 min-w-0">
                     <span className="font-medium">{u.booking.title}</span>
-                    <span className="text-white/50 ml-2">{u.roomName}</span>
+                    <span className="text-white/70 ml-2">{u.roomName}</span>
                   </div>
-                  <span className="text-white/60 text-xs whitespace-nowrap">{fmtDt(u.booking.startDatetime)}</span>
+                  <span className="text-white/80 text-xs whitespace-nowrap">{fmtDt(u.booking.startDatetime)}</span>
                 </div>
               ))}
             </div>
@@ -298,27 +298,27 @@ export default function Facilities() {
               <thead>
                 <tr className="border-b border-white/10 bg-white/5">
                   {["Room", "Title", "Booker", "Start", "End", "Amount", "Status", "Payment", ""].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-white/50 whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-white/70 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {bookings.isLoading && (
-                  <tr><td colSpan={9} className="text-center py-8 text-white/40">Loading...</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 text-white/60">Loading...</td></tr>
                 )}
                 {!bookings.isLoading && (!bookings.data || bookings.data.length === 0) && (
-                  <tr><td colSpan={9} className="text-center py-8 text-white/40">No bookings yet. Create the first one.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 text-white/60">No bookings yet. Create the first one.</td></tr>
                 )}
                 {bookings.data?.map((row: any) => (
                   <tr key={row.booking.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className="font-medium">{row.roomName || "-"}</span>
-                      {row.building && <span className="ml-1 text-xs text-white/40">({row.building})</span>}
+                      {row.building && <span className="ml-1 text-xs text-white/60">({row.building})</span>}
                     </td>
                     <td className="px-3 py-2 max-w-[180px] truncate">{row.booking.title}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <div>{row.booking.bookerName}</div>
-                      {row.booking.organisation && <div className="text-xs text-white/40">{row.booking.organisation}</div>}
+                      {row.booking.organisation && <div className="text-xs text-white/60">{row.booking.organisation}</div>}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs">{fmtDt(row.booking.startDatetime)}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs">{fmtDt(row.booking.endDatetime)}</td>
@@ -344,14 +344,14 @@ export default function Facilities() {
         {/* Rooms Tab */}
         <TabsContent value="rooms" className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {rooms.isLoading && <p className="text-white/40 col-span-3">Loading rooms...</p>}
+            {rooms.isLoading && <p className="text-white/60 col-span-3">Loading rooms...</p>}
             {rooms.data?.map((room: any) => (
               <Card key={room.id} className={`bg-white/5 border-white/10 ${!room.isActive ? "opacity-50" : ""}`}>
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="font-semibold">{room.name}</div>
-                      <div className="text-xs text-white/50">{room.building}</div>
+                      <div className="text-xs text-white/70">{room.building}</div>
                     </div>
                     {!room.isActive && <Badge className="text-xs bg-red-500/20 text-red-300 border-red-500/30">Inactive</Badge>}
                   </div>
@@ -360,7 +360,7 @@ export default function Facilities() {
                       <Users className="w-3 h-3" /> Capacity: {room.capacity}
                     </div>
                   )}
-                  {room.description && <p className="text-xs text-white/50 line-clamp-2">{room.description}</p>}
+                  {room.description && <p className="text-xs text-white/70 line-clamp-2">{room.description}</p>}
                   <div className="flex flex-wrap gap-2 text-xs">
                     {room.hourlyRate && <span className="bg-white/10 px-2 py-0.5 rounded">{fmt(room.hourlyRate)}/hr</span>}
                     {room.halfDayRate && <span className="bg-white/10 px-2 py-0.5 rounded">{fmt(room.halfDayRate)} half-day</span>}
@@ -377,7 +377,7 @@ export default function Facilities() {
               </Card>
             ))}
             {rooms.data?.length === 0 && (
-              <div className="col-span-3 text-center py-12 text-white/40">
+              <div className="col-span-3 text-center py-12 text-white/60">
                 <Building2 className="w-10 h-10 mx-auto mb-3 opacity-30" />
                 <p>No rooms configured yet. Add the first room.</p>
               </div>
