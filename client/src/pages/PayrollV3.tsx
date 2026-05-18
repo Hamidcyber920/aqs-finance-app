@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Upload, Plus, CheckCircle, DollarSign, Users, FileText, AlertCircle, ChevronRight } from "lucide-react";
+import { Upload, Plus, CheckCircle, DollarSign, Users, FileText, AlertCircle, ChevronRight, Download, Calendar } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -50,9 +50,21 @@ export default function PayrollV3Page() {
   const [ocrFields, setOcrFields] = useState<any>(null);
   const [ocrConfirmed, setOcrConfirmed] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState<number | null>(null);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const dashboard = trpc.payrollV3.getDashboardStats.useQuery({ month, year });
   const records = trpc.payrollV3.list.useQuery({ month, year, limit: 100 });
+
+  // Filter records by date range (uses createdAt or constructs date from month/year)
+  const filteredPayroll = (records.data ?? []).filter((r: any) => {
+    if (!dateFrom && !dateTo) return true;
+    const recDate = r.createdAt ? new Date(r.createdAt) : new Date(r.year ?? year, (r.month ?? month) - 1, 1);
+    if (dateFrom && recDate < new Date(dateFrom)) return false;
+    if (dateTo && recDate > new Date(dateTo + "T23:59:59")) return false;
+    return true;
+  });
+
   const employeeSummary = trpc.payrollV3.getEmployeeSummary.useQuery(
     { employeeId: selectedEmployee!, year },
     { enabled: selectedEmployee !== null }
@@ -200,6 +212,45 @@ export default function PayrollV3Page() {
         </div>
       )}
 
+      {/* Date range filter + Export */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2 bg-gray-50 border rounded-lg px-3 py-2 flex-wrap">
+          <Calendar className="h-4 w-4 text-gray-400" />
+          <span className="text-xs text-gray-500 font-medium">From:</span>
+          <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="bg-transparent border-none text-sm outline-none" />
+          <span className="text-xs text-gray-500 font-medium ml-2">To:</span>
+          <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="bg-transparent border-none text-sm outline-none" />
+        </div>
+        {(dateFrom || dateTo) && (
+          <Button variant="outline" size="sm" onClick={()=>{setDateFrom("");setDateTo("");}} className="text-red-500 border-red-200">Clear</Button>
+        )}
+        <Button variant="outline" size="sm" onClick={()=>{
+          const recs = filteredPayroll;
+          const headers = ["Employee","NI Number","Tax Code","Gross Pay","Income Tax","NI","Net Pay","Method","Status"];
+          const rows = recs.map((r:any) => [r.employeeName,r.niNumber??"",r.taxCode??"",Number(r.grossPay).toFixed(2),Number(r.incomeTax).toFixed(2),Number(r.nationalInsurance).toFixed(2),Number(r.netPay).toFixed(2),r.paymentMethod,r.status]);
+          if (dateFrom||dateTo) rows.push([`Date Range: ${dateFrom||'start'} to ${dateTo||'end'}`,"","","","","","","",""]);
+          rows.push(["TOTAL","","",recs.reduce((s:number,r:any)=>s+Number(r.grossPay),0).toFixed(2),recs.reduce((s:number,r:any)=>s+Number(r.incomeTax),0).toFixed(2),recs.reduce((s:number,r:any)=>s+Number(r.nationalInsurance),0).toFixed(2),recs.reduce((s:number,r:any)=>s+Number(r.netPay),0).toFixed(2),"",""]);
+          const csv = [headers,...rows].map(row=>row.map(v=>`"${v}"`).join(",")).join("\n");
+          const blob = new Blob([csv],{type:"text/csv"});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a"); a.href=url;
+          a.download=`payroll-${MONTHS[month-1]}-${year}${dateFrom||dateTo?`-${dateFrom||'start'}-to-${dateTo||'end'}`:''}.csv`;
+          a.click(); URL.revokeObjectURL(url);
+        }}><Download className="h-3 w-3 mr-1" />CSV</Button>
+        <Button variant="outline" size="sm" onClick={()=>{
+          const recs = filteredPayroll;
+          const totalGross = recs.reduce((s:number,r:any)=>s+Number(r.grossPay),0);
+          const totalTax = recs.reduce((s:number,r:any)=>s+Number(r.incomeTax),0);
+          const totalNI = recs.reduce((s:number,r:any)=>s+Number(r.nationalInsurance),0);
+          const totalNet = recs.reduce((s:number,r:any)=>s+Number(r.netPay),0);
+          const dateLabel = dateFrom||dateTo ? ` (${dateFrom||'start'} to ${dateTo||'end'})` : '';
+          const win = window.open("","_blank");
+          if (!win) { toast.error("Pop-up blocked"); return; }
+          win.document.write(`<!DOCTYPE html><html><head><title>Payroll Report</title><style>body{font-family:system-ui,sans-serif;padding:40px;max-width:900px;margin:0 auto}table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}th,td{padding:8px 12px;border-bottom:1px solid #eee;text-align:left}th{background:#f5f5f5;font-weight:600;font-size:12px;text-transform:uppercase}h1{font-size:22px}.total{font-weight:700;border-top:2px solid #333}@media print{body{padding:0}}</style></head><body><h1>Payroll Report</h1><p style="color:#666">${MONTHS[month-1]} ${year}${dateLabel}</p><p><strong>Employees:</strong> ${recs.length} | <strong>Total Gross:</strong> \u00a3${totalGross.toLocaleString("en-GB",{minimumFractionDigits:2})} | <strong>Total Net:</strong> \u00a3${totalNet.toLocaleString("en-GB",{minimumFractionDigits:2})}</p><table><thead><tr><th>Employee</th><th>NI / Tax Code</th><th style="text-align:right">Gross</th><th style="text-align:right">Tax</th><th style="text-align:right">NI</th><th style="text-align:right">Net Pay</th><th>Method</th><th>Status</th></tr></thead><tbody>${recs.map((r:any)=>`<tr><td>${r.employeeName}</td><td>${r.niNumber??'\u2014'} / ${r.taxCode??'\u2014'}</td><td style="text-align:right">\u00a3${Number(r.grossPay).toFixed(2)}</td><td style="text-align:right">\u00a3${Number(r.incomeTax).toFixed(2)}</td><td style="text-align:right">\u00a3${Number(r.nationalInsurance).toFixed(2)}</td><td style="text-align:right">\u00a3${Number(r.netPay).toFixed(2)}</td><td style="text-transform:capitalize">${r.paymentMethod.replace("_"," ")}</td><td style="text-transform:capitalize">${r.status}</td></tr>`).join("")}<tr class="total"><td colspan="2">TOTAL</td><td style="text-align:right">\u00a3${totalGross.toFixed(2)}</td><td style="text-align:right">\u00a3${totalTax.toFixed(2)}</td><td style="text-align:right">\u00a3${totalNI.toFixed(2)}</td><td style="text-align:right">\u00a3${totalNet.toFixed(2)}</td><td></td><td></td></tr></tbody></table><p style="margin-top:32px;font-size:11px;color:#999">Generated ${new Date().toLocaleString("en-GB")} | Use browser "Save as PDF"</p></body></html>`);
+          win.document.close();
+          setTimeout(()=>win.print(),500);
+        }}><FileText className="h-3 w-3 mr-1" />PDF</Button>
+      </div>
       {/* Records table */}
       <Card>
         <CardHeader className="pb-2">
@@ -224,9 +275,9 @@ export default function PayrollV3Page() {
               <tbody>
                 {records.isLoading ? (
                   <tr><td colSpan={9} className="p-6 text-center text-gray-400">Loading...</td></tr>
-                ) : (records.data ?? []).length === 0 ? (
-                  <tr><td colSpan={9} className="p-6 text-center text-gray-400">No records for {MONTHS[month - 1]} {year}.</td></tr>
-                ) : (records.data ?? []).map(r => (
+                ) : filteredPayroll.length === 0 ? (
+                  <tr><td colSpan={9} className="p-6 text-center text-gray-400">No records for {MONTHS[month - 1]} {year}{(dateFrom||dateTo)?' in selected date range':''}.</td></tr>
+                ) : filteredPayroll.map(r => (
                   <tr key={r.id} className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setSelectedEmployee(r.employeeId ?? null)}>
                     <td className="p-3 font-medium">{r.employeeName}</td>
                     <td className="p-3 text-gray-500 text-xs">{r.niNumber ?? "—"} / {r.taxCode ?? "—"}</td>

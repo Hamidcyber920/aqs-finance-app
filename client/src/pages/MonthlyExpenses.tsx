@@ -450,11 +450,11 @@ export default function MonthlyExpenses() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectItem, setRejectItem] = useState<any>(null);
   const [rejectComment, setRejectComment] = useState("");
-  const [activeTab, setActiveTab] = useState<"expenses" | "cashflow">("expenses");
-
+    const [activeTab, setActiveTab] = useState<"expenses" | "cashflow">("expenses");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   useEffect(() => {
   }, [month, year, activeTab]);
-
   const { data, refetch } = trpc.expenses.allItems.useQuery({ month, year });
 
   const authoriseMutation = trpc.expenses.authorise.useMutation({
@@ -467,10 +467,77 @@ export default function MonthlyExpenses() {
     onSuccess: () => { toast.success("Marked as paid"); refetch(); },
   });
 
-  const payroll = data?.payroll ?? [];
-  const invoices = data?.receipts ?? [];
-  const volunteers = data?.volunteers ?? [];
-  const loans = data?.loans ?? [];
+  // Date range filter helper
+  const filterByDateRange = (items: any[]) => {
+    if (!dateFrom && !dateTo) return items;
+    return items.filter((item: any) => {
+      const d = new Date(item.receiptDate || item.paidAt || item.createdAt || item.date || 0);
+      if (dateFrom && d < new Date(dateFrom)) return false;
+      if (dateTo) { const to = new Date(dateTo); to.setHours(23,59,59,999); if (d > to) return false; }
+      return true;
+    });
+  };
+  const payroll = filterByDateRange(data?.payroll ?? []);
+  const invoices = filterByDateRange(data?.receipts ?? []);
+  const volunteers = filterByDateRange(data?.volunteers ?? []);
+  const loans = filterByDateRange(data?.loans ?? []);
+  const allItemsFlat = [...payroll.map((i:any)=>({...i,_type:"payroll"})), ...invoices.map((i:any)=>({...i,_type:"invoice"})), ...volunteers.map((i:any)=>({...i,_type:"volunteer"})), ...loans.map((i:any)=>({...i,_type:"loan"}))];
+  const dateRangeLabel = dateFrom || dateTo ? ` (${dateFrom || 'start'} to ${dateTo || 'end'})` : '';
+  const dateRangeFile = dateFrom || dateTo ? `-${dateFrom || 'start'}-to-${dateTo || 'end'}` : '';
+
+  const handleExpenseCSV = () => {
+    const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
+    const header = ["Date","Payee","Type","Category","Amount","Status","Payment Method"];
+    const csvRows = [header.join(",")];
+    allItemsFlat.forEach((r: any) => {
+      const rd = r.receiptDate || r.paidAt || r.createdAt || r.date;
+      csvRows.push([
+        escape(rd ? new Date(rd).toLocaleDateString("en-GB") : ""),
+        escape(r.vendor || r.staffName || r.name || ""),
+        escape(r._type || ""),
+        escape(r.categoryName || r.departmentName || ""),
+        String(Number(r.amount ?? r.grossPay ?? r.netPay ?? 0).toFixed(2)),
+        escape(r.status || r.paymentStatus || "pending"),
+        escape(r.paymentMethod || ""),
+      ].join(","));
+    });
+    csvRows.push("");
+    if (dateFrom || dateTo) csvRows.push(`"Date Range","${dateFrom || 'start'} to ${dateTo || 'end'}"`);
+    csvRows.push(`"Total",,,,,${totalAll.toFixed(2)}`);
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `expenses-${year}-${String(month).padStart(2,"0")}${dateRangeFile}.csv`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url);
+    toast.success("CSV downloaded");
+  };
+
+  const handleExpensePDF = () => {
+    const monthName = `${new Date(year, month-1).toLocaleString("en-GB",{month:"long"})} ${year}`;
+    const win = window.open("","_blank");
+    if (!win) { toast.error("Pop-up blocked"); return; }
+    win.document.write(`<!DOCTYPE html><html><head><title>Expenses ${monthName}</title>
+    <style>body{font-family:system-ui,sans-serif;padding:40px;max-width:900px;margin:0 auto}
+    table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+    th,td{padding:8px 12px;border-bottom:1px solid #eee;text-align:left}
+    th{background:#f5f5f5;font-weight:600;font-size:12px;text-transform:uppercase}
+    h1{font-size:22px} h2{font-size:16px;margin-top:24px}
+    .total{font-weight:700;border-top:2px solid #333}
+    @media print{body{padding:0}}</style></head><body>
+    <h1>Monthly Expenses Report</h1>
+    <p style="color:#666">${monthName}${dateRangeLabel}</p>
+    <p><strong>Total Outgoings:</strong> £${totalAll.toLocaleString("en-GB",{minimumFractionDigits:2})} | <strong>Authorised:</strong> £${authorisedTotal.toLocaleString("en-GB",{minimumFractionDigits:2})}</p>
+    <table><thead><tr><th>Date</th><th>Payee</th><th>Type</th><th>Category</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead><tbody>
+    ${allItemsFlat.map((r:any)=>{const rd=r.receiptDate||r.paidAt||r.createdAt||r.date;return`<tr><td>${rd?new Date(rd).toLocaleDateString('en-GB'):'—'}</td><td>${r.vendor||r.staffName||r.name||'—'}</td><td style="text-transform:capitalize">${r._type||'—'}</td><td>${r.categoryName||r.departmentName||'—'}</td><td style="text-align:right">£${Number(r.amount??r.grossPay??r.netPay??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td style="text-transform:capitalize">${r.status||r.paymentStatus||'pending'}</td></tr>`}).join("")}
+    ${allItemsFlat.length===0?'<tr><td colspan="6" style="color:#999">No expense items</td></tr>':''}
+    <tr class="total"><td colspan="4">Total</td><td style="text-align:right">£${totalAll.toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td></td></tr>
+    </tbody></table>
+    <p style="margin-top:32px;font-size:11px;color:#999">Generated ${new Date().toLocaleString("en-GB")} | Use browser "Save as PDF"</p>
+    </body></html>`);
+    win.document.close();
+    setTimeout(()=>win.print(),500);
+  };
 
   const totalAll = [...payroll, ...invoices, ...volunteers, ...loans]
     .reduce((s: number, i: any) => s + Number(i.amount ?? i.grossPay ?? i.netPay ?? 0), 0);
@@ -542,6 +609,37 @@ export default function MonthlyExpenses() {
 
         {activeTab === "expenses" && (
           <>
+            {/* Date range filter + export */}
+            <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:20 }}>
+              <div style={{ display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`,borderRadius:12,padding:"8px 14px" }}>
+                <Calendar size={14} style={{color:T.muted}}/>
+                <span style={{ fontSize:12,color:T.muted,fontWeight:600 }}>From:</span>
+                <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+                  style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",cursor:"pointer" }}/>
+                <span style={{ fontSize:12,color:T.muted,fontWeight:600,marginLeft:8 }}>To:</span>
+                <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+                  style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",cursor:"pointer" }}/>
+              </div>
+              {(dateFrom || dateTo) && (
+                <Button onClick={()=>{setDateFrom("");setDateTo("");}}
+                  style={{ background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.2)",color:"#ff5050",borderRadius:10,padding:"7px 12px",fontWeight:600,fontSize:11 }}>
+                  Clear
+                </Button>
+              )}
+              <Button onClick={handleExpenseCSV}
+                style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,borderRadius:12,padding:"9px 14px",fontWeight:600,display:"flex",alignItems:"center",gap:6,fontSize:12 }}>
+                <Download size={13}/> CSV
+              </Button>
+              <Button onClick={handleExpensePDF}
+                style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,borderRadius:12,padding:"9px 14px",fontWeight:600,display:"flex",alignItems:"center",gap:6,fontSize:12 }}>
+                <FileText size={13}/> PDF
+              </Button>
+              {(dateFrom || dateTo) && (
+                <span style={{ fontSize:11,color:T.mint,fontWeight:600 }}>
+                  Showing {allItemsFlat.length} items{dateRangeLabel}
+                </span>
+              )}
+            </div>
             {/* Summary bar */}
             <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:16,marginBottom:28 }}>
               {[

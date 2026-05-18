@@ -2483,3 +2483,15 @@
 - [x] Fix Print button on Month-End Reconciliation page — opens clean print window with formatted data
 - [x] Add CSV download button — exports payment rows + summary totals as .csv
 - [x] Add PDF download button — opens formatted report in new tab for Save as PDF
+
+## Reconciliation Date Range Filter (May 2026)
+- [x] Add date range picker (From/To) to Reconciliation page header
+- [x] Filter displayed expenses by the selected date range
+- [x] CSV download exports only the filtered date range data
+- [x] PDF download exports only the filtered date range data
+
+## Date Range Filter + CSV/PDF on All Finance Pages (May 2026)
+- [x] Monthly Expenses: add date range filter + CSV/PDF download
+- [x] Income & Rentals: add date range filter + CSV/PDF download
+- [ ] Fundraising: skipped — campaign-based (no transaction list to filter)
+- [x] Payroll: add date range filter + CSV/PDF download

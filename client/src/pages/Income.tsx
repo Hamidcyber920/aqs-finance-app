@@ -5,7 +5,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft, Upload, X, Camera, Search, Download, ChevronDown } from "lucide-react";
+import { Plus, TrendingUp, DollarSign, Calendar, ChevronRight, ArrowLeft, Upload, X, Camera, Search, Download, ChevronDown, FileText } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -303,6 +303,8 @@ export default function IncomePage() {
   const [year, setYear] = useState(now.getFullYear());
   const [showAll, setShowAll] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
@@ -465,6 +467,12 @@ export default function IncomePage() {
 
   const filtered = records.filter((r: any) => {
     const matchCat = catFilter === "All" || r.category === catFilter || r.categoryName === catFilter;
+    // Date range filter
+    if (dateFrom || dateTo) {
+      const d = new Date(r.incomeDate || r.createdAt || 0);
+      if (dateFrom && d < new Date(dateFrom)) return false;
+      if (dateTo) { const to = new Date(dateTo); to.setHours(23,59,59,999); if (d > to) return false; }
+    }
     if (!searchQuery.trim()) return matchCat;
     const q = searchQuery.toLowerCase();
     return matchCat && (
@@ -474,6 +482,9 @@ export default function IncomePage() {
       String(r.amount ?? "").includes(q)
     );
   });
+  const filteredTotal = filtered.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+  const dateRangeLabel = dateFrom || dateTo ? ` (${dateFrom || 'start'} to ${dateTo || 'end'})` : '';
+  const dateRangeFile = dateFrom || dateTo ? `-${dateFrom || 'start'}-to-${dateTo || 'end'}` : '';
 
   function exportCSV() {
     const headers = ["Category","Subcategory","Payer/Ref","Period","Amount","Status","Date","Notes","Signed By Manager","Signed By Trustee"];
@@ -489,12 +500,38 @@ export default function IncomePage() {
       (r.signedByManager ?? "").replace(/,/g,";"),
       (r.signedByTrustee ?? "").replace(/,/g,";")
     ]);
+    if (dateFrom || dateTo) rows.push([`Date Range: ${dateFrom || 'start'} to ${dateTo || 'end'}`,"","","","","","","","",""]);
+    rows.push(["Total","","","",filteredTotal.toFixed(2),"","","","",""]);
     const csv = [headers, ...rows].map(row => row.map(v => `"${v}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url;
-    a.download = `income-records-${showAll ? "all" : `${year}-${String(month).padStart(2,"0")}`}.csv`;
+    a.download = `income-records-${showAll ? "all" : `${year}-${String(month).padStart(2,"0")}`}${dateRangeFile}.csv`;
     a.click(); URL.revokeObjectURL(url);
+  }
+  function exportPDF() {
+    const monthName = showAll ? "All Time" : `${new Date(year, month-1).toLocaleString("en-GB",{month:"long"})} ${year}`;
+    const win = window.open("","_blank");
+    if (!win) { toast.error("Pop-up blocked"); return; }
+    win.document.write(`<!DOCTYPE html><html><head><title>Income Report ${monthName}</title>
+    <style>body{font-family:system-ui,sans-serif;padding:40px;max-width:900px;margin:0 auto}
+    table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+    th,td{padding:8px 12px;border-bottom:1px solid #eee;text-align:left}
+    th{background:#f5f5f5;font-weight:600;font-size:12px;text-transform:uppercase}
+    h1{font-size:22px} .total{font-weight:700;border-top:2px solid #333}
+    @media print{body{padding:0}}</style></head><body>
+    <h1>Income Report</h1>
+    <p style="color:#666">${monthName}${dateRangeLabel}</p>
+    <p><strong>Total Income:</strong> \u00a3${filteredTotal.toLocaleString("en-GB",{minimumFractionDigits:2})} | <strong>Records:</strong> ${filtered.length}</p>
+    <table><thead><tr><th>Date</th><th>Category</th><th>Payer/Ref</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead><tbody>
+    ${filtered.map((r:any)=>`<tr><td>${r.createdAt?new Date(r.createdAt).toLocaleDateString('en-GB'):'\u2014'}</td><td>${r.categoryName??r.category??'\u2014'}</td><td>${r.tenantName??r.reference??'\u2014'}</td><td style="text-align:right">\u00a3${Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td style="text-transform:capitalize">${r.paymentStatus??'pending'}</td></tr>`).join("")}
+    ${filtered.length===0?'<tr><td colspan="5" style="color:#999">No income records</td></tr>':''}
+    <tr class="total"><td colspan="3">Total</td><td style="text-align:right">\u00a3${filteredTotal.toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td></td></tr>
+    </tbody></table>
+    <p style="margin-top:32px;font-size:11px;color:#999">Generated ${new Date().toLocaleString("en-GB")} | Use browser "Save as PDF"</p>
+    </body></html>`);
+    win.document.close();
+    setTimeout(()=>win.print(),500);
   }
 
   const allCats = ["All", ...INCOME_CATEGORIES];
@@ -635,17 +672,44 @@ export default function IncomePage() {
           ))}
         </div>
 
+        {/* Date range filter */}
+        <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:12 }}>
+          <div style={{ display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`,borderRadius:12,padding:"8px 14px",flexWrap:"wrap" }}>
+            <Calendar size={14} style={{color:T.muted}}/>
+            <span style={{ fontSize:12,color:T.muted,fontWeight:600 }}>From:</span>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+              style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",cursor:"pointer" }}/>
+            <span style={{ fontSize:12,color:T.muted,fontWeight:600,marginLeft:8 }}>To:</span>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+              style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",cursor:"pointer" }}/>
+          </div>
+          {(dateFrom || dateTo) && (
+            <button onClick={()=>{setDateFrom("");setDateTo("");}}
+              style={{ background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.2)",color:"#ff5050",borderRadius:10,padding:"7px 12px",fontWeight:600,fontSize:11,cursor:"pointer" }}>
+              Clear
+            </button>
+          )}
+          {(dateFrom || dateTo) && (
+            <span style={{ fontSize:11,color:T.mint,fontWeight:600 }}>
+              {filtered.length} records | \u00a3{filteredTotal.toLocaleString("en-GB",{minimumFractionDigits:2})}
+            </span>
+          )}
+        </div>
         {/* Search bar + Export */}
         <div style={{ display:"flex",gap:10,alignItems:"center",marginBottom:16,flexWrap:"wrap" }}>
           <div style={{ flex:1,minWidth:200,display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:12,padding:"8px 14px" }}>
             <Search size={14} style={{color:T.muted,flexShrink:0}}/>
-            <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search by category, reference, amount…"
+            <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Search by category, reference, amount\u2026"
               style={{ flex:1,background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none" }}/>
             {searchQuery && <button onClick={()=>setSearchQuery("")} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",padding:0}}><X size={12}/></button>}
           </div>
           <button onClick={exportCSV}
             style={{ display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:12,fontSize:12,fontWeight:600,border:`1px solid ${T.border}`,background:`rgba(255,255,255,0.06)`,color:T.muted,cursor:"pointer",transition:"all 0.2s" }}>
-            <Download size={13}/> Export CSV
+            <Download size={13}/> CSV
+          </button>
+          <button onClick={exportPDF}
+            style={{ display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:12,fontSize:12,fontWeight:600,border:`1px solid ${T.border}`,background:`rgba(255,255,255,0.06)`,color:T.muted,cursor:"pointer",transition:"all 0.2s" }}>
+            <FileText size={13}/> PDF
           </button>
         </div>
         {/* Category filter tabs */}

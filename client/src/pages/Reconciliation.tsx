@@ -35,6 +35,8 @@ export default function ReconciliationPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [bankBalance, setBankBalance] = useState("");
   const [scanningStatement, setScanningStatement] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const statementRef = useRef<HTMLInputElement>(null);
 
@@ -87,7 +89,7 @@ export default function ReconciliationPage() {
     extractStatementMutation?.mutate?.({ fileUrl: url });
   };
 
-  const rows = data?.expenditure ? [
+  const allRows = data?.expenditure ? [
     ...(data.expenditure.payroll ?? []),
     ...(data.expenditure.receipts ?? []),
     ...(data.expenditure.volunteers ?? []),
@@ -95,6 +97,21 @@ export default function ReconciliationPage() {
     ...(data.expenditure.invoices ?? []),
     ...(data.expenditure.carried ?? []),
   ] : [];
+
+  // Filter rows by date range if set
+  const rows = allRows.filter((r: any) => {
+    if (!dateFrom && !dateTo) return true;
+    const rowDate = r.date || r.paidAt || r.createdAt;
+    if (!rowDate) return true; // include rows without dates
+    const d = new Date(rowDate);
+    if (dateFrom && d < new Date(dateFrom)) return false;
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
+      if (d > to) return false;
+    }
+    return true;
+  });
   const incomeBreakdown = data?.income?.breakdown ?? [];
   const expBreakdown = data?.expenditure ? [
     ...(data.expenditure.payroll ?? []).map((r: any) => ({ type: 'payroll', category: 'Payroll', amount: r.amount })),
@@ -124,7 +141,7 @@ export default function ReconciliationPage() {
       .amount{font-size:20px;font-weight:700}.positive{color:#16a34a}.negative{color:#dc2626}
       @media print{body{padding:0}}</style></head><body>
       <h1>Month-End Reconciliation</h1>
-      <p style="color:#666;margin:0 0 20px">${monthName}</p>
+      <p style="color:#666;margin:0 0 20px">${monthName}${dateRangeLabel}</p>
       <div class="summary">
         <div class="summary-box"><p style="margin:0 0 4px;font-size:12px;color:#666">Bank Balance</p><p class="amount">&pound;${bankBal.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
         <div class="summary-box"><p style="margin:0 0 4px;font-size:12px;color:#666">Total Income</p><p class="amount positive">&pound;${income.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
@@ -136,22 +153,27 @@ export default function ReconciliationPage() {
       ${incRows.map(([cat,amt])=>`<tr><td>${cat}</td><td style="text-align:right">&pound;${amt.toLocaleString("en-GB",{minimumFractionDigits:2})}</td></tr>`).join("")}
       ${incRows.length===0?'<tr><td colspan="2" style="color:#999">No income records</td></tr>':''}
       </tbody></table>
-      <h2>Payment Rows</h2>
-      <table><thead><tr><th>Payee</th><th>Type</th><th style="text-align:right">Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>
-      ${rows.map((r:any)=>`<tr><td>${r.payee??r.employeeName??r.borrowerName??'\u2014'}</td><td style="text-transform:capitalize">${r.type??'\u2014'}</td><td style="text-align:right">&pound;${Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td style="text-transform:capitalize">${r.paymentMethod??'\u2014'}</td><td style="text-transform:capitalize">${r.status??'pending'}</td></tr>`).join("")}
-      ${rows.length===0?'<tr><td colspan="5" style="color:#999">No payment rows</td></tr>':''}
+      <h2>Payment Rows${dateRangeLabel ? ` <span style="font-weight:400;font-size:12px;color:#666">${dateRangeLabel}</span>` : ''}</h2>
+      <table><thead><tr><th>Date</th><th>Payee</th><th>Type</th><th style="text-align:right">Amount</th><th>Method</th><th>Status</th></tr></thead><tbody>
+      ${rows.map((r:any)=>{const rd=r.date||r.paidAt||r.createdAt;return`<tr><td>${rd?new Date(rd).toLocaleDateString('en-GB'):'\u2014'}</td><td>${r.payee??r.employeeName??r.borrowerName??'\u2014'}</td><td style="text-transform:capitalize">${r.type??'\u2014'}</td><td style="text-align:right">&pound;${Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td style="text-transform:capitalize">${r.paymentMethod??'\u2014'}</td><td style="text-transform:capitalize">${r.status??'pending'}</td></tr>`}).join("")}
+      ${rows.length===0?'<tr><td colspan="6" style="color:#999">No payment rows</td></tr>':''}
       </tbody></table>
       <p style="margin-top:32px;font-size:11px;color:#999">Generated ${new Date().toLocaleString("en-GB")}</p>
       <script>window.onload=()=>window.print()</script></body></html>`);
     win.document.close();
   };
 
+  const dateRangeLabel = dateFrom || dateTo ? ` (${dateFrom || 'start'} to ${dateTo || 'end'})` : '';
+  const dateRangeFile = dateFrom || dateTo ? `-${dateFrom || 'start'}-to-${dateTo || 'end'}` : '';
+
   const handleExportCSV = () => {
     const escape = (v: string) => `"${String(v).replace(/"/g, '""')}"`;
-    const header = ["Payee","Type","Amount","Payment Method","Status","Carried From"];
+    const header = ["Date","Payee","Type","Amount","Payment Method","Status","Carried From"];
     const csvRows = [header.join(",")];
     rows.forEach((r: any) => {
+      const rowDate = r.date || r.paidAt || r.createdAt;
       csvRows.push([
+        escape(rowDate ? new Date(rowDate).toLocaleDateString("en-GB") : ""),
         escape(r.payee ?? r.employeeName ?? r.borrowerName ?? ""),
         escape(r.type ?? ""),
         String(Number(r.amount ?? 0).toFixed(2)),
@@ -162,15 +184,16 @@ export default function ReconciliationPage() {
     });
     // Add summary rows
     csvRows.push("");
-    csvRows.push(`"Bank Balance",,${bankBal.toFixed(2)}`);
-    csvRows.push(`"Total Income",,${income.toFixed(2)}`);
-    csvRows.push(`"Total Expenditure",,${expenditure.toFixed(2)}`);
-    csvRows.push(`"Reconciliation Balance",,${balance.toFixed(2)}`);
+    if (dateFrom || dateTo) csvRows.push(`"Date Range","${dateFrom || 'start'} to ${dateTo || 'end'}"`);
+    csvRows.push(`"Bank Balance",,,${bankBal.toFixed(2)}`);
+    csvRows.push(`"Total Income",,,${income.toFixed(2)}`);
+    csvRows.push(`"Total Expenditure",,,${expenditure.toFixed(2)}`);
+    csvRows.push(`"Reconciliation Balance",,,${balance.toFixed(2)}`);
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `reconciliation-${year}-${String(month).padStart(2,"0")}.csv`;
+    link.download = `reconciliation-${year}-${String(month).padStart(2,"0")}${dateRangeFile}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -209,7 +232,7 @@ export default function ReconciliationPage() {
       </div>
       <div class="header">
         <h1>Month-End Reconciliation Report</h1>
-        <p style="color:#64748b;margin:4px 0 0;font-size:14px">${monthName} &mdash; Abdullah Quilliam Society</p>
+        <p style="color:#64748b;margin:4px 0 0;font-size:14px">${monthName}${dateRangeLabel} &mdash; Abdullah Quilliam Society</p>
       </div>
       <div class="grid">
         <div class="stat"><p class="stat-label">Bank Balance</p><p class="stat-value">&pound;${bankBal.toLocaleString("en-GB",{minimumFractionDigits:2})}</p></div>
@@ -223,11 +246,11 @@ export default function ReconciliationPage() {
       ${incRows.length===0?'<tr><td colspan="2" style="color:#999">No income records for this period</td></tr>':''}
       <tr style="font-weight:700;border-top:2px solid #333"><td>Total Income</td><td style="text-align:right">&pound;${income.toLocaleString("en-GB",{minimumFractionDigits:2})}</td></tr>
       </tbody></table>
-      <h2>Expenditure &amp; Payments</h2>
-      <table><thead><tr><th>Payee</th><th>Type</th><th style="text-align:right">Amount (&pound;)</th><th>Method</th><th>Status</th></tr></thead><tbody>
-      ${rows.map((r:any)=>`<tr><td>${r.payee??r.employeeName??r.borrowerName??'\u2014'}${r.carriedFrom?' <em style="color:#94a3b8">(carried)</em>':''}</td><td style="text-transform:capitalize">${r.type??'\u2014'}</td><td style="text-align:right">&pound;${Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td style="text-transform:capitalize">${r.paymentMethod??'\u2014'}</td><td style="text-transform:capitalize">${r.status??'pending'}</td></tr>`).join("")}
-      ${rows.length===0?'<tr><td colspan="5" style="color:#999">No payment rows for this period</td></tr>':''}
-      <tr style="font-weight:700;border-top:2px solid #333"><td colspan="2">Total Expenditure</td><td style="text-align:right">&pound;${expenditure.toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td></td><td></td></tr>
+      <h2>Expenditure &amp; Payments${dateRangeLabel ? ` <span style="font-weight:400;font-size:12px;color:#64748b">${dateRangeLabel}</span>` : ''}</h2>
+      <table><thead><tr><th>Date</th><th>Payee</th><th>Type</th><th style="text-align:right">Amount (&pound;)</th><th>Method</th><th>Status</th></tr></thead><tbody>
+      ${rows.map((r:any)=>{const rd=r.date||r.paidAt||r.createdAt;return`<tr><td>${rd?new Date(rd).toLocaleDateString('en-GB'):'\u2014'}</td><td>${r.payee??r.employeeName??r.borrowerName??'\u2014'}${r.carriedFrom?' <em style="color:#94a3b8">(carried)</em>':''}</td><td style="text-transform:capitalize">${r.type??'\u2014'}</td><td style="text-align:right">&pound;${Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td style="text-transform:capitalize">${r.paymentMethod??'\u2014'}</td><td style="text-transform:capitalize">${r.status??'pending'}</td></tr>`}).join("")}
+      ${rows.length===0?'<tr><td colspan="6" style="color:#999">No payment rows for this period</td></tr>':''}
+      <tr style="font-weight:700;border-top:2px solid #333"><td></td><td colspan="2">Total Expenditure</td><td style="text-align:right">&pound;${expenditure.toLocaleString("en-GB",{minimumFractionDigits:2})}</td><td></td><td></td></tr>
       </tbody></table>
       <div class="footer">
         <p>Generated: ${new Date().toLocaleString("en-GB")} | Abdullah Quilliam Society | Confidential</p>
@@ -284,6 +307,30 @@ export default function ReconciliationPage() {
               <FileText size={13}/> PDF
             </Button>
           </div>
+        </div>
+
+        {/* Date range filter */}
+        <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",marginBottom:20,animation:"fadeUp 0.4s ease 50ms both" }}>
+          <div style={{ display:"flex",alignItems:"center",gap:8,background:"rgba(255,255,255,0.04)",border:`1px solid ${T.border}`,borderRadius:12,padding:"8px 14px" }}>
+            <Calendar size={14} style={{color:T.muted}}/>
+            <span style={{ fontSize:12,color:T.muted,fontWeight:600 }}>From:</span>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}
+              style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",cursor:"pointer" }}/>
+            <span style={{ fontSize:12,color:T.muted,fontWeight:600,marginLeft:8 }}>To:</span>
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}
+              style={{ background:"transparent",border:"none",color:T.white,fontSize:13,outline:"none",cursor:"pointer" }}/>
+          </div>
+          {(dateFrom || dateTo) && (
+            <Button onClick={()=>{setDateFrom("");setDateTo("");}}
+              style={{ background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.2)",color:"#ff5050",borderRadius:10,padding:"7px 12px",fontWeight:600,fontSize:11 }}>
+              Clear dates
+            </Button>
+          )}
+          {(dateFrom || dateTo) && (
+            <span style={{ fontSize:11,color:T.mint,fontWeight:600 }}>
+              Showing {rows.length} of {allRows.length} expense rows
+            </span>
+          )}
         </div>
 
         {/* Bank balance input */}
