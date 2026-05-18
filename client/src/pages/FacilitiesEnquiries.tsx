@@ -953,8 +953,8 @@ function SendBlankFormDialog({
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [extraMsg, setExtraMsg] = useState("");
-  const [pdfReady, setPdfReady] = useState(!!savedPdfUrl);
-  const [localPdfUrl, setLocalPdfUrl] = useState(savedPdfUrl);
+  const [pdfReady, setPdfReady] = useState(false);
+  const [localPdfUrl, setLocalPdfUrl] = useState("");
 
   // Auto-generate PDF if not already available
   const handleOpen = () => {
@@ -1126,7 +1126,7 @@ export default function FacilitiesEnquiries({ rooms }: { rooms: any[] }) {
   const refetch = () => { utils.facilities.listEnquiries.invalidate(); utils.facilities.stats.invalidate(); };
   const currentSettings = facilitySettingsQ.data || {};
   const googleFormUrl = currentSettings["google_form_url"] || "";
-  const savedPdfUrl = currentSettings["blank_pdf_url"] || blankFormPdfUrl;
+  const savedPdfUrl = blankFormPdfUrl; // Always use freshly generated URL, never cached
 
   const filtered = (enquiries.data || []).filter((e: any) => {
     if (!search) return true;

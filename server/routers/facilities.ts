@@ -1341,11 +1341,6 @@ export const facilitiesRouter = router({
       const key = `facility-forms/blank-enquiry-form-${Date.now()}.pdf`;
       const { url } = await storagePut(key, pdfBuffer, "application/pdf");
 
-      // Save URL to settings
-      await db.update(facilitySettings)
-        .set({ value: url })
-        .where(eq(facilitySettings.key, "blank_pdf_url"));
-
       return { url };
     }),
 
