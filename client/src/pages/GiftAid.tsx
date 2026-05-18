@@ -31,9 +31,6 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function GiftAidPage() {
   const { user } = useAuth();
-  useEffect(() => {
-  }, [tab]);
-
   const utils = trpc.useUtils();
 
   const [tab, setTab] = useState("gift-aid");
