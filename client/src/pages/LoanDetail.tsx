@@ -78,9 +78,13 @@ function ApprovalBox({ label, approved, approvedBy, approvedAt, onApprove, canAp
   );
 }
 
-function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin, onSendReminder, onDownloadReceipt, onConfirmLender, borrowerPhone }: any) {
+function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrustee, onApproveAdmin, onSendReminder, onDownloadReceipt, onConfirmLender, onInterimWaqf, borrowerPhone }: any) {
   const [adminName, setAdminName] = useState("");
   const [trusteeName, setTrusteeName] = useState("");
+  const [waqfDialogOpen, setWaqfDialogOpen] = useState(false);
+  const [waqfAmt, setWaqfAmt] = useState("");
+  const [waqfNote, setWaqfNote] = useState("");
+  const existingWaqf = parseFloat(repayment.waqfAmount ?? "0");
   const isPending = !repayment.trusteeApprovedAt;
   const isOverdue = isPending && repayment.dueDate && new Date(repayment.dueDate) < new Date();
   const isDueSoon = isPending && !isOverdue && repayment.dueDate && (new Date(repayment.dueDate).getTime() - Date.now()) < 7 * 24 * 60 * 60 * 1000;
@@ -140,6 +144,11 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
             <p style={{ fontSize:11,color:T.mint,margin:"2px 0 0" }}>
               ✓ Admin: <strong>{repayment.adminApprovedByName ?? ""}</strong> · {new Date(repayment.adminApprovedAt).toLocaleString("en-GB")}
               {repayment.trusteeApprovedAt && <span> · ✓ Trustee: <strong>{repayment.trusteeName ?? ""}</strong> · {new Date(repayment.trusteeApprovedAt).toLocaleString("en-GB")}</span>}
+            </p>
+          )}
+          {existingWaqf > 0 && (
+            <p style={{ fontSize:11,color:"#c9a84c",margin:"4px 0 0",fontWeight:600 }}>
+              🕌 Waqf Endowed: £{existingWaqf.toFixed(2)}{repayment.waqfNote ? ` · ${repayment.waqfNote}` : ""}
             </p>
           )}
           {/* Evidence */}
@@ -240,8 +249,67 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
                 : <>☐ Mark Lender Confirmed</>}
             </button>
           )}
+          {isAdmin && (
+            <button
+              onClick={() => setWaqfDialogOpen(true)}
+              style={{ padding:"5px 12px",borderRadius:8,background:existingWaqf>0?"rgba(201,168,76,0.12)":"rgba(255,255,255,0.05)",border:`1px solid ${existingWaqf>0?"rgba(201,168,76,0.35)":T.border}`,color:existingWaqf>0?"#c9a84c":T.muted,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
+              🕌 {existingWaqf>0?`Waqf £${existingWaqf.toFixed(2)}`:"Interim Waqf"}
+            </button>
+          )}
         </div>
       </div>
+      {/* Interim Waqf Dialog */}
+      <Dialog open={waqfDialogOpen} onOpenChange={setWaqfDialogOpen}>
+        <DialogContent style={{ background:"#0D2240",border:`1px solid ${T.border}`,borderRadius:16,maxWidth:400 }}>
+          <DialogHeader>
+            <DialogTitle style={{ color:"#c9a84c",fontSize:16,fontWeight:800 }}>🕌 Interim Waqf — Instalment {repayment.instalment}</DialogTitle>
+          </DialogHeader>
+          <p style={{ fontSize:12,color:T.muted,margin:"0 0 14px" }}>
+            Record a partial Waqf (endowment) on this £{Number(repayment.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})} repayment.
+            The lender is gifting part or all of this instalment back as a permanent endowment.
+          </p>
+          {existingWaqf > 0 && (
+            <p style={{ fontSize:12,color:"#c9a84c",margin:"0 0 10px",fontWeight:600 }}>
+              Current Waqf on this instalment: £{existingWaqf.toFixed(2)}
+            </p>
+          )}
+          <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
+            <div>
+              <Label style={{ color:T.muted,fontSize:11 }}>Waqf Amount (£)</Label>
+              <Input
+                type="number" min="0.01" max={Number(repayment.amount??0)} step="0.01"
+                value={waqfAmt} onChange={e=>setWaqfAmt(e.target.value)}
+                placeholder={`e.g. ${Number(repayment.amount??0).toFixed(2)}`}
+                style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.white,marginTop:4 }}/>
+            </div>
+            <div>
+              <Label style={{ color:T.muted,fontSize:11 }}>Note (optional)</Label>
+              <Input
+                value={waqfNote} onChange={e=>setWaqfNote(e.target.value)}
+                placeholder="e.g. Gifted for Rimmers Building"
+                style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.white,marginTop:4 }}/>
+            </div>
+            <div style={{ display:"flex",gap:8,justifyContent:"flex-end",marginTop:4 }}>
+              <button onClick={()=>setWaqfDialogOpen(false)}
+                style={{ padding:"8px 16px",borderRadius:10,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,fontSize:12,fontWeight:600,cursor:"pointer" }}>
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const amt = parseFloat(waqfAmt);
+                  if (!amt || amt <= 0) { toast.error("Enter a valid amount"); return; }
+                  if (amt > parseFloat(repayment.amount??"0")) { toast.error(`Cannot exceed £${Number(repayment.amount??0).toFixed(2)}`); return; }
+                  onInterimWaqf && onInterimWaqf(repayment, amt, waqfNote);
+                  setWaqfDialogOpen(false);
+                  setWaqfAmt(""); setWaqfNote("");
+                }}
+                style={{ padding:"8px 16px",borderRadius:10,background:"rgba(201,168,76,0.15)",border:"1px solid rgba(201,168,76,0.4)",color:"#c9a84c",fontSize:12,fontWeight:700,cursor:"pointer" }}>
+                🕌 Confirm Waqf
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -333,6 +401,11 @@ export default function LoanDetailPage({ id }: { id: number }) {
 
   const exportScheduleMutation = trpc.loans.exportSchedule?.useMutation?.({
     onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const interimWaqfMutation = trpc.loans.interimWaqf?.useMutation?.({
+    onSuccess: () => { toast.success("🕌 Interim Waqf recorded successfully"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -689,6 +762,7 @@ The AQS Team`);
                   else { genRepPdfMutation?.mutate?.({ repaymentId: r.id }); }
                 }}
                 onConfirmLender={(r: any) => confirmLenderMutation?.mutate?.({ repaymentId: r.id })}
+                onInterimWaqf={(r: any, amt: number, note: string) => interimWaqfMutation?.mutate?.({ repaymentId: r.id, waqfAmount: amt, waqfNote: note || undefined })}
               />
             ))}
 

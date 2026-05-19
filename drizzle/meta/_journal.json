@@ -610,6 +610,13 @@
       "when": 1779119103736,
       "tag": "0086_melted_santa_claus",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "5",
+      "when": 1779197333134,
+      "tag": "0087_misty_diamondback",
+      "breakpoints": true
     }
   ]
 }

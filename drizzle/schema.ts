@@ -385,6 +385,10 @@ export const loanRepayments = mysqlTable("loan_repayments", {
   whatsappSentAt: timestamp("whatsappSentAt"),
   dueDate: timestamp("dueDate"),
   lenderConfirmedAt: timestamp("lenderConfirmedAt"),
+  // Interim Waqf conversion on this repayment
+  waqfAmount: decimal("waqfAmount", { precision: 10, scale: 2 }),
+  waqfNote: text("waqfNote"),
+  waqfConvertedAt: timestamp("waqfConvertedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
