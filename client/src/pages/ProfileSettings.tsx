@@ -19,13 +19,25 @@ const TABS = [
 export default function ProfileSettingsPage() {
   const { user, logout } = useAuth();
   const [tab, setTab] = useState("profile");
+
+  // Morning brief settings (superadmin only)
+  const isSuperAdmin = user?.role === 'superadmin';
+  const briefSettingsQuery = trpc.users.getMorningBriefSettings.useQuery(undefined, { enabled: isSuperAdmin });
+  const setGlobalMut = trpc.users.setMorningBriefGlobal.useMutation({
+    onSuccess: () => { toast.success('Morning brief setting saved'); briefSettingsQuery.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const setUserBriefMut = trpc.users.setUserMorningBrief.useMutation({
+    onSuccess: () => briefSettingsQuery.refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const briefingPrefs: any = null;
   const saveBriefingPrefsMut = { mutate: () => {}, isPending: false };
   const [localPrefs, setLocalPrefs] = useState({
     enabled: true, includeLoans: true, includeDonations: true,
     includePayroll: true, includePledges: true, includeTenants: true, includeCompliance: true,
   });
-  // Sync localPrefs when briefingPrefs loads
   useEffect(() => {
     if (briefingPrefs) setLocalPrefs({
       enabled: briefingPrefs.enabled ?? true,
@@ -212,56 +224,48 @@ export default function ProfileSettingsPage() {
                 ))}
               </div>
 
-              {/* Hibba Morning Briefing Preferences */}
-              <div style={{ marginTop:24,paddingTop:24,borderTop:`1px solid ${T.border}` }}>
-                <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
-                  <div>
-                    <p style={{ fontSize:14,fontWeight:700,color:T.white,margin:0 }}>Hibba Morning Briefing</p>
-                    <p style={{ fontSize:12,color:T.muted,margin:"2px 0 0" }}>Choose which sections Hibba includes in your daily 7:30am email</p>
+              {/* Hibba Morning Briefing — Superadmin Controls */}
+              {isSuperAdmin && (
+                <div style={{ marginTop:24,paddingTop:24,borderTop:`1px solid ${T.border}` }}>
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6 }}>
+                    <div>
+                      <p style={{ fontSize:14,fontWeight:700,color:T.white,margin:0 }}>Morning Briefing</p>
+                      <p style={{ fontSize:12,color:T.muted,margin:"2px 0 0" }}>Global on/off and per-user recipient control (7:30am daily)</p>
+                    </div>
+                    {briefSettingsQuery.data && (
+                      <label style={{ position:"relative",width:44,height:24,cursor:"pointer",flexShrink:0 }}>
+                        <input type="checkbox" checked={briefSettingsQuery.data.globalEnabled}
+                          onChange={e => setGlobalMut.mutate({ enabled: e.target.checked })}
+                          style={{ opacity:0,width:0,height:0,position:"absolute" }}/>
+                        <span style={{ position:"absolute",inset:0,borderRadius:999,background:briefSettingsQuery.data.globalEnabled?T.mint:"rgba(255,255,255,0.15)",transition:"0.2s" }}>
+                          <span style={{ position:"absolute",width:20,height:20,borderRadius:"50%",background:T.white,boxShadow:"0 1px 3px rgba(0,0,0,0.3)",transition:"0.2s",top:2,left:briefSettingsQuery.data.globalEnabled?"calc(100% - 22px)":"2px" }}/>
+                        </span>
+                      </label>
+                    )}
                   </div>
-                  {briefingPrefs && (
-                    <label style={{ position:"relative",width:44,height:24,cursor:"pointer",flexShrink:0 }}>
-                      <input type="checkbox" checked={localPrefs.enabled} onChange={e => setLocalPrefs(p => ({...p, enabled: e.target.checked}))} style={{ opacity:0,width:0,height:0,position:"absolute" }}/>
-                      <span style={{ position:"absolute",inset:0,borderRadius:999,background:localPrefs.enabled?T.mint:"rgba(255,255,255,0.15)",transition:"0.2s",display:"flex",alignItems:"center" }}>
-                        <span style={{ position:"absolute",width:20,height:20,borderRadius:"50%",background:T.white,boxShadow:"0 1px 3px rgba(0,0,0,0.3)",transition:"0.2s",left:localPrefs.enabled?"calc(100% - 22px)":"2px" }}/>
-                      </span>
-                    </label>
+                  {briefSettingsQuery.isLoading && <p style={{ fontSize:12,color:T.muted }}>Loading...</p>}
+                  {briefSettingsQuery.data && (
+                    <div style={{ display:"flex",flexDirection:"column",gap:0,marginTop:12,opacity:briefSettingsQuery.data.globalEnabled?1:0.4,pointerEvents:briefSettingsQuery.data.globalEnabled?"auto":"none" }}>
+                      {briefSettingsQuery.data.users.map((u: any, i: number, arr: any[]) => (
+                        <div key={u.id} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<arr.length-1?`1px solid ${T.border}`:"none" }}>
+                          <div>
+                            <p style={{ fontSize:13,fontWeight:600,color:T.white,margin:0 }}>{u.name}</p>
+                            <p style={{ fontSize:11,color:T.muted,margin:"2px 0 0" }}>{u.email} &middot; {u.role}</p>
+                          </div>
+                          <label style={{ position:"relative",width:40,height:22,cursor:"pointer",flexShrink:0 }}>
+                            <input type="checkbox" checked={!!u.receiveMorningBrief}
+                              onChange={e => setUserBriefMut.mutate({ userId: u.id, receive: e.target.checked })}
+                              style={{ opacity:0,width:0,height:0,position:"absolute" }}/>
+                            <span style={{ position:"absolute",inset:0,borderRadius:999,background:u.receiveMorningBrief?T.mint:"rgba(255,255,255,0.15)",transition:"0.2s" }}>
+                              <span style={{ position:"absolute",width:18,height:18,borderRadius:"50%",background:T.white,boxShadow:"0 1px 3px rgba(0,0,0,0.3)",transition:"0.2s",top:2,left:u.receiveMorningBrief?"calc(100% - 20px)":"2px" }}/>
+                            </span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {briefingPrefs && localPrefs.enabled && (
-                  <div style={{ display:"flex",flexDirection:"column",gap:0 }}>
-                    {([
-                      { key:"includeLoans", label:"Loans", sub:"Active loans and overdue repayments" },
-                      { key:"includeDonations", label:"Donations", sub:"Recent donations and campaign totals" },
-                      { key:"includePayroll", label:"Payroll", sub:"Upcoming payroll and pending approvals" },
-                      { key:"includePledges", label:"Pledges", sub:"Pledge fulfilment progress" },
-                      { key:"includeTenants", label:"Tenants", sub:"Accommodation and rent status" },
-                      { key:"includeCompliance", label:"Compliance", sub:"Outstanding compliance items" },
-                    ] as const).map((item, i, arr) => (
-                      <div key={item.key} style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:i<arr.length-1?`1px solid ${T.border}`:"none" }}>
-                        <div>
-                          <p style={{ fontSize:13,fontWeight:600,color:T.white,margin:0 }}>{item.label}</p>
-                          <p style={{ fontSize:11,color:T.muted,margin:"2px 0 0" }}>{item.sub}</p>
-                        </div>
-                        <label style={{ position:"relative",width:40,height:22,cursor:"pointer",flexShrink:0 }}>
-                          <input type="checkbox" checked={localPrefs[item.key]} onChange={e => setLocalPrefs(p => ({...p, [item.key]: e.target.checked}))} style={{ opacity:0,width:0,height:0,position:"absolute" }}/>
-                          <span style={{ position:"absolute",inset:0,borderRadius:999,background:localPrefs[item.key]?T.mint:"rgba(255,255,255,0.15)",transition:"0.2s",display:"flex",alignItems:"center" }}>
-                            <span style={{ position:"absolute",width:18,height:18,borderRadius:"50%",background:T.white,boxShadow:"0 1px 3px rgba(0,0,0,0.3)",transition:"0.2s",left:localPrefs[item.key]?"calc(100% - 20px)":"2px" }}/>
-                          </span>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {briefingPrefs && (
-                  <button
-                    onClick={() => saveBriefingPrefsMut.mutate(localPrefs)}
-                    disabled={saveBriefingPrefsMut.isPending}
-                    style={{ marginTop:16,padding:"9px 20px",borderRadius:10,background:"linear-gradient(135deg,#635BFF,#4f46e5)",border:"none",color:T.white,fontSize:13,fontWeight:700,cursor:"pointer",opacity:saveBriefingPrefsMut.isPending?0.6:1 }}>
-                    {saveBriefingPrefsMut.isPending ? "Saving..." : "Save Preferences"}
-                  </button>
-                )}
-              </div>
+              )}
             </div>
           )}
         </div>

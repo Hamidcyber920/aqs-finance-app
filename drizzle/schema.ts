@@ -36,6 +36,7 @@ export const users = mysqlTable("users", {
   // Supervision hierarchy
   supervisedById: int("supervisedById"), // FK to users.id — who supervises this user
   isPropertyManager: boolean("isPropertyManager").default(false).notNull(),
+  receiveMorningBrief: boolean("receiveMorningBrief").default(false).notNull(),
   // Profile
   phone: varchar("phone", { length: 30 }),
   jobTitle: varchar("jobTitle", { length: 100 }),
@@ -2428,6 +2429,15 @@ export const userBriefingPrefs = mysqlTable("user_briefing_prefs", {
 });
 export type UserBriefingPref = typeof userBriefingPrefs.$inferSelect;
 export type InsertUserBriefingPref = typeof userBriefingPrefs.$inferInsert;
+
+// ─── SYSTEM SETTINGS ────────────────────────────────────────────────────────
+export const systemSettings = mysqlTable("system_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type SystemSetting = typeof systemSettings.$inferSelect;
 
 
 // ─── FACILITY ENQUIRIES & BOOKING PIPELINE ──────────────────────────────────

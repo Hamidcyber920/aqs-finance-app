@@ -1088,6 +1088,46 @@ export const appRouter = router({
         }).where(eq(usersTable.id, input.userId));
         return { success: true };
       }),
+
+    // ─── Morning Brief Controls ────────────────────────────────────────────────
+    getMorningBriefSettings: adminProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return { globalEnabled: true, users: [] };
+      const { systemSettings, users: usersTable } = await import('../drizzle/schema');
+      // Get global toggle
+      const [setting] = await db.select().from(systemSettings).where(eq(systemSettings.key, 'morningBriefEnabled')).limit(1);
+      const globalEnabled = setting ? setting.value === 'true' : true;
+      // Get all active users with their receiveMorningBrief flag
+      const userRows = await db.select({
+        id: usersTable.id,
+        name: usersTable.name,
+        email: usersTable.email,
+        role: usersTable.role,
+        receiveMorningBrief: usersTable.receiveMorningBrief,
+      }).from(usersTable).where(eq(usersTable.isActive, true)).orderBy(usersTable.name);
+      return { globalEnabled, users: userRows };
+    }),
+
+    setMorningBriefGlobal: superAdminProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { systemSettings } = await import('../drizzle/schema');
+        await db.insert(systemSettings).values({ key: 'morningBriefEnabled', value: String(input.enabled) })
+          .onDuplicateKeyUpdate({ set: { value: String(input.enabled) } });
+        return { success: true };
+      }),
+
+    setUserMorningBrief: superAdminProcedure
+      .input(z.object({ userId: z.number(), receive: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { users: usersTable } = await import('../drizzle/schema');
+        await db.update(usersTable).set({ receiveMorningBrief: input.receive }).where(eq(usersTable.id, input.userId));
+        return { success: true };
+      }),
   }),
 
   // ─── FUNDRAISING ──────────────────────────────────────────────────────────
