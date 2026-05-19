@@ -446,6 +446,7 @@ export interface WaqfCertificateData {
   lenderPhone?: string | null;
   originalAmount: string | number;
   totalRepaid: string | number;
+  waqfAmount?: number;  // actual endowed amount (interim or full)
   convertedAt: Date;
   adminApprovedByName?: string | null;
   trusteeName?: string | null;
@@ -464,7 +465,10 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
     const MUTED = "#666666";
     const TEXT = "#1a1a1a";
     const pageWidth = doc.page.width - 120;
-    const remaining = Math.max(0, parseFloat(String(data.originalAmount)) - parseFloat(String(data.totalRepaid)));
+    // Use explicit waqfAmount if provided, otherwise fall back to originalAmount - totalRepaid
+    const remaining = data.waqfAmount != null
+      ? data.waqfAmount
+      : Math.max(0, parseFloat(String(data.originalAmount)) - parseFloat(String(data.totalRepaid)));
 
     // ── Decorative border ────────────────────────────────────────────────────
     doc.rect(30, 30, doc.page.width - 60, doc.page.height - 60).lineWidth(3).stroke(GOLD);

@@ -1924,9 +1924,10 @@ export const appRouter = router({
         if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
         const repayments = await db.select().from(lrTable).where(eqOp(lrTable.loanId, input.id)).orderBy(lrTable.paidAt);
         const totalAmount = parseFloat(loan.amount);
-        const paid = repayments.filter(r => r.trusteeApprovedAt).reduce((s, r) => s + parseFloat(r.amount), 0);
+        // Count all recorded repayments (paidAt set), not just trustee-approved
+        const paid = repayments.filter(r => r.paidAt).reduce((s, r) => s + parseFloat(r.amount), 0);
         const totalWaqf = repayments.reduce((s, r) => s + parseFloat((r as any).waqfAmount ?? '0'), 0);
-        const outstanding = totalAmount - paid;
+        const outstanding = Math.max(0, totalAmount - paid);
         const cashRepaid = paid - totalWaqf;
         const rows = repayments.map((r, i) => {
           const rWaqf = parseFloat((r as any).waqfAmount ?? '0');
@@ -1984,7 +1985,15 @@ export const appRouter = router({
         if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
         if ((loan as any).waqfConvertedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This loan has already been converted to Waqf" });
         const convertedAt = new Date();
-        const totalRepaid = parseFloat(String(loan.totalRepaid ?? 0));
+        // Fetch repayments to compute actual paid and waqf totals
+        const { loanRepayments: lrTableW } = await import("../drizzle/schema");
+        const repayments = await db.select().from(lrTableW).where(eqOp(lrTableW.loanId, input.id));
+        const totalRepaid = repayments.filter((r: any) => r.paidAt).reduce((s: number, r: any) => s + parseFloat(r.amount), 0);
+        const totalWaqfOnRepayments = repayments.reduce((s: number, r: any) => s + parseFloat((r as any).waqfAmount ?? '0'), 0);
+        // Endowed amount = waqf recorded on repayments + remaining outstanding (full conversion)
+        const outstandingBalance = Math.max(0, parseFloat(String(loan.amount)) - totalRepaid);
+        // If there are interim waqf amounts, use those; otherwise the full outstanding is being endowed
+        const waqfAmountForCert = totalWaqfOnRepayments > 0 ? totalWaqfOnRepayments : outstandingBalance;
         // Generate Certificate of Waqf PDF
         const certBuffer = await generateWaqfCertificate({
           loanId: loan.id,
@@ -1993,7 +2002,8 @@ export const appRouter = router({
           lenderAddress: loan.borrowerAddress,
           lenderPhone: loan.borrowerPhone,
           originalAmount: loan.amount,
-          totalRepaid: loan.totalRepaid ?? 0,
+          totalRepaid: String(totalRepaid),
+          waqfAmount: waqfAmountForCert,
           convertedAt,
           adminApprovedByName: loan.adminApprovedByName,
           trusteeName: loan.trusteeName,
@@ -2009,7 +2019,7 @@ export const appRouter = router({
           const firstName = (loan.borrowerName ?? '').split(' ')[0];
           const nameParts = (loan.borrowerName ?? '').trim().split(' ');
           const surname = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
-          const remaining = Math.max(0, parseFloat(String(loan.amount)) - totalRepaid);
+          const remaining = waqfAmountForCert;
           const baseStyle = `font-family:Arial,sans-serif;max-width:600px;margin:0 auto`;
           const header = `<div style="background:#1a4731;padding:24px;text-align:center"><h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1><p style="color:#c9a84c;margin:4px 0 0">Certificate of Waqf — Rimmers Building Project</p></div>`;
           const footer = `<div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div>`;
