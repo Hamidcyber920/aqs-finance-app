@@ -30,9 +30,6 @@ export default function ReportsPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [generating, setGenerating] = useState(false);
 
-  useEffect(() => {
-  }, [month, year]);
-
   const { data: reportData } = trpc.expenses.monthlySummary.useQuery({ month, year });
 
   const monthlyData = [
@@ -133,7 +130,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Charts row */}
-        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:24 }}>
+        <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:16,marginBottom:24 }}>
 
           {/* Monthly bar chart */}
           <div style={{ background:T.card,backdropFilter:"blur(20px)",border:`1px solid ${T.border}`,borderRadius:16,padding:24,animation:"fadeUp 0.5s ease 300ms both" }}>
