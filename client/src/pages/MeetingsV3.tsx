@@ -52,9 +52,6 @@ const EMPTY_PIPELINE = {
 
 export default function MeetingsV3Page() {
   useAuth();
-  useEffect(() => {
-  }, [tab]);
-
   const utils = trpc.useUtils();
 
   const [tab, setTab] = useState("meetings");

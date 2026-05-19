@@ -19,9 +19,6 @@ const TABS = [
 export default function ProfileSettingsPage() {
   const { user, logout } = useAuth();
   const [tab, setTab] = useState("profile");
-
-  useEffect(() => {
-  }, [tab]);
   const briefingPrefs: any = null;
   const saveBriefingPrefsMut = { mutate: () => {}, isPending: false };
   const [localPrefs, setLocalPrefs] = useState({
