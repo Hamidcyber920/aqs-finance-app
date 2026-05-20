@@ -1867,58 +1867,122 @@ export const appRouter = router({
         // Count all repayments that have been recorded (paidAt is always set on creation)
         const totalPaid = repayments.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
         const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
-        const rows = repayments.map((r: any, i: number) => {
-          const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
-          const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
-          const paid = r.paidAt ? new Date(r.paidAt).toLocaleString('en-GB') : '—';
-          const lenderConf = r.lenderConfirmedAt ? new Date(r.lenderConfirmedAt).toLocaleDateString('en-GB') : '—';
-          return `<tr style="border-bottom:1px solid #e5e7eb">
-            <td style="padding:8px 12px;font-size:13px">${i + 1}</td>
-            <td style="padding:8px 12px;font-size:13px">&pound;${Number(r.amount ?? 0).toFixed(2)}</td>
-            <td style="padding:8px 12px;font-size:13px">${due}</td>
-            <td style="padding:8px 12px;font-size:13px">${paid}</td>
-            <td style="padding:8px 12px;font-size:13px">${r.paymentMethod?.replace(/_/g,' ') ?? '—'}</td>
-            <td style="padding:8px 12px;font-size:13px;color:${r.trusteeApprovedAt?'#059669':r.adminApprovedAt?'#d97706':'#6b7280'}">${status}</td>
-            <td style="padding:8px 12px;font-size:13px">${lenderConf}</td>
-          </tr>`;
-        }).join('');
-        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Loan Statement</title></head><body style="font-family:Arial,sans-serif;max-width:800px;margin:0 auto;padding:32px;color:#111">
-          <div style="background:#1a4731;padding:24px;border-radius:8px;margin-bottom:24px">
-            <h1 style="color:#fff;margin:0;font-size:22px">Abdullah Quilliam Society</h1>
-            <p style="color:#c9a84c;margin:4px 0 0;font-size:14px">Qarde Hasan Loan Statement</p>
-          </div>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280;width:160px">Lender / Donor</td><td style="padding:6px 0;font-size:14px;font-weight:600">${loan.borrowerName ?? '—'}</td></tr>
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Email</td><td style="padding:6px 0;font-size:14px">${loan.borrowerEmail ?? '—'}</td></tr>
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Loan Amount</td><td style="padding:6px 0;font-size:14px;font-weight:700;color:#059669">&pound;${Number(loan.amount).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</td></tr>
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Term</td><td style="padding:6px 0;font-size:14px">${loan.termValue} ${loan.termUnit ?? 'months'}</td></tr>
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Monthly</td><td style="padding:6px 0;font-size:14px">&pound;${monthly}/mo</td></tr>
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Purpose</td><td style="padding:6px 0;font-size:14px">${loan.purpose ?? '—'}</td></tr>
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Total Paid</td><td style="padding:6px 0;font-size:14px;font-weight:700">&pound;${totalPaid.toFixed(2)}</td></tr>
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Outstanding</td><td style="padding:6px 0;font-size:14px;font-weight:700;color:${outstanding > 0 ? '#dc2626' : '#059669'}">&pound;${outstanding.toFixed(2)}</td></tr>
-            <tr><td style="padding:6px 0;font-size:13px;color:#6b7280">Generated</td><td style="padding:6px 0;font-size:14px">${new Date().toLocaleString('en-GB')}</td></tr>
-          </table>
-          <h2 style="font-size:15px;font-weight:700;margin-bottom:12px">Repayment Schedule</h2>
-          <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px">
-            <thead><tr style="background:#f9fafb">
-              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">#</th>
-              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Amount</th>
-              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Due Date</th>
-              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Paid At</th>
-              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Method</th>
-              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Status</th>
-              <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.05em">Lender Confirmed</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-          <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;text-align:center">
-            This is an official record from the AQ Society Finance System. Qarde Hasan — Interest-Free Loan.
-          </div>
-        </body></html>`;
-        // Upload HTML as a file to S3
+        // Generate as PDF so it opens correctly in all browsers
+        const PDFDocument = (await import('pdfkit')).default;
+        const stmtDoc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
+        const stmtBufs: Buffer[] = [];
+        await new Promise<void>((res, rej) => {
+          stmtDoc.on('data', (c: Buffer) => stmtBufs.push(c));
+          stmtDoc.on('end', res);
+          stmtDoc.on('error', rej);
+
+          const SG = '#1a4731'; const SGOLD = '#c9a84c'; const SMUTED = '#555555'; const STEXT = '#1a1a1a';
+          const SL = 50; const SW = 495; const SPW = stmtDoc.page.width;
+
+          // Header
+          stmtDoc.rect(0, 0, SPW, 80).fill(SG);
+          stmtDoc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
+            .text('Abdullah Quilliam Society', SL, 18, { width: SW });
+          stmtDoc.fontSize(10).font('Helvetica')
+            .text('Qarde Hasan Loan Statement', SL, 44, { width: SW });
+          stmtDoc.fillColor(SGOLD).fontSize(8).font('Helvetica')
+            .text('Official Finance Record — Interest-Free Loan', SL, 60, { width: SW });
+          stmtDoc.rect(0, 80, SPW, 3).fill(SGOLD);
+
+          let sy = 100;
+          stmtDoc.fillColor(SG).fontSize(13).font('Helvetica-Bold')
+            .text('QARDE HASAN LOAN STATEMENT', SL, sy, { width: SW, align: 'center' });
+          sy += 18;
+          stmtDoc.fillColor(SMUTED).fontSize(8).font('Helvetica')
+            .text(`Ref: AQS-LOAN-${String(input.id).padStart(6,'0')}   |   Generated: ${new Date().toLocaleString('en-GB')}`, SL, sy, { width: SW, align: 'center' });
+          sy += 12;
+          stmtDoc.rect(SL, sy, SW, 1).fill(SGOLD);
+          sy += 10;
+
+          // Summary section
+          stmtDoc.rect(SL, sy, SW, 18).fill('#f0f0f0');
+          stmtDoc.fillColor(SG).fontSize(9).font('Helvetica-Bold')
+            .text('LOAN SUMMARY', SL + 8, sy + 5, { width: SW - 16, lineBreak: false });
+          sy += 21;
+
+          const sRow = (label: string, val: string, bold = false, color = STEXT) => {
+            stmtDoc.fillColor(SMUTED).fontSize(8.5).font('Helvetica')
+              .text(label, SL + 8, sy, { width: 150, lineBreak: false });
+            stmtDoc.fillColor(color).fontSize(8.5).font(bold ? 'Helvetica-Bold' : 'Helvetica')
+              .text(val, SL + 165, sy, { width: SW - 170, lineBreak: false });
+            sy += 15;
+          };
+
+          sRow('Lender / Donor', loan.borrowerName ?? '—', true);
+          if (loan.borrowerEmail) sRow('Email', loan.borrowerEmail);
+          sRow('Loan Amount', `£${Number(loan.amount).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`, true, '#059669');
+          sRow('Term', `${loan.termValue ?? termMonths} ${loan.termUnit ?? 'months'}`);
+          sRow('Monthly Repayment', `£${monthly}/mo`);
+          sRow('Purpose', loan.purpose ?? '—');
+          sy += 4;
+          stmtDoc.rect(SL, sy, SW, 1).fill('#e0e0e0'); sy += 5;
+          sRow('Total Paid', `£${totalPaid.toFixed(2)}`, true);
+          sRow('Outstanding Balance', `£${outstanding.toFixed(2)}`, true, outstanding > 0 ? '#dc2626' : '#059669');
+          sy += 8;
+
+          // Repayments table
+          stmtDoc.rect(SL, sy, SW, 18).fill('#f0f0f0');
+          stmtDoc.fillColor(SG).fontSize(9).font('Helvetica-Bold')
+            .text('REPAYMENT HISTORY', SL + 8, sy + 5, { width: SW - 16, lineBreak: false });
+          sy += 21;
+
+          if (repayments.length === 0) {
+            stmtDoc.fillColor(SMUTED).fontSize(8.5).font('Helvetica')
+              .text('No repayments recorded yet.', SL + 8, sy);
+            sy += 20;
+          } else {
+            // Table header
+            const tCols = [28, 72, 80, 115, 75, 65, 60];
+            const tHdrs = ['#', 'Amount', 'Due Date', 'Paid At', 'Method', 'Status', 'Confirmed'];
+            stmtDoc.rect(SL, sy, SW, 16).fill(SG);
+            stmtDoc.fillColor('#ffffff').fontSize(7).font('Helvetica-Bold');
+            let tx = SL + 3;
+            tHdrs.forEach((h, i) => {
+              stmtDoc.text(h, tx, sy + 5, { width: tCols[i]! - 4, lineBreak: false });
+              tx += tCols[i]!;
+            });
+            sy += 16;
+
+            repayments.forEach((r: any, i: number) => {
+              const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
+              const statusColor = r.trusteeApprovedAt ? '#059669' : r.adminApprovedAt ? '#d97706' : '#6b7280';
+              const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
+              const paid = r.paidAt ? new Date(r.paidAt).toLocaleString('en-GB') : '—';
+              const conf = r.lenderConfirmedAt ? new Date(r.lenderConfirmedAt).toLocaleDateString('en-GB') : '—';
+              const method = (r.paymentMethod ?? '').replace(/_/g,' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
+              if (i % 2 === 0) stmtDoc.rect(SL, sy, SW, 15).fill('#f7f7f7');
+              stmtDoc.fillColor(STEXT).fontSize(7.5).font('Helvetica');
+              let rx = SL + 3;
+              [String(i+1), `£${Number(r.amount??0).toFixed(2)}`, due, paid, method].forEach((v, ci) => {
+                stmtDoc.text(v, rx, sy + 4, { width: tCols[ci]! - 4, lineBreak: false });
+                rx += tCols[ci]!;
+              });
+              stmtDoc.fillColor(statusColor).fontSize(7.5).font('Helvetica-Bold')
+                .text(status, rx, sy + 4, { width: tCols[5]! - 4, lineBreak: false });
+              rx += tCols[5]!;
+              stmtDoc.fillColor(STEXT).fontSize(7.5).font('Helvetica')
+                .text(conf, rx, sy + 4, { width: tCols[6]! - 4, lineBreak: false });
+              sy += 15;
+            });
+          }
+
+          // Footer
+          stmtDoc.rect(SL, stmtDoc.page.height - 50, SW, 1).fill(SGOLD);
+          stmtDoc.fillColor(SMUTED).fontSize(7.5).font('Helvetica')
+            .text('This is an official record from the AQ Society Finance System. Qarde Hasan — Interest-Free Loan.', SL, stmtDoc.page.height - 38, { width: SW, align: 'center' });
+
+          stmtDoc.end();
+        });
+
+        const pdfBuf = Buffer.concat(stmtBufs);
         const { storagePut } = await import('./storage');
-        const key = `loan-statements/loan-${input.id}-statement-${Date.now()}.html`;
-        const { url } = await storagePut(key, Buffer.from(html, 'utf8'), 'text/html');
+        const key = `loan-statements/loan-${input.id}-statement-${Date.now()}.pdf`;
+        const { url } = await storagePut(key, pdfBuf, 'application/pdf');
         return { url };
       }),
 
