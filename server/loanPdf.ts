@@ -7,6 +7,7 @@ export interface LoanPdfData {
   borrowerEmail?: string | null;
   borrowerAddress?: string | null;
   borrowerPhone?: string | null;
+  borrowerTitle?: string | null;
   purpose: string;
   amount: string | number;
   termMonths: number;
@@ -192,7 +193,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       // ── 1. Lender Details ─────────────────────────────────────────────────
       y = sectionHeading("1. Respected Donor / Lender Details", y);
       y += 4;
-      y = drawRow("Full Name",      loan.borrowerName, y);
+      y = drawRow("Full Name",      (loan.borrowerTitle && loan.borrowerTitle !== 'none' ? loan.borrowerTitle + ' ' : '') + loan.borrowerName, y);
       if (loan.borrowerPhone)   y = drawRow("Telephone",     loan.borrowerPhone, y);
       if (loan.borrowerEmail)   y = drawRow("Email Address", loan.borrowerEmail, y);
       if (loan.borrowerAddress) y = drawRow("Address",       loan.borrowerAddress, y);
@@ -294,7 +295,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       doc.fillColor(WHITE).fontSize(11).font("Helvetica-Bold")
         .text("QARDE HASAN AMANAH AGREEMENT", L, 14, { width: W, align: "center" });
       doc.fillColor(GOLD_LIGHT).fontSize(7.5).font("Helvetica")
-        .text(`Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   ${loan.borrowerName}`, L, 28, { width: W, align: "center" });
+        .text(`Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   ${(loan.borrowerTitle && loan.borrowerTitle !== 'none' ? loan.borrowerTitle + ' ' : '') + loan.borrowerName}`, L, 28, { width: W, align: "center" });
 
       // geometric border removed
 
@@ -436,6 +437,7 @@ export interface RepaymentPdfData {
   repaymentId: number;
   loanId: number;
   borrowerName: string;
+  borrowerTitle?: string | null;
   borrowerEmail?: string | null;
   borrowerPhone?: string | null;
   amount: string | number;
@@ -529,7 +531,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
 
     y = sectionHeading("1. Respected Donor / Lender Details", y);
     y += 4;
-    y = drawRow("Full Name", data.borrowerName, y);
+    y = drawRow("Full Name", (data.borrowerTitle && data.borrowerTitle !== 'none' ? data.borrowerTitle + ' ' : '') + data.borrowerName, y);
     if (data.borrowerEmail) y = drawRow("Email Address", data.borrowerEmail, y);
     if (data.borrowerPhone) y = drawRow("Telephone", data.borrowerPhone, y);
     y += 10;
@@ -594,6 +596,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
 export interface WaqfCertificateData {
   loanId: number;
   lenderName: string;
+  lenderTitle?: string | null;
   lenderEmail?: string | null;
   lenderAddress?: string | null;
   lenderPhone?: string | null;
@@ -678,7 +681,7 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
       .text("This is to certify that", L, y, { width: W, align: "center" });
     y += 20;
     doc.fillColor(BURGUNDY).fontSize(22).font("Helvetica-Bold")
-      .text(data.lenderName.toUpperCase(), L, y, { width: W, align: "center" });
+      .text(((data.lenderTitle && data.lenderTitle !== 'none' ? data.lenderTitle + ' ' : '') + data.lenderName).toUpperCase(), L, y, { width: W, align: "center" });
     y += 32;
     doc.fillColor(TEXT).fontSize(10.5).font("Helvetica")
       .text("has graciously converted their Qarde Hasan (interest-free loan) to a permanent\nWaqf (Endowment) for the AQS Rimmers Building Project.", L, y, { width: W, align: "center" });
@@ -695,11 +698,11 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
 
     doc.fillColor(TEXT).fontSize(9.5).font("Helvetica")
       .text(
-        `By this act of generosity, ${data.lenderName.split(" ")[0]} has permanently endowed a portion of the Rimmers Building — a House of Allah — for the benefit of the Muslim community and all who seek knowledge and worship therein. This Waqf shall be recorded in the AQS Endowment Register and acknowledged before Allah (SWT) as a Sadaqah Jariyah that shall continue to benefit the donor and their family for generations to come, in sha Allah.`,
+        `By this act of generosity, ${(data.lenderTitle && data.lenderTitle !== 'none' ? data.lenderTitle + ' ' : '') + data.lenderName.split(" ")[0]} has permanently endowed a portion of the Rimmers Building — a House of Allah — for the benefit of the Muslim community and all who seek knowledge and worship therein. This Waqf shall be recorded in the AQS Endowment Register and acknowledged before Allah (SWT) as a Sadaqah Jariyah that shall continue to benefit the donor and their family for generations to come, in sha Allah.`,
         L + 20, y, { width: W - 40, align: "justify" }
       );
     y += doc.heightOfString(
-      `By this act of generosity, ${data.lenderName.split(" ")[0]} has permanently endowed a portion of the Rimmers Building — a House of Allah — for the benefit of the Muslim community and all who seek knowledge and worship therein. This Waqf shall be recorded in the AQS Endowment Register and acknowledged before Allah (SWT) as a Sadaqah Jariyah that shall continue to benefit the donor and their family for generations to come, in sha Allah.`,
+      `By this act of generosity, ${(data.lenderTitle && data.lenderTitle !== 'none' ? data.lenderTitle + ' ' : '') + data.lenderName.split(" ")[0]} has permanently endowed a portion of the Rimmers Building — a House of Allah — for the benefit of the Muslim community and all who seek knowledge and worship therein. This Waqf shall be recorded in the AQS Endowment Register and acknowledged before Allah (SWT) as a Sadaqah Jariyah that shall continue to benefit the donor and their family for generations to come, in sha Allah.`,
       { width: W - 40 }
     ) + 18;
 

@@ -231,6 +231,7 @@ async function _fullyApproveLoan(loan: any) {
     const pdfBuffer = await generateLoanPdf({
       id: loan.id, borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail,
       borrowerAddress: loan.borrowerAddress, borrowerPhone: loan.borrowerPhone,
+      borrowerTitle: (loan as any).borrowerTitle,
       purpose: loan.purpose, amount: loan.amount, termMonths: loan.termMonths,
       termValue: loan.termValue, termUnit: loan.termUnit, termNotes: loan.termNotes,
       monthlyRepayment: loan.monthlyRepayment, startDate: loan.startDate,
@@ -263,6 +264,7 @@ async function _fullyApproveRepayment(repayment: any) {
     const pdfBuffer = await generateRepaymentPdf({
       repaymentId: repayment.id, loanId: loan.id,
       borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail, borrowerPhone: loan.borrowerPhone,
+      borrowerTitle: (loan as any).borrowerTitle,
       amount: repayment.amount, paymentMethod: repayment.paymentMethod,
       paidAt: repayment.paidAt, loanAmount: loan.amount, totalRepaid: loan.totalRepaid ?? "0",
       termMonths: loan.termMonths,
@@ -1720,6 +1722,7 @@ export const appRouter = router({
         const pdfBuffer = await generateLoanPdf({
           id: loan.id, borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail,
           borrowerAddress: loan.borrowerAddress, borrowerPhone: loan.borrowerPhone,
+          borrowerTitle: (loan as any).borrowerTitle,
           purpose: loan.purpose, amount: loan.amount, termMonths: loan.termMonths,
           termValue: (loan as any).termValue, termUnit: (loan as any).termUnit, termNotes: (loan as any).termNotes,
           monthlyRepayment: loan.monthlyRepayment, startDate: loan.startDate,
@@ -1744,6 +1747,7 @@ export const appRouter = router({
         const pdfBuffer = await generateRepaymentPdf({
           repaymentId: repayment.id, loanId: loan.id,
           borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail, borrowerPhone: loan.borrowerPhone,
+          borrowerTitle: (loan as any).borrowerTitle,
           amount: repayment.amount, paymentMethod: repayment.paymentMethod,
           paidAt: repayment.paidAt, loanAmount: loan.amount, totalRepaid: loan.totalRepaid ?? "0",
           termMonths: loan.termMonths,
@@ -2207,6 +2211,7 @@ export const appRouter = router({
         const certBuffer = await generateWaqfCertificate({
           loanId: loan.id,
           lenderName: loan.borrowerName,
+          lenderTitle: (loan as any).borrowerTitle,
           lenderEmail: loan.borrowerEmail,
           lenderAddress: loan.borrowerAddress,
           lenderPhone: loan.borrowerPhone,
@@ -2290,6 +2295,7 @@ export const appRouter = router({
         const certBuffer = await generateWaqfCertificate({
           loanId: loan.id,
           lenderName: loan.borrowerName,
+          lenderTitle: (loan as any).borrowerTitle,
           lenderEmail: loan.borrowerEmail,
           lenderAddress: loan.borrowerAddress,
           lenderPhone: loan.borrowerPhone,
