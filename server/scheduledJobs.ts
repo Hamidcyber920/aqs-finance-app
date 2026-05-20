@@ -132,7 +132,8 @@ async function sendWeeklyRepaymentAlert() {
     const reportDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 
     for (const recipient of WEEKLY_ALERT_RECIPIENTS) {
-      const firstName = recipient.name.split(" ").find(p => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? recipient.name;
+      // Full respectful salutation — recipient.name already includes title (e.g. "Dr Abdul Hamid")
+      const recipientSalutation = recipient.name;
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;">
           <div style="background:#5C1A1A;padding:24px;text-align:center;">
@@ -140,7 +141,7 @@ async function sendWeeklyRepaymentAlert() {
             <p style="color:#c9a84c;margin:4px 0 0;">Qarde Hasan — Weekly Repayment Alert</p>
           </div>
           <div style="padding:24px;background:#fff;">
-            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${recipientSalutation},</p>
             <p>May Allah bless you and your family with barakah. This is your weekly Qarde Hasan repayment alert for <strong>${reportDate}</strong>.</p>
             <p>The following Amanah repayments are due within the next <strong>4 weeks</strong>:</p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;">
@@ -163,7 +164,7 @@ async function sendWeeklyRepaymentAlert() {
             </table>
             <p>Please follow up with the respective donors and update the system once repayments are received. JazakAllahu Khayran for your continued dedication to the Rimmers Building Project.</p>
             <p>The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em></p>
-            <p>Warm Islamic greetings,<br><strong>AQ Society Finance System</strong></p>
+            <p>Wassalamu alaikum,<br><strong>Dr Abdul Hamid (Chair)</strong><br>On behalf of the Board of Trustees<br><em>Abdullah Quilliam Society</em></p>
           </div>
           <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
             JazakAllahu Khayran — AQ Society Automated Finance Alert
@@ -216,7 +217,8 @@ async function sendMonthlyTrusteeReport() {
     }).join("");
 
     for (const trustee of trustees) {
-      const firstName = (trustee.fullName ?? "").split(" ").find((p: string) => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? trustee.fullName ?? "Trustee";
+      // Use full respectful salutation: title + full name (e.g. "Dr Abdul Hamid")
+      const trusteeSalutation = (trustee.title && trustee.title !== 'none' ? `${trustee.title} ` : '') + (trustee.fullName ?? 'Trustee');
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;">
           <div style="background:#5C1A1A;padding:24px;text-align:center;">
@@ -224,7 +226,7 @@ async function sendMonthlyTrusteeReport() {
             <p style="color:#c9a84c;margin:4px 0 0;">Qarde Hasan — Monthly Trustee Report — ${monthName}</p>
           </div>
           <div style="padding:24px;background:#fff;">
-            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${trusteeSalutation},</p>
             <p>May Allah bless you with barakah and good health. Please find below the monthly Qarde Hasan Amanah report for <strong>${monthName}</strong>.</p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;background:#f0fdf4;border-radius:8px;">
               <tr><td style="padding:10px 16px;font-weight:700;">Total Borrowed</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#5C1A1A;">£${totalLoaned.toFixed(2)}</td></tr>
@@ -289,7 +291,8 @@ async function sendBirthdayAlerts() {
     }
 
     for (const trustee of birthdayTrustees) {
-      const firstName = (trustee.fullName ?? "").split(" ").find((p: string) => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? trustee.fullName ?? "Trustee";
+      // Full respectful salutation: title + full name
+      const birthdaySalutation = (trustee.title && trustee.title !== 'none' ? `${trustee.title} ` : '') + (trustee.fullName ?? 'Trustee');
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
           <div style="background:#5C1A1A;padding:24px;text-align:center;">
@@ -297,7 +300,7 @@ async function sendBirthdayAlerts() {
             <p style="color:#c9a84c;margin:4px 0 0;">Birthday Mubarak 🎁</p>
           </div>
           <div style="padding:24px;background:#fff;">
-            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${birthdaySalutation},</p>
             <p style="font-size:18px;font-weight:700;color:#5C1A1A;">JazakAllahu Khayran — Wishing you a blessed birthday!</p>
             <p>May Allah (SWT) bless you with good health, happiness, barakah, and continued success in your service to the community. May this year bring you and your family immense joy and reward in both this world and the Hereafter.</p>
             <p>The Prophet (PBUH) said: <em>"Whoever is not grateful to people is not grateful to Allah."</em></p>
@@ -310,8 +313,8 @@ async function sendBirthdayAlerts() {
 
       await sendEmail(
         trustee.email!,
-        trustee.fullName ?? firstName,
-        `Birthday Mubarak, ${firstName}! 🎁 — AQ Society`,
+        trustee.fullName ?? birthdaySalutation,
+        `Birthday Mubarak, ${birthdaySalutation}! 🎁 — AQ Society`,
         html
       )
         .then(() => console.log(`[Scheduled] Birthday email sent to ${trustee.email}`))
