@@ -322,7 +322,7 @@ export default function LoansPage() {
               </style></head><body>`;
               html += `<div class="letterhead">`;
               html += `<div><p class="letterhead-title">Abdullah Quilliam Society</p><p class="letterhead-sub">Qarde Hasan Amanah — Finance Report</p></div>`;
-              html += `<div class="letterhead-meta">Generated: ${generatedDate}<br>Registered Charity No. 1169382<br>receiptapp-excmtodu.manus.space</div>`;
+              html += `<div class="letterhead-meta">Generated: ${generatedDate}<br>Registered Charity No. 1194942<br>receiptapp-excmtodu.manus.space</div>`;
               html += `</div>`;
               html += `<div class="report-info"><h2>Qarde Hasan Loans Report</h2><p>Period: ${dateFrom} to ${dateTo}</p></div>`;
               html += `<div class="stats-grid">`;
@@ -339,6 +339,24 @@ export default function LoansPage() {
                 html += `<tr><td>${new Date(l.createdAt).toLocaleDateString("en-GB")}</td><td>${l.borrowerName}</td><td style="font-size:10px">${l.borrowerEmail || ""}</td><td>\u00a3${Number(l.amount).toFixed(2)}</td><td class="${statusClass}">${l.status}</td><td>${l.purpose || ""}</td></tr>`;
               });
               html += `</table>`;
+              html += `
+              <div style="margin: 0 32px 24px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                <div style="background: #5C1A1A; color: #fff; padding: 10px 16px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;">Board Approval &amp; Meeting Record</div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin: 0;">
+                  <tr>
+                    <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; width: 35%; font-weight: 600; color: #444; background: #fafafa;">Approved by Trustees</td>
+                    <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; color: #1a1a1a; min-height: 32px;">&nbsp;</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; font-weight: 600; color: #444; background: #fafafa;">Date of Meeting</td>
+                    <td style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; color: #1a1a1a;">&nbsp;</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 14px 16px; font-weight: 600; color: #444; background: #fafafa; vertical-align: top;">Action Points Arising</td>
+                    <td style="padding: 14px 16px; color: #1a1a1a; min-height: 80px; height: 80px;">&nbsp;</td>
+                  </tr>
+                </table>
+              </div>`;
               html += `<div class="footer">JazakAllahu Khayran \u2014 Abdullah Quilliam Society \u2014 Qarde Hasan Amanah Finance System</div>`;
               html += `</body></html>`;
               const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
