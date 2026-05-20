@@ -666,11 +666,15 @@ The AQS Team`);
                 <Button
                   onClick={() => {
                     const fn = (loan.borrowerName ?? "").split(" ")[0];
-                    const totalPaid = ((loan as any).repayments ?? []).filter((r: any) => r.paidAt).reduce((s: number, r: any) => s + parseFloat(r.amount ?? "0"), 0);
-                    const outstanding = Math.max(0, parseFloat(String(loan.amount ?? 0)) - totalPaid);
+                    const allReps = (loan as any).repayments ?? [];
+                    const totalPaid = allReps.filter((r: any) => r.paidAt).reduce((s: number, r: any) => s + parseFloat(r.amount ?? "0"), 0);
+                    const waqfEndowed = allReps.reduce((s: number, r: any) => s + parseFloat(r.waqfAmount ?? "0"), 0);
+                    const isWaqf = !!(loan as any).waqfConvertedAt || waqfEndowed > 0;
+                    const outstanding = Math.max(0, parseFloat(String(loan.amount ?? 0)) - totalPaid - (isWaqf ? waqfEndowed : 0));
+                    const endowmentLine = isWaqf ? `\nEndowment (Waqf): £${waqfEndowed.toFixed(2)}` : "";
                     setEmailPreviewType("statement");
                     setEmailPreviewSubject(`Qarde Hasan Amanah Statement — ${new Date().toLocaleDateString("en-GB")} — AQ Society`);
-                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn},\n\nMay Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the Rimmers Building Project as of ${new Date().toLocaleDateString("en-GB")}.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nTotal Paid: £${totalPaid.toFixed(2)}\nOutstanding Balance: £${outstanding.toFixed(2)}\n\nYour generosity is a pillar of this House of Allah. JazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
+                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn},\n\nMay Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the Rimmers Building Project as of ${new Date().toLocaleDateString("en-GB")}.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nTotal Paid: £${totalPaid.toFixed(2)}${endowmentLine}\nOutstanding Balance: £${outstanding.toFixed(2)}\n\nYour generosity is a pillar of this House of Allah. JazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
                     setEmailPreviewOpen(true);
                   }}
                   style={{ background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.15)",color:"#fbbf24",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>

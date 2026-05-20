@@ -2025,7 +2025,9 @@ export const appRouter = router({
         const termMonths = loan.termUnit === 'years' ? (loan.termValue ?? 6) * 12 : (loan.termValue ?? (loan as any).termMonths ?? 6);
         const monthly = (Number(loan.amount) / termMonths).toFixed(2);
         const totalPaid = repayments.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
-        const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
+        const waqfEndowedEmail = repayments.reduce((s: number, r: any) => s + Number(r.waqfAmount ?? 0), 0);
+        const isWaqfEmail = !!(loan as any).waqfConvertedAt || waqfEndowedEmail > 0;
+        const outstanding = Math.max(0, Number(loan.amount) - totalPaid - (isWaqfEmail ? waqfEndowedEmail : 0));
         const firstName = (loan.borrowerName ?? '').split(' ')[0];
         const rows = repayments.map((r: any, i: number) => {
           const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
@@ -2046,7 +2048,8 @@ export const appRouter = router({
             <table style="width:100%;border-collapse:collapse;margin:16px 0">
               <tr><td style="padding:5px 0;font-size:13px;color:#6b7280;width:150px">Loan Amount</td><td style="font-size:14px;font-weight:700;color:#059669">&pound;${Number(loan.amount).toLocaleString('en-GB',{minimumFractionDigits:2})}</td></tr>
               <tr><td style="padding:5px 0;font-size:13px;color:#6b7280">Total Paid</td><td style="font-size:14px;font-weight:700">&pound;${totalPaid.toFixed(2)}</td></tr>
-              <tr><td style="padding:5px 0;font-size:13px;color:#6b7280">Outstanding</td><td style="font-size:14px;font-weight:700;color:${outstanding>0?'#dc2626':'#059669'}">&pound;${outstanding.toFixed(2)}</td></tr>
+              ${isWaqfEmail ? `<tr><td style="padding:5px 0;font-size:13px;color:#6b7280">Endowment (Waqf)</td><td style="font-size:14px;font-weight:700;color:#c9a84c">&pound;${waqfEndowedEmail.toFixed(2)}</td></tr>` : ''}
+              <tr><td style="padding:5px 0;font-size:13px;color:#6b7280">Outstanding Balance</td><td style="font-size:14px;font-weight:700;color:${outstanding>0?'#dc2626':'#059669'}">&pound;${outstanding.toFixed(2)}</td></tr>
             </table>
             <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb">
               <thead><tr style="background:#f9fafb">
