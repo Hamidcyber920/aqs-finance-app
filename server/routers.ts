@@ -1869,6 +1869,9 @@ export const appRouter = router({
         const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
         // Generate as PDF so it opens correctly in all browsers
         const PDFDocument = (await import('pdfkit')).default;
+        // Pre-load logo buffer before entering synchronous Promise callback
+        let stmtLogoBufferPre: Buffer | null = null;
+        try { stmtLogoBufferPre = Buffer.from((await import('./aqsLogoB64')).AQS_LOGO_WHITE_B64, 'base64'); } catch {}
         const stmtDoc = new PDFDocument({ size: 'A4', margin: 0, autoFirstPage: true });
         const stmtBufs: Buffer[] = [];
         await new Promise<void>((res, rej) => {
@@ -1876,20 +1879,35 @@ export const appRouter = router({
           stmtDoc.on('end', res);
           stmtDoc.on('error', rej);
 
-          const SG = '#1a4731'; const SGOLD = '#c9a84c'; const SMUTED = '#555555'; const STEXT = '#1a1a1a';
-          const SL = 50; const SW = 495; const SPW = stmtDoc.page.width;
+          const SG = '#4a0e1a'; const SGOLD = '#c9a84c'; const SMUTED = '#555555'; const STEXT = '#1a1a1a';
+          const SGOLD_LIGHT = '#e8c97a'; const SWHITE = '#ffffff'; const SMUTED2 = '#d4b8be';
+          const SL = 45; const SW = 505; const SPW = stmtDoc.page.width;
 
-          // Header
-          stmtDoc.rect(0, 0, SPW, 80).fill(SG);
-          stmtDoc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
-            .text('Abdullah Quilliam Society', SL, 18, { width: SW });
-          stmtDoc.fontSize(10).font('Helvetica')
-            .text('Qarde Hasan Loan Statement', SL, 44, { width: SW });
-          stmtDoc.fillColor(SGOLD).fontSize(8).font('Helvetica')
-            .text('Official Finance Record — Interest-Free Loan', SL, 60, { width: SW });
-          stmtDoc.rect(0, 80, SPW, 3).fill(SGOLD);
+          // ── Burgundy header band (matching loan agreement letterhead) ─────────────────────────────────
+          const SHEADER_H = 120;
+          stmtDoc.rect(0, 0, SPW, SHEADER_H).fill(SG);
+          stmtDoc.rect(0, SHEADER_H, SPW, 3).fill(SGOLD);
+          // Logo (pre-loaded before this callback)
+          const sLogoH = SHEADER_H - 16;
+          const sLogoW = Math.round(sLogoH * 470 / 490);
+          if (stmtLogoBufferPre) {
+            try { stmtDoc.image(stmtLogoBufferPre, SL, 8, { width: sLogoW, height: sLogoH }); } catch {}
+          }
+          // Vertical gold divider
+          const sDivX = SL + sLogoW + 14;
+          stmtDoc.rect(sDivX, 18, 1.5, SHEADER_H - 36).fill(SGOLD);
+          // Organisation name & tagline
+          const sTextX = sDivX + 14;
+          stmtDoc.fillColor(SWHITE).fontSize(15).font('Helvetica-Bold')
+            .text('ABDULLAH QUILLIAM SOCIETY', sTextX, 20, { width: SPW - sTextX - 30 });
+          stmtDoc.fontSize(9).font('Helvetica').fillColor(SGOLD_LIGHT)
+            .text('Qarde Hasan (Interest-Free Loan) — Loan Statement', sTextX, 40, { width: SPW - sTextX - 30 });
+          stmtDoc.fontSize(7.5).fillColor(SGOLD)
+            .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', sTextX, 57, { width: SPW - sTextX - 30 });
+          stmtDoc.fontSize(7.5).fillColor(SMUTED2)
+            .text('8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org', sTextX, 74, { width: SPW - sTextX - 30 });
 
-          let sy = 100;
+          let sy = SHEADER_H + 16;
           stmtDoc.fillColor(SG).fontSize(13).font('Helvetica-Bold')
             .text('QARDE HASAN LOAN STATEMENT', SL, sy, { width: SW, align: 'center' });
           sy += 18;
@@ -1923,6 +1941,14 @@ export const appRouter = router({
           stmtDoc.rect(SL, sy, SW, 1).fill('#e0e0e0'); sy += 5;
           sRow('Total Paid', `£${totalPaid.toFixed(2)}`, true);
           sRow('Outstanding Balance', `£${outstanding.toFixed(2)}`, true, outstanding > 0 ? '#dc2626' : '#059669');
+          // Endowment rows (if waqf converted or any interim waqf amounts)
+          const waqfEndowed = repayments.reduce((s: number, r: any) => s + Number(r.waqfAmount ?? 0), 0);
+          const isWaqfConverted = !!(loan as any).waqfConvertedAt;
+          if (isWaqfConverted || waqfEndowed > 0) {
+            const endowedBalance = Math.max(0, Number(loan.amount) - totalPaid - waqfEndowed);
+            sRow('Endowment (Waqf) Amount', `£${waqfEndowed.toFixed(2)}`, true, '#c9a84c');
+            sRow('Endowment Balance', `£${endowedBalance.toFixed(2)}`, true, endowedBalance > 0 ? '#dc2626' : '#059669');
+          }
           sy += 8;
 
           // Repayments table

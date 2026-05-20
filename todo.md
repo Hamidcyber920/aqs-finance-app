@@ -2636,3 +2636,7 @@
 - [x] Fix Loan Statement button — added toast + popup-blocked fallback (window.location.href)
 - [x] Email Lender: open preview dialog (editable subject + body) before sending — do not auto-send
 - [x] Email Statement: open preview dialog (editable subject + body) before sending — do not auto-send
+
+## Loan Statement PDF Updates (May 2026)
+- [x] Replace old green header with new AQS burgundy letterhead (matching loan agreement PDF: burgundy band, logo, gold rule, address line)
+- [x] Add Endowment Amount and Endowment Balance rows to Loan Summary section on statement
