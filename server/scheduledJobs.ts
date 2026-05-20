@@ -57,7 +57,7 @@ async function getActiveLoansWithRepayments() {
   if (!db) return [];
   const { loanApplications } = await import("../drizzle/schema");
   const loans = await db.select().from(loanApplications)
-    .where(eq(loanApplications.status, "active"));
+    .where(sql`${loanApplications.status} IN ('approved', 'active')`);
   const results = await Promise.all(loans.map(async (loan: any) => {
     const reps = await db.select().from(loanRepayments)
       .where(eq((loanRepayments as any).loanId, loan.id));
@@ -227,7 +227,7 @@ async function sendMonthlyTrusteeReport() {
             <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
             <p>May Allah bless you with barakah and good health. Please find below the monthly Qarde Hasan Amanah report for <strong>${monthName}</strong>.</p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;background:#f0fdf4;border-radius:8px;">
-              <tr><td style="padding:10px 16px;font-weight:700;">Total Loaned</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#5C1A1A;">£${totalLoaned.toFixed(2)}</td></tr>
+              <tr><td style="padding:10px 16px;font-weight:700;">Total Borrowed</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#5C1A1A;">£${totalLoaned.toFixed(2)}</td></tr>
               <tr><td style="padding:10px 16px;font-weight:700;">Total Repaid</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#16a34a;">£${totalRepaid.toFixed(2)}</td></tr>
               <tr><td style="padding:10px 16px;font-weight:700;">Total Outstanding</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#dc2626;">£${totalOutstanding.toFixed(2)}</td></tr>
               <tr><td style="padding:10px 16px;font-weight:700;">Active Loans</td><td style="padding:10px 16px;font-weight:800;font-size:16px;">${loans.length}</td></tr>
@@ -248,7 +248,7 @@ async function sendMonthlyTrusteeReport() {
             </table>
             <p style="margin-top:24px;">The Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em> May Allah (SWT) accept the Amanah of all our donors and reward them with Sadaqah Jariyah.</p>
             <p>JazakAllahu Khayran for your continued trust and oversight of the Rimmers Building Project.</p>
-            <p>Warm Islamic greetings,<br><strong>AQ Society Finance System</strong></p>
+            <p>Wassalamu alaikum,<br><strong>Dr Abdul Hamid (Chair)</strong><br>On behalf of the Board of Trustees<br><em>Abdullah Quilliam Society</em></p>
           </div>
           <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666;">
             JazakAllahu Khayran — AQ Society Monthly Finance Report
