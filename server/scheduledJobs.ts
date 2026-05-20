@@ -1616,9 +1616,9 @@ export async function generateMorningBriefing() {
     const recipients: { name: string; email: string }[] = briefUsers
       .filter(u => !!u.email)
       .map(u => ({ name: u.name ?? 'User', email: u.email! }));
-    // Fallback to hardcoded list if no users have opted in
     if (recipients.length === 0) {
-      recipients.push(...WEEKLY_ALERT_RECIPIENTS);
+      console.log('[Scheduled] Morning briefing: no opted-in recipients — skipping.');
+      return;
     }
 
     for (const r of recipients) {
@@ -1718,17 +1718,9 @@ async function sendCalendarAndUrgentBriefing() {
     const recipients: { name: string; email: string }[] = nineAmUsers
       .filter(u => !!u.email)
       .map(u => ({ name: u.name ?? 'User', email: u.email! }));
-    // Fallback to hardcoded list if no users have opted in
     if (recipients.length === 0) {
-      recipients.push(...WEEKLY_ALERT_RECIPIENTS);
-      try {
-        const activeTrustees = await getActiveTrustees();
-        for (const t of activeTrustees) {
-          if ((t as any).email && !recipients.find(r => r.email === (t as any).email)) {
-            recipients.push({ name: (t as any).name ?? "Trustee", email: (t as any).email });
-          }
-        }
-      } catch { /* skip */ }
+      console.log('[Scheduled] 9am briefing: no opted-in recipients — skipping.');
+      return;
     }
 
     for (const r of recipients) {
