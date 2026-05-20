@@ -1940,14 +1940,15 @@ export const appRouter = router({
           sy += 4;
           stmtDoc.rect(SL, sy, SW, 1).fill('#e0e0e0'); sy += 5;
           sRow('Total Paid', `£${totalPaid.toFixed(2)}`, true);
-          sRow('Outstanding Balance', `£${outstanding.toFixed(2)}`, true, outstanding > 0 ? '#dc2626' : '#059669');
-          // Endowment rows (if waqf converted or any interim waqf amounts)
+          // Endowment: adjust outstanding balance if waqf converted
           const waqfEndowed = repayments.reduce((s: number, r: any) => s + Number(r.waqfAmount ?? 0), 0);
           const isWaqfConverted = !!(loan as any).waqfConvertedAt;
           if (isWaqfConverted || waqfEndowed > 0) {
-            const endowedBalance = Math.max(0, Number(loan.amount) - totalPaid - waqfEndowed);
             sRow('Endowment (Waqf) Amount', `£${waqfEndowed.toFixed(2)}`, true, '#c9a84c');
-            sRow('Endowment Balance', `£${endowedBalance.toFixed(2)}`, true, endowedBalance > 0 ? '#dc2626' : '#059669');
+            const adjustedOutstanding = Math.max(0, Number(loan.amount) - totalPaid - waqfEndowed);
+            sRow('Outstanding Balance', `£${adjustedOutstanding.toFixed(2)}`, true, adjustedOutstanding > 0 ? '#dc2626' : '#059669');
+          } else {
+            sRow('Outstanding Balance', `£${outstanding.toFixed(2)}`, true, outstanding > 0 ? '#dc2626' : '#059669');
           }
           sy += 8;
 
