@@ -454,6 +454,61 @@ export default function LoansPage() {
             ? Array.from(new Map(loans.map((l: any) => [l.borrowerEmail || l.borrowerName, l])).values())
             : loans;
           const filterLabel = tableFilter === "active" ? "Active Loans" : tableFilter === "pending" ? "Pending Review" : tableFilter === "donors" ? "Donors" : "All Loans";
+
+          const isRepaidInFull = (l: any) => (l._summary?.outstanding ?? Number(l.amount)) <= 0;
+          const activeList = filteredLoans.filter((l: any) => !isRepaidInFull(l));
+          const pastList = filteredLoans.filter((l: any) => isRepaidInFull(l));
+
+          const renderRow = (l: any) => {
+            const s = l._summary ?? {};
+            const termMonths = s.termMonths ?? (l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6));
+            const monthly = (Number(l.amount) / termMonths).toFixed(2);
+            const paidCount = s.paidCount ?? 0;
+            const totalInstalments = s.totalInstalments ?? termMonths;
+            const outstanding = s.outstanding ?? Number(l.amount);
+            const overdueCount = s.overdueCount ?? 0;
+            const repaidFull = outstanding <= 0;
+            return (
+              <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setLocation(`/loans/${l.id}`)}>      
+                <td style={{ padding: "12px 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: T.white, margin: 0 }}>{l.borrowerName}</p>
+                    <p style={{ fontSize: 11, color: T.muted, margin: 0 }}>{l.borrowerEmail}</p>
+                    <div style={{ display:"flex",gap:6,marginTop:5,flexWrap:"wrap" }}>
+                      <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(0,255,194,0.08)",color:"#6ee7b7" }}>{paidCount}/{totalInstalments} paid</span>
+                      {repaidFull
+                        ? <span style={{ fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:999,background:"rgba(239,68,68,0.12)",color:"#f87171",border:"1px solid rgba(239,68,68,0.3)" }}>✓ Repaid in Full</span>
+                        : <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(239,68,68,0.08)",color:"#f87171" }}>£{outstanding.toFixed(0)} outstanding</span>
+                      }
+                      {overdueCount > 0 && <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(239,68,68,0.15)",color:"#fca5a5" }}>⚠ {overdueCount} overdue</span>}
+                    </div>
+                  </div>
+                </td>
+                <td style={{ padding: "12px 12px 12px 0", fontSize: 14, fontWeight: 700, color: T.mint, borderBottom: `1px solid ${T.border}` }}>£{Number(l.amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td style={{ padding: "12px 12px 12px 0", fontSize: 13, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{l.termValue} {l.termUnit ?? "months"}</td>
+                <td style={{ padding: "12px 12px 12px 0", fontSize: 13, color: T.purple, fontWeight: 600, borderBottom: `1px solid ${T.border}` }}>£{monthly}/mo</td>
+                <td style={{ padding: "12px 12px 12px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{l.purpose}</td>
+                <td style={{ padding: "12px 12px 12px 0", borderBottom: `1px solid ${T.border}` }}><Badge status={l.status} /></td>
+                <td style={{ padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {isAdmin && l.status === "pending" && (
+                      <button onClick={(e) => { e.stopPropagation(); approveMutation.mutate({ id: l.id }); }}
+                        style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,255,194,0.1)", border: "1px solid rgba(0,255,194,0.2)", color: T.mint, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                        Approve
+                      </button>
+                    )}
+                    <button onClick={(e) => { e.stopPropagation(); setLocation(`/loans/${l.id}`); }}
+                      style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(99,91,255,0.1)", border: "1px solid rgba(99,91,255,0.2)", color: T.purple, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                      View
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          };
+
+          const tableHeaders = ["Lender / Donor", "Amount", "Term", "Monthly", "Purpose", "Status", "Actions"];
+
           return (
         <div style={{ background: T.card, backdropFilter: "blur(20px)", border: `1px solid ${T.border}`, borderRadius: 16, padding: 24, animation: "fadeUp 0.5s ease 200ms both" }}>
           <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20 }}>
@@ -462,66 +517,32 @@ export default function LoansPage() {
               <button onClick={() => setTableFilter("all")} style={{ fontSize:11,color:T.muted,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:8,padding:"4px 10px",cursor:"pointer" }}>Show All</button>
             )}
           </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
-              <thead>
-                <tr>
-                  {["Lender / Donor", "Amount", "Term", "Monthly", "Purpose", "Status", "Actions"].map(h => (
-                    <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLoans.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: "center", padding: 40, color: T.muted, fontSize: 14 }}>{tableFilter !== "all" ? "No loans match this filter" : "No loan applications yet"}</td></tr>
-                ) : filteredLoans.map((l: any) => {
-                  const s = l._summary ?? {};
-                  const termMonths = s.termMonths ?? (l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6));
-                  const monthly = (Number(l.amount) / termMonths).toFixed(2);
-                  const paidCount = s.paidCount ?? 0;
-                  const totalInstalments = s.totalInstalments ?? termMonths;
-                  const outstanding = s.outstanding ?? Number(l.amount);
-                  const overdueCount = s.overdueCount ?? 0;
-                  return (
-                    <tr key={l.id} style={{ cursor: "pointer" }} onClick={() => setLocation(`/loans/${l.id}`)}>
-                      <td style={{ padding: "12px 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>
-                        <div>
-                          <p style={{ fontSize: 13, fontWeight: 600, color: T.white, margin: 0 }}>{l.borrowerName}</p>
-                          <p style={{ fontSize: 11, color: T.muted, margin: 0 }}>{l.borrowerEmail}</p>
-                          <div style={{ display:"flex",gap:6,marginTop:5,flexWrap:"wrap" }}>
-                            <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(0,255,194,0.08)",color:"#6ee7b7" }}>{paidCount}/{totalInstalments} paid</span>
-                            {outstanding > 0 && <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(239,68,68,0.08)",color:"#f87171" }}>£{outstanding.toFixed(0)} outstanding</span>}
-                            {overdueCount > 0 && <span style={{ fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:999,background:"rgba(239,68,68,0.15)",color:"#fca5a5" }}>⚠ {overdueCount} overdue</span>}
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: "12px 12px 12px 0", fontSize: 14, fontWeight: 700, color: T.mint, borderBottom: `1px solid ${T.border}` }}>£{Number(l.amount).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td style={{ padding: "12px 12px 12px 0", fontSize: 13, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
-                        {l.termValue} {l.termUnit ?? "months"}
-                      </td>
-                      <td style={{ padding: "12px 12px 12px 0", fontSize: 13, color: T.purple, fontWeight: 600, borderBottom: `1px solid ${T.border}` }}>£{monthly}/mo</td>
-                      <td style={{ padding: "12px 12px 12px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{l.purpose}</td>
-                      <td style={{ padding: "12px 12px 12px 0", borderBottom: `1px solid ${T.border}` }}><Badge status={l.status} /></td>
-                      <td style={{ padding: "12px 0", borderBottom: `1px solid ${T.border}` }}>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          {isAdmin && l.status === "pending" && (
-                            <button onClick={(e) => { e.stopPropagation(); approveMutation.mutate({ id: l.id }); }}
-                              style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,255,194,0.1)", border: "1px solid rgba(0,255,194,0.2)", color: T.mint, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                              Approve
-                            </button>
-                          )}
-                          <button onClick={(e) => { e.stopPropagation(); setLocation(`/loans/${l.id}`); }}
-                            style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(99,91,255,0.1)", border: "1px solid rgba(99,91,255,0.2)", color: T.purple, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                            View
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {filteredLoans.length === 0 ? (
+            <p style={{ textAlign: "center", padding: 40, color: T.muted, fontSize: 14 }}>{tableFilter !== "all" ? "No loans match this filter" : "No loan applications yet"}</p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              {/* Active / Outstanding section */}
+              {activeList.length > 0 && (
+                <>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: T.mint, textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 10px" }}>Active — {activeList.length} loan{activeList.length !== 1 ? "s" : ""}</p>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600, marginBottom: 24 }}>
+                    <thead><tr>{tableHeaders.map(h => <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>)}</tr></thead>
+                    <tbody>{activeList.map(renderRow)}</tbody>
+                  </table>
+                </>
+              )}
+              {/* Past / Repaid section */}
+              {pastList.length > 0 && (
+                <>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 10px" }}>Past / Repaid — {pastList.length} loan{pastList.length !== 1 ? "s" : ""}</p>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+                    <thead><tr>{tableHeaders.map(h => <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>)}</tr></thead>
+                    <tbody>{pastList.map(renderRow)}</tbody>
+                  </table>
+                </>
+              )}
+            </div>
+          )}
         </div>
           );
         })()}
