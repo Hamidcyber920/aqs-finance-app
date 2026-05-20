@@ -322,7 +322,7 @@ export default function LoansPage() {
 
         {/* Stats */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
-          <StatCard label="Total Loaned" value={`£${totalLoaned.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={BookOpen} color={T.purple}
+          <StatCard label="Total Borrowed" value={`£${totalLoaned.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={BookOpen} color={T.purple}
             onClick={() => setTableFilter(f => f === "all" ? "all" : "all")} active={tableFilter === "all"} />
           <StatCard label="Total Outstanding" value={`£${totalOutstanding.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingDown} color="#f87171"
             onClick={() => setTableFilter(f => f === "all" ? "all" : "all")} active={false} />
