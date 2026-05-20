@@ -451,8 +451,8 @@ export interface RepaymentPdfData {
   trusteeName?: string | null;
   trusteeApprovedAt?: Date | null;
   notes?: string | null;
+  waqfEndowed?: number | null;
 }
-
 export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buffer> {
   const PDFDocument = (await import("pdfkit")).default;
   return new Promise((resolve, reject) => {
@@ -480,7 +480,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     // Org name
     const textX = 130;
     doc.fillColor(WHITE).fontSize(18).font("Helvetica-Bold")
-      .text("ABDULLAH QUILLIAM SOCIETY", textX, 18, { width: PW - textX - 30, lineBreak: false });
+      .text("ABDULLAH QUILLIAM SOCIETY", textX, 28, { width: PW - textX - 30, lineBreak: false });
     doc.fillColor(GOLD_LIGHT).fontSize(9).font("Helvetica")
       .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 42, { width: PW - textX - 30 });
     doc.fillColor(GOLD_LIGHT).fontSize(8.5).font("Helvetica")
@@ -543,7 +543,11 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     y = drawRow("Payment Date", new Date(data.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }), y);
     y = drawRow("Original Amanah Amount", `£${parseFloat(String(data.loanAmount)).toFixed(2)}`, y);
     y = drawRow("Total Returned to Date", `£${parseFloat(String(data.totalRepaid)).toFixed(2)}`, y);
-    const outstanding = Math.max(0, parseFloat(String(data.loanAmount)) - parseFloat(String(data.totalRepaid)));
+    const waqfAmt = data.waqfEndowed ?? 0;
+    if (waqfAmt > 0) {
+      y = drawRow("Endowment (Waqf)", `£${waqfAmt.toFixed(2)}`, y);
+    }
+    const outstanding = Math.max(0, parseFloat(String(data.loanAmount)) - parseFloat(String(data.totalRepaid)) - waqfAmt);
     y = drawRow("Outstanding Balance", `£${outstanding.toFixed(2)}`, y);
     y += 10;
 

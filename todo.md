@@ -2640,3 +2640,10 @@
 ## Loan Statement PDF Updates (May 2026)
 - [x] Replace old green header with new AQS burgundy letterhead (matching loan agreement PDF: burgundy band, logo, gold rule, address line)
 - [x] Add Endowment Amount and Endowment Balance rows to Loan Summary section on statement
+
+## Repayment Receipt PDF Updates (May 2026)
+- [x] Fix org name Y position in repayment receipt letterhead (Y=28 instead of Y=18 to avoid clipping)
+- [x] Add waqfEndowed field to RepaymentPdfData interface in loanPdf.ts
+- [x] Add Endowment (Waqf) Amount row and adjusted Outstanding Balance to repayment receipt PDF
+- [x] Update routers.ts _fullyApproveRepayment: fetch all repayments, compute waqfEndowed, pass to generateRepaymentPdf
+- [x] Update routers.ts generateRepaymentPdf adminProcedure: fetch all repayments, compute waqfEndowed, pass to generateRepaymentPdf

@@ -261,6 +261,8 @@ async function _fullyApproveRepayment(repayment: any) {
   try {
     const loan = await getLoanById(repayment.loanId);
     if (!loan) return;
+    const allRepayments = await getLoanRepayments(loan.id);
+    const waqfEndowed = allRepayments.reduce((s, r) => s + Number((r as any).waqfAmount ?? 0), 0);
     const pdfBuffer = await generateRepaymentPdf({
       repaymentId: repayment.id, loanId: loan.id,
       borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail, borrowerPhone: loan.borrowerPhone,
@@ -271,6 +273,7 @@ async function _fullyApproveRepayment(repayment: any) {
       adminApprovedByName: repayment.adminApprovedByName, adminApprovedAt: repayment.adminApprovedAt,
       trusteeName: repayment.trusteeName, trusteeApprovedAt: repayment.trusteeApprovedAt,
       notes: repayment.notes,
+      waqfEndowed,
     });
     const fileKey = `loans/repayment-${repayment.id}-${Date.now()}.pdf`;
     const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
@@ -1744,6 +1747,8 @@ export const appRouter = router({
         if (!repayment) throw new TRPCError({ code: "NOT_FOUND" });
         const loan = await getLoanById(repayment.loanId);
         if (!loan) throw new TRPCError({ code: "NOT_FOUND" });
+        const allRepayments = await getLoanRepayments(repayment.loanId);
+        const waqfEndowed = allRepayments.reduce((s, r) => s + Number((r as any).waqfAmount ?? 0), 0);
         const pdfBuffer = await generateRepaymentPdf({
           repaymentId: repayment.id, loanId: loan.id,
           borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail, borrowerPhone: loan.borrowerPhone,
@@ -1754,6 +1759,7 @@ export const appRouter = router({
           adminApprovedByName: (repayment as any).adminApprovedByName, adminApprovedAt: (repayment as any).adminApprovedAt,
           trusteeName: (repayment as any).trusteeName, trusteeApprovedAt: (repayment as any).trusteeApprovedAt,
           notes: repayment.notes,
+          waqfEndowed,
         });
         const fileKey = `loans/repayment-${repayment.id}-${Date.now()}.pdf`;
         const { url } = await storagePut(fileKey, pdfBuffer, "application/pdf");
