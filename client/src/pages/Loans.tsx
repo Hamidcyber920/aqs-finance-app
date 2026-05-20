@@ -288,7 +288,9 @@ export default function LoansPage() {
               lines.push("Qarde Hasan Amanah - Finance Report");
               lines.push(`Registered Charity No. 1194942`);
               lines.push(`Generated: ${csvDate}`);
-              lines.push(`Period: ${dateFrom} to ${dateTo}`);
+              // Format dateFrom/dateTo as dd/mm/yyyy for the header
+              const fmtDate = (iso: string) => { const p = iso.split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso; };
+              lines.push(`Period: ${fmtDate(dateFrom)} to ${fmtDate(dateTo)}`);
               lines.push("");
               lines.push("SUMMARY");
               lines.push(`Total Borrowed,GBP ${csvTotalBorrowed.toFixed(2)}`);
@@ -300,9 +302,14 @@ export default function LoansPage() {
               lines.push("LOAN DETAILS");
               lines.push("Date,Borrower,Email,Amount (GBP),Status,Purpose");
               filtered.forEach((l: any) => {
-                const d = new Date(l.createdAt).toLocaleDateString("en-GB"); // dd/mm/yyyy - no encoding issues
+                // Prefix date with a tab so Excel treats it as text, not a date value (prevents #########)
+                const raw = new Date(l.createdAt);
+                const dd = String(raw.getDate()).padStart(2,'0');
+                const mm = String(raw.getMonth()+1).padStart(2,'0');
+                const yyyy = raw.getFullYear();
+                const d = `\t${dd}/${mm}/${yyyy}`; // tab prefix forces text mode in Excel
                 const amt = Number(l.amount).toFixed(2);
-                lines.push([esc(d), esc(l.borrowerName || ""), esc(l.borrowerEmail || ""), amt, esc(l.status || ""), esc(l.purpose || "")].join(","));
+                lines.push([d, esc(l.borrowerName || ""), esc(l.borrowerEmail || ""), amt, esc(l.status || ""), esc(l.purpose || "")].join(","));
               });
               lines.push("");
               lines.push("JazakAllahu Khayran - Abdullah Quilliam Society - Qarde Hasan Amanah Finance System");
