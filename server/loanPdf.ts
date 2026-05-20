@@ -123,7 +123,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       doc.rect(0, HEADER_H, PW, 3).fill(GOLD);
 
       // ── Islamic geometric border strip below gold rule ─────────────────────
-      drawGeometricBorder(doc, L, HEADER_H + 12, W, GOLD);
+      // geometric border removed
 
       // ── Logo ──────────────────────────────────────────────────────────────
       // Logo is 440x230 (wide rectangle) — render at 110x57 to preserve aspect ratio
@@ -270,7 +270,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
 
       // ── Page 1 footer ─────────────────────────────────────────────────────
       doc.rect(L, PH - 52, W, 1.5).fill(GOLD);
-      drawGeometricBorder(doc, L, PH - 38, W, GOLD + "88");
+      // geometric border removed
       doc.fillColor(MUTED).fontSize(7).font("Helvetica")
         .text(
           `Abdullah Quilliam Society  |  Qarde Hasan Amanah Agreement  |  Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}  |  Page 1 of 2`,
@@ -292,7 +292,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       doc.fillColor(GOLD_LIGHT).fontSize(7.5).font("Helvetica")
         .text(`Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   ${loan.borrowerName}`, L, 28, { width: W, align: "center" });
 
-      drawGeometricBorder(doc, L, P2_BAR + 14, W, GOLD);
+      // geometric border removed
 
       y = P2_BAR + 28;
 
@@ -411,7 +411,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
 
       // ── Page 2 footer ─────────────────────────────────────────────────────
       doc.rect(L, PH - 52, W, 1.5).fill(GOLD);
-      drawGeometricBorder(doc, L, PH - 38, W, GOLD + "88");
+      // geometric border removed
       doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
         .text("JazakAllahu Khayran — May Allah (SWT) accept this Amanah and bless all parties abundantly.", L, PH - 28, { width: W, align: "center" });
       doc.fillColor(MUTED).fontSize(7).font("Helvetica")
@@ -486,7 +486,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     doc.rect(0, HEADER_H + 4, PW, PH - HEADER_H - 4).fill(CREAM);
 
     // Geometric border strip
-    drawGeometricBorder(doc, L, HEADER_H + 18, W, GOLD);
+    // geometric border removed
 
     let y = HEADER_H + 30;
 
@@ -571,7 +571,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     }
 
     // Footer
-    drawGeometricBorder(doc, L, PH - 62, W, GOLD);
+    // geometric border removed
     doc.rect(L, PH - 55, W, 1).fill(GOLD);
     doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
       .text("JazakAllahu Khayran — May Allah (SWT) bless you for your generous Amanah and accept it as Sadaqah Jariyah.", L, PH - 44, { width: W, align: "center" });
@@ -652,7 +652,7 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
     doc.rect(20, 20 + HEADER_H + 4, PW - 40, PH - 40 - HEADER_H - 4).fill(CREAM);
 
     // Geometric border
-    drawGeometricBorder(doc, L, 20 + HEADER_H + 20, W, GOLD);
+    // geometric border removed
 
     let y = 20 + HEADER_H + 32;
 
@@ -737,7 +737,7 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
     });
 
     // Footer
-    drawGeometricBorder(doc, L, PH - 62, W, GOLD);
+    // geometric border removed
     doc.rect(L, PH - 55, W, 1).fill(GOLD);
     doc.fillColor(BURGUNDY).fontSize(8.5).font("Helvetica-Bold")
       .text("JazakAllahu Khayran — May Allah (SWT) accept this Waqf and bless the donor abundantly in this life and the next.", L, PH - 44, { width: W, align: "center" });
