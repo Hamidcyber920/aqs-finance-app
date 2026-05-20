@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `receive9amBrief` boolean DEFAULT false NOT NULL;

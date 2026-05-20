@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
   Mail, Phone, Pencil, ChevronDown, ChevronUp, MapPin, Heart,
-  Plus, X, Check, Users, Shield, Briefcase, Download, FileText,
+  Plus, X, Check, Users, Shield, Briefcase, Download, FileText, Bell,
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { ScanMergeUndoBanner } from "@/components/ScanMergeUndoBanner";
@@ -390,6 +390,101 @@ function AddMemberForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: (
   );
 }
 
+function BriefingSettingsPanel() {
+  const [open, setOpen] = useState(false);
+  const { isOwnerOrSuperAdmin } = usePermissions();
+
+  const { data: morningData, refetch: refetchMorning } = trpc.users.getMorningBriefSettings.useQuery(undefined, { enabled: isOwnerOrSuperAdmin });
+  const { data: nineAmData, refetch: refetch9am } = trpc.users.get9amBriefSettings.useQuery(undefined, { enabled: isOwnerOrSuperAdmin });
+
+  const setMorningGlobal = trpc.users.setMorningBriefGlobal.useMutation({ onSuccess: () => refetchMorning() });
+  const setUserMorning = trpc.users.setUserMorningBrief.useMutation({ onSuccess: () => refetchMorning() });
+  const set9amGlobal = trpc.users.set9amBriefGlobal.useMutation({ onSuccess: () => refetch9am() });
+  const setUser9am = trpc.users.setUser9amBrief.useMutation({ onSuccess: () => refetch9am() });
+
+  if (!isOwnerOrSuperAdmin) return null;
+
+  return (
+    <div style={{ marginBottom: 20, animation: "fadeUp 0.4s ease both" }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", borderRadius: 12, background: open ? "rgba(99,91,255,0.15)" : T.card, border: `1px solid ${open ? "rgba(99,91,255,0.5)" : T.border}`, color: T.white, fontWeight: 700, fontSize: 13, cursor: "pointer", width: "100%", justifyContent: "space-between" }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}><Bell size={14} style={{ color: "#a78bfa" }} /> Briefing Settings</span>
+        <span style={{ color: T.muted, fontSize: 11 }}>{open ? "▲ Hide" : "▼ Show"}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 }}>
+          {/* 7:30am Morning Brief */}
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "16px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.white }}>☀️ 7:30am Morning Brief</p>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: T.muted }}>Daily operational summary</p>
+              </div>
+              <button
+                onClick={() => setMorningGlobal.mutate({ enabled: !(morningData?.globalEnabled ?? true) })}
+                style={{ padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", background: morningData?.globalEnabled !== false ? "#22c55e" : "rgba(255,255,255,0.1)", color: morningData?.globalEnabled !== false ? "#fff" : T.muted }}
+              >
+                {morningData?.globalEnabled !== false ? "ON" : "OFF"}
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {(morningData?.users ?? []).map((u: any) => (
+                <div key={u.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)" }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.white }}>{u.name}</p>
+                    <p style={{ margin: 0, fontSize: 10, color: T.muted }}>{u.email ?? u.role}</p>
+                  </div>
+                  <button
+                    onClick={() => setUserMorning.mutate({ userId: u.id, receive: !u.receiveMorningBrief })}
+                    style={{ padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", background: u.receiveMorningBrief ? "#22c55e" : "rgba(255,255,255,0.1)", color: u.receiveMorningBrief ? "#fff" : T.muted }}
+                  >
+                    {u.receiveMorningBrief ? "✓ On" : "Off"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 9am Brief */}
+          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "16px 18px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.white }}>🗓️ 9am Calendar Brief</p>
+                <p style={{ margin: "2px 0 0", fontSize: 11, color: T.muted }}>Calendar events &amp; urgent emails</p>
+              </div>
+              <button
+                onClick={() => set9amGlobal.mutate({ enabled: !(nineAmData?.globalEnabled ?? true) })}
+                style={{ padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none", background: nineAmData?.globalEnabled !== false ? "#22c55e" : "rgba(255,255,255,0.1)", color: nineAmData?.globalEnabled !== false ? "#fff" : T.muted }}
+              >
+                {nineAmData?.globalEnabled !== false ? "ON" : "OFF"}
+              </button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {(nineAmData?.users ?? []).map((u: any) => (
+                <div key={u.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)" }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.white }}>{u.name}</p>
+                    <p style={{ margin: 0, fontSize: 10, color: T.muted }}>{u.email ?? u.role}</p>
+                  </div>
+                  <button
+                    onClick={() => setUser9am.mutate({ userId: u.id, receive: !u.receive9amBrief })}
+                    style={{ padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", background: u.receive9amBrief ? "#22c55e" : "rgba(255,255,255,0.1)", color: u.receive9amBrief ? "#fff" : T.muted }}
+                  >
+                    {u.receive9amBrief ? "✓ On" : "Off"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TrusteesPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [dateFrom, setDateFrom] = useState(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split("T")[0]; });
@@ -527,6 +622,8 @@ export default function TrusteesPage() {
             />
           </div>
         )}
+
+        <BriefingSettingsPanel />
 
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:12,marginBottom:24,animation:"fadeUp 0.5s ease 60ms both" }}>
           {[

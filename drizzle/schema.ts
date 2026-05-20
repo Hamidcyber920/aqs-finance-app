@@ -37,6 +37,7 @@ export const users = mysqlTable("users", {
   supervisedById: int("supervisedById"), // FK to users.id — who supervises this user
   isPropertyManager: boolean("isPropertyManager").default(false).notNull(),
   receiveMorningBrief: boolean("receiveMorningBrief").default(false).notNull(),
+  receive9amBrief: boolean("receive9amBrief").default(false).notNull(),
   // Profile
   phone: varchar("phone", { length: 30 }),
   jobTitle: varchar("jobTitle", { length: 100 }),

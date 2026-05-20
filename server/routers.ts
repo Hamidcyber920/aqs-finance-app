@@ -1128,6 +1128,44 @@ export const appRouter = router({
         await db.update(usersTable).set({ receiveMorningBrief: input.receive }).where(eq(usersTable.id, input.userId));
         return { success: true };
       }),
+
+    // ─── 9am Brief Controls ───────────────────────────────────────────────────
+    get9amBriefSettings: adminProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return { globalEnabled: true, users: [] };
+      const { systemSettings, users: usersTable } = await import('../drizzle/schema');
+      const [setting] = await db.select().from(systemSettings).where(eq(systemSettings.key, 'nineAmBriefEnabled')).limit(1);
+      const globalEnabled = setting ? setting.value === 'true' : true;
+      const userRows = await db.select({
+        id: usersTable.id,
+        name: usersTable.name,
+        email: usersTable.email,
+        role: usersTable.role,
+        receive9amBrief: usersTable.receive9amBrief,
+      }).from(usersTable).where(eq(usersTable.isActive, true)).orderBy(usersTable.name);
+      return { globalEnabled, users: userRows };
+    }),
+
+    set9amBriefGlobal: superAdminProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { systemSettings } = await import('../drizzle/schema');
+        await db.insert(systemSettings).values({ key: 'nineAmBriefEnabled', value: String(input.enabled) })
+          .onDuplicateKeyUpdate({ set: { value: String(input.enabled) } });
+        return { success: true };
+      }),
+
+    setUser9amBrief: superAdminProcedure
+      .input(z.object({ userId: z.number(), receive: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { users: usersTable } = await import('../drizzle/schema');
+        await db.update(usersTable).set({ receive9amBrief: input.receive }).where(eq(usersTable.id, input.userId));
+        return { success: true };
+      }),
   }),
 
   // ─── FUNDRAISING ──────────────────────────────────────────────────────────
