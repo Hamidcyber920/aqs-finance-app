@@ -859,8 +859,7 @@ The AQS Team`);
                 onApproveTrustee={(r: any) => approveRepTrusteeMutation?.mutate?.({ repaymentId: r.id, trusteeName: r.trusteeName })}
                 onSendReminder={(r: any) => sendReminderMutation?.mutate?.({ repaymentId: r.id })}
                 onDownloadReceipt={(r: any) => {
-                  if (r.confirmationPdfUrl) { window.open(r.confirmationPdfUrl, "_blank"); }
-                  else { genRepPdfMutation?.mutate?.({ repaymentId: r.id }); }
+                  genRepPdfMutation?.mutate?.({ repaymentId: r.id });
                 }}
                 onConfirmLender={(r: any) => confirmLenderMutation?.mutate?.({ repaymentId: r.id })}
                 onInterimWaqf={(r: any, amt: number, note: string) => interimWaqfMutation?.mutate?.({ repaymentId: r.id, waqfAmount: amt, waqfNote: note || undefined })}
