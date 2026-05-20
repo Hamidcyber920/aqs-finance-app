@@ -1807,6 +1807,7 @@ export const appRouter = router({
         borrowerEmail: z.string().email().optional(),
         borrowerPhone: z.string().optional(),
         borrowerAddress: z.string().optional(),
+        borrowerTitle: z.enum(["Brother", "Sister", "Dr.", "Hajji", "Hajjah", "Sheikh", "none"]).optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, ...fields } = input;

@@ -297,6 +297,7 @@ export const loanApplications = mysqlTable("loan_applications", {
   borrowerPhone: varchar("borrowerPhone", { length: 30 }),
   borrowerAddress: text("borrowerAddress"),
   borrowerNiNumber: varchar("borrowerNiNumber", { length: 20 }),
+  borrowerTitle: mysqlEnum("borrowerTitle", ["Brother", "Sister", "Dr.", "Hajji", "Hajjah", "Sheikh", "none"]).default("none"),
   // Loan details
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
   purpose: text("purpose").notNull(),

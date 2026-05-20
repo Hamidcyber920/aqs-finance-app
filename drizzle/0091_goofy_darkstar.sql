@@ -1,0 +1,1 @@
+ALTER TABLE `loan_applications` ADD `borrowerTitle` enum('Brother','Sister','Dr.','Hajji','Hajjah','Sheikh','none') DEFAULT 'none';

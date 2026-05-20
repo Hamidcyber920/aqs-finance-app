@@ -467,6 +467,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  const [editTitle, setEditTitle] = useState("none");
 
   const loan = data;
   const repayments = (data as any)?.repayments ?? [];
@@ -524,7 +525,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
                   </span>
                 )}
                 {isAdmin && (
-                  <button onClick={() => { setEditName(loan.borrowerName??''); setEditEmail(loan.borrowerEmail??''); setEditPhone((loan as any).borrowerPhone??''); setEditAddress((loan as any).borrowerAddress??''); setEditBorrowerOpen(true); }} // label: Edit Lender Details
+                  <button onClick={() => { setEditName(loan.borrowerName??''); setEditEmail(loan.borrowerEmail??''); setEditPhone((loan as any).borrowerPhone??''); setEditAddress((loan as any).borrowerAddress??''); setEditTitle((loan as any).borrowerTitle??'none'); setEditBorrowerOpen(true); }} // label: Edit Lender Details
                     style={{ padding:"5px 12px",borderRadius:999,fontSize:11,fontWeight:600,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,cursor:"pointer" }}>
                     ✏️ Edit Details
                   </button>
@@ -640,11 +641,13 @@ The AQS Team`);
                 <Button
                   onClick={() => {
                     const fn = (loan.borrowerName ?? "").split(" ")[0];
+                    const lenderTitle = (loan as any).borrowerTitle && (loan as any).borrowerTitle !== "none" ? (loan as any).borrowerTitle : "";
+                    const lenderSalutation = lenderTitle ? `Dear ${lenderTitle} ${fn},` : `Dear ${fn},`;
                     const remaining = Math.max(0, parseFloat(String(loan.amount ?? 0)) - parseFloat(String((loan as any).totalRepaid ?? 0)));
                     const pdfLink = (loan as any).agreementPdfUrl ? `\n\n📄 View Agreement: ${(loan as any).agreementPdfUrl}` : "";
                     setEmailPreviewType("lender");
                     setEmailPreviewSubject("An Investment in the House of Allah – Your Qarde Hasan Agreement");
-                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn},\n\nWe pray this finds you in the best of health and Iman.\n\nAttached is the formal agreement for the interest-free loan you have graciously provided for the AQS Rimmers Building Project. While this is a technical requirement for our records, we recognise it primarily as a testament to your commitment to the Ummah.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nOutstanding Balance: £${remaining.toFixed(2)}${pdfLink}\n\nMay Allah (SWT) accept this from you as a Sadaqah Jariyah that continues to benefit you and your family for generations.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
+                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh,\n\n${lenderSalutation}\n\nWe pray this finds you in the best of health and Iman.\n\nAttached is the formal agreement for the interest-free loan you have graciously provided for the AQS Rimmers Building Project. While this is a technical requirement for our records, we recognise it primarily as a testament to your commitment to the Ummah.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nOutstanding Balance: £${remaining.toFixed(2)}${pdfLink}\n\nMay Allah (SWT) accept this from you as a Sadaqah Jariyah that continues to benefit you and your family for generations.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
                     setEmailPreviewOpen(true);
                   }}
                   style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.white,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
@@ -666,6 +669,8 @@ The AQS Team`);
                 <Button
                   onClick={() => {
                     const fn = (loan.borrowerName ?? "").split(" ")[0];
+                    const stmtTitle = (loan as any).borrowerTitle && (loan as any).borrowerTitle !== "none" ? (loan as any).borrowerTitle : "";
+                    const stmtSalutation = stmtTitle ? `Dear ${stmtTitle} ${fn},` : `Dear ${fn},`;
                     const allReps = (loan as any).repayments ?? [];
                     const totalPaid = allReps.filter((r: any) => r.paidAt).reduce((s: number, r: any) => s + parseFloat(r.amount ?? "0"), 0);
                     const waqfEndowed = allReps.reduce((s: number, r: any) => s + parseFloat(r.waqfAmount ?? "0"), 0);
@@ -674,7 +679,7 @@ The AQS Team`);
                     const endowmentLine = isWaqf ? `\nEndowment (Waqf): £${waqfEndowed.toFixed(2)}` : "";
                     setEmailPreviewType("statement");
                     setEmailPreviewSubject(`Qarde Hasan Amanah Statement — ${new Date().toLocaleDateString("en-GB")} — AQ Society`);
-                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn},\n\nMay Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the Rimmers Building Project as of ${new Date().toLocaleDateString("en-GB")}.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nTotal Paid: £${totalPaid.toFixed(2)}${endowmentLine}\nOutstanding Balance: £${outstanding.toFixed(2)}\n\nYour generosity is a pillar of this House of Allah. JazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
+                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh,\n\n${stmtSalutation}\n\nMay Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the Rimmers Building Project as of ${new Date().toLocaleDateString("en-GB")}.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nTotal Paid: £${totalPaid.toFixed(2)}${endowmentLine}\nOutstanding Balance: £${outstanding.toFixed(2)}\n\nYour generosity is a pillar of this House of Allah. JazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
                     setEmailPreviewOpen(true);
                   }}
                   style={{ background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.15)",color:"#fbbf24",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
@@ -714,6 +719,15 @@ The AQS Team`);
               </DialogHeader>
               <div style={{ display:"flex",flexDirection:"column",gap:14,marginTop:8 }}>
                 <div>
+                  <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Title / Salutation</Label>
+                  <select value={editTitle} onChange={e=>setEditTitle(e.target.value)}
+                    style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42,width:"100%",padding:"0 12px",fontSize:14 }}>
+                    {["none","Brother","Sister","Dr.","Hajji","Hajjah","Sheikh"].map(t => (
+                      <option key={t} value={t} style={{ background:"#0D2240" }}>{t === "none" ? "— No title —" : t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <Label style={{ fontSize:11,fontWeight:600,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em" }}>Full Name</Label>
                   <Input value={editName} onChange={e=>setEditName(e.target.value)} placeholder="Full name"
                     style={{ marginTop:6,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:42 }}/>
@@ -735,7 +749,7 @@ The AQS Team`);
                 </div>
                 <Button
                   disabled={updateBorrowerMutation?.isPending}
-                  onClick={() => updateBorrowerMutation?.mutate?.({ id, borrowerName:editName||undefined, borrowerEmail:editEmail||undefined, borrowerPhone:editPhone||undefined, borrowerAddress:editAddress||undefined })}
+                  onClick={() => updateBorrowerMutation?.mutate?.({ id, borrowerName:editName||undefined, borrowerEmail:editEmail||undefined, borrowerPhone:editPhone||undefined, borrowerAddress:editAddress||undefined, borrowerTitle:(editTitle as any)||undefined })}
                   style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:44,borderRadius:12,border:"none",fontSize:14,marginTop:4 }}>
                   {updateBorrowerMutation?.isPending ? "Saving…" : "Save Changes"}
                 </Button>
