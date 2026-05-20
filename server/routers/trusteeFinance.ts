@@ -340,7 +340,7 @@ export const trusteeFinanceRouter = router({
       doc.on("data", (chunk: Buffer) => buffers.push(chunk));
 
       // Header
-      doc.rect(0, 0, doc.page.width, 80).fill("#1a4731");
+      doc.rect(0, 0, doc.page.width, 80).fill("#5C1A1A");
       doc.fillColor("#c9a84c").fontSize(18).font("Helvetica-Bold")
         .text("Abdullah Quilliam Society", 50, 20);
       doc.fillColor("#ffffff").fontSize(13).font("Helvetica")
@@ -348,16 +348,16 @@ export const trusteeFinanceRouter = router({
       doc.fillColor("#000000").moveDown(3);
 
       // Summary section
-      doc.fontSize(14).font("Helvetica-Bold").fillColor("#1a4731").text("Financial Summary", 50, 100);
-      doc.moveTo(50, 118).lineTo(545, 118).strokeColor("#1a4731").stroke();
+      doc.fontSize(14).font("Helvetica-Bold").fillColor("#5C1A1A").text("Financial Summary", 50, 100);
+      doc.moveTo(50, 118).lineTo(545, 118).strokeColor("#5C1A1A").stroke();
       const summaryY = 125;
       const cols = [
-        { label: "Total Income", value: fmtGBP(totalIncome), color: "#1a4731" },
+        { label: "Total Income", value: fmtGBP(totalIncome), color: "#5C1A1A" },
         { label: "Total Expenses", value: fmtGBP(totalExpenses), color: "#dc2626" },
         { label: "Bills Paid", value: fmtGBP(totalBills), color: "#2563eb" },
         { label: "DD Payments Paid", value: fmtGBP(totalScheduledPaid), color: "#7c3aed" },
         { label: "Payments Held", value: fmtGBP(totalHeld), color: "#d97706" },
-        { label: "Net Position", value: fmtGBP(totalIncome - totalExpenses - totalBills - totalScheduledPaid), color: totalIncome - totalExpenses - totalBills - totalScheduledPaid >= 0 ? "#1a4731" : "#dc2626" },
+        { label: "Net Position", value: fmtGBP(totalIncome - totalExpenses - totalBills - totalScheduledPaid), color: totalIncome - totalExpenses - totalBills - totalScheduledPaid >= 0 ? "#5C1A1A" : "#dc2626" },
       ];
       cols.forEach((col, i) => {
         const x = 50 + (i % 3) * 165;
@@ -370,8 +370,8 @@ export const trusteeFinanceRouter = router({
       // Pending approvals
       doc.moveDown(6);
       const approvalY = summaryY + 130;
-      doc.fontSize(13).font("Helvetica-Bold").fillColor("#1a4731").text(`Pending Approvals (${pendingApprovals.length})`, 50, approvalY);
-      doc.moveTo(50, approvalY + 16).lineTo(545, approvalY + 16).strokeColor("#1a4731").stroke();
+      doc.fontSize(13).font("Helvetica-Bold").fillColor("#5C1A1A").text(`Pending Approvals (${pendingApprovals.length})`, 50, approvalY);
+      doc.moveTo(50, approvalY + 16).lineTo(545, approvalY + 16).strokeColor("#5C1A1A").stroke();
       if (pendingApprovals.length === 0) {
         doc.fontSize(10).fillColor("#6b7280").font("Helvetica").text("No pending approvals this month.", 50, approvalY + 22);
       } else {
@@ -394,8 +394,8 @@ export const trusteeFinanceRouter = router({
 
       // Bills section
       doc.addPage();
-      doc.fontSize(13).font("Helvetica-Bold").fillColor("#1a4731").text(`Bills Paid This Month (${billRows.length})`, 50, 50);
-      doc.moveTo(50, 66).lineTo(545, 66).strokeColor("#1a4731").stroke();
+      doc.fontSize(13).font("Helvetica-Bold").fillColor("#5C1A1A").text(`Bills Paid This Month (${billRows.length})`, 50, 50);
+      doc.moveTo(50, 66).lineTo(545, 66).strokeColor("#5C1A1A").stroke();
       let by = 72;
       if (billRows.length === 0) {
         doc.fontSize(10).fillColor("#6b7280").font("Helvetica").text("No bills recorded this month.", 50, by);
@@ -417,14 +417,14 @@ export const trusteeFinanceRouter = router({
 
       // Scheduled payments section
       doc.addPage();
-      doc.fontSize(13).font("Helvetica-Bold").fillColor("#1a4731").text(`Scheduled Payments This Month (${schedRows.length})`, 50, 50);
-      doc.moveTo(50, 66).lineTo(545, 66).strokeColor("#1a4731").stroke();
+      doc.fontSize(13).font("Helvetica-Bold").fillColor("#5C1A1A").text(`Scheduled Payments This Month (${schedRows.length})`, 50, 50);
+      doc.moveTo(50, 66).lineTo(545, 66).strokeColor("#5C1A1A").stroke();
       let sy = 72;
       doc.fontSize(9).font("Helvetica-Bold").fillColor("#374151")
         .text("Due Date", 50, sy).text("Description", 130, sy).text("Building", 310, sy).text("Status", 410, sy).text("Amount", 480, sy);
       sy += 14;
       for (const s of schedRows) {
-        const statusColor = s.status === "paid" ? "#1a4731" : s.status === "held" ? "#d97706" : "#6b7280";
+        const statusColor = s.status === "paid" ? "#5C1A1A" : s.status === "held" ? "#d97706" : "#6b7280";
         doc.fontSize(9).font("Helvetica").fillColor("#111827")
           .text(s.dueDate ? new Date(s.dueDate as any).toLocaleDateString("en-GB") : "—", 50, sy)
           .text((s.description ?? "—").slice(0, 25), 130, sy)
@@ -458,7 +458,7 @@ export const trusteeFinanceRouter = router({
         const trustees = allUsers.filter((u: any) => u.role === "admin" || u.isTrustee);
         const subject = `Monthly Financial Close Report — ${monthName}`;
         const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-          <div style="background:#1a4731;padding:24px;text-align:center">
+          <div style="background:#5C1A1A;padding:24px;text-align:center">
             <h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1>
             <p style="color:#c9a84c;margin:4px 0 0">Monthly Financial Close Report</p>
           </div>
@@ -466,15 +466,15 @@ export const trusteeFinanceRouter = router({
             <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh,</p>
             <p>Please find the Monthly Financial Close Report for <strong>${monthName}</strong> for your review.</p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0">
-              <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Total Income</td><td style="padding:8px;border:1px solid #e5e7eb;color:#1a4731;font-weight:bold">${fmtGBP(totalIncome)}</td></tr>
+              <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Total Income</td><td style="padding:8px;border:1px solid #e5e7eb;color:#5C1A1A;font-weight:bold">${fmtGBP(totalIncome)}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Total Expenses</td><td style="padding:8px;border:1px solid #e5e7eb;color:#dc2626;font-weight:bold">${fmtGBP(totalExpenses)}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Bills Paid</td><td style="padding:8px;border:1px solid #e5e7eb;color:#2563eb;font-weight:bold">${fmtGBP(totalBills)}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">DD Payments Paid</td><td style="padding:8px;border:1px solid #e5e7eb;color:#7c3aed;font-weight:bold">${fmtGBP(totalScheduledPaid)}</td></tr>
               <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Payments Held</td><td style="padding:8px;border:1px solid #e5e7eb;color:#d97706;font-weight:bold">${fmtGBP(totalHeld)}</td></tr>
-              <tr style="background:#f9fafb"><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Net Position</td><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold;color:${totalIncome - totalExpenses - totalBills - totalScheduledPaid >= 0 ? "#1a4731" : "#dc2626"}">${fmtGBP(totalIncome - totalExpenses - totalBills - totalScheduledPaid)}</td></tr>
+              <tr style="background:#f9fafb"><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Net Position</td><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold;color:${totalIncome - totalExpenses - totalBills - totalScheduledPaid >= 0 ? "#5C1A1A" : "#dc2626"}">${fmtGBP(totalIncome - totalExpenses - totalBills - totalScheduledPaid)}</td></tr>
             </table>
             ${pendingApprovals.length > 0 ? `<p style="background:#fef3c7;padding:12px;border-radius:4px;border-left:4px solid #d97706"><strong>⚠️ ${pendingApprovals.length} expense(s) awaiting approval</strong></p>` : ""}
-            <a href="${url}" style="display:inline-block;background:#1a4731;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold;margin-top:16px">Download Full PDF Report</a>
+            <a href="${url}" style="display:inline-block;background:#5C1A1A;color:#fff;padding:12px 24px;text-decoration:none;border-radius:4px;font-weight:bold;margin-top:16px">Download Full PDF Report</a>
           </div>
           <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">AQ Society — Monthly Close Report — Confidential</div>
         </div>`;

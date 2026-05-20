@@ -125,7 +125,7 @@ async function sendWeeklyRepaymentAlert() {
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.borrowerName}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.borrowerEmail || "—"}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.borrowerPhone || "—"}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#1a4731;">£${d.amount.toFixed(2)}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#5C1A1A;">£${d.amount.toFixed(2)}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.dueDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</td>
       </tr>`).join("");
 
@@ -135,7 +135,7 @@ async function sendWeeklyRepaymentAlert() {
       const firstName = recipient.name.split(" ").find(p => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? recipient.name;
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;">
-          <div style="background:#1a4731;padding:24px;text-align:center;">
+          <div style="background:#5C1A1A;padding:24px;text-align:center;">
             <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
             <p style="color:#c9a84c;margin:4px 0 0;">Qarde Hasan — Weekly Repayment Alert</p>
           </div>
@@ -157,7 +157,7 @@ async function sendWeeklyRepaymentAlert() {
               <tfoot>
                 <tr style="background:#f9fafb;">
                   <td colspan="3" style="padding:10px 12px;font-weight:700;font-size:13px;">Total Due</td>
-                  <td colspan="2" style="padding:10px 12px;font-weight:800;font-size:15px;color:#1a4731;">£${totalDue.toFixed(2)}</td>
+                  <td colspan="2" style="padding:10px 12px;font-weight:800;font-size:15px;color:#5C1A1A;">£${totalDue.toFixed(2)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -203,7 +203,7 @@ async function sendMonthlyTrusteeReport() {
       const termMonths = l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6);
       const paidCount = (l.repayments ?? []).filter((r: any) => r.trusteeApprovedAt).length;
       const overdueCount = (l.repayments ?? []).filter((r: any) => !r.trusteeApprovedAt && r.dueDate && new Date(r.dueDate) < now).length;
-      const statusColor = overdueCount > 0 ? "#dc2626" : outstanding === 0 ? "#16a34a" : "#1a4731";
+      const statusColor = overdueCount > 0 ? "#dc2626" : outstanding === 0 ? "#16a34a" : "#5C1A1A";
       return `
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${l.borrowerName ?? "Unknown"}</td>
@@ -219,7 +219,7 @@ async function sendMonthlyTrusteeReport() {
       const firstName = (trustee.fullName ?? "").split(" ").find((p: string) => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? trustee.fullName ?? "Trustee";
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;">
-          <div style="background:#1a4731;padding:24px;text-align:center;">
+          <div style="background:#5C1A1A;padding:24px;text-align:center;">
             <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
             <p style="color:#c9a84c;margin:4px 0 0;">Qarde Hasan — Monthly Trustee Report — ${monthName}</p>
           </div>
@@ -227,12 +227,12 @@ async function sendMonthlyTrusteeReport() {
             <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
             <p>May Allah bless you with barakah and good health. Please find below the monthly Qarde Hasan Amanah report for <strong>${monthName}</strong>.</p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:13px;background:#f0fdf4;border-radius:8px;">
-              <tr><td style="padding:10px 16px;font-weight:700;">Total Loaned</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#1a4731;">£${totalLoaned.toFixed(2)}</td></tr>
+              <tr><td style="padding:10px 16px;font-weight:700;">Total Loaned</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#5C1A1A;">£${totalLoaned.toFixed(2)}</td></tr>
               <tr><td style="padding:10px 16px;font-weight:700;">Total Repaid</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#16a34a;">£${totalRepaid.toFixed(2)}</td></tr>
               <tr><td style="padding:10px 16px;font-weight:700;">Total Outstanding</td><td style="padding:10px 16px;font-weight:800;font-size:16px;color:#dc2626;">£${totalOutstanding.toFixed(2)}</td></tr>
               <tr><td style="padding:10px 16px;font-weight:700;">Active Loans</td><td style="padding:10px 16px;font-weight:800;font-size:16px;">${loans.length}</td></tr>
             </table>
-            <h3 style="color:#1a4731;margin:24px 0 12px;font-size:15px;">Individual Loan Status</h3>
+            <h3 style="color:#5C1A1A;margin:24px 0 12px;font-size:15px;">Individual Loan Status</h3>
             <table style="width:100%;border-collapse:collapse;font-size:12px;">
               <thead>
                 <tr style="background:#f0fdf4;">
@@ -292,13 +292,13 @@ async function sendBirthdayAlerts() {
       const firstName = (trustee.fullName ?? "").split(" ").find((p: string) => !["Mr", "Dr", "Mrs", "Ms"].includes(p)) ?? trustee.fullName ?? "Trustee";
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-          <div style="background:#1a4731;padding:24px;text-align:center;">
+          <div style="background:#5C1A1A;padding:24px;text-align:center;">
             <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
             <p style="color:#c9a84c;margin:4px 0 0;">Birthday Mubarak 🎁</p>
           </div>
           <div style="padding:24px;background:#fff;">
             <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
-            <p style="font-size:18px;font-weight:700;color:#1a4731;">JazakAllahu Khayran — Wishing you a blessed birthday!</p>
+            <p style="font-size:18px;font-weight:700;color:#5C1A1A;">JazakAllahu Khayran — Wishing you a blessed birthday!</p>
             <p>May Allah (SWT) bless you with good health, happiness, barakah, and continued success in your service to the community. May this year bring you and your family immense joy and reward in both this world and the Hereafter.</p>
             <p>The Prophet (PBUH) said: <em>"Whoever is not grateful to people is not grateful to Allah."</em></p>
             <p>With warm Islamic greetings and du'as,<br><strong>The AQ Society Team</strong></p>
@@ -588,7 +588,7 @@ export async function sendRentReminders() {
       const dueDate = new Date(payment.dueDate as any).toLocaleDateString("en-GB");
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-          <div style="background:#1a4731;padding:24px;text-align:center;">
+          <div style="background:#5C1A1A;padding:24px;text-align:center;">
             <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
             <p style="color:#c9a84c;margin:4px 0 0;">Rent Reminder</p>
           </div>
@@ -597,7 +597,7 @@ export async function sendRentReminders() {
             <p>This is a friendly reminder that your rent payment is due soon.</p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0;">
               <tr><td style="padding:8px;background:#f9f9f9;font-weight:600;">Period</td><td style="padding:8px;">${payment.periodLabel}</td></tr>
-              <tr><td style="padding:8px;background:#f9f9f9;font-weight:600;">Amount Due</td><td style="padding:8px;font-size:18px;color:#1a4731;font-weight:700;">£${parseFloat(payment.amountDue as any).toFixed(2)}</td></tr>
+              <tr><td style="padding:8px;background:#f9f9f9;font-weight:600;">Amount Due</td><td style="padding:8px;font-size:18px;color:#5C1A1A;font-weight:700;">£${parseFloat(payment.amountDue as any).toFixed(2)}</td></tr>
               <tr><td style="padding:8px;background:#f9f9f9;font-weight:600;">Due Date</td><td style="padding:8px;">${dueDate}</td></tr>
             </table>
             <p>Please ensure your payment is made on time. If you have any questions, please contact us.</p>
@@ -1326,14 +1326,14 @@ export async function sendContractRenewalReminders() {
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.utilityType || "—"}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.building || "—"}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.accountNumber || "—"}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${daysLeft <= 14 ? "#dc2626" : daysLeft <= 30 ? "#d97706" : "#1a4731"};">${daysLeft} days (${new Date(acc.contractEndDate).toLocaleDateString("en-GB")})</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${daysLeft <= 14 ? "#dc2626" : daysLeft <= 30 ? "#d97706" : "#5C1A1A"};">${daysLeft} days (${new Date(acc.contractEndDate).toLocaleDateString("en-GB")})</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;">${contactInfo}</td>
         </tr>`;
     }).join("");
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;">
-        <div style="background:#1a4731;padding:24px;text-align:center;">
+        <div style="background:#5C1A1A;padding:24px;text-align:center;">
           <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
           <p style="color:#c9a84c;margin:4px 0 0;">Utility Contract Renewal Reminder</p>
         </div>
@@ -1431,7 +1431,7 @@ async function sendWeeklyCashFlowDigest() {
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${p.description ?? "—"}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${p.supplier ?? "—"}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${p.building ?? "—"}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#1a4731;">£${parseFloat(p.amount ?? "0").toFixed(2)}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#5C1A1A;">£${parseFloat(p.amount ?? "0").toFixed(2)}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${dueDate}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${statusBadge}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;color:#6b7280;">${p.note ?? "—"}</td>
@@ -1442,7 +1442,7 @@ async function sendWeeklyCashFlowDigest() {
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;">
-        <div style="background:#1a4731;padding:24px;text-align:center;">
+        <div style="background:#5C1A1A;padding:24px;text-align:center;">
           <h1 style="color:#fff;margin:0;font-size:20px;">Abdullah Quilliam Society</h1>
           <p style="color:#c9a84c;margin:4px 0 0;">Weekly Cash Flow Digest — Payments Due This Week</p>
         </div>
@@ -1452,7 +1452,7 @@ async function sendWeeklyCashFlowDigest() {
 
           <div style="display:flex;gap:16px;margin:16px 0;">
             <div style="flex:1;background:#f0fdf4;padding:16px;border-radius:8px;text-align:center;">
-              <div style="font-size:22px;font-weight:800;color:#1a4731;">£${totalAll.toFixed(2)}</div>
+              <div style="font-size:22px;font-weight:800;color:#5C1A1A;">£${totalAll.toFixed(2)}</div>
               <div style="font-size:12px;color:#6b7280;margin-top:4px;">Total Due This Week</div>
             </div>
             <div style="flex:1;background:#dbeafe;padding:16px;border-radius:8px;text-align:center;">

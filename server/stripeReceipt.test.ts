@@ -16,7 +16,7 @@ describe("Pledge payment receipt email", () => {
     // Simulate the HTML template from stripeWebhook.ts
     const receiptHtml = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
-        <div style="background: #1a4731; padding: 24px 32px; border-radius: 8px 8px 0 0;">
+        <div style="background:#5C1A1A; padding: 24px 32px; border-radius: 8px 8px 0 0;">
           <h1 style="color: #ffffff; font-size: 20px; margin: 0;">Abdullah Quilliam Society</h1>
           <p style="color: #c9a84c; font-size: 12px; margin: 4px 0 0;">Pledge Payment Receipt</p>
         </div>
