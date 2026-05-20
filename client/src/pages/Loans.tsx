@@ -280,12 +280,67 @@ export default function LoansPage() {
             <button onClick={() => {
               const filtered = loans.filter((l: any) => { const d = new Date(l.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
               if (!filtered.length) { toast.info("No loans in selected range"); return; }
-              const total = filtered.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
-              let html = `<html><head><title>Loans ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
-              html += `<h2>Qarde Hasan Loans Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total: \u00a3${total.toFixed(2)}</p>`;
+              // Summary stats (same as dashboard)
+              const totalBorrowed = filtered.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
+              const filteredActive = filtered.filter((l: any) => l.status === "active" || l.status === "approved").length;
+              const filteredOutstanding = filtered.reduce((s: number, l: any) => {
+                const out = l._summary?.outstanding ?? Math.max(0, Number(l.amount ?? 0) - Number(l.totalRepaid ?? 0));
+                return s + out;
+              }, 0);
+              const filteredDonors = new Set(filtered.map((l: any) => l.borrowerEmail || l.borrowerName)).size;
+              const filteredPending = filtered.filter((l: any) => l.status === "pending" || l.status === "pending_review").length;
+              const generatedDate = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+              let html = `<html><head><title>Qarde Hasan Loans Report ${dateFrom} to ${dateTo}</title><style>
+                @page { margin: 20mm; }
+                body { font-family: Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 0; }
+                .letterhead { background: #5C1A1A; color: #fff; padding: 24px 32px; display: flex; justify-content: space-between; align-items: center; }
+                .letterhead-title { font-size: 22px; font-weight: 800; margin: 0; }
+                .letterhead-sub { color: #c9a84c; font-size: 13px; margin: 4px 0 0; }
+                .letterhead-meta { text-align: right; font-size: 11px; color: #e5c9a0; }
+                .report-info { padding: 16px 32px 8px; border-bottom: 2px solid #5C1A1A; }
+                .report-info h2 { margin: 0 0 4px; font-size: 16px; color: #5C1A1A; }
+                .report-info p { margin: 0; font-size: 12px; color: #555; }
+                .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 16px 32px; }
+                .stat-box { background: #f8f8f8; border-radius: 8px; padding: 12px 14px; border-left: 4px solid #5C1A1A; }
+                .stat-box.green { border-left-color: #16a34a; }
+                .stat-box.red { border-left-color: #dc2626; }
+                .stat-box.purple { border-left-color: #7c3aed; }
+                .stat-box.amber { border-left-color: #d97706; }
+                .stat-label { font-size: 10px; color: #777; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 4px; }
+                .stat-value { font-size: 16px; font-weight: 800; margin: 0; color: #1a1a1a; }
+                table { width: calc(100% - 64px); margin: 0 32px 20px; border-collapse: collapse; font-size: 11px; }
+                th { background: #5C1A1A; color: #fff; padding: 8px 10px; text-align: left; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+                td { padding: 7px 10px; border-bottom: 1px solid #e5e7eb; }
+                tr:nth-child(even) td { background: #fafafa; }
+                .status-approved { color: #16a34a; font-weight: 700; }
+                .status-pending { color: #d97706; font-weight: 700; }
+                .status-completed { color: #2563eb; font-weight: 700; }
+                .status-draft { color: #6b7280; }
+                .status-rejected { color: #dc2626; }
+                .footer { background: #f5f5f5; padding: 12px 32px; text-align: center; font-size: 10px; color: #888; border-top: 1px solid #e5e7eb; margin-top: 20px; }
+                .hadith { padding: 12px 32px; font-style: italic; font-size: 11px; color: #5C1A1A; border-left: 3px solid #c9a84c; margin: 0 32px 16px; background: #fffbf0; }
+              </style></head><body>`;
+              html += `<div class="letterhead">`;
+              html += `<div><p class="letterhead-title">Abdullah Quilliam Society</p><p class="letterhead-sub">Qarde Hasan Amanah — Finance Report</p></div>`;
+              html += `<div class="letterhead-meta">Generated: ${generatedDate}<br>Registered Charity No. 1169382<br>receiptapp-excmtodu.manus.space</div>`;
+              html += `</div>`;
+              html += `<div class="report-info"><h2>Qarde Hasan Loans Report</h2><p>Period: ${dateFrom} to ${dateTo}</p></div>`;
+              html += `<div class="stats-grid">`;
+              html += `<div class="stat-box"><p class="stat-label">Total Borrowed</p><p class="stat-value">\u00a3${totalBorrowed.toLocaleString("en-GB", {minimumFractionDigits:2,maximumFractionDigits:2})}</p></div>`;
+              html += `<div class="stat-box red"><p class="stat-label">Total Outstanding</p><p class="stat-value">\u00a3${filteredOutstanding.toLocaleString("en-GB", {minimumFractionDigits:2,maximumFractionDigits:2})}</p></div>`;
+              html += `<div class="stat-box green"><p class="stat-label">Active Loans</p><p class="stat-value">${filteredActive}</p></div>`;
+              html += `<div class="stat-box purple"><p class="stat-label">No. of Donors</p><p class="stat-value">${filteredDonors}</p></div>`;
+              html += `<div class="stat-box amber"><p class="stat-label">Pending Review</p><p class="stat-value">${filteredPending}</p></div>`;
+              html += `</div>`;
+              html += `<div class="hadith">The Prophet (PBUH) said: \u201cWhoever builds a mosque for Allah, Allah will build for him a house in Jannah.\u201d</div>`;
               html += `<table><tr><th>Date</th><th>Borrower</th><th>Email</th><th>Amount</th><th>Status</th><th>Purpose</th></tr>`;
-              filtered.forEach((l: any) => { html += `<tr><td>${new Date(l.createdAt).toLocaleDateString()}</td><td>${l.borrowerName}</td><td>${l.borrowerEmail || ""}</td><td>\u00a3${Number(l.amount).toFixed(2)}</td><td>${l.status}</td><td>${l.purpose || ""}</td></tr>`; });
-              html += `</table></body></html>`;
+              filtered.forEach((l: any) => {
+                const statusClass = `status-${l.status}`;
+                html += `<tr><td>${new Date(l.createdAt).toLocaleDateString("en-GB")}</td><td>${l.borrowerName}</td><td style="font-size:10px">${l.borrowerEmail || ""}</td><td>\u00a3${Number(l.amount).toFixed(2)}</td><td class="${statusClass}">${l.status}</td><td>${l.purpose || ""}</td></tr>`;
+              });
+              html += `</table>`;
+              html += `<div class="footer">JazakAllahu Khayran \u2014 Abdullah Quilliam Society \u2014 Qarde Hasan Amanah Finance System</div>`;
+              html += `</body></html>`;
               const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
             }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
               <FileText size={12} /> PDF
