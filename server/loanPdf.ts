@@ -136,7 +136,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 58, { width: PW - textX - 40 });
       // Address and telephone
       doc.fontSize(7.5).fillColor("#ccddcc")
-        .text("8 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 298 2678  |  info@abdullahquilliam.org", textX, 76, { width: PW - textX - 40 });
+        .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 76, { width: PW - textX - 40 });
 
       // Gold rule under header
       doc.rect(0, HEADER_H, PW, 3).fill(GOLD);
