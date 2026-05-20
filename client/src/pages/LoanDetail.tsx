@@ -417,6 +417,14 @@ export default function LoanDetailPage({ id }: { id: number }) {
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const regenerateWaqfCertMutation = trpc.loans.regenerateWaqfCertificate?.useMutation?.({
+    onSuccess: (res: any) => {
+      toast.success("Certificate regenerated with latest repayment figures");
+      if (res?.certUrl) window.open(res.certUrl, "_blank");
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const utils = trpc.useUtils();
   const generatePdfMutation = trpc.loans.generatePdf?.useMutation?.({
@@ -653,6 +661,14 @@ The AQS Team`);
                   <FileText size={14}/> Certificate of Waqf
                 </Button>
               )}
+              {waqfConverted && isAdmin && (
+                <Button
+                  onClick={() => regenerateWaqfCertMutation?.mutate?.({ id })}
+                  disabled={regenerateWaqfCertMutation?.isPending}
+                  style={{ background:"rgba(201,168,76,0.07)",border:"1px solid rgba(201,168,76,0.25)",color:"rgba(201,168,76,0.7)",borderRadius:12,padding:"10px 18px",fontWeight:600,fontSize:12,display:"flex",alignItems:"center",gap:7 }}>
+                  🔄 {regenerateWaqfCertMutation?.isPending ? "Regenerating…" : "Regenerate Certificate"}
+                </Button>
+              )}
             </div>
           )}
 
@@ -739,6 +755,7 @@ The AQS Team`);
               <p style={{ fontSize:12,color:"rgba(255,255,255,0.5)",margin:0 }}>
                 Converted on {new Date((loan as any).waqfConvertedAt).toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"})}
                 {waqfCertUrl && <> &middot; <a href={waqfCertUrl} target="_blank" rel="noreferrer" style={{color:"#c9a84c",textDecoration:"underline"}}>View Certificate of Waqf</a></>}
+                {isAdmin && <> &middot; <button onClick={() => regenerateWaqfCertMutation?.mutate?.({ id })} disabled={regenerateWaqfCertMutation?.isPending} style={{background:"none",border:"none",color:"rgba(201,168,76,0.6)",fontSize:12,cursor:"pointer",textDecoration:"underline",padding:0}}>{regenerateWaqfCertMutation?.isPending ? "Regenerating…" : "Regenerate"}</button></>}
               </p>
             </div>
           )}

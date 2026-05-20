@@ -2627,3 +2627,7 @@
 
 ## Loan PDF — Title Restoration (May 2026)
 - [x] Restore "QARDE HASAN AMANAH AGREEMENT" title to page 1 of loan agreement PDF (below header, above reference line, centred, burgundy bold 15pt)
+
+## Waqf Certificate — Reflect Actual Repayments (May 2026)
+- [x] Backend: add regenerateWaqfCertificate procedure — re-computes totalRepaid from actual paidAt repayments and regenerates the PDF with correct figures
+- [x] Frontend: add "Regenerate Certificate" button next to "View Certificate of Waqf" link in LoanDetail

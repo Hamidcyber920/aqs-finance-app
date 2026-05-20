@@ -2238,6 +2238,45 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // Regenerate Waqf Certificate with current repayment data
+    regenerateWaqfCertificate: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+        const { loanApplications } = await import("../drizzle/schema");
+        const { eq: eqOp } = await import("drizzle-orm");
+        const [loan] = await db.select().from(loanApplications).where(eqOp(loanApplications.id, input.id));
+        if (!loan) throw new TRPCError({ code: "NOT_FOUND", message: "Loan not found" });
+        // Fetch repayments to compute actual paid and waqf totals
+        const { loanRepayments: lrTableR } = await import("../drizzle/schema");
+        const repayments = await db.select().from(lrTableR).where(eqOp(lrTableR.loanId, input.id));
+        const totalRepaid = repayments.filter((r: any) => r.paidAt).reduce((s: number, r: any) => s + parseFloat(r.amount), 0);
+        const totalWaqfOnRepayments = repayments.reduce((s: number, r: any) => s + parseFloat((r as any).waqfAmount ?? '0'), 0);
+        const outstandingBalance = Math.max(0, parseFloat(String(loan.amount)) - totalRepaid);
+        const waqfAmountForCert = totalWaqfOnRepayments > 0 ? totalWaqfOnRepayments : outstandingBalance;
+        const convertedAt = (loan as any).waqfConvertedAt ? new Date((loan as any).waqfConvertedAt) : new Date();
+        const certBuffer = await generateWaqfCertificate({
+          loanId: loan.id,
+          lenderName: loan.borrowerName,
+          lenderEmail: loan.borrowerEmail,
+          lenderAddress: loan.borrowerAddress,
+          lenderPhone: loan.borrowerPhone,
+          originalAmount: loan.amount,
+          totalRepaid: String(totalRepaid),
+          waqfAmount: waqfAmountForCert,
+          convertedAt,
+          adminApprovedByName: loan.adminApprovedByName,
+          trusteeName: loan.trusteeName,
+        });
+        const { storagePut } = await import("./storage");
+        const certKey = `loans/waqf-certificate-${loan.id}-${Date.now()}.pdf`;
+        const { url: certUrl } = await storagePut(certKey, certBuffer, "application/pdf");
+        await db.update(loanApplications)
+          .set({ waqfCertificateUrl: certUrl } as any)
+          .where(eqOp(loanApplications.id, input.id));
+        return { success: true, certUrl };
+      }),
     // Manual trigger: send weekly repayment alert now
     triggerWeeklyAlert: adminProcedure
       .mutation(async () => {
