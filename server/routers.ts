@@ -1536,7 +1536,8 @@ export const appRouter = router({
         const reps = await db.select().from(loanRepayments).where(eq((loanRepayments as any).loanId, loan.id));
         const termMonths = loan.termUnit === 'years' ? (loan.termValue ?? 6) * 12 : (loan.termValue ?? loan.termMonths ?? 6);
         const totalPaid = reps.filter((r: any) => r.trusteeApprovedAt).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
-        const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
+        const totalWaqf = reps.reduce((s: number, r: any) => s + Number((r as any).waqfAmount ?? 0), 0);
+        const outstanding = Math.max(0, Number(loan.amount) - totalPaid - totalWaqf);
         const overdueCount = reps.filter((r: any) => !r.trusteeApprovedAt && r.dueDate && new Date(r.dueDate) < now).length;
         const paidCount = reps.filter((r: any) => r.trusteeApprovedAt).length;
         return { ...loan, _summary: { termMonths, totalPaid, outstanding, overdueCount, paidCount, totalInstalments: termMonths } };
