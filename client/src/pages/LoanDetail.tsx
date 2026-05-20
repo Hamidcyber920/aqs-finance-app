@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   ArrowLeft, CheckCircle2, Clock, XCircle, Download,
-  Upload, MessageCircle, Mail, Calendar, DollarSign, User, FileText
+  Upload, MessageCircle, Mail, Calendar, DollarSign, User, FileText, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -447,6 +447,9 @@ export default function LoanDetailPage({ id }: { id: number }) {
 
   const termMonths = loan.termUnit==="years" ? (loan.termValue??6)*12 : (loan.termValue??loan.termMonths??6);
   const monthly = (Number(loan.amount)/termMonths).toFixed(2);
+  const totalRepaid = repayments.filter((r: any) => r.paidAt).reduce((sum: number, r: any) => sum + Number(r.amount ?? 0), 0);
+  const totalWaqfAmount = repayments.reduce((sum: number, r: any) => sum + Number(r.waqfAmount ?? 0), 0);
+  const balance = Math.max(0, Number(loan.amount) - totalRepaid - totalWaqfAmount);
   const fullyApproved = loan.adminApprovedAt && loan.trusteeApprovedAt;
   const waqfConverted = !!(loan as any).waqfConvertedAt;
   const waqfCertUrl = (loan as any).waqfCertificateUrl as string | null | undefined;
@@ -497,15 +500,17 @@ export default function LoanDetailPage({ id }: { id: number }) {
           <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:14,marginBottom:24,animation:"fadeUp 0.5s ease 100ms both" }}>
             {[
               { label:"Loan Amount", value:`£${Number(loan.amount).toLocaleString()}`, color:T.mint, icon:DollarSign },
-              { label:"Term", value:`${loan.termValue} ${loan.termUnit??"months"}`, color:T.purple, icon:Calendar },
-              { label:"Monthly", value:`£${monthly}`, color:"#a78bfa", icon:Calendar },
+              { label:"Term & Monthly", value:`${loan.termValue} ${loan.termUnit??"months"}`, sub:`£${monthly}/mo`, color:T.purple, icon:Calendar },
+              { label:"Balance", value:`£${balance.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, color: balance === 0 ? "#22c55e" : "#f87171", icon:DollarSign },
+              { label:"Repaid", value:`£${totalRepaid.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, sub: totalWaqfAmount > 0 ? `+£${totalWaqfAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} waqf` : undefined, color:"#22c55e", icon:Check },
               { label:"Purpose", value:loan.purpose??"—", color:"#f59e0b", icon:User },
-            ].map((s,i)=>(
+            ].map((s: any,i: number)=>(
               <div key={s.label} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px",animation:`fadeUp 0.5s ease ${i*60}ms both` }}>
                 <div style={{ width:32,height:32,borderRadius:9,background:`${s.color}22`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10 }}>
                   <s.icon size={14} style={{color:s.color}}/>
                 </div>
                 <p style={{ fontSize:16,fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.02em" }}>{s.value}</p>
+                {s.sub && <p style={{ fontSize:11,color:s.color,margin:"2px 0 0",fontWeight:600 }}>{s.sub}</p>}
                 <p style={{ fontSize:11,color:T.muted,margin:0 }}>{s.label}</p>
               </div>
             ))}

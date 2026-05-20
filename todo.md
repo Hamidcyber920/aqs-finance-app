@@ -2611,6 +2611,11 @@
 - [x] Fix DashboardLayout.tsx: "Scan Receipt" sidebar nav item path "/" → "/capture"
 - [x] Fix DashboardLayout.tsx: mobile bottom "Scan" button path "/" → "/capture"
 
+## Loan Detail Stats Grid (May 2026)
+- [x] Merge Term and Monthly into a single card showing "6 months" with "£1666.67/mo" subtitle
+- [x] Add Balance card (loan amount minus repaid minus waqf, red when outstanding, green when zero)
+- [x] Add Repaid card (sum of all paidAt repayments, with waqf subtitle when applicable)
+
 ## Briefing Settings — Trustees in Toggle Lists (May 2026)
 - [x] DB: Add receiveMorningBrief and receive9amBrief fields to trustees table
 - [x] Backend: getMorningBriefSettings and get9amBriefSettings now return trustees array
