@@ -524,7 +524,7 @@ export default function LoansPage() {
               {/* Active / Outstanding section */}
               {activeList.length > 0 && (
                 <>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: T.mint, textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 10px" }}>Active — {activeList.length} loan{activeList.length !== 1 ? "s" : ""}</p>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#f87171", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 10px" }}>Active — {activeList.length} loan{activeList.length !== 1 ? "s" : ""}</p>
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600, marginBottom: 24 }}>
                     <thead><tr>{tableHeaders.map(h => <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>)}</tr></thead>
                     <tbody>{activeList.map(renderRow)}</tbody>
@@ -534,7 +534,7 @@ export default function LoansPage() {
               {/* Past / Repaid section */}
               {pastList.length > 0 && (
                 <>
-                  <p style={{ fontSize: 11, fontWeight: 700, color: "#6ee7b7", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 10px" }}>Past / Repaid — {pastList.length} loan{pastList.length !== 1 ? "s" : ""}</p>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#a78bfa", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 10px" }}>Past / Repaid — {pastList.length} loan{pastList.length !== 1 ? "s" : ""}</p>
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
                     <thead><tr>{tableHeaders.map(h => <th key={h} style={{ textAlign: "left", fontSize: 10, fontWeight: 600, color: T.muted, letterSpacing: "0.1em", textTransform: "uppercase", padding: "0 12px 12px 0", borderBottom: `1px solid ${T.border}` }}>{h}</th>)}</tr></thead>
                     <tbody>{pastList.map(renderRow)}</tbody>
