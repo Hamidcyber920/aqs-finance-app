@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { AQS_LOGO_B64 } from "./aqsLogoB64";
 
 export interface LoanPdfData {
   id: number;
@@ -88,6 +89,12 @@ function drawAqsLogo(doc: PDFKit.PDFDocument, cx: number, cy: number, r: number)
 // ── Loan Agreement PDF ────────────────────────────────────────────────────────
 
 export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
+  // Load the real AQS logo from embedded base64
+  let logoBuffer: Buffer | null = null;
+  try {
+    logoBuffer = Buffer.from(AQS_LOGO_B64, "base64");
+  } catch { /* logo optional */ }
+
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, autoFirstPage: true });
     const buffers: Buffer[] = [];
@@ -105,31 +112,37 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       // PAGE 1
       // ────────────────────────────────────────────────────────────────────────
 
-      // Green header band
-      doc.rect(0, 0, PW, 110).fill(GREEN);
+      // Green header band — taller to fit address
+      const HEADER_H = 130;
+      doc.rect(0, 0, PW, HEADER_H).fill(GREEN);
 
       // Logo area (left side of header)
-      const logoX = 70;
-      const logoY = 30;
-      const logoR = 38;
-      // Draw logo on white circle background
-      doc.circle(logoX, logoY + logoR, logoR + 2).fill("#ffffff");
-      drawAqsLogo(doc, logoX, logoY + logoR, logoR);
+      const logoSize = 80; // px square
+      const logoX = 40;
+      const logoY = 18;
+      if (logoBuffer) {
+        try {
+          doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize });
+        } catch { /* skip if image fails */ }
+      }
 
       // Organisation name (right of logo)
-      const textX = logoX + logoR + 18;
-      doc.fillColor("#ffffff").fontSize(18).font("Helvetica-Bold")
-        .text("ABDULLAH QUILLIAM SOCIETY", textX, 22, { width: PW - textX - 40 });
-      doc.fontSize(9.5).font("Helvetica")
-        .text("Qarde Hasan (Interest-Free Loan) — Amanah Agreement", textX, 46, { width: PW - textX - 40 });
-      doc.fontSize(8).fillColor(GOLD)
-        .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 64, { width: PW - textX - 40 });
+      const textX = logoX + logoSize + 14;
+      doc.fillColor("#ffffff").fontSize(17).font("Helvetica-Bold")
+        .text("ABDULLAH QUILLIAM SOCIETY", textX, 20, { width: PW - textX - 40 });
+      doc.fontSize(9).font("Helvetica")
+        .text("Qarde Hasan (Interest-Free Loan) — Amanah Agreement", textX, 42, { width: PW - textX - 40 });
+      doc.fontSize(7.5).fillColor(GOLD)
+        .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 58, { width: PW - textX - 40 });
+      // Address and telephone
+      doc.fontSize(7.5).fillColor("#ccddcc")
+        .text("8 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 298 2678  |  info@abdullahquilliam.org", textX, 76, { width: PW - textX - 40 });
 
       // Gold rule under header
-      doc.rect(0, 110, PW, 3).fill(GOLD);
+      doc.rect(0, HEADER_H, PW, 3).fill(GOLD);
 
       // Document title
-      let y = 128;
+      let y = HEADER_H + 14;
       doc.fillColor(GREEN).fontSize(15).font("Helvetica-Bold")
         .text("QARDE HASAN AMANAH AGREEMENT", L, y, { width: W, align: "center" });
       y += 22;
