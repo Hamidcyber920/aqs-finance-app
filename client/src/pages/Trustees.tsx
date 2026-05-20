@@ -399,8 +399,10 @@ function BriefingSettingsPanel() {
 
   const setMorningGlobal = trpc.users.setMorningBriefGlobal.useMutation({ onSuccess: () => refetchMorning() });
   const setUserMorning = trpc.users.setUserMorningBrief.useMutation({ onSuccess: () => refetchMorning() });
+  const setTrusteeMorning = trpc.users.setTrusteeMorningBrief.useMutation({ onSuccess: () => refetchMorning() });
   const set9amGlobal = trpc.users.set9amBriefGlobal.useMutation({ onSuccess: () => refetch9am() });
   const setUser9am = trpc.users.setUser9amBrief.useMutation({ onSuccess: () => refetch9am() });
+  const setTrustee9am = trpc.users.setTrustee9amBrief.useMutation({ onSuccess: () => refetch9am() });
 
   if (!isOwnerOrSuperAdmin) return null;
 
@@ -431,6 +433,9 @@ function BriefingSettingsPanel() {
               </button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {(morningData?.users ?? []).length > 0 && (
+                <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: 1 }}>App Users</p>
+              )}
               {(morningData?.users ?? []).map((u: any) => (
                 <div key={u.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)" }}>
                   <div>
@@ -442,6 +447,23 @@ function BriefingSettingsPanel() {
                     style={{ padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", background: u.receiveMorningBrief ? "#22c55e" : "rgba(255,255,255,0.1)", color: u.receiveMorningBrief ? "#fff" : T.muted }}
                   >
                     {u.receiveMorningBrief ? "✓ On" : "Off"}
+                  </button>
+                </div>
+              ))}
+              {(morningData?.trustees ?? []).length > 0 && (
+                <p style={{ margin: "8px 0 2px", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: 1 }}>Trustees &amp; Staff</p>
+              )}
+              {(morningData?.trustees ?? []).map((t: any) => (
+                <div key={`t-${t.id}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)" }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.white }}>{t.name}</p>
+                    <p style={{ margin: 0, fontSize: 10, color: T.muted }}>{t.email ?? t.role}</p>
+                  </div>
+                  <button
+                    onClick={() => setTrusteeMorning.mutate({ trusteeId: t.id, receive: !t.receiveMorningBrief })}
+                    style={{ padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", background: t.receiveMorningBrief ? "#22c55e" : "rgba(255,255,255,0.1)", color: t.receiveMorningBrief ? "#fff" : T.muted }}
+                  >
+                    {t.receiveMorningBrief ? "✓ On" : "Off"}
                   </button>
                 </div>
               ))}
@@ -463,6 +485,9 @@ function BriefingSettingsPanel() {
               </button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {(nineAmData?.users ?? []).length > 0 && (
+                <p style={{ margin: "0 0 2px", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: 1 }}>App Users</p>
+              )}
               {(nineAmData?.users ?? []).map((u: any) => (
                 <div key={u.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)" }}>
                   <div>
@@ -474,6 +499,23 @@ function BriefingSettingsPanel() {
                     style={{ padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", background: u.receive9amBrief ? "#22c55e" : "rgba(255,255,255,0.1)", color: u.receive9amBrief ? "#fff" : T.muted }}
                   >
                     {u.receive9amBrief ? "✓ On" : "Off"}
+                  </button>
+                </div>
+              ))}
+              {(nineAmData?.trustees ?? []).length > 0 && (
+                <p style={{ margin: "8px 0 2px", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: 1 }}>Trustees &amp; Staff</p>
+              )}
+              {(nineAmData?.trustees ?? []).map((t: any) => (
+                <div key={`t-${t.id}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,255,0.04)" }}>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: T.white }}>{t.name}</p>
+                    <p style={{ margin: 0, fontSize: 10, color: T.muted }}>{t.email ?? t.role}</p>
+                  </div>
+                  <button
+                    onClick={() => setTrustee9am.mutate({ trusteeId: t.id, receive: !t.receive9amBrief })}
+                    style={{ padding: "3px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", background: t.receive9amBrief ? "#22c55e" : "rgba(255,255,255,0.1)", color: t.receive9amBrief ? "#fff" : T.muted }}
+                  >
+                    {t.receive9amBrief ? "✓ On" : "Off"}
                   </button>
                 </div>
               ))}

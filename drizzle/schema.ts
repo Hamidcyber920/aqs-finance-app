@@ -792,6 +792,8 @@ export const trustees = mysqlTable("trustees", {
   declarationsOfInterest: text("declarationsOfInterest"),
   dbs_check_date: date("dbs_check_date"),
   seniorityOrder: int("seniorityOrder").default(99).notNull(),
+  receiveMorningBrief: boolean("receiveMorningBrief").default(false).notNull(),
+  receive9amBrief: boolean("receive9amBrief").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

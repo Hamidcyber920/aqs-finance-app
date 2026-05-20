@@ -2610,3 +2610,12 @@
 - [x] Remove capture="environment" from file input in Capture.tsx — iOS now shows full picker (camera + gallery + files)
 - [x] Fix DashboardLayout.tsx: "Scan Receipt" sidebar nav item path "/" → "/capture"
 - [x] Fix DashboardLayout.tsx: mobile bottom "Scan" button path "/" → "/capture"
+
+## Briefing Settings — Trustees in Toggle Lists (May 2026)
+- [x] DB: Add receiveMorningBrief and receive9amBrief fields to trustees table
+- [x] Backend: getMorningBriefSettings and get9amBriefSettings now return trustees array
+- [x] Backend: setTrusteeMorningBrief and setTrustee9amBrief tRPC procedures added
+- [x] Backend: morning brief scheduled job queries opted-in trustees and merges with user recipients (deduplication by email)
+- [x] Backend: 9am brief scheduled job queries opted-in trustees and merges with user recipients (deduplication by email)
+- [x] UI: BriefingSettingsPanel in Trustees.tsx now shows "App Users" and "Trustees & Staff" subsections in both brief cards
+- [x] UI: Trustee toggles call setTrusteeMorningBrief / setTrustee9amBrief mutations

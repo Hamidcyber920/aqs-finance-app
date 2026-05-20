@@ -1092,8 +1092,8 @@ export const appRouter = router({
     // ─── Morning Brief Controls ────────────────────────────────────────────────
     getMorningBriefSettings: adminProcedure.query(async () => {
       const db = await getDb();
-      if (!db) return { globalEnabled: true, users: [] };
-      const { systemSettings, users: usersTable } = await import('../drizzle/schema');
+      if (!db) return { globalEnabled: true, users: [], trustees: [] };
+      const { systemSettings, users: usersTable, trustees: trusteesTable } = await import('../drizzle/schema');
       // Get global toggle
       const [setting] = await db.select().from(systemSettings).where(eq(systemSettings.key, 'morningBriefEnabled')).limit(1);
       const globalEnabled = setting ? setting.value === 'true' : true;
@@ -1105,7 +1105,15 @@ export const appRouter = router({
         role: usersTable.role,
         receiveMorningBrief: usersTable.receiveMorningBrief,
       }).from(usersTable).where(eq(usersTable.isActive, true)).orderBy(usersTable.name);
-      return { globalEnabled, users: userRows };
+      // Get all active trustees
+      const trusteeRows = await db.select({
+        id: trusteesTable.id,
+        name: trusteesTable.fullName,
+        email: trusteesTable.email,
+        role: trusteesTable.role,
+        receiveMorningBrief: trusteesTable.receiveMorningBrief,
+      }).from(trusteesTable).where(eq(trusteesTable.isActive, true)).orderBy(trusteesTable.seniorityOrder);
+      return { globalEnabled, users: userRows, trustees: trusteeRows };
     }),
 
     setMorningBriefGlobal: superAdminProcedure
@@ -1132,8 +1140,8 @@ export const appRouter = router({
     // ─── 9am Brief Controls ───────────────────────────────────────────────────
     get9amBriefSettings: adminProcedure.query(async () => {
       const db = await getDb();
-      if (!db) return { globalEnabled: true, users: [] };
-      const { systemSettings, users: usersTable } = await import('../drizzle/schema');
+      if (!db) return { globalEnabled: true, users: [], trustees: [] };
+      const { systemSettings, users: usersTable, trustees: trusteesTable } = await import('../drizzle/schema');
       const [setting] = await db.select().from(systemSettings).where(eq(systemSettings.key, 'nineAmBriefEnabled')).limit(1);
       const globalEnabled = setting ? setting.value === 'true' : true;
       const userRows = await db.select({
@@ -1143,7 +1151,14 @@ export const appRouter = router({
         role: usersTable.role,
         receive9amBrief: usersTable.receive9amBrief,
       }).from(usersTable).where(eq(usersTable.isActive, true)).orderBy(usersTable.name);
-      return { globalEnabled, users: userRows };
+      const trusteeRows = await db.select({
+        id: trusteesTable.id,
+        name: trusteesTable.fullName,
+        email: trusteesTable.email,
+        role: trusteesTable.role,
+        receive9amBrief: trusteesTable.receive9amBrief,
+      }).from(trusteesTable).where(eq(trusteesTable.isActive, true)).orderBy(trusteesTable.seniorityOrder);
+      return { globalEnabled, users: userRows, trustees: trusteeRows };
     }),
 
     set9amBriefGlobal: superAdminProcedure
@@ -1164,6 +1179,26 @@ export const appRouter = router({
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         const { users: usersTable } = await import('../drizzle/schema');
         await db.update(usersTable).set({ receive9amBrief: input.receive }).where(eq(usersTable.id, input.userId));
+        return { success: true };
+      }),
+
+    setTrusteeMorningBrief: superAdminProcedure
+      .input(z.object({ trusteeId: z.number(), receive: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { trustees: trusteesTable } = await import('../drizzle/schema');
+        await db.update(trusteesTable).set({ receiveMorningBrief: input.receive }).where(eq(trusteesTable.id, input.trusteeId));
+        return { success: true };
+      }),
+
+    setTrustee9amBrief: superAdminProcedure
+      .input(z.object({ trusteeId: z.number(), receive: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        const { trustees: trusteesTable } = await import('../drizzle/schema');
+        await db.update(trusteesTable).set({ receive9amBrief: input.receive }).where(eq(trusteesTable.id, input.trusteeId));
         return { success: true };
       }),
   }),
