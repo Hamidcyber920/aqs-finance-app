@@ -496,25 +496,36 @@ export default function LoanDetailPage({ id }: { id: number }) {
             </div>
           </div>
 
-          {/* Loan details */}
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:14,marginBottom:24,animation:"fadeUp 0.5s ease 100ms both" }}>
+          {/* Loan details — 2×2 big cards */}
+          <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:12,animation:"fadeUp 0.5s ease 100ms both" }}>
             {[
               { label:"Loan Amount", value:`£${Number(loan.amount).toLocaleString()}`, color:T.mint, icon:DollarSign },
-              { label:"Term & Monthly", value:`${loan.termValue} ${loan.termUnit??"months"}`, sub:`£${monthly}/mo`, color:T.purple, icon:Calendar },
               { label:"Balance", value:`£${balance.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, color: balance === 0 ? "#22c55e" : "#f87171", icon:DollarSign },
+              { label:"Term & Monthly", value:`${loan.termValue} ${loan.termUnit??"months"}`, sub:`£${monthly}/mo`, color:T.purple, icon:Calendar },
               { label:"Repaid", value:`£${totalRepaid.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`, sub: totalWaqfAmount > 0 ? `+£${totalWaqfAmount.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} waqf` : undefined, color:"#22c55e", icon:Check },
-              { label:"Purpose", value:loan.purpose??"—", color:"#f59e0b", icon:User },
             ].map((s: any,i: number)=>(
-              <div key={s.label} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"14px 16px",animation:`fadeUp 0.5s ease ${i*60}ms both` }}>
-                <div style={{ width:32,height:32,borderRadius:9,background:`${s.color}22`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:10 }}>
-                  <s.icon size={14} style={{color:s.color}}/>
+              <div key={s.label} style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 18px",animation:`fadeUp 0.5s ease ${i*60}ms both` }}>
+                <div style={{ width:36,height:36,borderRadius:10,background:`${s.color}22`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12 }}>
+                  <s.icon size={16} style={{color:s.color}}/>
                 </div>
-                <p style={{ fontSize:16,fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.02em" }}>{s.value}</p>
-                {s.sub && <p style={{ fontSize:11,color:s.color,margin:"2px 0 0",fontWeight:600 }}>{s.sub}</p>}
-                <p style={{ fontSize:11,color:T.muted,margin:0 }}>{s.label}</p>
+                <p style={{ fontSize:20,fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.02em" }}>{s.value}</p>
+                {s.sub && <p style={{ fontSize:12,color:s.color,margin:"3px 0 0",fontWeight:700 }}>{s.sub}</p>}
+                <p style={{ fontSize:11,color:T.muted,margin:"4px 0 0" }}>{s.label}</p>
               </div>
             ))}
           </div>
+          {/* Purpose — slim full-width bar */}
+          {loan.purpose && (
+            <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:"10px 16px",marginBottom:24,display:"flex",alignItems:"center",gap:10,animation:"fadeUp 0.5s ease 240ms both" }}>
+              <div style={{ width:28,height:28,borderRadius:8,background:"rgba(245,158,11,0.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                <User size={13} style={{color:"#f59e0b"}}/>
+              </div>
+              <div style={{ minWidth:0 }}>
+                <p style={{ margin:0,fontSize:12,color:T.white,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis" }}>{loan.purpose}</p>
+                <p style={{ margin:0,fontSize:10,color:T.muted }}>Purpose</p>
+              </div>
+            </div>
+          )}
 
           {/* Dual approval */}
           <div style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:16,padding:24,marginBottom:20,animation:"fadeUp 0.5s ease 200ms both" }}>
