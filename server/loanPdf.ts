@@ -268,14 +268,15 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       }
       y += 6;
 
-      // ── Page 1 footer ─────────────────────────────────────────────────────
-      doc.rect(L, PH - 52, W, 1.5).fill(GOLD);
-      // geometric border removed
+      // ── Page 1 footer (pinned to absolute bottom) ─────────────────────────
+      doc.save();
+      doc.rect(L, PH - 44, W, 1.5).fill(GOLD);
       doc.fillColor(MUTED).fontSize(7).font("Helvetica")
         .text(
           `Abdullah Quilliam Society  |  Qarde Hasan Amanah Agreement  |  Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}  |  Page 1 of 2`,
-          L, PH - 28, { width: W, align: "center" }
+          L, PH - 30, { width: W, align: "center", lineBreak: false }
         );
+      doc.restore();
 
       // ══════════════════════════════════════════════════════════════════════════
       // PAGE 2
@@ -409,16 +410,17 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         doc.fillColor(MUTED).fontSize(7).font("Helvetica").text("Date", x, y + 17, { lineBreak: false });
       });
 
-      // ── Page 2 footer ─────────────────────────────────────────────────────
-      doc.rect(L, PH - 52, W, 1.5).fill(GOLD);
-      // geometric border removed
+      // ── Page 2 footer (pinned to absolute bottom) ─────────────────────────
+      doc.save();
+      doc.rect(L, PH - 56, W, 1.5).fill(GOLD);
       doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
-        .text("JazakAllahu Khayran — May Allah (SWT) accept this Amanah and bless all parties abundantly.", L, PH - 28, { width: W, align: "center" });
+        .text("JazakAllahu Khayran — May Allah (SWT) accept this Amanah and bless all parties abundantly.", L, PH - 44, { width: W, align: "center", lineBreak: false });
       doc.fillColor(MUTED).fontSize(7).font("Helvetica")
         .text(
           `Abdullah Quilliam Society  |  Qarde Hasan Amanah Agreement  |  Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}  |  Page 2 of 2`,
-          L, PH - 16, { width: W, align: "center" }
+          L, PH - 30, { width: W, align: "center", lineBreak: false }
         );
+      doc.restore();
 
       doc.end();
     })().catch(reject);
