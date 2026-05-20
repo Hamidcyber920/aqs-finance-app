@@ -262,11 +262,12 @@ async function _fullyApproveRepayment(repayment: any) {
     const loan = await getLoanById(repayment.loanId);
     if (!loan) return;
     const allRepayments = await getLoanRepayments(loan.id);
-    // Determine repayment number (position of this repayment among all approved ones, sorted by paidAt)
-    const approvedRepayments = allRepayments
-      .filter((r: any) => r.status === 'approved' || r.id === repayment.id)
-      .sort((a: any, b: any) => new Date(a.paidAt ?? a.createdAt).getTime() - new Date(b.paidAt ?? b.createdAt).getTime());
-    const repaymentNumber = approvedRepayments.findIndex((r: any) => r.id === repayment.id) + 1 || allRepayments.length;
+    // Determine repayment number: position among ALL repayments sorted chronologically (oldest=1)
+    // This matches the UI instalment numbering which also counts all repayments regardless of status
+    const allSorted = [...allRepayments].sort((a: any, b: any) =>
+      new Date(a.paidAt ?? a.createdAt).getTime() - new Date(b.paidAt ?? b.createdAt).getTime()
+    );
+    const repaymentNumber = allSorted.findIndex((r: any) => r.id === repayment.id) + 1 || allRepayments.length;
     const waqfEndowed = allRepayments.reduce((s, r) => s + Number((r as any).waqfAmount ?? 0), 0);
     const pdfBuffer = await generateRepaymentPdf({
       repaymentId: repayment.id, loanId: loan.id,
