@@ -492,7 +492,15 @@ export default function LoanDetailPage({ id }: { id: number }) {
   const [editTitle, setEditTitle] = useState("none");
 
   const loan = data;
-  const repayments = (data as any)?.repayments ?? [];
+  // Sort repayments by paidAt/createdAt ascending to assign stable instalment numbers (oldest=1)
+  const repaymentsChron = [...((data as any)?.repayments ?? [])].sort((a: any, b: any) =>
+    new Date(a.paidAt ?? a.createdAt).getTime() - new Date(b.paidAt ?? b.createdAt).getTime()
+  );
+  // For display: newest at top, but instalment number reflects chronological position
+  const repayments = [...repaymentsChron].reverse().map((rep: any, i: number, arr: any[]) => ({
+    ...rep,
+    instalmentNumber: arr.length - i, // newest shown first gets highest number
+  }));
 
   if (!loan) {
     return (
@@ -865,7 +873,7 @@ The AQS Team`);
             ) : repayments.map((rep: any, i: number) => (
               <RepaymentRow
                 key={rep.id??i}
-                repayment={{ ...rep, instalment: i+1, borrowerName: (loan as any).borrowerName }}
+                repayment={{ ...rep, instalment: rep.instalmentNumber, borrowerName: (loan as any).borrowerName }}
                 isAdmin={isAdmin}
                 isTrustee={isTrustee}
                 borrowerPhone={(loan as any).borrowerPhone}
