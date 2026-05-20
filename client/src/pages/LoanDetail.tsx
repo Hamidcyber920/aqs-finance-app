@@ -509,7 +509,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
             <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12 }}>
               <div>
                 <h1 style={{ fontSize:"clamp(20px,3vw,28px)",fontWeight:800,color:T.white,margin:0,letterSpacing:"-0.03em" }}>
-                  {loan.borrowerName}
+                  {(loan as any).borrowerTitle && (loan as any).borrowerTitle !== 'none' ? `${(loan as any).borrowerTitle} ` : ''}{loan.borrowerName}
                 </h1>
                 <p style={{ fontSize:13,color:T.muted,margin:"4px 0 0" }}>{loan.borrowerEmail}</p>
               </div>
@@ -646,8 +646,9 @@ The AQS Team`);
                     const remaining = Math.max(0, parseFloat(String(loan.amount ?? 0)) - parseFloat(String((loan as any).totalRepaid ?? 0)));
                     const pdfLink = (loan as any).agreementPdfUrl ? `\n\n📄 View Agreement: ${(loan as any).agreementPdfUrl}` : "";
                     setEmailPreviewType("lender");
-                    setEmailPreviewSubject("An Investment in the House of Allah – Your Qarde Hasan Agreement");
-                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh,\n\n${lenderSalutation}\n\nWe pray this finds you in the best of health and Iman.\n\nAttached is the formal agreement for the interest-free loan you have graciously provided for the AQS Rimmers Building Project. While this is a technical requirement for our records, we recognise it primarily as a testament to your commitment to the Ummah.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nOutstanding Balance: £${remaining.toFixed(2)}${pdfLink}\n\nMay Allah (SWT) accept this from you as a Sadaqah Jariyah that continues to benefit you and your family for generations.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
+                    const startDate = (loan as any).createdAt ? new Date((loan as any).createdAt).toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' }) : 'the date of your agreement';
+                    setEmailPreviewSubject("An Update from the Abdullah Quilliam Society – Rimmers Building Project");
+                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh,\n\n${lenderSalutation}\n\nWe pray this message finds you and your family in the best of health and Iman.\n\nWe wanted to take a moment to update you on the progress of the AQS Rimmers Building Project — a project made possible through the generous Qarde Hasan (interest-free loans) of our community, including your own.\n\nYour Amanah with the Abdullah Quilliam Society began on ${startDate}, and since then, the project has continued to move forward, Alhamdulillah. The building is being prepared as a permanent House of Allah for the Muslim community of Liverpool and beyond.\n\nWe are deeply grateful for your trust, patience, and commitment to this cause. Every contribution — large or small — is a brick in the foundation of something that will benefit the Ummah for generations to come, in sha Allah.${pdfLink}\n\nThe Prophet (PBUH) said: \"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah.\"\n\nMay Allah (SWT) accept this from you as a Sadaqah Jariyah, reward you abundantly in this life and the next, and make it a source of ongoing blessings for you and your family.\n\nIf you have any questions or would like to discuss anything, please do not hesitate to get in touch.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society\n8-10 Brougham Terrace, Liverpool, L6 1AE\nadmin@abdullahquilliam.org`);
                     setEmailPreviewOpen(true);
                   }}
                   style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.white,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
