@@ -126,11 +126,11 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       // geometric border removed
 
       // ── Logo ──────────────────────────────────────────────────────────────
-      // Logo is 440x230 (wide rectangle) — render at 110x57 to preserve aspect ratio
-      const logoW = 110;
-      const logoH = 57;
+      // Logo is 470x490 (nearly square circle monogram on burgundy background)
+      const logoH = HEADER_H - 16;  // fill most of the header height
+      const logoW = Math.round(logoH * 470 / 490);  // preserve aspect ratio
       const logoX = L;
-      const logoY = (HEADER_H - logoH) / 2;
+      const logoY = 8;
       if (logoBuffer) {
         try { doc.image(logoBuffer, logoX, logoY, { width: logoW, height: logoH }); } catch {}
       }
