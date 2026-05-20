@@ -150,8 +150,11 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       doc.fontSize(7.5).fillColor("#d4b8be")
         .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 82, { width: PW - textX - 40 });
 
-      // ── Document reference below header ─────────────────────────────────
-      let y = HEADER_H + 20;
+      // ── Document title & reference below header ──────────────────────────
+      let y = HEADER_H + 18;
+      doc.fillColor(BURGUNDY).fontSize(15).font("Helvetica-Bold")
+        .text("QARDE HASAN AMANAH AGREEMENT", L, y, { width: W, align: "center" });
+      y += 22;
       doc.fillColor(MUTED).fontSize(8.5).font("Helvetica")
         .text(
           `Reference: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   Date: ${new Date(loan.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`,

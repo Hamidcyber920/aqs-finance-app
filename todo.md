@@ -2624,3 +2624,6 @@
 - [x] Backend: 9am brief scheduled job queries opted-in trustees and merges with user recipients (deduplication by email)
 - [x] UI: BriefingSettingsPanel in Trustees.tsx now shows "App Users" and "Trustees & Staff" subsections in both brief cards
 - [x] UI: Trustee toggles call setTrusteeMorningBrief / setTrustee9amBrief mutations
+
+## Loan PDF — Title Restoration (May 2026)
+- [x] Restore "QARDE HASAN AMANAH AGREEMENT" title to page 1 of loan agreement PDF (below header, above reference line, centred, burgundy bold 15pt)
