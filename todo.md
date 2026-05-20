@@ -2631,3 +2631,8 @@
 ## Waqf Certificate — Reflect Actual Repayments (May 2026)
 - [x] Backend: add regenerateWaqfCertificate procedure — re-computes totalRepaid from actual paidAt repayments and regenerates the PDF with correct figures
 - [x] Frontend: add "Regenerate Certificate" button next to "View Certificate of Waqf" link in LoanDetail
+
+## Loan Statement & Email Preview Fixes (May 2026)
+- [x] Fix Loan Statement button — added toast + popup-blocked fallback (window.location.href)
+- [x] Email Lender: open preview dialog (editable subject + body) before sending — do not auto-send
+- [x] Email Statement: open preview dialog (editable subject + body) before sending — do not auto-send

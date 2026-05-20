@@ -377,8 +377,16 @@ export default function LoanDetailPage({ id }: { id: number }) {
   });
 
   const generateStatementMutation = trpc.loans.generateLoanStatement?.useMutation?.({
-    onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank"); },
-    onError: (e: any) => toast.error(e.message),
+    onSuccess: (res: any) => {
+      if (res?.url) {
+        toast.success("Statement ready — opening PDF");
+        const opened = window.open(res.url, "_blank");
+        if (!opened) { window.location.href = res.url; }
+      } else {
+        toast.error("Statement generated but no URL returned");
+      }
+    },
+    onError: (e: any) => toast.error(`Statement error: ${e.message}`),
   });
 
   const emailStatementMutation = trpc.loans.emailLoanStatement?.useMutation?.({
@@ -450,6 +458,11 @@ export default function LoanDetailPage({ id }: { id: number }) {
   const evidenceFileRef = useRef<HTMLInputElement>(null);
   const [editBorrowerOpen, setEditBorrowerOpen] = useState(false);
   const [waqfConfirmOpen, setWaqfConfirmOpen] = useState(false);
+  // Email preview dialog state
+  const [emailPreviewOpen, setEmailPreviewOpen] = useState(false);
+  const [emailPreviewType, setEmailPreviewType] = useState<"lender"|"statement">("lender");
+  const [emailPreviewSubject, setEmailPreviewSubject] = useState("");
+  const [emailPreviewBody, setEmailPreviewBody] = useState("");
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -625,15 +638,25 @@ The AQS Team`);
               </Button>
               {loan.borrowerEmail ? (
                 <Button
-                  onClick={() => sendEmailMutation?.mutate?.({ id, type: "approved" })}
-                  disabled={sendEmailMutation?.isPending}
+                  onClick={() => {
+                    const fn = (loan.borrowerName ?? "").split(" ")[0];
+                    const remaining = Math.max(0, parseFloat(String(loan.amount ?? 0)) - parseFloat(String((loan as any).totalRepaid ?? 0)));
+                    const pdfLink = (loan as any).agreementPdfUrl ? `\n\n📄 View Agreement: ${(loan as any).agreementPdfUrl}` : "";
+                    setEmailPreviewType("lender");
+                    setEmailPreviewSubject("An Investment in the House of Allah – Your Qarde Hasan Agreement");
+                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn},\n\nWe pray this finds you in the best of health and Iman.\n\nAttached is the formal agreement for the interest-free loan you have graciously provided for the AQS Rimmers Building Project. While this is a technical requirement for our records, we recognise it primarily as a testament to your commitment to the Ummah.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nOutstanding Balance: £${remaining.toFixed(2)}${pdfLink}\n\nMay Allah (SWT) accept this from you as a Sadaqah Jariyah that continues to benefit you and your family for generations.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
+                    setEmailPreviewOpen(true);
+                  }}
                   style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.white,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
-                  <Mail size={14}/> {sendEmailMutation?.isPending ? "Sending…" : "Email Lender"}
+                  <Mail size={14}/> Email Lender
                 </Button>
               ) : null}
               {fullyApproved && (
                 <Button
-                  onClick={() => generateStatementMutation?.mutate?.({ id })}
+                  onClick={() => {
+                    toast.info("Generating statement PDF…");
+                    generateStatementMutation?.mutate?.({ id });
+                  }}
                   disabled={generateStatementMutation?.isPending}
                   style={{ background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
                   <FileText size={14}/> {generateStatementMutation?.isPending ? "Generating…" : "Loan Statement"}
@@ -641,10 +664,17 @@ The AQS Team`);
               )}
               {fullyApproved && loan.borrowerEmail && (
                 <Button
-                  onClick={() => emailStatementMutation?.mutate?.({ id })}
-                  disabled={emailStatementMutation?.isPending}
+                  onClick={() => {
+                    const fn = (loan.borrowerName ?? "").split(" ")[0];
+                    const totalPaid = ((loan as any).repayments ?? []).filter((r: any) => r.paidAt).reduce((s: number, r: any) => s + parseFloat(r.amount ?? "0"), 0);
+                    const outstanding = Math.max(0, parseFloat(String(loan.amount ?? 0)) - totalPaid);
+                    setEmailPreviewType("statement");
+                    setEmailPreviewSubject(`Qarde Hasan Amanah Statement — ${new Date().toLocaleDateString("en-GB")} — AQ Society`);
+                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${fn},\n\nMay Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the Rimmers Building Project as of ${new Date().toLocaleDateString("en-GB")}.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nTotal Paid: £${totalPaid.toFixed(2)}\nOutstanding Balance: £${outstanding.toFixed(2)}\n\nYour generosity is a pillar of this House of Allah. JazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.\n\nWarm Islamic greetings,\nAQ Society Finance Team\nAbdullah Quilliam Society`);
+                    setEmailPreviewOpen(true);
+                  }}
                   style={{ background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.15)",color:"#fbbf24",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
-                  <Mail size={14}/> {emailStatementMutation?.isPending ? "Sending…" : "Email Statement"}
+                  <Mail size={14}/> Email Statement
                 </Button>
               )}
               {fullyApproved && !waqfConverted && (
@@ -908,6 +938,60 @@ The AQS Team`);
           </div>
         </div>
       </div>
+      {/* Email Preview Dialog */}
+      <Dialog open={emailPreviewOpen} onOpenChange={setEmailPreviewOpen}>
+        <DialogContent style={{ background:"#1a2035",border:"1px solid rgba(255,255,255,0.1)",borderRadius:16,maxWidth:540,width:"calc(100vw - 32px)",padding:0,overflow:"hidden" }}>
+          <DialogHeader style={{ padding:"20px 24px 0" }}>
+            <DialogTitle style={{ color:"#fff",fontSize:16,fontWeight:700 }}>
+              <Mail size={16} style={{ display:"inline",marginRight:8,verticalAlign:"middle" }}/>
+              {emailPreviewType === "lender" ? "Email Lender" : "Email Statement"} — Preview
+            </DialogTitle>
+          </DialogHeader>
+          <div style={{ padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:14 }}>
+            <div>
+              <label style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",display:"block",marginBottom:6 }}>Subject</label>
+              <input
+                value={emailPreviewSubject}
+                onChange={e => setEmailPreviewSubject(e.target.value)}
+                style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:9,padding:"9px 12px",color:"#fff",fontSize:13,outline:"none",boxSizing:"border-box" }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.07em",display:"block",marginBottom:6 }}>Message Body</label>
+              <textarea
+                value={emailPreviewBody}
+                onChange={e => setEmailPreviewBody(e.target.value)}
+                rows={10}
+                style={{ width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:9,padding:"9px 12px",color:"#fff",fontSize:12,outline:"none",resize:"vertical",lineHeight:1.6,fontFamily:"inherit",boxSizing:"border-box" }}
+              />
+            </div>
+            <p style={{ fontSize:11,color:"rgba(255,255,255,0.35)",margin:0 }}>
+              To: {loan.borrowerName} &lt;{loan.borrowerEmail}&gt;
+            </p>
+            <div style={{ display:"flex",gap:10 }}>
+              <Button
+                onClick={() => setEmailPreviewOpen(false)}
+                style={{ flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",borderRadius:10,height:42,fontWeight:600 }}>
+                Cancel
+              </Button>
+              <Button
+                disabled={sendEmailMutation?.isPending || emailStatementMutation?.isPending}
+                onClick={() => {
+                  if (emailPreviewType === "lender") {
+                    sendEmailMutation?.mutate?.({ id, type: "custom", customSubject: emailPreviewSubject, customBody: emailPreviewBody.replace(/\n/g, "<br>") });
+                  } else {
+                    emailStatementMutation?.mutate?.({ id });
+                  }
+                  setEmailPreviewOpen(false);
+                }}
+                style={{ flex:2,background:"linear-gradient(135deg,#1a4731,#2d6a4f)",color:"#fff",border:"none",borderRadius:10,height:42,fontWeight:700,fontSize:14 }}>
+                <Mail size={15} style={{ display:"inline",marginRight:6,verticalAlign:"middle" }}/>
+                {sendEmailMutation?.isPending || emailStatementMutation?.isPending ? "Sending…" : "Send Email"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
