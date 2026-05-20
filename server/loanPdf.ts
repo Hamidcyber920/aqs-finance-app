@@ -469,22 +469,30 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     const W = R - L;
 
     // ── Header ──────────────────────────────────────────────────────────────
-    const HEADER_H = 120;
+    const HEADER_H = 130;
     doc.rect(0, 0, PW, HEADER_H).fill(BURGUNDY);
 
-    // Logo
+    // Logo — sized to fill most of header height, preserving aspect ratio
     const logoB64 = AQS_LOGO_WHITE_B64;
     const logoData = Buffer.from(logoB64, "base64");
-    doc.image(logoData, 30, 10, { width: 90, height: 90 });
+    const logoH = HEADER_H - 16;
+    const logoW = Math.round(logoH * 470 / 490);
+    const logoX = L;
+    const logoY = 8;
+    try { doc.image(logoData, logoX, logoY, { width: logoW, height: logoH }); } catch {}
 
-    // Org name
-    const textX = 130;
-    doc.fillColor(WHITE).fontSize(18).font("Helvetica-Bold")
-      .text("ABDULLAH QUILLIAM SOCIETY", textX, 28, { width: PW - textX - 30, lineBreak: false });
+    // Vertical gold divider
+    const divX = logoX + logoW + 14;
+    doc.rect(divX, 20, 1.5, HEADER_H - 40).fill(GOLD);
+
+    // Org name and details
+    const textX = divX + 14;
+    doc.fillColor(WHITE).fontSize(16).font("Helvetica-Bold")
+      .text("ABDULLAH QUILLIAM SOCIETY", textX, 24, { width: PW - textX - 40 });
     doc.fillColor(GOLD_LIGHT).fontSize(9).font("Helvetica")
-      .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 42, { width: PW - textX - 30 });
+      .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 48, { width: PW - textX - 40 });
     doc.fillColor(GOLD_LIGHT).fontSize(8.5).font("Helvetica")
-      .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 60, { width: PW - textX - 30 });
+      .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 68, { width: PW - textX - 40 });
 
     // Gold border strip
     doc.rect(0, HEADER_H, PW, 4).fill(GOLD);
