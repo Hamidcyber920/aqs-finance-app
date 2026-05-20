@@ -270,10 +270,47 @@ export default function LoansPage() {
             <button onClick={() => {
               const filtered = loans.filter((l: any) => { const d = new Date(l.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
               if (!filtered.length) { toast.info("No loans in selected range"); return; }
-              const rows = filtered.map((l: any) => `${new Date(l.createdAt).toLocaleDateString()},${l.borrowerName},${l.borrowerEmail || ""},\u00a3${Number(l.amount).toFixed(2)},${l.status},${l.purpose || ""}`);
-              const csv = "Date,Borrower,Email,Amount,Status,Purpose\n" + rows.join("\n");
-              const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
-              const a = document.createElement("a"); a.href = url; a.download = `loans_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
+              // Compute summary stats
+              const csvTotalBorrowed = filtered.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
+              const csvActive = filtered.filter((l: any) => l.status === "active" || l.status === "approved").length;
+              const csvOutstanding = filtered.reduce((s: number, l: any) => {
+                const out = l._summary?.outstanding ?? Math.max(0, Number(l.amount ?? 0) - Number(l.totalRepaid ?? 0));
+                return s + out;
+              }, 0);
+              const csvDonors = new Set(filtered.map((l: any) => l.borrowerEmail || l.borrowerName)).size;
+              const csvPending = filtered.filter((l: any) => l.status === "pending" || l.status === "pending_review").length;
+              const csvDate = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+              // Helper: escape CSV cell (wrap in quotes if contains comma/quote/newline)
+              const esc = (v: string) => /[,"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+              // Build CSV with UTF-8 BOM for Excel compatibility
+              const lines: string[] = [];
+              lines.push("Abdullah Quilliam Society");
+              lines.push("Qarde Hasan Amanah - Finance Report");
+              lines.push(`Registered Charity No. 1194942`);
+              lines.push(`Generated: ${csvDate}`);
+              lines.push(`Period: ${dateFrom} to ${dateTo}`);
+              lines.push("");
+              lines.push("SUMMARY");
+              lines.push(`Total Borrowed,GBP ${csvTotalBorrowed.toFixed(2)}`);
+              lines.push(`Total Outstanding,GBP ${csvOutstanding.toFixed(2)}`);
+              lines.push(`Active Loans,${csvActive}`);
+              lines.push(`Number of Donors,${csvDonors}`);
+              lines.push(`Pending Review,${csvPending}`);
+              lines.push("");
+              lines.push("LOAN DETAILS");
+              lines.push("Date,Borrower,Email,Amount (GBP),Status,Purpose");
+              filtered.forEach((l: any) => {
+                const d = new Date(l.createdAt).toLocaleDateString("en-GB"); // dd/mm/yyyy - no encoding issues
+                const amt = Number(l.amount).toFixed(2);
+                lines.push([esc(d), esc(l.borrowerName || ""), esc(l.borrowerEmail || ""), amt, esc(l.status || ""), esc(l.purpose || "")].join(","));
+              });
+              lines.push("");
+              lines.push("JazakAllahu Khayran - Abdullah Quilliam Society - Qarde Hasan Amanah Finance System");
+              // UTF-8 BOM ensures Excel opens with correct encoding (no Â£ corruption)
+              const bom = "\uFEFF";
+              const csv = bom + lines.join("\r\n");
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" }); const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = `AQS-Loans-${dateFrom}-to-${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
             }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
               <Download size={12} /> CSV
             </button>
