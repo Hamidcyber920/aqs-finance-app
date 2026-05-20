@@ -123,140 +123,168 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
     window.location.href = `https://wa.me/${phone}?text=${msg}`;
   };
 
+  // Status colour helpers
+  const statusBg = repayment.trusteeApprovedAt ? "rgba(0,255,194,0.1)" : repayment.adminApprovedAt ? "rgba(251,191,36,0.1)" : isOverdue ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.06)";
+  const statusColor = repayment.trusteeApprovedAt ? T.mint : repayment.adminApprovedAt ? "#fbbf24" : isOverdue ? "#ef4444" : T.muted;
+  const statusLabel = repayment.trusteeApprovedAt ? "Confirmed" : repayment.adminApprovedAt ? "Partial" : isOverdue ? "Overdue" : "Pending";
+  const borderAccent = isOverdue ? "#ef4444" : isDueSoon ? "#fbbf24" : repayment.trusteeApprovedAt ? "rgba(0,255,194,0.3)" : T.border;
+
   return (
-    <div style={{ padding:"14px 0",borderBottom:`1px solid ${T.border}`,borderLeft:isOverdue?"3px solid #ef4444":isDueSoon?"3px solid #fbbf24":"3px solid transparent",paddingLeft:isOverdue||isDueSoon?"12px":"0" }}>
-      <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:10 }}>
-        <div style={{ flex:1,minWidth:0 }}>
-          <p style={{ fontSize:13,fontWeight:600,color:T.white,margin:0 }}>
-            Instalment {repayment.instalment ?? "#"} — £{Number(repayment.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}
-          </p>
-          <p style={{ fontSize:11,color:isOverdue?"#ef4444":isDueSoon?"#fbbf24":T.muted,margin:"2px 0 0",fontWeight:isOverdue||isDueSoon?700:400 }}>
-            {isOverdue && "⚠️ OVERDUE · "}{isDueSoon && "⏰ Due soon · "}Due: {repayment.dueDate ? new Date(repayment.dueDate).toLocaleDateString("en-GB") : "—"}
-            {repayment.paidAt && <span style={{marginLeft:8,color:"rgba(255,255,255,0.4)"}}>Recorded: {new Date(repayment.paidAt).toLocaleString("en-GB")}</span>}
-          </p>
-          {repayment.paymentMethod && (
-            <p style={{ fontSize:11,color:"rgba(255,255,255,0.4)",margin:"2px 0 0",textTransform:"capitalize" }}>
-              {repayment.paymentMethod.replace(/_/g," ")}
-              {repayment.notes && <span style={{marginLeft:8}}>· {repayment.notes}</span>}
-            </p>
-          )}
-          {repayment.adminApprovedAt && (
-            <p style={{ fontSize:11,color:T.mint,margin:"2px 0 0" }}>
-              ✓ Admin: <strong>{repayment.adminApprovedByName ?? ""}</strong> · {new Date(repayment.adminApprovedAt).toLocaleString("en-GB")}
-              {repayment.trusteeApprovedAt && <span> · ✓ Trustee: <strong>{repayment.trusteeName ?? ""}</strong> · {new Date(repayment.trusteeApprovedAt).toLocaleString("en-GB")}</span>}
-            </p>
-          )}
+    <div style={{ marginBottom:12,borderRadius:12,border:`1px solid ${borderAccent}`,background:"rgba(255,255,255,0.025)",overflow:"hidden" }}>
+      {/* ── Header row ── */}
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",borderBottom:`1px solid ${T.border}`,background:"rgba(255,255,255,0.02)" }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <span style={{ fontSize:13,fontWeight:700,color:T.white }}>Instalment {repayment.instalment ?? "#"}</span>
+          <span style={{ fontSize:15,fontWeight:800,color:T.white }}>£{Number(repayment.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</span>
           {existingWaqf > 0 && (
-            <p style={{ fontSize:11,color:"#c9a84c",margin:"4px 0 0",fontWeight:600 }}>
-              🕌 Waqf Endowed: £{existingWaqf.toFixed(2)}{repayment.waqfNote ? ` · ${repayment.waqfNote}` : ""}
-            </p>
+            <span style={{ fontSize:11,fontWeight:700,color:"#c9a84c",background:"rgba(201,168,76,0.12)",border:"1px solid rgba(201,168,76,0.3)",borderRadius:6,padding:"2px 7px" }}>
+              🕌 Waqf £{existingWaqf.toFixed(2)}
+            </span>
           )}
-          {/* Evidence */}
-          <div style={{ marginTop:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-            <input ref={rowFileRef} type="file" accept="image/*,application/pdf" style={{ display:"none" }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleRowEvidence(f); }}/>
-            <button
-              onClick={() => rowFileRef.current?.click()}
-              disabled={rowUploading}
-              style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,color:T.muted,fontSize:11,fontWeight:600,cursor:"pointer" }}>
-              <Upload size={11}/> {rowUploading ? "Uploading…" : rowEvidenceUrl ? "📷 Replace Evidence" : "📷 Add Evidence"}
-            </button>
-            {rowEvidenceUrl && (
-              <>
-                <a href={rowEvidenceUrl} target="_blank" rel="noreferrer" style={{ display:"flex",alignItems:"center",gap:4,textDecoration:"none" }}>
-                  {/\.(jpg|jpeg|png|gif|webp)$/i.test(rowEvidenceUrl) ? (
-                    <img src={rowEvidenceUrl} alt="Evidence" style={{ width:36,height:36,objectFit:"cover",borderRadius:6,border:`1px solid ${T.border}` }}/>
-                  ) : (
-                    <span style={{ fontSize:11,color:T.mint }}>📎 View Evidence ↗</span>
-                  )}
-                </a>
-              </>
-            )}
-          </div>
         </div>
-        <div style={{ display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end" }}>
-          <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,textTransform:"capitalize",
-            background:repayment.trusteeApprovedAt?"rgba(0,255,194,0.1)":repayment.adminApprovedAt?"rgba(251,191,36,0.1)":isOverdue?"rgba(239,68,68,0.1)":"rgba(255,255,255,0.06)",
-            color:repayment.trusteeApprovedAt?T.mint:repayment.adminApprovedAt?"#fbbf24":isOverdue?"#ef4444":T.muted }}>
-            {repayment.trusteeApprovedAt?"Confirmed":repayment.adminApprovedAt?"Partial":isOverdue?"Overdue":"Pending"}
+        <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:700,background:statusBg,color:statusColor }}>{statusLabel}</span>
+      </div>
+
+      {/* ── Details grid ── */}
+      <div style={{ padding:"10px 14px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px" }}>
+        <div style={{ fontSize:11,color:T.muted }}>
+          <span style={{ color:"rgba(255,255,255,0.35)" }}>Due</span>{" "}
+          <span style={{ color:isOverdue?"#ef4444":isDueSoon?"#fbbf24":T.white,fontWeight:600 }}>
+            {isOverdue && "⚠️ "}{isDueSoon && "⏰ "}{repayment.dueDate ? new Date(repayment.dueDate).toLocaleDateString("en-GB") : "—"}
           </span>
-          {/* Admin authorisation — always show when not yet admin-approved */}
-          {isAdmin && !repayment.adminApprovedAt && (
-            <div style={{ display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end" }}>
-              <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-                <select value={adminName} onChange={e=>setAdminName(e.target.value)}
-                  style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:adminName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:130 }}>
-                  <option value="" disabled style={{background:"#0A192F"}}>Admin authorised by…</option>
-                  {ADMIN_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
-                </select>
-                <button onClick={()=>{ if(adminName) onApproveAdmin({...repayment, approvedByName: adminName}); }}
-                  disabled={!adminName}
-                  style={{ padding:"4px 10px",borderRadius:8,background:adminName?"rgba(0,255,194,0.15)":"rgba(255,255,255,0.04)",border:`1px solid ${adminName?"rgba(0,255,194,0.3)":T.border}`,color:adminName?T.mint:T.muted,fontSize:11,fontWeight:600,cursor:adminName?"pointer":"not-allowed" }}>
-                  Admin Sign ✓
-                </button>
-              </div>
-              <div style={{ display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end" }}>
-                <button onClick={()=>onConfirm(repayment)}
-                  style={{ padding:"5px 12px",borderRadius:8,background:"rgba(99,91,255,0.12)",border:"1px solid rgba(99,91,255,0.25)",color:T.purple,fontSize:12,fontWeight:600,cursor:"pointer" }}>
-                  Confirm Received
-                </button>
-                {onSendReminder && (
-                  <button onClick={()=>onSendReminder(repayment)}
-                    style={{ padding:"5px 12px",borderRadius:8,background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",fontSize:12,fontWeight:600,cursor:"pointer" }}>
-                    ✉️ Email
-                  </button>
-                )}
-                <button onClick={openWhatsApp}
-                  style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:600,cursor:"pointer" }}>
-                  💬 WhatsApp
-                </button>
-              </div>
-            </div>
-          )}
-          {/* Trustee authorisation — show after admin approved, before trustee approved */}
-          {(isAdmin || isTrustee) && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
-            <div style={{ display:"flex",gap:6,alignItems:"center" }}>
-              <select value={trusteeName} onChange={e=>setTrusteeName(e.target.value)}
-                style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:trusteeName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:140 }}>
-                <option value="" disabled style={{background:"#0A192F"}}>Trustee authorised by…</option>
-                {TRUSTEE_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
-              </select>
-              <button onClick={()=>{ if(trusteeName) onApproveTrustee({...repayment, trusteeName}); }}
-                disabled={!trusteeName}
-                style={{ padding:"4px 10px",borderRadius:8,background:trusteeName?"rgba(251,191,36,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${trusteeName?"rgba(251,191,36,0.3)":T.border}`,color:trusteeName?"#fbbf24":T.muted,fontSize:11,fontWeight:600,cursor:trusteeName?"pointer":"not-allowed" }}>
-                Trustee Sign ✓
-              </button>
-            </div>
-          )}
-          {repayment.trusteeApprovedAt && onDownloadReceipt && (
-            <button onClick={()=>onDownloadReceipt(repayment)}
-              style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
-              <Download size={12}/> Receipt PDF
-            </button>
-          )}
-          {repayment.trusteeApprovedAt && (
-            <button
-              onClick={() => onConfirmLender && onConfirmLender(repayment)}
-              disabled={!!repayment.lenderConfirmedAt}
-              style={{ padding:"5px 12px",borderRadius:8,
-                background:repayment.lenderConfirmedAt?"rgba(0,255,194,0.04)":"rgba(255,255,255,0.06)",
-                border:`1px solid ${repayment.lenderConfirmedAt?"rgba(0,255,194,0.2)":T.border}`,
-                color:repayment.lenderConfirmedAt?T.mint:T.muted,
-                fontSize:11,fontWeight:600,cursor:repayment.lenderConfirmedAt?"default":"pointer",
-                display:"flex",alignItems:"center",gap:5 }}>
-              {repayment.lenderConfirmedAt
-                ? <><span style={{color:T.mint}}>✓</span> Lender Confirmed {new Date(repayment.lenderConfirmedAt).toLocaleDateString("en-GB")}</>
-                : <>☐ Mark Lender Confirmed</>}
-            </button>
-          )}
-          {isAdmin && (
-            <button
-              onClick={() => setWaqfDialogOpen(true)}
-              style={{ padding:"5px 12px",borderRadius:8,background:existingWaqf>0?"rgba(201,168,76,0.12)":"rgba(255,255,255,0.05)",border:`1px solid ${existingWaqf>0?"rgba(201,168,76,0.35)":T.border}`,color:existingWaqf>0?"#c9a84c":T.muted,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
-              🕌 {existingWaqf>0?`Waqf £${existingWaqf.toFixed(2)}`:"Interim Waqf"}
-            </button>
-          )}
         </div>
+        {repayment.paidAt && (
+          <div style={{ fontSize:11,color:T.muted }}>
+            <span style={{ color:"rgba(255,255,255,0.35)" }}>Recorded</span>{" "}
+            <span style={{ color:T.white }}>{new Date(repayment.paidAt).toLocaleDateString("en-GB")}</span>
+          </div>
+        )}
+        {repayment.paymentMethod && (
+          <div style={{ fontSize:11,color:T.muted }}>
+            <span style={{ color:"rgba(255,255,255,0.35)" }}>Method</span>{" "}
+            <span style={{ color:T.white,textTransform:"capitalize" }}>{repayment.paymentMethod.replace(/_/g," ")}</span>
+          </div>
+        )}
+        {repayment.notes && (
+          <div style={{ fontSize:11,color:T.muted,gridColumn:"1/-1" }}>
+            <span style={{ color:"rgba(255,255,255,0.35)" }}>Notes</span>{" "}
+            <span style={{ color:T.white }}>{repayment.notes}</span>
+          </div>
+        )}
+        {repayment.adminApprovedAt && (
+          <div style={{ fontSize:11,color:T.muted }}>
+            <span style={{ color:"rgba(255,255,255,0.35)" }}>Admin</span>{" "}
+            <span style={{ color:T.mint,fontWeight:600 }}>✓ {repayment.adminApprovedByName ?? ""}</span>{" "}
+            <span style={{ color:"rgba(255,255,255,0.3)" }}>{new Date(repayment.adminApprovedAt).toLocaleDateString("en-GB")}</span>
+          </div>
+        )}
+        {repayment.trusteeApprovedAt && (
+          <div style={{ fontSize:11,color:T.muted }}>
+            <span style={{ color:"rgba(255,255,255,0.35)" }}>Trustee</span>{" "}
+            <span style={{ color:"#fbbf24",fontWeight:600 }}>✓ {repayment.trusteeName ?? ""}</span>{" "}
+            <span style={{ color:"rgba(255,255,255,0.3)" }}>{new Date(repayment.trusteeApprovedAt).toLocaleDateString("en-GB")}</span>
+          </div>
+        )}
+        {existingWaqf > 0 && repayment.waqfNote && (
+          <div style={{ fontSize:11,color:T.muted,gridColumn:"1/-1" }}>
+            <span style={{ color:"rgba(255,255,255,0.35)" }}>Waqf Note</span>{" "}
+            <span style={{ color:"#c9a84c" }}>{repayment.waqfNote}</span>
+          </div>
+        )}
+        {repayment.lenderConfirmedAt && (
+          <div style={{ fontSize:11,color:T.muted }}>
+            <span style={{ color:"rgba(255,255,255,0.35)" }}>Lender</span>{" "}
+            <span style={{ color:T.mint,fontWeight:600 }}>✓ Confirmed {new Date(repayment.lenderConfirmedAt).toLocaleDateString("en-GB")}</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Evidence ── */}
+      <div style={{ padding:"0 14px 10px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
+        <input ref={rowFileRef} type="file" accept="image/*,application/pdf" style={{ display:"none" }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleRowEvidence(f); }}/>
+        <button
+          onClick={() => rowFileRef.current?.click()}
+          disabled={rowUploading}
+          style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:8,background:"rgba(255,255,255,0.05)",border:`1px solid ${T.border}`,color:T.muted,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+          <Upload size={11}/> {rowUploading ? "Uploading…" : rowEvidenceUrl ? "📷 Replace Evidence" : "📷 Add Evidence"}
+        </button>
+        {rowEvidenceUrl && (
+          <a href={rowEvidenceUrl} target="_blank" rel="noreferrer" style={{ display:"flex",alignItems:"center",gap:4,textDecoration:"none" }}>
+            {/\.(jpg|jpeg|png|gif|webp)$/i.test(rowEvidenceUrl) ? (
+              <img src={rowEvidenceUrl} alt="Evidence" style={{ width:36,height:36,objectFit:"cover",borderRadius:6,border:`1px solid ${T.border}` }}/>
+            ) : (
+              <span style={{ fontSize:11,color:T.mint }}>📎 View Evidence ↗</span>
+            )}
+          </a>
+        )}
+      </div>
+
+      {/* ── Action buttons ── */}
+      <div style={{ padding:"8px 14px 12px",display:"flex",flexWrap:"wrap",gap:8,borderTop:`1px solid ${T.border}` }}>
+        {/* Admin sign-off */}
+        {isAdmin && !repayment.adminApprovedAt && (
+          <>
+            <select value={adminName} onChange={e=>setAdminName(e.target.value)}
+              style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:adminName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:130 }}>
+              <option value="" disabled style={{background:"#0A192F"}}>Admin authorised by…</option>
+              {ADMIN_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
+            </select>
+            <button onClick={()=>{ if(adminName) onApproveAdmin({...repayment, approvedByName: adminName}); }}
+              disabled={!adminName}
+              style={{ padding:"4px 10px",borderRadius:8,background:adminName?"rgba(0,255,194,0.15)":"rgba(255,255,255,0.04)",border:`1px solid ${adminName?"rgba(0,255,194,0.3)":T.border}`,color:adminName?T.mint:T.muted,fontSize:11,fontWeight:600,cursor:adminName?"pointer":"not-allowed" }}>
+              Admin Sign ✓
+            </button>
+            <button onClick={()=>onConfirm(repayment)}
+              style={{ padding:"4px 10px",borderRadius:8,background:"rgba(99,91,255,0.12)",border:"1px solid rgba(99,91,255,0.25)",color:T.purple,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+              Confirm Received
+            </button>
+            {onSendReminder && (
+              <button onClick={()=>onSendReminder(repayment)}
+                style={{ padding:"4px 10px",borderRadius:8,background:"rgba(251,191,36,0.08)",border:"1px solid rgba(251,191,36,0.2)",color:"#fbbf24",fontSize:11,fontWeight:600,cursor:"pointer" }}>
+                ✉️ Email
+              </button>
+            )}
+            <button onClick={openWhatsApp}
+              style={{ padding:"4px 10px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+              💬 WhatsApp
+            </button>
+          </>
+        )}
+        {/* Trustee sign-off */}
+        {(isAdmin || isTrustee) && repayment.adminApprovedAt && !repayment.trusteeApprovedAt && (
+          <>
+            <select value={trusteeName} onChange={e=>setTrusteeName(e.target.value)}
+              style={{ background:"rgba(255,255,255,0.08)",border:`1px solid ${T.border}`,borderRadius:8,color:trusteeName?T.white:T.muted,fontSize:11,padding:"4px 8px",height:30,outline:"none",cursor:"pointer",minWidth:140 }}>
+              <option value="" disabled style={{background:"#0A192F"}}>Trustee authorised by…</option>
+              {TRUSTEE_NAMES.map(n=><option key={n} value={n} style={{background:"#0A192F",color:T.white}}>{n}</option>)}
+            </select>
+            <button onClick={()=>{ if(trusteeName) onApproveTrustee({...repayment, trusteeName}); }}
+              disabled={!trusteeName}
+              style={{ padding:"4px 10px",borderRadius:8,background:trusteeName?"rgba(251,191,36,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${trusteeName?"rgba(251,191,36,0.3)":T.border}`,color:trusteeName?"#fbbf24":T.muted,fontSize:11,fontWeight:600,cursor:trusteeName?"pointer":"not-allowed" }}>
+              Trustee Sign ✓
+            </button>
+          </>
+        )}
+        {/* Post-confirmation actions */}
+        {repayment.trusteeApprovedAt && onDownloadReceipt && (
+          <button onClick={()=>onDownloadReceipt(repayment)}
+            style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:8,background:"rgba(0,255,194,0.08)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+            <Download size={11}/> Receipt PDF
+          </button>
+        )}
+        {repayment.trusteeApprovedAt && !repayment.lenderConfirmedAt && (
+          <button onClick={() => onConfirmLender && onConfirmLender(repayment)}
+            style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:8,background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,color:T.muted,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+            ☐ Mark Lender Confirmed
+          </button>
+        )}
+        {isAdmin && (
+          <button onClick={() => setWaqfDialogOpen(true)}
+            style={{ display:"flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:8,background:existingWaqf>0?"rgba(201,168,76,0.12)":"rgba(255,255,255,0.05)",border:`1px solid ${existingWaqf>0?"rgba(201,168,76,0.35)":T.border}`,color:existingWaqf>0?"#c9a84c":T.muted,fontSize:11,fontWeight:600,cursor:"pointer" }}>
+            🕌 {existingWaqf>0?`Waqf £${existingWaqf.toFixed(2)}`:"Interim Waqf"}
+          </button>
+        )}
       </div>
       {/* Interim Waqf Dialog */}
       <Dialog open={waqfDialogOpen} onOpenChange={setWaqfDialogOpen}>
@@ -394,13 +422,7 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const remindAllOverdueMutation = trpc.loans.remindAllOverdue?.useMutation?.({
-    onSuccess: (res: any) => {
-      if (res?.count === 0) toast.info('No overdue repayments to remind');
-      else toast.success(`Reminder sent for ${res?.count} overdue instalment(s) to ${res?.sentTo}`);
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
+
 
   const genRepPdfMutation = trpc.loans.generateRepaymentPdf?.useMutation?.({
     onSuccess: (res: any) => { if (res?.url) window.open(res.url, "_blank"); refetch(); },
@@ -830,14 +852,7 @@ The AQS Team`);
                     <Download size={12}/> {exportScheduleMutation?.isPending ? "Generating…" : "Export Schedule"}
                   </button>
                 )}
-                {isAdmin && fullyApproved && loan.borrowerEmail && (
-                  <button
-                    onClick={() => remindAllOverdueMutation?.mutate?.({ loanId: id })}
-                    disabled={remindAllOverdueMutation?.isPending}
-                    style={{ display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:9,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.25)",color:"#f87171",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap" }}>
-                    <Mail size={12}/> {remindAllOverdueMutation?.isPending ? "Sending…" : "Remind All Overdue"}
-                  </button>
-                )}
+
               </div>
             </div>
             <p style={{ fontSize:12,color:T.muted,margin:"0 0 16px" }}>
