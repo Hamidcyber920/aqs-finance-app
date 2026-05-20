@@ -217,8 +217,8 @@ async function sendMonthlyTrusteeReport() {
     }).join("");
 
     for (const trustee of trustees) {
-      // Use full respectful salutation: title + full name (e.g. "Dr Abdul Hamid")
-      const trusteeSalutation = (trustee.title && trustee.title !== 'none' ? `${trustee.title} ` : '') + (trustee.fullName ?? 'Trustee');
+      // Use full respectful salutation — fullName already includes title (e.g. "Dr Abdul Hamid")
+      const trusteeSalutation = trustee.fullName ?? 'Trustee';
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;">
           <div style="background:#5C1A1A;padding:24px;text-align:center;">
@@ -291,8 +291,8 @@ async function sendBirthdayAlerts() {
     }
 
     for (const trustee of birthdayTrustees) {
-      // Full respectful salutation: title + full name
-      const birthdaySalutation = (trustee.title && trustee.title !== 'none' ? `${trustee.title} ` : '') + (trustee.fullName ?? 'Trustee');
+      // Full respectful salutation — fullName already includes title (e.g. "Dr Abdul Hamid")
+      const birthdaySalutation = trustee.fullName ?? 'Trustee';
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
           <div style="background:#5C1A1A;padding:24px;text-align:center;">
