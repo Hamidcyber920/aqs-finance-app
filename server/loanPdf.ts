@@ -173,7 +173,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
     const terms = [
       "This Amanah is offered on a Qarde Hasan (interest-free) basis, in full accordance with Islamic finance principles and the Shariah. No interest, profit, or additional charges are attached. May Allah (SWT) reward the Respected Donor / Lender abundantly for this act of generosity.",
       "The Abdullah Quilliam Society agrees to repay the full principal amount within the agreed term. No increase beyond the original Amanah is permissible. The Society considers this a sacred trust.",
-      "Monthly repayments (Project Milestone Updates) are due on the 25th of each calendar month and should be made by bank transfer or cheque to the Abdullah Quilliam Society.",
+      "The term of this Amanah is as agreed and may be extended by mutual agreement. Repayment is subject to deferment in the event of genuine financial difficulties, upon notification to the Respected Donor / Lender.",
       "Early repayment is permitted and encouraged at no additional cost.",
       "In the event of genuine difficulty, the AQ Society must notify the Respected Donor / Lender in writing to discuss revised arrangements. The Donor / Lender may, at their discretion, extend the term or convert the Amanah to Sadaqah Jariyah.",
       "This agreement is a trust (Amanah) between the Respected Donor / Lender and the Society. Both parties are morally and contractually obligated to honour this commitment before Allah (SWT).",
