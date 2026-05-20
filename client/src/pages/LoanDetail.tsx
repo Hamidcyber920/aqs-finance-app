@@ -841,7 +841,7 @@ The AQS Team`);
               </div>
             </div>
             <p style={{ fontSize:12,color:T.muted,margin:"0 0 16px" }}>
-              {termMonths} monthly payments of £{monthly} · Started {loan.createdAt ? new Date(loan.createdAt).toLocaleDateString("en-GB") : "—"}
+              {termMonths} monthly payments of £{monthly} · Started {(loan as any).startDate ? new Date((loan as any).startDate).toLocaleDateString("en-GB") : loan.createdAt ? new Date(loan.createdAt).toLocaleDateString("en-GB") : "—"}
             </p>
             {repayments.length === 0 ? (
               <div style={{ textAlign:"center",padding:"32px 0",color:T.muted }}>

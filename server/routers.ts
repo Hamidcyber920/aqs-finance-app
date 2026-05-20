@@ -2147,8 +2147,12 @@ export const appRouter = router({
         // Count all recorded repayments (paidAt set), not just trustee-approved
         const paid = repayments.filter(r => r.paidAt).reduce((s, r) => s + parseFloat(r.amount), 0);
         const totalWaqf = repayments.reduce((s, r) => s + parseFloat((r as any).waqfAmount ?? '0'), 0);
+        // Outstanding = loan amount minus total paid (cash + waqf already included in paid)
         const outstanding = Math.max(0, totalAmount - paid);
         const cashRepaid = paid - totalWaqf;
+        const borrowerTitle = (loan as any).borrowerTitle && (loan as any).borrowerTitle !== 'none' ? (loan as any).borrowerTitle + ' ' : '';
+        const lenderDisplayName = borrowerTitle + loan.borrowerName;
+        const startDateDisplay = (loan as any).startDate ? new Date((loan as any).startDate).toLocaleDateString('en-GB') : new Date(loan.createdAt).toLocaleDateString('en-GB');
         const rows = repayments.map((r, i) => {
           const rWaqf = parseFloat((r as any).waqfAmount ?? '0');
           const waqfCell = rWaqf > 0
@@ -2176,15 +2180,16 @@ export const appRouter = router({
           <body>
           <h1>Qarde Hasan Loan \u2014 Repayment Schedule</h1>
           <p style="color:#6b7280;margin-bottom:16px">Generated ${new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'long',year:'numeric'})}</p>
-          <table style="margin-bottom:20px;font-size:13px"><tr><td style="padding:4px 16px 4px 0"><strong>Lender / Donor</strong></td><td>${loan.borrowerName}</td></tr>
+          <table style="margin-bottom:20px;font-size:13px"><tr><td style="padding:4px 16px 4px 0"><strong>Lender / Donor</strong></td><td>${lenderDisplayName}</td></tr>
           <tr><td style="padding:4px 16px 4px 0"><strong>Email</strong></td><td>${loan.borrowerEmail ?? '\u2014'}</td></tr>
           <tr><td style="padding:4px 16px 4px 0"><strong>Phone</strong></td><td>${loan.borrowerPhone ?? '\u2014'}</td></tr>
           <tr><td style="padding:4px 16px 4px 0"><strong>Loan Amount</strong></td><td>\u00a3${totalAmount.toFixed(2)}</td></tr>
           <tr><td style="padding:4px 16px 4px 0"><strong>Term</strong></td><td>${loan.termMonths} months</td></tr>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Start Date</strong></td><td>${startDateDisplay}</td></tr>
           <tr><td style="padding:4px 16px 4px 0"><strong>Purpose</strong></td><td>${loan.purpose ?? '\u2014'}</td></tr>
           <tr><td style="padding:4px 16px 4px 0"><strong>Total Paid</strong></td><td>\u00a3${paid.toFixed(2)}</td></tr>
           ${waqfRow}
-          <tr><td style="padding:4px 16px 4px 0"><strong>Outstanding</strong></td><td style="color:${outstanding > 0 ? '#d97706' : '#059669'}">\u00a3${totalAmount.toFixed(2)} \u2212 \u00a3${paid.toFixed(2)} = \u00a3${outstanding.toFixed(2)}</td></tr></table>
+          <tr><td style="padding:4px 16px 4px 0"><strong>Outstanding</strong></td><td style="color:${outstanding > 0 ? '#d97706' : '#059669'}">\u00a3${outstanding.toFixed(2)}${outstanding === 0 ? ' (Fully Settled)' : ''}</td></tr></table>
           <table><thead><tr><th>#</th><th>Due Date</th><th>Paid Date</th><th>Amount</th><th>Method</th><th>Admin Auth</th><th>Trustee Auth</th><th>Status</th><th>Notes</th></tr></thead>
           <tbody>${rows.join('')}</tbody></table>
           <p style="margin-top:24px;font-size:11px;color:#9ca3af">AQ Society Finance Team \u2014 Qarde Hasan Interest-Free Loan Programme</p>
