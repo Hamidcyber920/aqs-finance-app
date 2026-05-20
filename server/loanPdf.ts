@@ -72,17 +72,24 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
     const sectionHeading = (title: string) => {
-      doc.rect(60, doc.y, pageWidth, 22).fill(LIGHT_GREY);
+      const headY = doc.y;
+      doc.rect(60, headY, pageWidth, 20).fill(LIGHT_GREY);
       doc.fillColor(GREEN).fontSize(10).font("Helvetica-Bold")
-        .text(title.toUpperCase(), 70, doc.y - 16);
-      doc.moveDown(0.6);
+        .text(title.toUpperCase(), 70, headY + 5, { width: pageWidth - 20 });
+      doc.y = headY + 24;
     };
 
     const row = (label: string, value: string) => {
       const y = doc.y;
-      doc.fillColor(MUTED).fontSize(9).font("Helvetica").text(label, 70, y, { width: 160 });
-      doc.fillColor(TEXT).fontSize(9).font("Helvetica").text(value, 240, y, { width: pageWidth - 180 });
-      doc.moveDown(0.55);
+      // Draw label without advancing cursor
+      doc.fillColor(MUTED).fontSize(9).font("Helvetica")
+        .text(label, 70, y, { width: 160, lineBreak: false });
+      // Draw value — PDFKit advances doc.y based on wrapped value height
+      doc.fillColor(TEXT).fontSize(9).font("Helvetica")
+        .text(value, 240, y, { width: pageWidth - 185 });
+      // Ensure minimum row height
+      if (doc.y < y + 14) doc.y = y + 14;
+      doc.y += 3;
     };
 
     // ── 1. Respected Donor / Lender Details ─────────────────────────────────
@@ -366,15 +373,20 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     doc.moveDown(1.2);
 
     const sectionHeading = (title: string) => {
-      doc.rect(60, doc.y, pageWidth, 22).fill(LIGHT_GREY);
-      doc.fillColor(GREEN).fontSize(10).font("Helvetica-Bold").text(title.toUpperCase(), 70, doc.y - 16);
-      doc.moveDown(0.6);
+      const headY = doc.y;
+      doc.rect(60, headY, pageWidth, 20).fill(LIGHT_GREY);
+      doc.fillColor(GREEN).fontSize(10).font("Helvetica-Bold")
+        .text(title.toUpperCase(), 70, headY + 5, { width: pageWidth - 20 });
+      doc.y = headY + 24;
     };
     const row = (label: string, value: string) => {
       const y = doc.y;
-      doc.fillColor(MUTED).fontSize(9).font("Helvetica").text(label, 70, y, { width: 160 });
-      doc.fillColor(TEXT).fontSize(9).font("Helvetica").text(value, 240, y, { width: pageWidth - 180 });
-      doc.moveDown(0.55);
+      doc.fillColor(MUTED).fontSize(9).font("Helvetica")
+        .text(label, 70, y, { width: 160, lineBreak: false });
+      doc.fillColor(TEXT).fontSize(9).font("Helvetica")
+        .text(value, 240, y, { width: pageWidth - 185 });
+      if (doc.y < y + 14) doc.y = y + 14;
+      doc.y += 3;
     };
 
     sectionHeading("1. Respected Donor / Lender Details");

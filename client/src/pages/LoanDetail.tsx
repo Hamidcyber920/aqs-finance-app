@@ -418,8 +418,19 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const utils = trpc.useUtils();
   const generatePdfMutation = trpc.loans.generatePdf?.useMutation?.({
-    onSuccess: (res: any) => { toast.success("PDF regenerated"); if (res?.url) window.open(res.url, "_blank"); refetch(); },
+    onSuccess: (res: any) => {
+      toast.success("PDF regenerated — opening fresh document");
+      // Invalidate so View PDF button picks up the new URL
+      utils.loans.get.invalidate({ id });
+      refetch();
+      // Open the freshly generated URL (bypasses any browser cache of old URL)
+      if (res?.url) {
+        const freshUrl = res.url.includes('?') ? res.url + '&t=' + Date.now() : res.url + '?t=' + Date.now();
+        window.open(freshUrl, "_blank");
+      }
+    },
     onError: (e: any) => toast.error(e.message),
   });
 

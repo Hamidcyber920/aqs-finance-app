@@ -1864,8 +1864,9 @@ export const appRouter = router({
         const repayments = await db.select().from(loanRepayments).where(eq((loanRepayments as any).loanId, input.id)).orderBy((loanRepayments as any).createdAt);
         const termMonths = loan.termUnit === 'years' ? (loan.termValue ?? 6) * 12 : (loan.termValue ?? loan.termMonths ?? 6);
         const monthly = (Number(loan.amount) / termMonths).toFixed(2);
-        const totalPaid = repayments.filter((r: any) => r.trusteeApprovedAt).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
-        const outstanding = Number(loan.amount) - totalPaid;
+        // Count all repayments that have been recorded (paidAt is always set on creation)
+        const totalPaid = repayments.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+        const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
         const rows = repayments.map((r: any, i: number) => {
           const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
           const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
@@ -1932,8 +1933,8 @@ export const appRouter = router({
         const repayments = await db.select().from(loanRepayments).where(eq((loanRepayments as any).loanId, input.id)).orderBy((loanRepayments as any).createdAt);
         const termMonths = loan.termUnit === 'years' ? (loan.termValue ?? 6) * 12 : (loan.termValue ?? (loan as any).termMonths ?? 6);
         const monthly = (Number(loan.amount) / termMonths).toFixed(2);
-        const totalPaid = repayments.filter((r: any) => r.trusteeApprovedAt).reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
-        const outstanding = Number(loan.amount) - totalPaid;
+        const totalPaid = repayments.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+        const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
         const firstName = (loan.borrowerName ?? '').split(' ')[0];
         const rows = repayments.map((r: any, i: number) => {
           const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
