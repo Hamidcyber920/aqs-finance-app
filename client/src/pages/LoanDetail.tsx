@@ -418,6 +418,11 @@ export default function LoanDetailPage({ id }: { id: number }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const generatePdfMutation = trpc.loans.generatePdf?.useMutation?.({
+    onSuccess: (res: any) => { toast.success("PDF regenerated"); if (res?.url) window.open(res.url, "_blank"); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const [repaymentAmount, setRepaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const [repaymentNotes, setRepaymentNotes] = useState("");
@@ -563,15 +568,18 @@ export default function LoanDetailPage({ id }: { id: number }) {
           {/* Actions */}
           {fullyApproved && (
             <div style={{ display:"flex",gap:10,marginBottom:20,flexWrap:"wrap",animation:"fadeUp 0.5s ease 280ms both" }}>
-              {(loan as any).agreementPdfUrl ? (
+              {(loan as any).agreementPdfUrl && (
                 <Button onClick={() => window.open((loan as any).agreementPdfUrl, "_blank")}
                   style={{ background:"rgba(99,91,255,0.15)",border:"1px solid rgba(99,91,255,0.3)",color:T.purple,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
                   <FileText size={14}/> View PDF
                 </Button>
-              ) : (
-                <Button disabled
-                  style={{ background:"rgba(99,91,255,0.06)",border:"1px solid rgba(99,91,255,0.15)",color:"rgba(99,91,255,0.4)",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7,cursor:"not-allowed" }}>
-                  <FileText size={14}/> PDF Generating…
+              )}
+              {isAdmin && (
+                <Button
+                  onClick={() => generatePdfMutation?.mutate?.({ id })}
+                  disabled={generatePdfMutation?.isPending}
+                  style={{ background:"rgba(99,91,255,0.08)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
+                  <FileText size={14}/> {generatePdfMutation?.isPending ? "Generating…" : (loan as any).agreementPdfUrl ? "Regenerate PDF" : "Generate PDF"}
                 </Button>
               )}
               <Button onClick={() => {
