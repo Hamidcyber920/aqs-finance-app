@@ -1936,7 +1936,8 @@ export const appRouter = router({
             sy += 15;
           };
 
-          sRow('Lender / Donor', loan.borrowerName ?? '—', true);
+          const stmtTitle = (loan as any).borrowerTitle && (loan as any).borrowerTitle !== 'none' ? (loan as any).borrowerTitle + ' ' : '';
+          sRow('Lender / Donor', stmtTitle + (loan.borrowerName ?? '—'), true);
           if (loan.borrowerEmail) sRow('Email', loan.borrowerEmail);
           sRow('Loan Amount', `£${Number(loan.amount).toLocaleString('en-GB', { minimumFractionDigits: 2 })}`, true, '#059669');
           sRow('Term', `${loan.termValue ?? termMonths} ${loan.termUnit ?? 'months'}`);
