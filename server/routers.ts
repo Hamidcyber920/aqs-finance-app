@@ -281,7 +281,7 @@ async function _fullyApproveRepayment(repayment: any) {
     if (db) await db.update(loanRepayments).set({ confirmationPdfUrl: url, status: "approved" } as any).where(eq(loanRepayments.id, repayment.id));
     if (loan.borrowerEmail) {
       const firstName = (loan.borrowerName ?? '').split(' ')[0];
-      const outstanding = Math.max(0, parseFloat(String(loan.amount)) - parseFloat(String(loan.totalRepaid ?? 0)));
+      const outstanding = Math.max(0, parseFloat(String(loan.amount)) - parseFloat(String(loan.totalRepaid ?? 0)) - waqfEndowed);
       const whatsappPhone = (loan.borrowerPhone ?? '').replace(/[^0-9]/g, '');
       const waMsg = `Assalamu Alaikum wa Rahmatullahi wa Barakatuh ${firstName}, JazakAllahu Khayran for your Project Milestone Repayment of £${parseFloat(String(repayment.amount)).toFixed(2)} to the Abdullah Quilliam Society. Outstanding Amanah balance: £${outstanding.toFixed(2)}. May Allah (SWT) bless you and accept this as Sadaqah Jariyah. Download receipt: ${url}`;
       const waLink = buildWhatsAppUrl(whatsappPhone, waMsg);
@@ -1877,7 +1877,8 @@ export const appRouter = router({
         const monthly = (Number(loan.amount) / termMonths).toFixed(2);
         // Count all repayments that have been recorded (paidAt is always set on creation)
         const totalPaid = repayments.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
-        const outstanding = Math.max(0, Number(loan.amount) - totalPaid);
+        const totalWaqfStmt = repayments.reduce((s: number, r: any) => s + Number((r as any).waqfAmount ?? 0), 0);
+        const outstanding = Math.max(0, Number(loan.amount) - totalPaid - totalWaqfStmt);
         // Generate as PDF so it opens correctly in all browsers
         const PDFDocument = (await import('pdfkit')).default;
         // Pre-load logo buffer before entering synchronous Promise callback
@@ -2147,8 +2148,9 @@ export const appRouter = router({
         // Count all recorded repayments (paidAt set), not just trustee-approved
         const paid = repayments.filter(r => r.paidAt).reduce((s, r) => s + parseFloat(r.amount), 0);
         const totalWaqf = repayments.reduce((s, r) => s + parseFloat((r as any).waqfAmount ?? '0'), 0);
-        // Outstanding = loan amount minus total paid (cash + waqf already included in paid)
-        const outstanding = Math.max(0, totalAmount - paid);
+        // Outstanding = loan amount minus cash repaid minus waqf endowed
+        // Waqf settles the remaining balance, so subtract it separately from outstanding
+        const outstanding = Math.max(0, totalAmount - paid - totalWaqf);
         const cashRepaid = paid - totalWaqf;
         const borrowerTitle = (loan as any).borrowerTitle && (loan as any).borrowerTitle !== 'none' ? (loan as any).borrowerTitle + ' ' : '';
         const lenderDisplayName = borrowerTitle + loan.borrowerName;
