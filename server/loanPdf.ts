@@ -1,5 +1,5 @@
 import PDFDocument from "pdfkit";
-import { AQS_LOGO_B64 } from "./aqsLogoB64";
+import { AQS_LOGO_WHITE_B64 } from "./aqsLogoB64";
 
 export interface LoanPdfData {
   id: number;
@@ -89,10 +89,10 @@ function drawAqsLogo(doc: PDFKit.PDFDocument, cx: number, cy: number, r: number)
 // ── Loan Agreement PDF ────────────────────────────────────────────────────────
 
 export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
-  // Load the real AQS logo from embedded base64
+  // Load the white AQS logo from embedded base64
   let logoBuffer: Buffer | null = null;
   try {
-    logoBuffer = Buffer.from(AQS_LOGO_B64, "base64");
+    logoBuffer = Buffer.from(AQS_LOGO_WHITE_B64, "base64");
   } catch { /* logo optional */ }
 
   return new Promise((resolve, reject) => {
@@ -116,10 +116,10 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       const HEADER_H = 130;
       doc.rect(0, 0, PW, HEADER_H).fill(GREEN);
 
-      // Logo area (left side of header)
-      const logoSize = 80; // px square
-      const logoX = 40;
-      const logoY = 18;
+      // ── White AQS logo image ───────────────────────────────────────────────
+      const logoSize = 110; // larger size
+      const logoX = 20;
+      const logoY = (HEADER_H - logoSize) / 2; // vertically centred
       if (logoBuffer) {
         try {
           doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize });
@@ -127,7 +127,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       }
 
       // Organisation name (right of logo)
-      const textX = logoX + logoSize + 14;
+      const textX = logoX + logoSize + 12;
       doc.fillColor("#ffffff").fontSize(17).font("Helvetica-Bold")
         .text("ABDULLAH QUILLIAM SOCIETY", textX, 20, { width: PW - textX - 40 });
       doc.fontSize(9).font("Helvetica")
