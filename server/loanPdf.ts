@@ -126,15 +126,17 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       drawGeometricBorder(doc, L, HEADER_H + 12, W, GOLD);
 
       // ── Logo ──────────────────────────────────────────────────────────────
-      const logoSize = 100;
-      const logoX    = L;
-      const logoY    = (HEADER_H - logoSize) / 2;
+      // Logo is 440x230 (wide rectangle) — render at 110x57 to preserve aspect ratio
+      const logoW = 110;
+      const logoH = 57;
+      const logoX = L;
+      const logoY = (HEADER_H - logoH) / 2;
       if (logoBuffer) {
-        try { doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize }); } catch {}
+        try { doc.image(logoBuffer, logoX, logoY, { width: logoW, height: logoH }); } catch {}
       }
 
       // ── Vertical gold divider ─────────────────────────────────────────────
-      const divX = logoX + logoSize + 14;
+      const divX = logoX + logoW + 14;
       doc.rect(divX, 20, 1.5, HEADER_H - 40).fill(GOLD);
 
       // ── Organisation name ─────────────────────────────────────────────────
@@ -148,15 +150,8 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       doc.fontSize(7.5).fillColor("#d4b8be")
         .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 82, { width: PW - textX - 40 });
 
-      // ── Islamic star motifs in header corners ─────────────────────────────
-      drawIslamicStar(doc, PW - 30, 28, 14, GOLD + "55");
-      drawIslamicStar(doc, PW - 30, HEADER_H - 28, 10, GOLD + "44");
-
-      // ── Document title ────────────────────────────────────────────────────
-      let y = HEADER_H + 28;
-      doc.fillColor(BURGUNDY).fontSize(14).font("Helvetica-Bold")
-        .text("QARDE HASAN AMANAH AGREEMENT", L, y, { width: W, align: "center" });
-      y += 20;
+      // ── Document reference below header ─────────────────────────────────
+      let y = HEADER_H + 20;
       doc.fillColor(MUTED).fontSize(8.5).font("Helvetica")
         .text(
           `Reference: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   Date: ${new Date(loan.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`,
