@@ -21,25 +21,26 @@ export interface LoanPdfData {
   trusteeSignatureUrl?: string | null;
   managerSignatureUrl?: string | null;
   notes?: string | null;
-  // Dual approval
   adminApprovedByName?: string | null;
   adminApprovedAt?: Date | null;
   trusteeName?: string | null;
   trusteeApprovedAt?: Date | null;
 }
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
-
-const GREEN = "#1a4731";
-const GOLD = "#c9a84c";
-const LIGHT_GREY = "#f0f0f0";
-const TEXT = "#1a1a1a";
-const MUTED = "#555555";
+// ── Colour palette ────────────────────────────────────────────────────────────
+const BURGUNDY  = "#4a0e1a";   // deep maroon / header bg
+const BURGUNDY2 = "#3a0b14";   // slightly darker for accents
+const CREAM     = "#f9f4ec";   // warm cream body bg
+const GOLD      = "#c9a84c";   // gold accent
+const GOLD_LIGHT= "#e8c97a";   // lighter gold for sub-text
+const TEXT      = "#1a0a0d";   // near-black body text
+const MUTED     = "#6b4c52";   // muted burgundy-tinted grey
+const WHITE     = "#ffffff";
 
 const fetchImageBuffer = async (url: string): Promise<Buffer | null> => {
   try {
     const https = await import("https");
-    const http = await import("http");
+    const http  = await import("http");
     return await new Promise((res, rej) => {
       const mod = url.startsWith("https") ? https : http;
       (mod as any).get(url, (resp: any) => {
@@ -52,140 +53,154 @@ const fetchImageBuffer = async (url: string): Promise<Buffer | null> => {
   } catch { return null; }
 };
 
-// Draw the AQS circular logo using PDFKit primitives
-function drawAqsLogo(doc: PDFKit.PDFDocument, cx: number, cy: number, r: number) {
-  // Outer circle
-  doc.circle(cx, cy, r).lineWidth(1.5).stroke("#1a1a1a");
-  // Inner circle (crescent effect)
-  doc.circle(cx - r * 0.12, cy - r * 0.05, r * 0.72).lineWidth(1).stroke("#1a1a1a");
-  // Star (5-pointed) in centre
-  const starR1 = r * 0.18;
-  const starR2 = r * 0.08;
-  const starPoints = 5;
+// Draw a simple 8-pointed Islamic star (geometric motif) at (cx, cy) radius r
+function drawIslamicStar(doc: PDFKit.PDFDocument, cx: number, cy: number, r: number, colour: string) {
+  const pts = 8;
+  const inner = r * 0.45;
   doc.save();
-  doc.moveTo(cx, cy - starR1);
-  for (let i = 1; i <= starPoints * 2; i++) {
-    const angle = (Math.PI / starPoints) * i - Math.PI / 2;
-    const sr = i % 2 === 0 ? starR1 : starR2;
-    doc.lineTo(cx + sr * Math.cos(angle), cy + sr * Math.sin(angle));
+  doc.moveTo(cx, cy - r);
+  for (let i = 1; i <= pts * 2; i++) {
+    const angle = (Math.PI / pts) * i - Math.PI / 2;
+    const radius = i % 2 === 0 ? r : inner;
+    doc.lineTo(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
   }
-  doc.closePath().fill("#1a1a1a");
+  doc.closePath().fillColor(colour).fill();
   doc.restore();
-  // "A" letter top-left area
-  doc.fillColor("#1a1a1a").fontSize(r * 0.55).font("Helvetica-Bold")
-    .text("A", cx - r * 0.62, cy - r * 0.72, { lineBreak: false });
-  // "Q" letter bottom-left
-  doc.fontSize(r * 0.62).font("Helvetica-Bold")
-    .text("Q", cx - r * 0.55, cy + r * 0.08, { lineBreak: false });
-  // "S" letter right
-  doc.fontSize(r * 0.55).font("Helvetica-Bold")
-    .text("S", cx + r * 0.22, cy - r * 0.18, { lineBreak: false });
-  // Year text
-  doc.fontSize(r * 0.18).font("Helvetica")
-    .text("1306", cx + r * 0.28, cy - r * 0.52, { lineBreak: false });
-  doc.text("1889", cx + r * 0.28, cy - r * 0.30, { lineBreak: false });
+}
+
+// Draw a row of small diamond motifs as a border strip
+function drawGeometricBorder(doc: PDFKit.PDFDocument, x: number, y: number, w: number, colour: string) {
+  const size = 4;
+  const gap  = 14;
+  const count = Math.floor(w / gap);
+  const startX = x + (w - count * gap) / 2;
+  doc.save();
+  for (let i = 0; i < count; i++) {
+    const cx = startX + i * gap + gap / 2;
+    doc.moveTo(cx, y - size)
+       .lineTo(cx + size, y)
+       .lineTo(cx, y + size)
+       .lineTo(cx - size, y)
+       .closePath()
+       .fillColor(colour)
+       .fill();
+  }
+  doc.restore();
 }
 
 // ── Loan Agreement PDF ────────────────────────────────────────────────────────
 
 export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
-  // Load the white AQS logo from embedded base64
   let logoBuffer: Buffer | null = null;
-  try {
-    logoBuffer = Buffer.from(AQS_LOGO_WHITE_B64, "base64");
-  } catch { /* logo optional */ }
+  try { logoBuffer = Buffer.from(AQS_LOGO_WHITE_B64, "base64"); } catch {}
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, autoFirstPage: true });
     const buffers: Buffer[] = [];
     doc.on("data", (chunk: Buffer) => buffers.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(buffers)));
+    doc.on("end",  () => resolve(Buffer.concat(buffers)));
     doc.on("error", reject);
 
     (async () => {
-      const L = 50;   // left margin
-      const R = 545;  // right edge
-      const W = R - L; // content width
-      const PW = doc.page.width;
+      const PW = doc.page.width;   // 595
+      const PH = doc.page.height;  // 842
+      const L  = 45;               // left margin
+      const R  = PW - 45;          // right margin
+      const W  = R - L;            // content width
 
-      // ────────────────────────────────────────────────────────────────────────
+      // ══════════════════════════════════════════════════════════════════════════
       // PAGE 1
-      // ────────────────────────────────────────────────────────────────────────
+      // ══════════════════════════════════════════════════════════════════════════
 
-      // Green header band — taller to fit address
-      const HEADER_H = 130;
-      doc.rect(0, 0, PW, HEADER_H).fill(GREEN);
+      // ── Cream background ──────────────────────────────────────────────────
+      doc.rect(0, 0, PW, PH).fill(CREAM);
 
-      // ── White AQS logo image ───────────────────────────────────────────────
-      const logoSize = 110; // larger size
-      const logoX = 20;
-      const logoY = (HEADER_H - logoSize) / 2; // vertically centred
-      if (logoBuffer) {
-        try {
-          doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize });
-        } catch { /* skip if image fails */ }
-      }
+      // ── Burgundy header band ──────────────────────────────────────────────
+      const HEADER_H = 140;
+      doc.rect(0, 0, PW, HEADER_H).fill(BURGUNDY);
 
-      // Organisation name (right of logo)
-      const textX = logoX + logoSize + 12;
-      doc.fillColor("#ffffff").fontSize(17).font("Helvetica-Bold")
-        .text("ABDULLAH QUILLIAM SOCIETY", textX, 20, { width: PW - textX - 40 });
-      doc.fontSize(9).font("Helvetica")
-        .text("Qarde Hasan (Interest-Free Loan) — Amanah Agreement", textX, 42, { width: PW - textX - 40 });
-      doc.fontSize(7.5).fillColor(GOLD)
-        .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 58, { width: PW - textX - 40 });
-      // Address and telephone
-      doc.fontSize(7.5).fillColor("#ccddcc")
-        .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 76, { width: PW - textX - 40 });
-
-      // Gold rule under header
+      // ── Gold rule at bottom of header ─────────────────────────────────────
       doc.rect(0, HEADER_H, PW, 3).fill(GOLD);
 
-      // Document title
-      let y = HEADER_H + 14;
-      doc.fillColor(GREEN).fontSize(15).font("Helvetica-Bold")
+      // ── Islamic geometric border strip below gold rule ─────────────────────
+      drawGeometricBorder(doc, L, HEADER_H + 12, W, GOLD);
+
+      // ── Logo ──────────────────────────────────────────────────────────────
+      const logoSize = 100;
+      const logoX    = L;
+      const logoY    = (HEADER_H - logoSize) / 2;
+      if (logoBuffer) {
+        try { doc.image(logoBuffer, logoX, logoY, { width: logoSize, height: logoSize }); } catch {}
+      }
+
+      // ── Vertical gold divider ─────────────────────────────────────────────
+      const divX = logoX + logoSize + 14;
+      doc.rect(divX, 20, 1.5, HEADER_H - 40).fill(GOLD);
+
+      // ── Organisation name ─────────────────────────────────────────────────
+      const textX = divX + 14;
+      doc.fillColor(WHITE).fontSize(16).font("Helvetica-Bold")
+        .text("ABDULLAH QUILLIAM SOCIETY", textX, 24, { width: PW - textX - 40 });
+      doc.fontSize(9).font("Helvetica").fillColor(GOLD_LIGHT)
+        .text("Qarde Hasan (Interest-Free Loan) — Amanah Agreement", textX, 46, { width: PW - textX - 40 });
+      doc.fontSize(7.5).fillColor(GOLD)
+        .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 63, { width: PW - textX - 40 });
+      doc.fontSize(7.5).fillColor("#d4b8be")
+        .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 82, { width: PW - textX - 40 });
+
+      // ── Islamic star motifs in header corners ─────────────────────────────
+      drawIslamicStar(doc, PW - 30, 28, 14, GOLD + "55");
+      drawIslamicStar(doc, PW - 30, HEADER_H - 28, 10, GOLD + "44");
+
+      // ── Document title ────────────────────────────────────────────────────
+      let y = HEADER_H + 28;
+      doc.fillColor(BURGUNDY).fontSize(14).font("Helvetica-Bold")
         .text("QARDE HASAN AMANAH AGREEMENT", L, y, { width: W, align: "center" });
-      y += 22;
+      y += 20;
       doc.fillColor(MUTED).fontSize(8.5).font("Helvetica")
         .text(
           `Reference: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   Date: ${new Date(loan.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`,
           L, y, { width: W, align: "center" }
         );
-      y += 14;
-      doc.rect(L, y, W, 1).fill(GOLD);
       y += 10;
+      // Gold underline
+      doc.rect(L + W * 0.25, y, W * 0.5, 1.5).fill(GOLD);
+      y += 14;
 
-      // ── Section heading helper ─────────────────────────────────────────────
+      // ── Section heading helper ────────────────────────────────────────────
       const sectionHeading = (title: string, yPos: number): number => {
-        doc.rect(L, yPos, W, 19).fill(LIGHT_GREY);
-        doc.fillColor(GREEN).fontSize(9.5).font("Helvetica-Bold")
-          .text(title.toUpperCase(), L + 8, yPos + 5, { width: W - 16, lineBreak: false });
-        return yPos + 22;
+        doc.rect(L, yPos, W, 20).fill(BURGUNDY);
+        // Small gold left accent bar
+        doc.rect(L, yPos, 4, 20).fill(GOLD);
+        doc.fillColor(WHITE).fontSize(9.5).font("Helvetica-Bold")
+          .text(title.toUpperCase(), L + 12, yPos + 6, { width: W - 20, lineBreak: false });
+        return yPos + 24;
       };
 
-      // ── Row helper ─────────────────────────────────────────────────────────
-      const drawRow = (label: string, value: string, yPos: number): number => {
-        const labelW = 155;
-        const valueX = L + labelW + 8;
-        const valueW = W - labelW - 12;
+      // ── Row helper ────────────────────────────────────────────────────────
+      const drawRow = (label: string, value: string, yPos: number, altBg = false): number => {
+        const labelW  = 155;
+        const valueX  = L + labelW + 8;
+        const valueW  = W - labelW - 12;
+        if (altBg) doc.rect(L, yPos - 2, W, 0).fill("#f0e8e0");
         doc.fillColor(MUTED).fontSize(8.5).font("Helvetica")
           .text(label, L + 8, yPos, { width: labelW, lineBreak: false });
         doc.fillColor(TEXT).fontSize(8.5).font("Helvetica")
           .text(value, valueX, yPos, { width: valueW });
         const textH = doc.heightOfString(value, { width: valueW });
-        return yPos + Math.max(textH, 12) + 5;
+        return yPos + Math.max(textH, 12) + 6;
       };
 
-      // ── 1. Lender Details ──────────────────────────────────────────────────
+      // ── 1. Lender Details ─────────────────────────────────────────────────
       y = sectionHeading("1. Respected Donor / Lender Details", y);
       y += 4;
-      y = drawRow("Full Name", loan.borrowerName, y);
-      if (loan.borrowerPhone) y = drawRow("Telephone", loan.borrowerPhone, y);
-      if (loan.borrowerEmail) y = drawRow("Email Address", loan.borrowerEmail, y);
-      if (loan.borrowerAddress) y = drawRow("Address", loan.borrowerAddress, y);
+      y = drawRow("Full Name",      loan.borrowerName, y);
+      if (loan.borrowerPhone)   y = drawRow("Telephone",     loan.borrowerPhone, y);
+      if (loan.borrowerEmail)   y = drawRow("Email Address", loan.borrowerEmail, y);
+      if (loan.borrowerAddress) y = drawRow("Address",       loan.borrowerAddress, y);
       y += 8;
 
-      // ── 2. Amanah Details ──────────────────────────────────────────────────
+      // ── 2. Amanah Details ─────────────────────────────────────────────────
       y = sectionHeading("2. Amanah (Loan) Details", y);
       y += 4;
       y = drawRow("Amanah Amount", `£${parseFloat(String(loan.amount)).toFixed(2)}`, y);
@@ -209,22 +224,22 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       if (loan.termNotes) y = drawRow("Notes", loan.termNotes, y);
       y += 8;
 
-      // ── 3. Repayment Schedule ──────────────────────────────────────────────
+      // ── 3. Repayment Schedule ─────────────────────────────────────────────
       y = sectionHeading("3. Project Milestone Repayment Schedule", y);
       y += 4;
 
-      const schedStart = loan.startDate ? new Date(loan.startDate) : new Date(loan.createdAt);
+      const schedStart  = loan.startDate ? new Date(loan.startDate) : new Date(loan.createdAt);
       const totalAmount = parseFloat(String(loan.amount));
       const schedMonths = Math.min(loan.termMonths, 36);
 
-      const tblX = L + 4;
-      const colW = [30, 120, 100, 110];
-      const tblW = colW.reduce((a, b) => a + b, 0);
-      const rowH = 15;
+      const tblX  = L + 4;
+      const colW  = [28, 120, 100, 110];
+      const tblW  = colW.reduce((a, b) => a + b, 0);
+      const rowH  = 15;
 
       // Table header
-      doc.rect(tblX, y, tblW, rowH).fill(GREEN);
-      doc.fillColor("#ffffff").fontSize(7.5).font("Helvetica-Bold");
+      doc.rect(tblX, y, tblW, rowH).fill(BURGUNDY2);
+      doc.fillColor(GOLD_LIGHT).fontSize(7.5).font("Helvetica-Bold");
       let cx = tblX + 3;
       ["#", "Milestone Date", "Amount (£)", "Balance After (£)"].forEach((h, i) => {
         doc.text(h, cx, y + 4, { width: colW[i]! - 6, lineBreak: false });
@@ -237,7 +252,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         const due = new Date(schedStart);
         due.setMonth(due.getMonth() + i + 1);
         balance = Math.max(0, balance - monthlyAmt);
-        if (i % 2 === 0) doc.rect(tblX, y, tblW, rowH).fill("#f7f7f7");
+        if (i % 2 === 0) doc.rect(tblX, y, tblW, rowH).fill("#f0e8e0");
         doc.fillColor(TEXT).fontSize(7.5).font("Helvetica");
         let rx = tblX + 3;
         [
@@ -258,30 +273,35 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       }
       y += 6;
 
-      // Page footer for page 1
-      doc.rect(L, doc.page.height - 55, W, 1).fill(GOLD);
+      // ── Page 1 footer ─────────────────────────────────────────────────────
+      doc.rect(L, PH - 52, W, 1.5).fill(GOLD);
+      drawGeometricBorder(doc, L, PH - 38, W, GOLD + "88");
       doc.fillColor(MUTED).fontSize(7).font("Helvetica")
         .text(
           `Abdullah Quilliam Society  |  Qarde Hasan Amanah Agreement  |  Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}  |  Page 1 of 2`,
-          L, doc.page.height - 44, { width: W, align: "center" }
+          L, PH - 28, { width: W, align: "center" }
         );
 
-      // ────────────────────────────────────────────────────────────────────────
+      // ══════════════════════════════════════════════════════════════════════════
       // PAGE 2
-      // ────────────────────────────────────────────────────────────────────────
+      // ══════════════════════════════════════════════════════════════════════════
       doc.addPage({ size: "A4", margin: 0 });
+      doc.rect(0, 0, PW, PH).fill(CREAM);
 
-      // Thin green top bar on page 2
-      doc.rect(0, 0, PW, 36).fill(GREEN);
-      doc.fillColor("#ffffff").fontSize(11).font("Helvetica-Bold")
-        .text("QARDE HASAN AMANAH AGREEMENT", L, 12, { width: W, align: "center" });
-      doc.fillColor(GOLD).fontSize(8).font("Helvetica")
-        .text(`Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   ${loan.borrowerName}`, L, 25, { width: W, align: "center" });
-      doc.rect(0, 36, PW, 2).fill(GOLD);
+      // Thin burgundy top bar
+      const P2_BAR = 42;
+      doc.rect(0, 0, PW, P2_BAR).fill(BURGUNDY);
+      doc.rect(0, P2_BAR, PW, 3).fill(GOLD);
+      doc.fillColor(WHITE).fontSize(11).font("Helvetica-Bold")
+        .text("QARDE HASAN AMANAH AGREEMENT", L, 14, { width: W, align: "center" });
+      doc.fillColor(GOLD_LIGHT).fontSize(7.5).font("Helvetica")
+        .text(`Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   ${loan.borrowerName}`, L, 28, { width: W, align: "center" });
 
-      y = 50;
+      drawGeometricBorder(doc, L, P2_BAR + 14, W, GOLD);
 
-      // ── 4. Islamic Terms ───────────────────────────────────────────────────
+      y = P2_BAR + 28;
+
+      // ── 4. Islamic Terms ──────────────────────────────────────────────────
       y = sectionHeading("4. Islamic Terms & Shariah Compliance", y);
       y += 6;
 
@@ -297,21 +317,22 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
 
       terms.forEach((term, i) => {
         const termText = `${i + 1}.  ${term}`;
-        const termH = doc.heightOfString(termText, { width: W - 16 });
+        const termH    = doc.heightOfString(termText, { width: W - 20 });
+        if (i % 2 === 0) doc.rect(L, y - 2, W, termH + 10).fill("#f0e8e0");
         doc.fillColor(TEXT).fontSize(8.5).font("Helvetica")
-          .text(termText, L + 8, y, { width: W - 16 });
-        y += termH + 7;
+          .text(termText, L + 10, y, { width: W - 20 });
+        y += termH + 10;
       });
 
       y += 6;
 
-      // ── 5. Additional Notes ────────────────────────────────────────────────
+      // ── 5. Additional Notes ───────────────────────────────────────────────
       if (loan.notes) {
         y = sectionHeading("5. Additional Notes", y);
         y += 4;
-        const notesH = doc.heightOfString(loan.notes, { width: W - 16 });
+        const notesH = doc.heightOfString(loan.notes, { width: W - 20 });
         doc.fillColor(TEXT).fontSize(8.5).font("Helvetica")
-          .text(loan.notes, L + 8, y, { width: W - 16 });
+          .text(loan.notes, L + 10, y, { width: W - 20 });
         y += notesH + 10;
       }
 
@@ -322,58 +343,59 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
 
       // Approval stamps
       if (loan.adminApprovedByName && loan.adminApprovedAt) {
-        doc.rect(L + 4, y, W - 8, 17).fill("#e8f5e9");
-        doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold")
+        doc.rect(L + 4, y, W - 8, 18).fill("#f0e8e0");
+        doc.rect(L + 4, y, 3, 18).fill(GOLD);
+        doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
           .text(
             `✓ Authorised by ${loan.adminApprovedByName} on ${new Date(loan.adminApprovedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })} at ${new Date(loan.adminApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
-            L + 8, y + 5, { width: W - 16, lineBreak: false }
+            L + 12, y + 5, { width: W - 20, lineBreak: false }
           );
-        y += 22;
+        y += 24;
       }
       if (loan.trusteeName && loan.trusteeApprovedAt) {
-        doc.rect(L + 4, y, W - 8, 17).fill("#e8f5e9");
-        doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold")
+        doc.rect(L + 4, y, W - 8, 18).fill("#f0e8e0");
+        doc.rect(L + 4, y, 3, 18).fill(GOLD);
+        doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
           .text(
             `✓ Trustee ${loan.trusteeName} confirmed on ${new Date(loan.trusteeApprovedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })} at ${new Date(loan.trusteeApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
-            L + 8, y + 5, { width: W - 16, lineBreak: false }
+            L + 12, y + 5, { width: W - 20, lineBreak: false }
           );
-        y += 22;
+        y += 24;
       }
       y += 8;
 
       // Fetch signature images
       const [borrowerSigBuf, trusteeSigBuf, adminSigBuf] = await Promise.all([
-        loan.chairSignatureUrl ? fetchImageBuffer(loan.chairSignatureUrl) : Promise.resolve(null),
+        loan.chairSignatureUrl   ? fetchImageBuffer(loan.chairSignatureUrl)   : Promise.resolve(null),
         loan.trusteeSignatureUrl ? fetchImageBuffer(loan.trusteeSignatureUrl) : Promise.resolve(null),
         loan.managerSignatureUrl ? fetchImageBuffer(loan.managerSignatureUrl) : Promise.resolve(null),
       ]);
 
       const drawSigBox = (x: number, yPos: number, w: number, h: number, imgBuf: Buffer | null, digitalText?: string, digitalDate?: string) => {
-        doc.rect(x, yPos, w, h).lineWidth(0.5).stroke(MUTED);
+        doc.rect(x, yPos, w, h).lineWidth(1).strokeColor(GOLD).stroke();
+        doc.rect(x, yPos, 3, h).fill(GOLD);
         if (imgBuf) {
-          try { doc.image(imgBuf, x + 2, yPos + 2, { width: w - 4, height: h - 4, fit: [w - 4, h - 4] }); } catch {}
+          try { doc.image(imgBuf, x + 6, yPos + 2, { width: w - 10, height: h - 4, fit: [w - 10, h - 4] }); } catch {}
         } else if (digitalText) {
-          doc.fillColor(GREEN).fontSize(7.5).font("Helvetica-Bold").text(digitalText, x + 4, yPos + 8, { lineBreak: false });
-          if (digitalDate) doc.fillColor(MUTED).fontSize(7).font("Helvetica").text(digitalDate, x + 4, yPos + 20, { lineBreak: false });
+          doc.fillColor(BURGUNDY).fontSize(7.5).font("Helvetica-Bold").text(digitalText, x + 8, yPos + 8, { lineBreak: false });
+          if (digitalDate) doc.fillColor(MUTED).fontSize(7).font("Helvetica").text(digitalDate, x + 8, yPos + 20, { lineBreak: false });
         }
       };
 
-      const sigBoxW = 155;
-      const sigBoxH = 48;
-      const col1 = L + 4;
-      const col2 = L + 4 + sigBoxW + 30;
-      const col3 = L + 4 + (sigBoxW + 30) * 2;
+      const sigBoxW = 152;
+      const sigBoxH = 52;
+      const col1    = L + 4;
+      const col2    = L + 4 + sigBoxW + 28;
+      const col3    = L + 4 + (sigBoxW + 28) * 2;
 
-      // Labels
       doc.fillColor(MUTED).fontSize(8).font("Helvetica")
         .text("Respected Donor / Lender", col1, y, { lineBreak: false });
       const trusteeLabel = loan.trusteeName ? `Trustee: ${loan.trusteeName}` : "Trustee";
       doc.text(trusteeLabel, col2, y, { lineBreak: false });
       const adminLabel = loan.adminApprovedByName ? `AQS Signatory: ${loan.adminApprovedByName}` : "AQS Authorised Signatory";
       doc.text(adminLabel, col3, y, { lineBreak: false });
-      y += 13;
+      y += 14;
 
-      // Signature boxes
       drawSigBox(col1, y, sigBoxW, sigBoxH, borrowerSigBuf);
       drawSigBox(col2, y, sigBoxW, sigBoxH, trusteeSigBuf,
         loan.trusteeApprovedAt ? "✓ Confirmed digitally" : undefined,
@@ -383,9 +405,8 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         loan.adminApprovedAt ? "✓ Authorised digitally" : undefined,
         loan.adminApprovedAt ? new Date(loan.adminApprovedAt).toLocaleDateString("en-GB") : undefined
       );
-      y += sigBoxH + 5;
+      y += sigBoxH + 6;
 
-      // Signature / Date lines
       [col1, col2, col3].forEach(x => {
         doc.rect(x, y, sigBoxW, 0.5).fill(MUTED);
         doc.fillColor(MUTED).fontSize(7).font("Helvetica").text("Signature", x, y + 3, { lineBreak: false });
@@ -393,14 +414,15 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         doc.fillColor(MUTED).fontSize(7).font("Helvetica").text("Date", x, y + 17, { lineBreak: false });
       });
 
-      // Page 2 footer
-      doc.rect(L, doc.page.height - 55, W, 1).fill(GOLD);
-      doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold")
-        .text("JazakAllahu Khayran — May Allah (SWT) accept this Amanah and bless all parties abundantly.", L, doc.page.height - 44, { width: W, align: "center" });
+      // ── Page 2 footer ─────────────────────────────────────────────────────
+      doc.rect(L, PH - 52, W, 1.5).fill(GOLD);
+      drawGeometricBorder(doc, L, PH - 38, W, GOLD + "88");
+      doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
+        .text("JazakAllahu Khayran — May Allah (SWT) accept this Amanah and bless all parties abundantly.", L, PH - 28, { width: W, align: "center" });
       doc.fillColor(MUTED).fontSize(7).font("Helvetica")
         .text(
           `Abdullah Quilliam Society  |  Qarde Hasan Amanah Agreement  |  Ref: AQS-LOAN-${String(loan.id).padStart(6, "0")}  |  Page 2 of 2`,
-          L, doc.page.height - 32, { width: W, align: "center" }
+          L, PH - 16, { width: W, align: "center" }
         );
 
       doc.end();
@@ -408,8 +430,8 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
   });
 }
 
-// ── Repayment Confirmation PDF ────────────────────────────────────────────────
 
+// ── Repayment Receipt PDF ─────────────────────────────────────────────────────
 export interface RepaymentPdfData {
   repaymentId: number;
   loanId: number;
@@ -430,6 +452,7 @@ export interface RepaymentPdfData {
 }
 
 export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buffer> {
+  const PDFDocument = (await import("pdfkit")).default;
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, autoFirstPage: true });
     const buffers: Buffer[] = [];
@@ -437,28 +460,43 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     doc.on("end", () => resolve(Buffer.concat(buffers)));
     doc.on("error", reject);
 
-    const L = 50;
-    const R = 545;
-    const W = R - L;
     const PW = doc.page.width;
+    const PH = doc.page.height;
+    const L = 50;
+    const R = PW - 50;
+    const W = R - L;
 
-    // Green header
-    doc.rect(0, 0, PW, 110).fill(GREEN);
-    const logoX = 70;
-    const logoR = 38;
-    doc.circle(logoX, 30 + logoR, logoR + 2).fill("#ffffff");
-    drawAqsLogo(doc, logoX, 30 + logoR, logoR);
-    const textX = logoX + logoR + 18;
-    doc.fillColor("#ffffff").fontSize(18).font("Helvetica-Bold")
-      .text("ABDULLAH QUILLIAM SOCIETY", textX, 22, { width: PW - textX - 40 });
-    doc.fontSize(9.5).font("Helvetica")
-      .text("Qarde Hasan — Project Milestone Repayment Confirmation", textX, 46, { width: PW - textX - 40 });
-    doc.fontSize(8).fillColor(GOLD)
-      .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 64, { width: PW - textX - 40 });
-    doc.rect(0, 110, PW, 3).fill(GOLD);
+    // ── Header ──────────────────────────────────────────────────────────────
+    const HEADER_H = 120;
+    doc.rect(0, 0, PW, HEADER_H).fill(BURGUNDY);
 
-    let y = 128;
-    doc.fillColor(GREEN).fontSize(15).font("Helvetica-Bold")
+    // Logo
+    const logoB64 = AQS_LOGO_WHITE_B64;
+    const logoData = Buffer.from(logoB64, "base64");
+    doc.image(logoData, 30, 10, { width: 90, height: 90 });
+
+    // Org name
+    const textX = 130;
+    doc.fillColor(WHITE).fontSize(18).font("Helvetica-Bold")
+      .text("ABDULLAH QUILLIAM SOCIETY", textX, 18, { width: PW - textX - 30, lineBreak: false });
+    doc.fillColor(GOLD_LIGHT).fontSize(9).font("Helvetica")
+      .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986  |  admin@abdullahquilliam.org", textX, 42, { width: PW - textX - 30 });
+    doc.fillColor(GOLD_LIGHT).fontSize(8.5).font("Helvetica")
+      .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 60, { width: PW - textX - 30 });
+
+    // Gold border strip
+    doc.rect(0, HEADER_H, PW, 4).fill(GOLD);
+
+    // Cream body background
+    doc.rect(0, HEADER_H + 4, PW, PH - HEADER_H - 4).fill(CREAM);
+
+    // Geometric border strip
+    drawGeometricBorder(doc, L, HEADER_H + 18, W, GOLD);
+
+    let y = HEADER_H + 30;
+
+    // Title
+    doc.fillColor(BURGUNDY).fontSize(16).font("Helvetica-Bold")
       .text("PROJECT MILESTONE RECEIPT", L, y, { width: W, align: "center" });
     y += 22;
     doc.fillColor(MUTED).fontSize(8.5).font("Helvetica")
@@ -468,14 +506,15 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
       );
     y += 14;
     doc.rect(L, y, W, 1).fill(GOLD);
-    y += 10;
+    y += 12;
 
     const sectionHeading = (title: string, yPos: number): number => {
-      doc.rect(L, yPos, W, 19).fill(LIGHT_GREY);
-      doc.fillColor(GREEN).fontSize(9.5).font("Helvetica-Bold")
+      doc.rect(L, yPos, W, 20).fill(BURGUNDY);
+      doc.fillColor(WHITE).fontSize(9.5).font("Helvetica-Bold")
         .text(title.toUpperCase(), L + 8, yPos + 5, { width: W - 16, lineBreak: false });
-      return yPos + 22;
+      return yPos + 24;
     };
+
     const drawRow = (label: string, value: string, yPos: number): number => {
       const labelW = 155;
       const valueX = L + labelW + 8;
@@ -493,37 +532,37 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     y = drawRow("Full Name", data.borrowerName, y);
     if (data.borrowerEmail) y = drawRow("Email Address", data.borrowerEmail, y);
     if (data.borrowerPhone) y = drawRow("Telephone", data.borrowerPhone, y);
-    y += 8;
+    y += 10;
 
     y = sectionHeading("2. Project Milestone Payment Details", y);
     y += 4;
     y = drawRow("Repayment Amount", `£${parseFloat(String(data.amount)).toFixed(2)}`, y);
-    y = drawRow("Payment Method", data.paymentMethod.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), y);
+    y = drawRow("Payment Method", data.paymentMethod.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()), y);
     y = drawRow("Payment Date", new Date(data.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }), y);
     y = drawRow("Original Amanah Amount", `£${parseFloat(String(data.loanAmount)).toFixed(2)}`, y);
     y = drawRow("Total Returned to Date", `£${parseFloat(String(data.totalRepaid)).toFixed(2)}`, y);
     const outstanding = Math.max(0, parseFloat(String(data.loanAmount)) - parseFloat(String(data.totalRepaid)));
     y = drawRow("Outstanding Balance", `£${outstanding.toFixed(2)}`, y);
-    y += 8;
+    y += 10;
 
     if (data.adminApprovedByName && data.adminApprovedAt) {
       y = sectionHeading("3. Authorisation", y);
       y += 4;
-      doc.rect(L + 4, y, W - 8, 17).fill("#e8f5e9");
-      doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold")
+      doc.rect(L + 4, y, W - 8, 18).fill("#f0e8d0");
+      doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
         .text(
           `✓ Authorised by ${data.adminApprovedByName} on ${new Date(data.adminApprovedAt).toLocaleDateString("en-GB")} at ${new Date(data.adminApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
           L + 8, y + 5, { width: W - 16, lineBreak: false }
         );
-      y += 22;
+      y += 24;
       if (data.trusteeName && data.trusteeApprovedAt) {
-        doc.rect(L + 4, y, W - 8, 17).fill("#e8f5e9");
-        doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold")
+        doc.rect(L + 4, y, W - 8, 18).fill("#f0e8d0");
+        doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
           .text(
             `✓ Trustee ${data.trusteeName} confirmed on ${new Date(data.trusteeApprovedAt).toLocaleDateString("en-GB")} at ${new Date(data.trusteeApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
             L + 8, y + 5, { width: W - 16, lineBreak: false }
           );
-        y += 22;
+        y += 24;
       }
       y += 6;
     }
@@ -537,13 +576,14 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     }
 
     // Footer
-    doc.rect(L, doc.page.height - 55, W, 1).fill(GOLD);
-    doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold")
-      .text("JazakAllahu Khayran — May Allah (SWT) bless you for your generous Amanah and accept it as Sadaqah Jariyah.", L, doc.page.height - 44, { width: W, align: "center" });
+    drawGeometricBorder(doc, L, PH - 62, W, GOLD);
+    doc.rect(L, PH - 55, W, 1).fill(GOLD);
+    doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
+      .text("JazakAllahu Khayran — May Allah (SWT) bless you for your generous Amanah and accept it as Sadaqah Jariyah.", L, PH - 44, { width: W, align: "center" });
     doc.fillColor(MUTED).fontSize(7).font("Helvetica")
       .text(
         `Abdullah Quilliam Society  |  Project Milestone Receipt  |  Ref: AQS-REPAY-${String(data.repaymentId).padStart(6, "0")}  |  Generated: ${new Date().toLocaleDateString("en-GB")}`,
-        L, doc.page.height - 32, { width: W, align: "center" }
+        L, PH - 32, { width: W, align: "center" }
       );
 
     doc.end();
@@ -551,7 +591,6 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
 }
 
 // ── Certificate of Waqf / Endowment PDF ──────────────────────────────────────
-
 export interface WaqfCertificateData {
   loanId: number;
   lenderName: string;
@@ -567,6 +606,7 @@ export interface WaqfCertificateData {
 }
 
 export async function generateWaqfCertificate(data: WaqfCertificateData): Promise<Buffer> {
+  const PDFDocument = (await import("pdfkit")).default;
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 0, autoFirstPage: true });
     const buffers: Buffer[] = [];
@@ -574,48 +614,84 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
     doc.on("end", () => resolve(Buffer.concat(buffers)));
     doc.on("error", reject);
 
-    const L = 50;
-    const R = 545;
-    const W = R - L;
     const PW = doc.page.width;
     const PH = doc.page.height;
+    const L = 50;
+    const R = PW - 50;
+    const W = R - L;
 
-    const remaining = data.waqfAmount != null
+    const remaining = data.waqfAmount !== undefined
       ? data.waqfAmount
       : Math.max(0, parseFloat(String(data.originalAmount)) - parseFloat(String(data.totalRepaid)));
 
-    // Decorative border
+    // ── Outer border ────────────────────────────────────────────────────────
     doc.rect(20, 20, PW - 40, PH - 40).lineWidth(3).stroke(GOLD);
-    doc.rect(26, 26, PW - 52, PH - 52).lineWidth(1).stroke(GREEN);
+    doc.rect(24, 24, PW - 48, PH - 48).lineWidth(1).stroke(GOLD);
 
-    // Header
-    doc.rect(40, 40, PW - 80, 100).fill(GREEN);
-    doc.fillColor("#ffffff").fontSize(22).font("Helvetica-Bold")
-      .text("CERTIFICATE OF WAQF", 60, 54, { width: PW - 120, align: "center" });
-    doc.fontSize(11).font("Helvetica")
-      .text("Permanent Endowment — Rimmers Building Project", 60, 82, { width: PW - 120, align: "center" });
-    doc.fontSize(8).fillColor(GOLD)
-      .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', 60, 102, { width: PW - 120, align: "center" });
+    // ── Header ──────────────────────────────────────────────────────────────
+    const HEADER_H = 130;
+    doc.rect(20, 20, PW - 40, HEADER_H).fill(BURGUNDY);
 
-    doc.rect(40, 140, PW - 80, 2).fill(GOLD);
+    // Logo
+    const logoB64 = AQS_LOGO_WHITE_B64;
+    const logoData = Buffer.from(logoB64, "base64");
+    doc.image(logoData, 35, 28, { width: 90, height: 90 });
 
-    let y = 160;
-    doc.fillColor(MUTED).fontSize(10).font("Helvetica").text("In the Name of Allah, the Most Gracious, the Most Merciful", L, y, { width: W, align: "center" });
-    y += 24;
-    doc.fillColor(TEXT).fontSize(11).font("Helvetica").text("This is to certify that", L, y, { width: W, align: "center" });
+    // Org name
+    const textX = 135;
+    doc.fillColor(WHITE).fontSize(20).font("Helvetica-Bold")
+      .text("ABDULLAH QUILLIAM SOCIETY", textX, 38, { width: PW - textX - 40, lineBreak: false });
+    doc.fillColor(GOLD_LIGHT).fontSize(9).font("Helvetica")
+      .text("8-10 Brougham Terrace, Liverpool, L6 1AE  |  Tel: 0151 260 3986", textX, 64, { width: PW - textX - 40 });
+    doc.fillColor(GOLD_LIGHT).fontSize(8.5).font("Helvetica")
+      .text('"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah." — Hadith', textX, 82, { width: PW - textX - 40 });
+
+    // Islamic stars in corners of header
+    drawIslamicStar(doc, PW - 45, 45, 16, GOLD);
+    drawIslamicStar(doc, PW - 45, HEADER_H + 20 - 16, 10, GOLD);
+
+    // Gold strip
+    doc.rect(20, 20 + HEADER_H, PW - 40, 4).fill(GOLD);
+
+    // Cream body
+    doc.rect(20, 20 + HEADER_H + 4, PW - 40, PH - 40 - HEADER_H - 4).fill(CREAM);
+
+    // Geometric border
+    drawGeometricBorder(doc, L, 20 + HEADER_H + 20, W, GOLD);
+
+    let y = 20 + HEADER_H + 32;
+
+    // Title
+    doc.fillColor(BURGUNDY).fontSize(22).font("Helvetica-Bold")
+      .text("CERTIFICATE OF WAQF", L, y, { width: W, align: "center" });
+    y += 28;
+    doc.fillColor(MUTED).fontSize(10).font("Helvetica")
+      .text("Permanent Endowment — Rimmers Building Project", L, y, { width: W, align: "center" });
+    y += 18;
+    doc.rect(L + 60, y, W - 120, 1).fill(GOLD);
+    y += 14;
+
+    doc.fillColor(MUTED).fontSize(10).font("Helvetica")
+      .text("In the Name of Allah, the Most Gracious, the Most Merciful", L, y, { width: W, align: "center" });
+    y += 22;
+    doc.fillColor(TEXT).fontSize(11).font("Helvetica")
+      .text("This is to certify that", L, y, { width: W, align: "center" });
     y += 20;
-    doc.fillColor(GREEN).fontSize(20).font("Helvetica-Bold").text(data.lenderName.toUpperCase(), L, y, { width: W, align: "center" });
-    y += 30;
+    doc.fillColor(BURGUNDY).fontSize(22).font("Helvetica-Bold")
+      .text(data.lenderName.toUpperCase(), L, y, { width: W, align: "center" });
+    y += 32;
     doc.fillColor(TEXT).fontSize(10.5).font("Helvetica")
       .text("has graciously converted their Qarde Hasan (interest-free loan) to a permanent\nWaqf (Endowment) for the AQS Rimmers Building Project.", L, y, { width: W, align: "center" });
-    y += 44;
+    y += 46;
 
     // Amount box
-    doc.rect(L + 40, y, W - 80, 60).fill("#faf7ee");
-    doc.rect(L + 40, y, W - 80, 60).lineWidth(1).stroke(GOLD);
-    doc.fillColor(MUTED).fontSize(9).font("Helvetica").text("Endowed Amount (Waqf)", L + 40, y + 10, { width: W - 80, align: "center" });
-    doc.fillColor(GREEN).fontSize(26).font("Helvetica-Bold").text(`£${remaining.toLocaleString("en-GB", { minimumFractionDigits: 2 })}`, L + 40, y + 24, { width: W - 80, align: "center" });
-    y += 76;
+    doc.rect(L + 40, y, W - 80, 64).fill("#f0e8d0");
+    doc.rect(L + 40, y, W - 80, 64).lineWidth(1.5).stroke(GOLD);
+    doc.fillColor(MUTED).fontSize(9).font("Helvetica")
+      .text("Endowed Amount (Waqf)", L + 40, y + 10, { width: W - 80, align: "center" });
+    doc.fillColor(BURGUNDY).fontSize(28).font("Helvetica-Bold")
+      .text(`£${remaining.toLocaleString("en-GB", { minimumFractionDigits: 2 })}`, L + 40, y + 26, { width: W - 80, align: "center" });
+    y += 80;
 
     doc.fillColor(TEXT).fontSize(9.5).font("Helvetica")
       .text(
@@ -625,7 +701,7 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
     y += doc.heightOfString(
       `By this act of generosity, ${data.lenderName.split(" ")[0]} has permanently endowed a portion of the Rimmers Building — a House of Allah — for the benefit of the Muslim community and all who seek knowledge and worship therein. This Waqf shall be recorded in the AQS Endowment Register and acknowledged before Allah (SWT) as a Sadaqah Jariyah that shall continue to benefit the donor and their family for generations to come, in sha Allah.`,
       { width: W - 40 }
-    ) + 16;
+    ) + 18;
 
     doc.fillColor(MUTED).fontSize(8).font("Helvetica")
       .text(
@@ -635,40 +711,40 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
     y += 14;
     doc.fillColor(MUTED).fontSize(8).font("Helvetica")
       .text(`Date of Conversion: ${new Date(data.convertedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, L, y, { width: W, align: "center" });
-    y += 24;
+    y += 26;
 
     doc.rect(L, y, W, 1).fill(MUTED);
-    y += 12;
+    y += 14;
 
     // Signature boxes
     const sigW = 180;
     const sigH = 55;
     const sc1 = L + 10;
     const sc2 = PW - L - 10 - sigW;
-
     doc.fillColor(MUTED).fontSize(8).font("Helvetica")
       .text("Authorised by (Finance Lead)", sc1, y, { width: sigW });
     doc.text("Confirmed by (Trustee)", sc2, y, { width: sigW });
     y += 14;
-
     doc.rect(sc1, y, sigW, sigH).lineWidth(0.5).stroke(MUTED);
     if (data.adminApprovedByName) {
-      doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold").text(`✓ ${data.adminApprovedByName}`, sc1 + 4, y + 8, { lineBreak: false });
+      doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
+        .text(`✓ ${data.adminApprovedByName}`, sc1 + 4, y + 8, { lineBreak: false });
     }
     doc.rect(sc2, y, sigW, sigH).lineWidth(0.5).stroke(MUTED);
     if (data.trusteeName) {
-      doc.fillColor(GREEN).fontSize(8).font("Helvetica-Bold").text(`✓ ${data.trusteeName}`, sc2 + 4, y + 8, { lineBreak: false });
+      doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
+        .text(`✓ ${data.trusteeName}`, sc2 + 4, y + 8, { lineBreak: false });
     }
-    y += sigH + 5;
-
-    [sc1, sc2].forEach(x => {
+    y += sigH + 6;
+    [sc1, sc2].forEach((x: number) => {
       doc.rect(x, y, sigW, 0.5).fill(MUTED);
       doc.fillColor(MUTED).fontSize(7).font("Helvetica").text("Signature & Date", x, y + 3, { lineBreak: false });
     });
 
     // Footer
+    drawGeometricBorder(doc, L, PH - 62, W, GOLD);
     doc.rect(L, PH - 55, W, 1).fill(GOLD);
-    doc.fillColor(GREEN).fontSize(8.5).font("Helvetica-Bold")
+    doc.fillColor(BURGUNDY).fontSize(8.5).font("Helvetica-Bold")
       .text("JazakAllahu Khayran — May Allah (SWT) accept this Waqf and bless the donor abundantly in this life and the next.", L, PH - 44, { width: W, align: "center" });
 
     doc.end();
