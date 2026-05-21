@@ -91,7 +91,7 @@ export default function ReceiptsPage() {
     try {
       await Promise.all(
         Array.from(selectedIds).map(id =>
-          (secondApproveMutation as any)?.mutateAsync?.({ receiptId: id })
+          (secondApproveMutation as any)?.mutateAsync?.({ id: id })
         )
       );
       toast.success(`${selectedIds.size} receipt${selectedIds.size !== 1 ? "s" : ""} approved`);
@@ -192,7 +192,7 @@ export default function ReceiptsPage() {
                       style={{ padding:"5px 12px",borderRadius:8,background:"rgba(99,91,255,0.1)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,fontSize:11,fontWeight:600,cursor:"pointer" }}>
                       View
                     </button>
-                    <button onClick={() => secondApproveMutation?.mutate?.({ receiptId: r.id })}
+                    <button onClick={() => secondApproveMutation?.mutate?.({ id: r.id })}
                       style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
                       <ThumbsUp size={11}/> Approve
                     </button>
