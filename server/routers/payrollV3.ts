@@ -9,6 +9,7 @@ import { invokeLLM } from "../_core/llm";
 import { getDb } from "../db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { payrollV2, users } from "../../drizzle/schema";
+import { fmtDate } from "../dateUtils";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
 
@@ -536,7 +537,7 @@ All monetary values as numbers (no £ sign). If a field is not visible, return n
         </table>
         <p style="margin-top:16px">Pay periods included: ${taxYearRecords.length}</p>
         <div class="footer">
-          <p>This is a computer-generated P60. Employer: Hibba Education Trust | Generated: ${new Date().toLocaleDateString('en-GB')}</p>
+          <p>This is a computer-generated P60. Employer: Hibba Education Trust | Generated: ${fmtDate(new Date())}</p>
         </div>
       </body></html>`;
 
@@ -619,7 +620,7 @@ All monetary values as numbers (no £ sign). If a field is not visible, return n
         </table>
         <div class="footer">
           <p>This P32 is for internal records. Submit RTI FPS/EPS to HMRC via your payroll software.</p>
-          <p>Generated: ${new Date().toLocaleDateString('en-GB')}</p>
+          <p>Generated: ${fmtDate(new Date())}</p>
         </div>
       </body></html>`;
 

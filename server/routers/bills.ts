@@ -12,6 +12,7 @@ import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { getDb } from "../db";
 import { utilityAccounts, utilityBills, utilityBuildings, utilityCategories, supplierContacts, scheduledPayments } from "../../drizzle/schema";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { fmtDate } from "../dateUtils";
 
 const BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"] as const;
 const CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"] as const;
@@ -607,7 +608,7 @@ export const billsRouter = router({
         type: "bill" as const,
         date: b.billDate,
         amount: b.amount,
-        description: `Bill — ${b.periodStart ? new Date(b.periodStart as any).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : ""} to ${b.periodEnd ? new Date(b.periodEnd as any).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : ""}`.trim(),
+        description: `Bill — ${b.periodStart ? fmtDate(new Date(b.periodStart as any)) : ""} to ${b.periodEnd ? fmtDate(new Date(b.periodEnd as any)) : ""}`.trim(),
         status: "paid" as const,
         note: b.notes ?? null,
         fileUrl: b.billUrl ?? null,
@@ -675,10 +676,10 @@ export const billsRouter = router({
       const rows = [
         ["Date", "Amount (£)", "Period Start", "Period End", "Consumption", "Unit", "Notes"],
         ...bills.map(b => [
-          b.billDate ? new Date(b.billDate as any).toLocaleDateString("en-GB") : "",
+          b.billDate ? fmtDate(new Date(b.billDate as any)) : "",
           b.amount ?? "",
-          b.periodStart ? new Date(b.periodStart as any).toLocaleDateString("en-GB") : "",
-          b.periodEnd ? new Date(b.periodEnd as any).toLocaleDateString("en-GB") : "",
+          b.periodStart ? fmtDate(new Date(b.periodStart as any)) : "",
+          b.periodEnd ? fmtDate(new Date(b.periodEnd as any)) : "",
           b.consumptionUnits ?? "",
           b.unitType ?? "",
           (b.notes ?? "").replace(/,/g, ";"),

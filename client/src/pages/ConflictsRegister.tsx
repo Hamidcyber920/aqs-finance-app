@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, AlertTriangle, CheckCircle, FileText } from "lucide-react";
+import { fmtDate } from "@/lib/dateUtils";
 
 export default function ConflictsRegister() {
   const [showAdd, setShowAdd] = useState(false);
@@ -96,7 +97,7 @@ export default function ConflictsRegister() {
                         <td className="py-2 pr-4 max-w-[200px]">{c.description}</td>
                         <td className="py-2 pr-4 text-muted-foreground">{c.donorName ?? "—"}</td>
                         <td className="py-2 pr-4 text-muted-foreground">{c.donationAmount ? `£${Number(c.donationAmount).toLocaleString()}` : "—"}</td>
-                        <td className="py-2 pr-4 text-muted-foreground">{c.disclosedAt ? new Date(c.disclosedAt).toLocaleDateString("en-GB") : "—"}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{c.disclosedAt ? fmtDate(new Date(c.disclosedAt)) : "—"}</td>
                         <td className="py-2 pr-4">{statusBadge(c.status)}</td>
                         <td className="py-2 flex gap-1">
                           {c.status === "open" && (

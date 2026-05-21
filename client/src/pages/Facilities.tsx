@@ -16,6 +16,7 @@ import {
   AlertTriangle, CheckCircle2, MapPin, Timer, RefreshCw
 } from "lucide-react";
 import FacilitiesEnquiries from "./FacilitiesEnquiries";
+import { fmtDate } from "@/lib/dateUtils";
 
 const STATUS_COLORS: Record<string, string> = {
   enquiry: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",

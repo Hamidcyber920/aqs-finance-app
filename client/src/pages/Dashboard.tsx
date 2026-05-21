@@ -11,6 +11,7 @@ import {
   CheckCircle2, Clock, ArrowUpRight, ArrowDownRight, RefreshCw,
   Receipt, CreditCard, HandHeart, BookOpen, Wallet, Zap, GraduationCap
 } from "lucide-react";
+import { fmtDate } from "@/lib/dateUtils";
 
 /* ── Brand tokens ── */
 const T = {
@@ -566,7 +567,7 @@ export default function DashboardPage() {
                         </div>
                       </td>
                       <td style={{ padding: "10px 12px 10px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
-                        {r.date ? new Date(r.date).toLocaleDateString("en-GB") : "—"}
+                        {r.date ? fmtDate(new Date(r.date)) : "—"}
                       </td>
                       <td style={{ padding: "10px 12px 10px 0", fontSize: 12, color: T.muted, borderBottom: `1px solid ${T.border}` }}>
                         {r.category ?? "—"}

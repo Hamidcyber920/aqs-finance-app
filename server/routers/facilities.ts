@@ -11,6 +11,7 @@ import { eq, and, gte, lte, desc, or, sql } from "drizzle-orm";
 import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail, facilityBuildings, enquiryReplies, commMessages, commChannels, facilitySettings } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 import { buildWhatsAppUrl } from "../lib/whatsapp";
+import { fmtDate, fmtDateLong } from "../dateUtils";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
 
@@ -775,7 +776,7 @@ export const facilitiesRouter = router({
         doc.y = _bannerY + 28;
         // ── Enquiry ref + date
         doc.fontSize(7.5).fillColor("#888")
-          .text(`Enquiry #${enquiry.id}   |   Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "right" });
+          .text(`Enquiry #${enquiry.id}   |   Generated: ${fmtDateLong(new Date())}`, { align: "right" });
         doc.fillColor("#000");
         doc.moveDown(0.5);
         // Section helper
@@ -804,7 +805,7 @@ export const facilitiesRouter = router({
         // Event
         section("Event Details");
         field("Event Type", enquiry.eventTypeOther || enquiry.eventType);
-        field("Date", enquiry.eventDate ? new Date(enquiry.eventDate).toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }) : null);
+        field("Date", enquiry.eventDate ? fmtDate(new Date(enquiry.eventDate)) : null);
         field("Start Time", enquiry.eventStartTime);
         field("End Time", enquiry.eventEndTime);
         field("Expected Attendees", enquiry.expectedAttendees?.toString());
@@ -1181,7 +1182,7 @@ export const facilitiesRouter = router({
 
         // ── Date ─────────────────────────────────────────────────────────────────
         doc.fontSize(7.5).fillColor("#888")
-          .text(`Generated: ${new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, { align: "right" });
+          .text(`Generated: ${fmtDateLong(new Date())}`, { align: "right" });
         doc.fillColor("#000");
         doc.moveDown(0.5);
         // ── Assalamu Alaikum intro ──────────────────────────────────────────────

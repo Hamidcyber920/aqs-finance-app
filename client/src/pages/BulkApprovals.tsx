@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { CheckCircle, XCircle, Clock, Users, Mail, AlertTriangle } from "lucide-react";
+import { fmtDate } from "@/lib/dateUtils";
 
 export default function BulkApprovals() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -83,7 +84,7 @@ export default function BulkApprovals() {
                           <Users className="w-3 h-3" /> {item.recipientCount} recipients
                         </span>
                         <span>Requested by: {item.requestedByName || "Unknown"}</span>
-                        <span>{new Date(item.createdAt).toLocaleDateString("en-GB")}</span>
+                        <span>{fmtDate(new Date(item.createdAt))}</span>
                       </div>
                       {item.messagePreview && (
                         <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{item.messagePreview}</p>
@@ -120,7 +121,7 @@ export default function BulkApprovals() {
                       <span className="text-sm text-muted-foreground">{item.recipientCount} recipients</span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {item.reviewedAt ? new Date(item.reviewedAt).toLocaleDateString("en-GB") : new Date(item.createdAt).toLocaleDateString("en-GB")}
+                      {item.reviewedAt ? fmtDate(new Date(item.reviewedAt)) : fmtDate(new Date(item.createdAt))}
                     </span>
                   </div>
                   {item.reviewNotes && <p className="text-xs text-muted-foreground mt-1">Note: {item.reviewNotes}</p>}

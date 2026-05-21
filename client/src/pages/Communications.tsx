@@ -9,6 +9,7 @@ import {
   BookOpen, Save, History, ChevronRight, Clock, Tag, Download, FileText,
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
+import { fmtDate } from "@/lib/dateUtils";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const T = {
@@ -1105,7 +1106,7 @@ export default function CommunicationsPage() {
             <button onClick={() => {
               const filtered = (messages as any[]).filter((m: any) => { const d = new Date(m.createdAt || m.sentAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
               if (!filtered.length) { toast.info("No messages in selected range"); return; }
-              const rows = filtered.map((m: any) => `${new Date(m.createdAt || m.sentAt).toLocaleDateString()},${(m.fromName || "").replace(/,/g," ")},${(m.body || "").replace(/,/g," ").replace(/\n/g," ")},${m.via || ""}`);
+              const rows = filtered.map((m: any) => `${fmtDate(new Date(m.createdAt || m.sentAt))},${(m.fromName || "").replace(/,/g," ")},${(m.body || "").replace(/,/g," ").replace(/\n/g," ")},${m.via || ""}`);
               const csv = "Date,From,Message,Channel\n" + rows.join("\n");
               const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
               const a = document.createElement("a"); a.href = url; a.download = `communications_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -1118,7 +1119,7 @@ export default function CommunicationsPage() {
               let html = `<html><head><title>Communications ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}</style></head><body>`;
               html += `<h2>Communications Report</h2><p>${dateFrom} to ${dateTo}</p><p><strong>Messages: ${filtered.length}</strong></p>`;
               html += `<table><tr><th>Date</th><th>From</th><th>Message</th><th>Via</th></tr>`;
-              filtered.forEach((m: any) => { html += `<tr><td>${new Date(m.createdAt || m.sentAt).toLocaleDateString()}</td><td>${m.fromName || ""}</td><td>${(m.body || "").substring(0, 100)}</td><td>${m.via || ""}</td></tr>`; });
+              filtered.forEach((m: any) => { html += `<tr><td>${fmtDate(new Date(m.createdAt || m.sentAt))}</td><td>${m.fromName || ""}</td><td>${(m.body || "").substring(0, 100)}</td><td>${m.via || ""}</td></tr>`; });
               html += `</table></body></html>`;
               const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
             }} style={{ height:28,borderRadius:8,border:`1px solid ${T.border}`,background:"rgba(255,255,255,0.04)",color:T.white,padding:"0 8px",fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",gap:3 }}>

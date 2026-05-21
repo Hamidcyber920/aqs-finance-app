@@ -9,6 +9,7 @@ import { invokeLLM } from "../_core/llm";
 import { getDb } from "../db";
 import { eq, and, sql, desc, lt, isNull, gte } from "drizzle-orm";
 import {
+import { fmtDate } from "../dateUtils";
   giftAidClaims, donorSegments, donorThankYouLog,
   donors,
 } from "../../drizzle/schema";
@@ -203,7 +204,7 @@ export const donorsV3Router = router({
           "", firstName, lastName,
           "", r.donorPostcode ?? "",
           "No", "No",
-          r.donationDate ? new Date(r.donationDate).toLocaleDateString("en-GB") : "",
+          r.donationDate ? fmtDate(new Date(r.donationDate)) : "",
           r.donationAmount,
         ].join(",");
       });

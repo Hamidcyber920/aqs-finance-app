@@ -5,6 +5,7 @@ import { stripePaymentSessions, fundraisingDonations, giftAidDeclarations, fundr
 import { eq, sql } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { buildWhatsAppUrl } from "./lib/whatsapp";
+import { fmtDateLong } from "./dateUtils";
 
 async function sendReceiptEmail(to: string, name: string, subject: string, html: string) {
   try {
@@ -326,7 +327,7 @@ export function registerStripeWebhook(app: Express) {
                                 </tr>
                                 <tr>
                                   <td style="padding: 10px 0; color: #666; font-size: 14px;">Date</td>
-                                  <td style="padding: 10px 0; font-size: 14px; text-align: right;">${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</td>
+                                  <td style="padding: 10px 0; font-size: 14px; text-align: right;">${fmtDateLong(new Date())}</td>
                                 </tr>
                               </table>
                               ${newStatus === "fulfilled" ? `<div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 12px 16px; margin: 16px 0;"><p style="color: #166534; font-size: 14px; margin: 0;">🎉 <strong>Alhamdulillah!</strong> Your pledge has been fulfilled in full. May Allah accept it from you.</p></div>` : ""}

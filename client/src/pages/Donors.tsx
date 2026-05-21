@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -103,7 +104,7 @@ export default function DonorsPage() {
             <span style={{color:T.muted,fontSize:11}}>to</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 8px",fontSize:11}} />
             <button onClick={() => {
-              const rows = donors.map((d: any) => `${d.name},${d.email || ""},${d.phone || ""},\u00a3${Number(d.totalGiven ?? 0).toFixed(2)},${d.isRegular ? "Regular" : "One-off"},${d.lastGiftDate ? new Date(d.lastGiftDate).toLocaleDateString() : ""}`);
+              const rows = donors.map((d: any) => `${d.name},${d.email || ""},${d.phone || ""},\u00a3${Number(d.totalGiven ?? 0).toFixed(2)},${d.isRegular ? "Regular" : "One-off"},${d.lastGiftDate ? fmtDate(new Date(d.lastGiftDate)) : ""}`);
               if (!rows.length) { toast.info("No donors to export"); return; }
               const csv = "Name,Email,Phone,Total Given,Type,Last Gift\n" + rows.join("\n");
               const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
@@ -116,7 +117,7 @@ export default function DonorsPage() {
               let html = `<html><head><title>Donors Report ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
               html += `<h2>Donor Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total Donors: ${donors.length} | Total Given: \u00a3${totalGiven.toFixed(2)}</p>`;
               html += `<table><tr><th>Name</th><th>Email</th><th>Phone</th><th>Total Given</th><th>Type</th><th>Last Gift</th></tr>`;
-              donors.forEach((d: any) => { html += `<tr><td>${d.name}</td><td>${d.email || ""}</td><td>${d.phone || ""}</td><td>\u00a3${Number(d.totalGiven ?? 0).toFixed(2)}</td><td>${d.isRegular ? "Regular" : "One-off"}</td><td>${d.lastGiftDate ? new Date(d.lastGiftDate).toLocaleDateString() : ""}</td></tr>`; });
+              donors.forEach((d: any) => { html += `<tr><td>${d.name}</td><td>${d.email || ""}</td><td>${d.phone || ""}</td><td>\u00a3${Number(d.totalGiven ?? 0).toFixed(2)}</td><td>${d.isRegular ? "Regular" : "One-off"}</td><td>${d.lastGiftDate ? fmtDate(new Date(d.lastGiftDate)) : ""}</td></tr>`; });
               html += `</table></body></html>`;
               const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
             }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
@@ -247,7 +248,7 @@ export default function DonorsPage() {
                   <p style={{ fontSize:10,color:T.muted,margin:0 }}>Total Given</p>
                 </div>
                 <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 12px" }}>
-                  <p style={{ fontSize:12,fontWeight:600,color:T.white,margin:0 }}>{d.lastGiftDate ? new Date(d.lastGiftDate).toLocaleDateString("en-GB") : "—"}</p>
+                  <p style={{ fontSize:12,fontWeight:600,color:T.white,margin:0 }}>{d.lastGiftDate ? fmtDate(new Date(d.lastGiftDate)) : "—"}</p>
                   <p style={{ fontSize:10,color:T.muted,margin:0 }}>Last Gift</p>
                 </div>
               </div>

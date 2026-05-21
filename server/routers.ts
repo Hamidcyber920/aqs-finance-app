@@ -63,6 +63,7 @@ import { eq, and, sql, desc, isNull, gte, lte } from "drizzle-orm";
 import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations, donorLeads, donorCommsLog, donors } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildWhatsAppUrl } from "./lib/whatsapp";
+import { fmtDate, fmtDateLong, fmtDateTime } from "./dateUtils";
 // sendGmail is defined locally in this file (line ~123)
 
 // ─── Permission helpers ───────────────────────────────────────────────────────
@@ -1931,7 +1932,7 @@ export const appRouter = router({
             .text('QARDE HASAN LOAN STATEMENT', SL, sy, { width: SW, align: 'center' });
           sy += 18;
           stmtDoc.fillColor(SMUTED).fontSize(8).font('Helvetica')
-            .text(`Ref: AQS-LOAN-${String(input.id).padStart(6,'0')}   |   Generated: ${new Date().toLocaleString('en-GB')}`, SL, sy, { width: SW, align: 'center' });
+            .text(`Ref: AQS-LOAN-${String(input.id).padStart(6,'0')}   |   Generated: ${fmtDateTime(new Date())}`, SL, sy, { width: SW, align: 'center' });
           sy += 12;
           stmtDoc.rect(SL, sy, SW, 1).fill(SGOLD);
           sy += 10;
@@ -1998,9 +1999,9 @@ export const appRouter = router({
             repayments.forEach((r: any, i: number) => {
               const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
               const statusColor = r.trusteeApprovedAt ? '#059669' : r.adminApprovedAt ? '#d97706' : '#6b7280';
-              const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
-              const paid = r.paidAt ? new Date(r.paidAt).toLocaleString('en-GB') : '—';
-              const conf = r.lenderConfirmedAt ? new Date(r.lenderConfirmedAt).toLocaleDateString('en-GB') : '—';
+              const due = r.dueDate ? fmtDate(new Date(r.dueDate)) : '—';
+              const paid = r.paidAt ? fmtDateTime(new Date(r.paidAt)) : '—';
+              const conf = r.lenderConfirmedAt ? fmtDate(new Date(r.lenderConfirmedAt)) : '—';
               const method = (r.paymentMethod ?? '').replace(/_/g,' ').replace(/\b\w/g, (c: string) => c.toUpperCase());
               if (i % 2 === 0) stmtDoc.rect(SL, sy, SW, 15).fill('#f7f7f7');
               stmtDoc.fillColor(STEXT).fontSize(7.5).font('Helvetica');
@@ -2051,9 +2052,9 @@ export const appRouter = router({
         const firstName = (loan.borrowerName ?? '').split(' ')[0];
         const rows = repayments.map((r: any, i: number) => {
           const status = r.trusteeApprovedAt ? 'Confirmed' : r.adminApprovedAt ? 'Partial' : 'Pending';
-          const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
-          const paid = r.paidAt ? new Date(r.paidAt).toLocaleString('en-GB') : '—';
-          const lenderConf = r.lenderConfirmedAt ? new Date(r.lenderConfirmedAt).toLocaleDateString('en-GB') : '—';
+          const due = r.dueDate ? fmtDate(new Date(r.dueDate)) : '—';
+          const paid = r.paidAt ? fmtDateTime(new Date(r.paidAt)) : '—';
+          const lenderConf = r.lenderConfirmedAt ? fmtDate(new Date(r.lenderConfirmedAt)) : '—';
           return `<tr style="border-bottom:1px solid #e5e7eb"><td style="padding:8px 12px;font-size:13px">${i+1}</td><td style="padding:8px 12px;font-size:13px">&pound;${Number(r.amount??0).toFixed(2)}</td><td style="padding:8px 12px;font-size:13px">${due}</td><td style="padding:8px 12px;font-size:13px">${paid}</td><td style="padding:8px 12px;font-size:13px;text-transform:capitalize">${r.paymentMethod?.replace(/_/g,' ')??'—'}</td><td style="padding:8px 12px;font-size:13px;color:${r.trusteeApprovedAt?'#059669':r.adminApprovedAt?'#d97706':'#6b7280'}">${status}</td><td style="padding:8px 12px;font-size:13px">${lenderConf}</td></tr>`;
         }).join('');
         const html = `<div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto">
@@ -2063,7 +2064,7 @@ export const appRouter = router({
           </div>
           <div style="padding:24px">
             <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${firstName},</p>
-            <p>May Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the <strong>Rimmers Building Project</strong> as of ${new Date().toLocaleDateString('en-GB')}.</p>
+            <p>May Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the <strong>Rimmers Building Project</strong> as of ${fmtDate(new Date())}.</p>
             <p>Your generosity is a pillar of this House of Allah — the Prophet (PBUH) said: <em>"Whoever builds a mosque for Allah, Allah will build for him a house in Jannah."</em></p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0">
               <tr><td style="padding:5px 0;font-size:13px;color:#6b7280;width:150px">Loan Amount</td><td style="font-size:14px;font-weight:700;color:#059669">&pound;${Number(loan.amount).toLocaleString('en-GB',{minimumFractionDigits:2})}</td></tr>
@@ -2090,7 +2091,7 @@ export const appRouter = router({
           <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">JazakAllahu Khayran — AQ Society Finance System</div>
         </div>`;
         try {
-          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Amanah Statement — ${new Date().toLocaleDateString('en-GB')} — AQ Society`, html);
+          await sendGmail(loan.borrowerEmail, loan.borrowerName, `Qarde Hasan Amanah Statement — ${fmtDate(new Date())} — AQ Society`, html);
           return { success: true, sentTo: loan.borrowerEmail };
         } catch (e: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Email failed: ${e?.message ?? String(e)}` });
@@ -2111,7 +2112,7 @@ export const appRouter = router({
         if (overdueReps.length === 0) return { success: true, count: 0, message: 'No overdue repayments' };
         const firstName = (loan.borrowerName ?? '').split(' ')[0];
         const overdueList = overdueReps.map((r: any, i: number) => {
-          const due = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '—';
+          const due = r.dueDate ? fmtDate(new Date(r.dueDate)) : '—';
           const amt = Number(r.amount ?? 0).toFixed(2);
           return `<li style="margin:6px 0">Instalment ${i+1} — <strong>&pound;${amt}</strong> (due ${due})</li>`;
         }).join('');
@@ -2161,7 +2162,7 @@ export const appRouter = router({
         const cashRepaid = paid - totalWaqf;
         const borrowerTitle = (loan as any).borrowerTitle && (loan as any).borrowerTitle !== 'none' ? (loan as any).borrowerTitle + ' ' : '';
         const lenderDisplayName = borrowerTitle + loan.borrowerName;
-        const startDateDisplay = (loan as any).startDate ? new Date((loan as any).startDate).toLocaleDateString('en-GB') : new Date(loan.createdAt).toLocaleDateString('en-GB');
+        const startDateDisplay = (loan as any).startDate ? fmtDate(new Date((loan as any).startDate)) : fmtDate(new Date(loan.createdAt));
         const rows = repayments.map((r, i) => {
           const rWaqf = parseFloat((r as any).waqfAmount ?? '0');
           const waqfCell = rWaqf > 0
@@ -2170,8 +2171,8 @@ export const appRouter = router({
           return `
           <tr style="border-bottom:1px solid #e5e7eb">
             <td style="padding:8px 12px">${i + 1}</td>
-            <td style="padding:8px 12px">${r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-GB') : '\u2014'}</td>
-            <td style="padding:8px 12px">${r.paidAt ? new Date(r.paidAt).toLocaleDateString('en-GB') : '\u2014'}</td>
+            <td style="padding:8px 12px">${r.dueDate ? fmtDate(new Date(r.dueDate)) : '\u2014'}</td>
+            <td style="padding:8px 12px">${r.paidAt ? fmtDate(new Date(r.paidAt)) : '\u2014'}</td>
             <td style="padding:8px 12px">\u00a3${parseFloat(r.amount).toFixed(2)}${rWaqf > 0 ? '<br>' + waqfCell : ''}</td>
             <td style="padding:8px 12px;text-transform:capitalize">${(r.paymentMethod ?? '').replace(/_/g,' ')}</td>
             <td style="padding:8px 12px">${r.adminApprovedByName ?? '\u2014'}</td>
@@ -2506,7 +2507,7 @@ export const appRouter = router({
         paidAt: z.date().optional(),
       }))
       .mutation(async ({ input }) => {
-        const dateStr = input.paidAt ? new Date(input.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }) : new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+        const dateStr = input.paidAt ? fmtDateLong(new Date(input.paidAt)) : fmtDateLong(new Date());
         const html = `
           <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
             <div style="background:#5C1A1A;padding:20px;text-align:center">
@@ -3381,7 +3382,7 @@ export const appRouter = router({
           donorAddress: donor.address,
           taxYear: input.taxYear,
           donations: donations.map(d => ({
-            date: d.donatedAt ? new Date(d.donatedAt).toLocaleDateString("en-GB") : "—",
+            date: d.donatedAt ? fmtDate(new Date(d.donatedAt)) : "—",
             amount: Number(d.amount ?? 0),
             campaign: d.campaignName,
             method: d.paymentMethod,
@@ -3389,7 +3390,7 @@ export const appRouter = router({
             reference: d.referenceCode,
           })),
           pledgePayments: pledgePaymentsRows.map(p => ({
-            date: p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—",
+            date: p.paymentDate ? fmtDate(new Date(p.paymentDate)) : "—",
             amount: Number(p.amount ?? 0),
             campaign: p.campaignName,
             reference: p.reference,
@@ -3440,12 +3441,12 @@ export const appRouter = router({
           donorName: donor.name, donorEmail: donor.email, donorAddress: donor.address,
           taxYear: input.taxYear,
           donations: donations.map(d => ({
-            date: d.donatedAt ? new Date(d.donatedAt).toLocaleDateString("en-GB") : "—",
+            date: d.donatedAt ? fmtDate(new Date(d.donatedAt)) : "—",
             amount: Number(d.amount ?? 0), campaign: d.campaignName,
             method: d.paymentMethod, giftAid: !!d.giftAidDeclared, reference: d.referenceCode,
           })),
           pledgePayments: pledgePaymentsRows.map(p => ({
-            date: p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—",
+            date: p.paymentDate ? fmtDate(new Date(p.paymentDate)) : "—",
             amount: Number(p.amount ?? 0), campaign: p.campaignName, reference: p.reference,
           })),
           totalDonated, totalPledgePaid,
@@ -3522,12 +3523,12 @@ export const appRouter = router({
               donorName: donor.name, donorEmail: donor.email!, donorAddress: donor.address,
               taxYear: input.taxYear,
               donations: donations.map((d: any) => ({
-                date: d.donatedAt ? new Date(d.donatedAt).toLocaleDateString("en-GB") : "—",
+                date: d.donatedAt ? fmtDate(new Date(d.donatedAt)) : "—",
                 amount: Number(d.amount ?? 0), campaign: d.campaignName,
                 method: d.paymentMethod, giftAid: !!d.giftAidDeclared, reference: d.referenceCode,
               })),
               pledgePayments: pledgePaymentsRows.map((p: any) => ({
-                date: p.paymentDate ? new Date(p.paymentDate).toLocaleDateString("en-GB") : "—",
+                date: p.paymentDate ? fmtDate(new Date(p.paymentDate)) : "—",
                 amount: Number(p.amount ?? 0), campaign: p.campaignName, reference: p.reference,
               })),
               totalDonated, totalPledgePaid, grandTotal, giftAidTotal,
@@ -3649,7 +3650,7 @@ export const appRouter = router({
           r.grossPay ?? '0', r.incomeTax ?? '0', r.nationalInsurance ?? '0',
           r.pensionContribution ?? '0', r.otherDeductions ?? '0', r.totalDeductions ?? '0', r.netPay ?? '0',
           r.paymentMethod ?? 'bank_transfer', r.chequeNumber ?? '',
-          r.paidAt ? new Date(r.paidAt).toLocaleString('en-GB') : '',
+          r.paidAt ? fmtDateTime(new Date(r.paidAt)) : '',
           r.authorisedByName ?? '', r.paymentStatus ?? 'pending',
         ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
         const csv = [headers.join(','), ...csvRows].join('\n');
@@ -3670,8 +3671,8 @@ export const appRouter = router({
         const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
         const monthLabel = `${monthNames[input.month - 1]} ${input.year}`;
         const totals = rows.reduce((acc, r) => ({ gross: acc.gross + parseFloat(String(r.grossPay ?? 0)), net: acc.net + parseFloat(String(r.netPay ?? 0)), deductions: acc.deductions + parseFloat(String(r.totalDeductions ?? 0)) }), { gross: 0, net: 0, deductions: 0 });
-        const rowsHtml = rows.map(r => `<tr><td>${r.employeeName ?? `Employee #${r.userId}`}</td><td>£${parseFloat(String(r.grossPay??0)).toFixed(2)}</td><td>£${parseFloat(String(r.incomeTax??0)).toFixed(2)}</td><td>£${parseFloat(String(r.nationalInsurance??0)).toFixed(2)}</td><td>£${parseFloat(String(r.pensionContribution??0)).toFixed(2)}</td><td>£${parseFloat(String(r.otherDeductions??0)).toFixed(2)}</td><td><strong>£${parseFloat(String(r.netPay??0)).toFixed(2)}</strong></td><td>${r.paymentMethod??'bank_transfer'}</td><td>${r.chequeNumber??''}</td><td>${r.paidAt?new Date(r.paidAt).toLocaleDateString('en-GB'):''}</td><td>${r.authorisedByName??''}</td></tr>`).join('');
-        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payroll ${monthLabel}</title><style>body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:20px}h1{color:#1a3a2a;font-size:16px;margin-bottom:4px}p{margin:2px 0}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#1a3a2a;color:#fff;padding:5px 6px;text-align:left;font-size:10px}td{padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:10px}.total-row td{font-weight:bold;background:#f0f7f4;border-top:2px solid #1a3a2a}.footer{margin-top:24px;border-top:1px solid #ccc;padding-top:10px;font-size:10px;color:#666}</style></head><body><h1>AQ Society — Payroll Summary: ${monthLabel}</h1><p><strong>Generated:</strong> ${new Date().toLocaleString('en-GB')} &nbsp; <strong>Staff Count:</strong> ${rows.length}</p><table><thead><tr><th>Employee</th><th>Gross</th><th>Tax</th><th>NI</th><th>Pension</th><th>Other</th><th>Net Pay</th><th>Method</th><th>Cheque No</th><th>Paid</th><th>Authorised By</th></tr></thead><tbody>${rowsHtml}<tr class="total-row"><td>TOTALS (${rows.length} staff)</td><td>£${totals.gross.toFixed(2)}</td><td></td><td></td><td></td><td></td><td>£${totals.net.toFixed(2)}</td><td colspan="4"></td></tr></tbody></table><div class="footer"><p>Authorised by: Dr Abdul Hamid (Manager &amp; Trustee) — AQ Society Finance &amp; HR System</p></div></body></html>`;
+        const rowsHtml = rows.map(r => `<tr><td>${r.employeeName ?? `Employee #${r.userId}`}</td><td>£${parseFloat(String(r.grossPay??0)).toFixed(2)}</td><td>£${parseFloat(String(r.incomeTax??0)).toFixed(2)}</td><td>£${parseFloat(String(r.nationalInsurance??0)).toFixed(2)}</td><td>£${parseFloat(String(r.pensionContribution??0)).toFixed(2)}</td><td>£${parseFloat(String(r.otherDeductions??0)).toFixed(2)}</td><td><strong>£${parseFloat(String(r.netPay??0)).toFixed(2)}</strong></td><td>${r.paymentMethod??'bank_transfer'}</td><td>${r.chequeNumber??''}</td><td>${r.paidAt?fmtDate(new Date(r.paidAt)):''}</td><td>${r.authorisedByName??''}</td></tr>`).join('');
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payroll ${monthLabel}</title><style>body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:20px}h1{color:#1a3a2a;font-size:16px;margin-bottom:4px}p{margin:2px 0}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#1a3a2a;color:#fff;padding:5px 6px;text-align:left;font-size:10px}td{padding:4px 6px;border-bottom:1px solid #e5e7eb;font-size:10px}.total-row td{font-weight:bold;background:#f0f7f4;border-top:2px solid #1a3a2a}.footer{margin-top:24px;border-top:1px solid #ccc;padding-top:10px;font-size:10px;color:#666}</style></head><body><h1>AQ Society — Payroll Summary: ${monthLabel}</h1><p><strong>Generated:</strong> ${fmtDateTime(new Date())} &nbsp; <strong>Staff Count:</strong> ${rows.length}</p><table><thead><tr><th>Employee</th><th>Gross</th><th>Tax</th><th>NI</th><th>Pension</th><th>Other</th><th>Net Pay</th><th>Method</th><th>Cheque No</th><th>Paid</th><th>Authorised By</th></tr></thead><tbody>${rowsHtml}<tr class="total-row"><td>TOTALS (${rows.length} staff)</td><td>£${totals.gross.toFixed(2)}</td><td></td><td></td><td></td><td></td><td>£${totals.net.toFixed(2)}</td><td colspan="4"></td></tr></tbody></table><div class="footer"><p>Authorised by: Dr Abdul Hamid (Manager &amp; Trustee) — AQ Society Finance &amp; HR System</p></div></body></html>`;
         return { html, monthLabel, rowCount: rows.length, totals };
       }),
 
@@ -6695,7 +6696,7 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
             .text('LBMW Correspondence Register', 70, 76, { width: pageW - 40 });
           doc.rect(50, 110, pageW, 2).fill(GOLD);
           const dateRange = (input.dateFrom || input.dateTo)
-            ? `${input.dateFrom ? new Date(input.dateFrom).toLocaleDateString('en-GB') : 'Start'} \u2014 ${input.dateTo ? new Date(input.dateTo).toLocaleDateString('en-GB') : 'Today'}`
+            ? `${input.dateFrom ? fmtDate(new Date(input.dateFrom)) : 'Start'} \u2014 ${input.dateTo ? fmtDate(new Date(input.dateTo)) : 'Today'}`
             : 'All dates';
           doc.moveDown(1.2);
           doc.fillColor('#444').fontSize(9).font('Helvetica')
@@ -6725,13 +6726,13 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
             const statusColor: Record<string, string> = { pending: '#d97706', responded: '#16a34a', awaiting_reply: '#2563eb', closed: '#6b7280' };
             let cx = 50;
             const cells = [
-              { val: row.dateReceived ? new Date(row.dateReceived).toLocaleDateString('en-GB') : '\u2014', color: '#333', w: cols[0].w },
+              { val: row.dateReceived ? fmtDate(new Date(row.dateReceived)) : '\u2014', color: '#333', w: cols[0].w },
               { val: `${row.contactName || '\u2014'}${row.contactRole ? ` (${row.contactRole})` : ''}`, color: '#333', w: cols[1].w },
               { val: row.subject || '\u2014', color: '#111', w: cols[2].w },
               { val: row.channel || '\u2014', color: '#555', w: cols[3].w },
               { val: (row.priority || '\u2014').toUpperCase(), color: priorityColor[row.priority] || '#333', w: cols[4].w },
               { val: (row.status || '\u2014').replace('_', ' ').toUpperCase(), color: statusColor[row.status] || '#333', w: cols[5].w },
-              { val: row.responseDeadline ? new Date(row.responseDeadline).toLocaleDateString('en-GB') : '\u2014', color: '#333', w: cols[6].w },
+              { val: row.responseDeadline ? fmtDate(new Date(row.responseDeadline)) : '\u2014', color: '#333', w: cols[6].w },
               { val: row.linkedComplianceActionId ? `Action #${row.linkedComplianceActionId}` : '\u2014', color: '#555', w: cols[7].w },
             ];
             cells.forEach(cell => {

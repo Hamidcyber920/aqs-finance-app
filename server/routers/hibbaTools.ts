@@ -19,6 +19,7 @@ import {
   listAllUsers,
 } from "../db";
 import {
+import { fmtDate } from "../dateUtils";
   getAllTenants,
   getOverdueRentPayments,
   getUpcomingRentDue,
@@ -182,7 +183,7 @@ export const hibbaToolsRouter = router({
     .query(async () => {
       try {
         // Use UK local date (Europe/London) to avoid UTC date boundary issues
-        const ukDateStr = new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+        const ukDateStr = fmtDate(new Date());
         const [dd, mm, yyyy] = ukDateStr.split("/");
         const res = await fetch(
           `https://api.aladhan.com/v1/timingsByCity/${dd}-${mm}-${yyyy}?city=Liverpool&country=United+Kingdom&method=2`
@@ -368,7 +369,7 @@ export const hibbaToolsRouter = router({
       // Prayer times (use UK local date)
       let prayerTimes = null;
       try {
-        const ukDateStr = new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London" });
+        const ukDateStr = fmtDate(new Date());
         const [dd, mm, yyyy] = ukDateStr.split("/");
         const res = await fetch(`https://api.aladhan.com/v1/timingsByCity/${dd}-${mm}-${yyyy}?city=Liverpool&country=United+Kingdom&method=2`);
         const json = await res.json();

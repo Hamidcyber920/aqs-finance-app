@@ -34,6 +34,7 @@ async function sendGmail(to: string, name: string, subject: string, htmlBody: st
   });
 }
 import PDFDocument from "pdfkit";
+import { fmtDate, fmtDateTime } from "../dateUtils";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function monthRange(year: number, month: number) {
@@ -381,7 +382,7 @@ export const trusteeFinanceRouter = router({
         py += 14;
         for (const r of pendingApprovals.slice(0, 15)) {
           doc.fontSize(9).font("Helvetica").fillColor("#111827")
-            .text(r.receiptDate ? new Date(r.receiptDate).toLocaleDateString("en-GB") : "—", 50, py)
+            .text(r.receiptDate ? fmtDate(new Date(r.receiptDate)) : "—", 50, py)
             .text((r.vendor ?? "—").slice(0, 20), 130, py)
             .text((r.categoryName ?? "—").slice(0, 20), 280, py)
             .text(fmtGBP(parseFloat(r.amount ?? "0")), 420, py)
@@ -405,7 +406,7 @@ export const trusteeFinanceRouter = router({
         by += 14;
         for (const b of billRows) {
           doc.fontSize(9).font("Helvetica").fillColor("#111827")
-            .text(b.billDate ? new Date(b.billDate as any).toLocaleDateString("en-GB") : "—", 50, by)
+            .text(b.billDate ? fmtDate(new Date(b.billDate as any)) : "—", 50, by)
             .text((b.supplier ?? "—").slice(0, 20), 120, by)
             .text((b.building ?? "—").slice(0, 18), 260, by)
             .text((b.category ?? "—"), 360, by)
@@ -426,7 +427,7 @@ export const trusteeFinanceRouter = router({
       for (const s of schedRows) {
         const statusColor = s.status === "paid" ? "#5C1A1A" : s.status === "held" ? "#d97706" : "#6b7280";
         doc.fontSize(9).font("Helvetica").fillColor("#111827")
-          .text(s.dueDate ? new Date(s.dueDate as any).toLocaleDateString("en-GB") : "—", 50, sy)
+          .text(s.dueDate ? fmtDate(new Date(s.dueDate as any)) : "—", 50, sy)
           .text((s.description ?? "—").slice(0, 25), 130, sy)
           .text((s.building ?? "—").slice(0, 18), 310, sy)
           .fillColor(statusColor).text(s.status, 410, sy)
@@ -441,7 +442,7 @@ export const trusteeFinanceRouter = router({
 
       // Footer on last page
       doc.fontSize(9).fillColor("#9ca3af").font("Helvetica")
-        .text(`Generated: ${new Date().toLocaleString("en-GB")} — Confidential — AQ Society`, 50, doc.page.height - 40, { align: "center" });
+        .text(`Generated: ${fmtDateTime(new Date())} — Confidential — AQ Society`, 50, doc.page.height - 40, { align: "center" });
 
       doc.end();
       await new Promise<void>((resolve) => doc.on("end", resolve));
@@ -511,7 +512,7 @@ export const trusteeFinanceRouter = router({
 
       const header = "Due Date,Description,Supplier,Building,Type,Amount,Status,Paid By,Paid At,Held By,Held At,Note\n";
       const csvRows = rows.map(r => [
-        r.dueDate ? new Date(r.dueDate as any).toLocaleDateString("en-GB") : "",
+        r.dueDate ? fmtDate(new Date(r.dueDate as any)) : "",
         `"${(r.description ?? "").replace(/"/g, '""')}"`,
         `"${(r.supplier ?? "").replace(/"/g, '""')}"`,
         `"${(r.building ?? "").replace(/"/g, '""')}"`,
@@ -519,9 +520,9 @@ export const trusteeFinanceRouter = router({
         parseFloat(r.amount ?? "0").toFixed(2),
         r.status,
         r.paidByName ?? "",
-        r.paidAt ? new Date(r.paidAt as any).toLocaleString("en-GB") : "",
+        r.paidAt ? fmtDateTime(new Date(r.paidAt as any)) : "",
         r.heldByName ?? "",
-        r.heldAt ? new Date(r.heldAt as any).toLocaleString("en-GB") : "",
+        r.heldAt ? fmtDateTime(new Date(r.heldAt as any)) : "",
         `"${(r.note ?? "").replace(/"/g, '""')}"`,
       ].join(",")).join("\n");
 
@@ -546,15 +547,15 @@ export const trusteeFinanceRouter = router({
 
       const header = "Date,Type,Description,Amount,Status,Note\n";
       const billRows = bills.map(b => [
-        b.billDate ? new Date(b.billDate as any).toLocaleDateString("en-GB") : "",
+        b.billDate ? fmtDate(new Date(b.billDate as any)) : "",
         "Bill",
-        `"Bill ${b.periodStart ? new Date(b.periodStart as any).toLocaleDateString("en-GB") : ""} - ${b.periodEnd ? new Date(b.periodEnd as any).toLocaleDateString("en-GB") : ""}"`,
+        `"Bill ${b.periodStart ? fmtDate(new Date(b.periodStart as any)) : ""} - ${b.periodEnd ? fmtDate(new Date(b.periodEnd as any)) : ""}"`,
         parseFloat(b.amount ?? "0").toFixed(2),
         "paid",
         `"${(b.notes ?? "").replace(/"/g, '""')}"`,
       ].join(","));
       const schedRows = scheduled.map(s => [
-        s.dueDate ? new Date(s.dueDate as any).toLocaleDateString("en-GB") : "",
+        s.dueDate ? fmtDate(new Date(s.dueDate as any)) : "",
         "Scheduled",
         `"${(s.description ?? "").replace(/"/g, '""')}"`,
         parseFloat(s.amount ?? "0").toFixed(2),
@@ -596,8 +597,8 @@ export const trusteeFinanceRouter = router({
       // Build 13 weekly buckets
       const weeks = Array.from({ length: 13 }, (_, i) => {
         const weekStart = new Date(now.getTime() + i * 7 * 24 * 60 * 60 * 1000);
-        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
-        const weekLabel = `W${i + 1} ${weekStart.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}`;
+        const weekEnd = fmtDate(new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000));
+        const weekLabel = `W${i + 1} ${weekStart}`;
         const weekPayments = scheduled.filter((s: any) => {
           const d = new Date(s.dueDate);
           return d >= weekStart && d < weekEnd;

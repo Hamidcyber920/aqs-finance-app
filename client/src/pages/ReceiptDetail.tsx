@@ -19,6 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { fmtDate } from "@/lib/dateUtils";
 
 export default function ReceiptDetailPage() {
   const params = useParams<{ id: string }>();
@@ -419,7 +420,7 @@ export default function ReceiptDetailPage() {
                   <div className="text-xs text-muted-foreground mt-0.5">
                     From: {email.fromName ? `${email.fromName} <${email.fromEmail}>` : email.fromEmail}
                     {" · "}
-                    {new Date(email.receivedAt).toLocaleDateString()}
+                    {fmtDate(new Date(email.receivedAt))}
                   </div>
                   {email.snippet && (
                     <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{email.snippet}</p>
@@ -455,7 +456,7 @@ export default function ReceiptDetailPage() {
                     <span className="text-sm font-medium truncate">{s.label}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    £{parseFloat(String(s.amount ?? 0)).toFixed(2)} · {s.date ? new Date(s.date).toLocaleDateString() : "—"}
+                    £{parseFloat(String(s.amount ?? 0)).toFixed(2)} · {s.date ? fmtDate(new Date(s.date)) : "—"}
                   </div>
                 </div>
                 <Button

@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { storagePut, storageGet } from "../storage";
 import { notifyOwner } from "../_core/notification";
+import { fmtDate } from "../dateUtils";
 
 // ─── Senior gate (superadmin or trustee) ─────────────────────────────────────
 const seniorProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -77,7 +78,7 @@ export async function runBackup(
     }
   }
 
-  const now = new Date();
+  const now = fmtDate(new Date());
   const dateStr = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const filename = `backup-${dateStr}.json`;
   const s3Key = `system-backups/${filename}`;
@@ -124,7 +125,7 @@ export async function runBackup(
   // Notify owner only for scheduled and manual (not every realtime backup to avoid noise)
   if (triggeredBy !== "realtime") {
     await notifyOwner({
-      title: `✅ Backup Complete — ${now.toLocaleDateString("en-GB")}`,
+      title: `✅ Backup Complete — ${now}`,
       content: `Backup completed successfully.\n\n• Tables: ${tables.length}\n• Records: ${totalRecords.toLocaleString()}\n• File size: ${(sizeBytes / 1024).toFixed(1)} KB\n• Triggered by: ${triggeredByLabel}\n• File: ${filename}`,
     }).catch(() => {});
   }

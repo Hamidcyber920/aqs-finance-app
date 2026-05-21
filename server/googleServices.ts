@@ -4,6 +4,7 @@
  * Uses the same OAuth credentials (GOOGLE_DRIVE_CLIENT_ID/SECRET/REFRESH_TOKEN).
  */
 import { google, drive_v3, sheets_v4 } from "googleapis";
+import { fmtDate, fmtDateLong } from "./dateUtils";
 
 // ─── Auth Helper ──────────────────────────────────────────────────────────────
 
@@ -543,7 +544,7 @@ export async function sendBulkGmail(
 
   const TEMPLATES: Record<string, { subject: string; bodyTemplate: string }> = {
     friday_comms: {
-      subject: `Friday Comms — ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`,
+      subject: `Friday Comms — ${fmtDateLong(new Date())}`,
       bodyTemplate: "Bismillah ir-Rahman ir-Rahim\n\nAssalamu Alaikum,\n\n[BODY]\n\nPlease remember us in your Dua.\n\nJazakAllah Khair,\nAbdullah Quilliam Society",
     },
     urgent: {
@@ -666,7 +667,7 @@ export async function fetchUpcomingWithin(hours: number): Promise<CalendarEvent[
     description: ev.description ?? undefined,
     location: ev.location ?? undefined,
     start: new Date(ev.start?.dateTime ?? ev.start?.date ?? now.toISOString()),
-    end: new Date(ev.end?.dateTime ?? ev.end?.date ?? now.toISOString()),
+    end: fmtDate(new Date(ev.end?.dateTime ?? ev.end?.date ?? now.toISOString())),
     allDay: !!ev.start?.date && !ev.start?.dateTime,
   }));
 }
@@ -753,7 +754,7 @@ export async function fetchAndPushToCommsHub(
       const content = [
         `Subject: ${email.subject}`,
         `From: ${email.fromName ?? ""} <${email.from ?? ""}>`,
-        `Received: ${email.date.toLocaleDateString("en-GB")}`,
+        `Received: ${email.date}`,
         `Body:\n${(email.body ?? "").slice(0, 3000)}`,
       ].join("\n");
 
@@ -860,7 +861,7 @@ export async function collectDailyBriefingData(): Promise<DailyBriefingData> {
       subject: r.subject,
       from: r.fromName || r.fromEmail || "Unknown",
       summary: r.aiSummary || "(No summary yet)",
-      receivedAt: r.receivedAt ? new Date(r.receivedAt).toLocaleDateString("en-GB") : "Unknown",
+      receivedAt: r.receivedAt ? fmtDate(new Date(r.receivedAt)) : "Unknown",
     }));
   } catch (err) {
     console.error("[DailyBriefing] Urgent emails fetch failed:", err);

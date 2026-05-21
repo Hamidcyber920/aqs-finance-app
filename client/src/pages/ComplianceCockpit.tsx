@@ -15,6 +15,7 @@ import {
   GraduationCap, FileText, ExternalLink, RefreshCw, Upload, Download } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import SmartDocumentUpload from "@/components/SmartDocumentUpload";
+import { fmtDate } from "@/lib/dateUtils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -504,7 +505,7 @@ export default function ComplianceCockpit() {
               const allItems = [...actions.map((a: any) => ({ type: "Action", name: a.title || a.description, status: a.status, priority: a.priority || "", dueDate: a.dueDate })), ...training.map((t: any) => ({ type: "Training", name: t.module || t.courseName, status: t.computedStatus || t.status, priority: "", dueDate: t.expiresAt })), ...policies.map((p: any) => ({ type: "Policy", name: p.title || p.name, status: p.status, priority: "", dueDate: p.reviewDate }))];
               const filtered = allItems.filter(i => { if (!i.dueDate) return true; const d = new Date(i.dueDate); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
               if (!filtered.length) { toast.info("No records in selected range"); return; }
-              const rows = filtered.map(i => `${i.type},${(i.name || "").replace(/,/g, " ")},${i.status},${i.priority},${i.dueDate ? new Date(i.dueDate).toLocaleDateString() : ""}`);
+              const rows = filtered.map(i => `${i.type},${(i.name || "").replace(/,/g, " ")},${i.status},${i.priority},${i.dueDate ? fmtDate(new Date(i.dueDate)) : ""}`);
               const csv = "Type,Name,Status,Priority,Due Date\n" + rows.join("\n");
               const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
               const a = document.createElement("a"); a.href = url; a.download = `compliance_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -516,7 +517,7 @@ export default function ComplianceCockpit() {
               let html = `<html><head><title>Compliance ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}</style></head><body>`;
               html += `<h2>Compliance Report</h2><p>${dateFrom} to ${dateTo}</p><p><strong>Total Items: ${filtered.length}</strong></p>`;
               html += `<table><tr><th>Type</th><th>Name</th><th>Status</th><th>Priority</th><th>Due Date</th></tr>`;
-              filtered.forEach(i => { html += `<tr><td>${i.type}</td><td>${i.name || ""}</td><td>${i.status}</td><td>${i.priority}</td><td>${i.dueDate ? new Date(i.dueDate).toLocaleDateString() : ""}</td></tr>`; });
+              filtered.forEach(i => { html += `<tr><td>${i.type}</td><td>${i.name || ""}</td><td>${i.status}</td><td>${i.priority}</td><td>${i.dueDate ? fmtDate(new Date(i.dueDate)) : ""}</td></tr>`; });
               html += `</table></body></html>`;
               const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
             }}><FileText className="w-3 h-3" /> PDF</Button>

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Database, Download, RefreshCw, CheckCircle2, HardDrive, Shield, AlertTriangle, Calendar, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -38,8 +39,9 @@ export default function BackupsPage() {
   const totalSizeMB = backups.reduce((acc: number, b: any) => acc + (b.sizeBytes ?? 0) / 1048576, 0).toFixed(1);
 
   const drLastDate = new Date(DR_LAST_DRILL);
-  const drNextDate = new Date(DR_NEXT_DRILL);
-  const drDaysUntil = Math.ceil((drNextDate.getTime() - Date.now()) / 86400000);
+  const drNextDateObj = new Date(DR_NEXT_DRILL);
+  const drNextDate = fmtDate(drNextDateObj);
+  const drDaysUntil = Math.ceil((drNextDateObj.getTime() - Date.now()) / 86400000);
 
   const fmtSize = (bytes: number) => {
     if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
@@ -70,7 +72,7 @@ export default function BackupsPage() {
         {/* Status cards */}
         <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:24 }}>
           {[
-            { label:"Last Backup", value:lastBackupDate?.toLocaleDateString("en-GB") ?? "—", sub:hoursSince!=null?`${hoursSince}h ago`:undefined, color:T.mint, icon:CheckCircle2 },
+            { label:"Last Backup", value:lastBackupDate ? fmtDate(lastBackupDate) : "—", sub:hoursSince!=null?`${hoursSince}h ago`:undefined, color:T.mint, icon:CheckCircle2 },
             { label:"Total Backups", value:backups.length, color:T.purple, icon:Database },
             { label:"Storage Used", value:`${totalSizeMB} MB`, color:"#f59e0b", icon:HardDrive },
             { label:"Retention Policy", value:`${RETENTION_DAYS} days`, color:T.mint, icon:Shield },
@@ -99,11 +101,11 @@ export default function BackupsPage() {
             <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                 <span style={{ fontSize:12,color:T.muted }}>Last DR Drill</span>
-                <span style={{ fontSize:12,fontWeight:600,color:T.white }}>{drLastDate.toLocaleDateString("en-GB")}</span>
+                <span style={{ fontSize:12,fontWeight:600,color:T.white }}>{fmtDate(drLastDate)}</span>
               </div>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                 <span style={{ fontSize:12,color:T.muted }}>Next Planned Drill</span>
-                <span style={{ fontSize:12,fontWeight:600,color:drDaysUntil < 30 ? '#f59e0b' : T.mint }}>{drNextDate.toLocaleDateString("en-GB")} ({drDaysUntil > 0 ? `in ${drDaysUntil} days` : 'overdue'})</span>
+                <span style={{ fontSize:12,fontWeight:600,color:drDaysUntil < 30 ? '#f59e0b' : T.mint }}>{drNextDate} ({drDaysUntil > 0 ? `in ${drDaysUntil} days` : 'overdue'})</span>
               </div>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                 <span style={{ fontSize:12,color:T.muted }}>Drill Frequency</span>
@@ -156,7 +158,7 @@ export default function BackupsPage() {
                   <div>
                     <p style={{ fontSize:13,fontWeight:600,color:T.white,margin:0 }}>{b.filename ?? b.name ?? `Backup #${b.id}`}</p>
                     <div style={{ display:"flex",gap:12,marginTop:3,flexWrap:"wrap" }}>
-                      <span style={{ fontSize:11,color:T.muted }}>{b.createdAt ? new Date(b.createdAt).toLocaleString("en-GB") : "—"}</span>
+                      <span style={{ fontSize:11,color:T.muted }}>{b.createdAt ? fmtDate(new Date(b.createdAt)) : "—"}</span>
                       {b.sizeBytes ? <span style={{ fontSize:11,color:T.muted }}>{fmtSize(b.sizeBytes)}</span> : null}
                       {b.recordCount ? <span style={{ fontSize:11,color:T.muted }}>{b.recordCount.toLocaleString()} records</span> : null}
                       <span style={{ fontSize:11,padding:"1px 8px",borderRadius:999,background:b.triggeredBy==="scheduled"?"rgba(99,91,255,0.12)":"rgba(0,255,194,0.08)",color:b.triggeredBy==="scheduled"?"#a78bfa":T.mint,fontWeight:600 }}>

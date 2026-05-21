@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = { navy: "#0A192F", purple: "#635BFF", mint: "#00FFC2", white: "#FFFFFF", muted: "rgba(255,255,255,0.5)", border: "rgba(255,255,255,0.08)", glass: "rgba(255,255,255,0.04)", card: "rgba(13,34,64,0.8)" };
 
@@ -39,7 +40,7 @@ function fmt(v: string | number | null | undefined) {
 
 function fmtDate(v: string | Date | null | undefined) {
   if (!v) return "—";
-  return new Date(v).toLocaleDateString("en-GB");
+  return fmtDate(new Date(v));
 }
 
 export default function PledgesPage() {

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { Calendar, Plus, Sparkles, FileText, CheckSquare, ChevronRight, UserPlus, Download } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { fmtDate } from "@/lib/dateUtils";
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -179,7 +180,7 @@ export default function MeetingsV3Page() {
             const allMeetings = meetings.data ?? [];
             const filtered = allMeetings.filter((m: any) => { const d = new Date(m.scheduledAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
             if (!filtered.length) { toast.info("No meetings in selected range"); return; }
-            const rows = filtered.map((m: any) => `${new Date(m.scheduledAt).toLocaleDateString()},${(m.title || "").replace(/,/g," ")},${m.meetingType || ""},${m.status},${m.location || ""}`);
+            const rows = filtered.map((m: any) => `${fmtDate(new Date(m.scheduledAt))},${(m.title || "").replace(/,/g," ")},${m.meetingType || ""},${m.status},${m.location || ""}`);
             const csv = "Date,Title,Type,Status,Location\n" + rows.join("\n");
             const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
             const a = document.createElement("a"); a.href = url; a.download = `meetings_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -191,7 +192,7 @@ export default function MeetingsV3Page() {
             let html = `<html><head><title>Meetings ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}</style></head><body>`;
             html += `<h2>Meetings Report</h2><p>${dateFrom} to ${dateTo}</p><p><strong>Total: ${filtered.length}</strong></p>`;
             html += `<table><tr><th>Date</th><th>Title</th><th>Type</th><th>Status</th><th>Location</th></tr>`;
-            filtered.forEach((m: any) => { html += `<tr><td>${new Date(m.scheduledAt).toLocaleDateString()}</td><td>${m.title || ""}</td><td>${m.meetingType || ""}</td><td>${m.status}</td><td>${m.location || ""}</td></tr>`; });
+            filtered.forEach((m: any) => { html += `<tr><td>${fmtDate(new Date(m.scheduledAt))}</td><td>${m.title || ""}</td><td>${m.meetingType || ""}</td><td>${m.status}</td><td>${m.location || ""}</td></tr>`; });
             html += `</table></body></html>`;
             const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
           }}><FileText className="w-3 h-3" /> PDF</Button>

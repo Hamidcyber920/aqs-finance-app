@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, CheckCircle, AlertTriangle, XCircle, Clock, Search, Trash2, Edit2, Award, Users, BookOpen, Grid3X3, UserPlus, Download, FileText } from "lucide-react";
+import { fmtDate } from "@/lib/dateUtils";
 
 const STATUS_COLORS: Record<string, string> = {
   valid: "bg-green-100 text-green-800",
@@ -175,7 +176,7 @@ export default function TrainingTracker() {
             <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
               const filtered = records.filter((r: any) => { const d = new Date(r.completedAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
               if (!filtered.length) { toast("No records in selected range"); return; }
-              const rows = filtered.map((r: any) => `${r.userName},${r.module},${r.provider || ""},${new Date(r.completedAt).toLocaleDateString()},${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : ""},${r.liveStatus || r.status}`);
+              const rows = filtered.map((r: any) => `${r.userName},${r.module},${r.provider || ""},${fmtDate(new Date(r.completedAt))},${r.expiresAt ? fmtDate(new Date(r.expiresAt)) : ""},${r.liveStatus || r.status}`);
               const csv = "Staff,Module,Provider,Completed,Expires,Status\n" + rows.join("\n");
               const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
               const a = document.createElement("a"); a.href = url; a.download = `training_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -186,7 +187,7 @@ export default function TrainingTracker() {
               let html = `<html><head><title>Training ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}</style></head><body>`;
               html += `<h2>Training Records Report</h2><p>${dateFrom} to ${dateTo}</p><p><strong>Total Records: ${filtered.length}</strong></p>`;
               html += `<table><tr><th>Staff</th><th>Module</th><th>Provider</th><th>Completed</th><th>Expires</th><th>Status</th></tr>`;
-              filtered.forEach((r: any) => { html += `<tr><td>${r.userName}</td><td>${r.module}</td><td>${r.provider || ""}</td><td>${new Date(r.completedAt).toLocaleDateString()}</td><td>${r.expiresAt ? new Date(r.expiresAt).toLocaleDateString() : ""}</td><td>${r.liveStatus || r.status}</td></tr>`; });
+              filtered.forEach((r: any) => { html += `<tr><td>${r.userName}</td><td>${r.module}</td><td>${r.provider || ""}</td><td>${fmtDate(new Date(r.completedAt))}</td><td>${r.expiresAt ? fmtDate(new Date(r.expiresAt)) : ""}</td><td>${r.liveStatus || r.status}</td></tr>`; });
               html += `</table></body></html>`;
               const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
             }}><FileText className="w-3 h-3" /> PDF</Button>
@@ -246,7 +247,7 @@ export default function TrainingTracker() {
                 {summary.urgentActions.slice(0, 5).map((a, i) => (
                   <div key={i} className="flex items-center justify-between text-sm">
                     <span><span className="font-medium">{a.staff}</span> — {a.module}</span>
-                    <Badge className={STATUS_COLORS[a.type]}>{a.type === "expired" ? "Expired" : "Expiring Soon"} {a.date ? new Date(a.date).toLocaleDateString() : ""}</Badge>
+                    <Badge className={STATUS_COLORS[a.type]}>{a.type === "expired" ? "Expired" : "Expiring Soon"} {a.date ? fmtDate(new Date(a.date)) : ""}</Badge>
                   </div>
                 ))}
                 {summary.urgentActions.length > 5 && <p className="text-xs text-amber-700">+{summary.urgentActions.length - 5} more</p>}
@@ -307,8 +308,8 @@ export default function TrainingTracker() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right text-xs text-muted-foreground">
-                          <p>Completed: {r.completedAt ? new Date(r.completedAt).toLocaleDateString() : "—"}</p>
-                          {r.expiresAt && <p>Expires: {new Date(r.expiresAt).toLocaleDateString()}</p>}
+                          <p>Completed: {r.completedAt ? fmtDate(new Date(r.completedAt)) : "—"}</p>
+                          {r.expiresAt && <p>Expires: {fmtDate(new Date(r.expiresAt))}</p>}
                         </div>
                         <Badge className={`${STATUS_COLORS[r.liveStatus ?? r.status]} flex items-center gap-1`}>
                           {STATUS_ICON[r.liveStatus ?? r.status]}

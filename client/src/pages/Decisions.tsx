@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2, CheckCircle2, XCircle, Clock, ChevronRight, FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
 import SmartDocumentUpload from "@/components/SmartDocumentUpload";
+import { fmtDate } from "@/lib/dateUtils";
 
 const OUTCOME_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   passed: { label: "Passed", color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
@@ -189,7 +190,7 @@ export default function Decisions() {
                           )}
                         </TableCell>
                         <TableCell className="text-sm tabular-nums">
-                          {d.meetingDate ? new Date(d.meetingDate).toLocaleDateString("en-GB") : "—"}
+                          {d.meetingDate ? fmtDate(new Date(d.meetingDate)) : "—"}
                         </TableCell>
                         <TableCell className="text-sm">{d.proposer ?? "—"}</TableCell>
                         <TableCell className="text-center text-sm tabular-nums text-emerald-400 font-semibold">{d.votesFor}</TableCell>

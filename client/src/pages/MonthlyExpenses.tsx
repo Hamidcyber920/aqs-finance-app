@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -66,7 +67,7 @@ function SectionCard({ title, items, color, onAuthorise, onReject, onPay, onWith
                     {item.secondApproverRequired && !item.secondApprovedAt && item.authorisedAt && <span style={{fontSize:10,fontWeight:700,background:"rgba(251,191,36,0.15)",color:"#fbbf24",padding:"2px 7px",borderRadius:999,border:"1px solid rgba(251,191,36,0.3)"}}>⏳ 2ND APPROVAL NEEDED</span>}
                   </div>
                   <div style={{ display:"flex",gap:16,flexWrap:"wrap" }}>
-                    {item.receiptDate && <span style={{ fontSize:12,color:T.muted }}>{new Date(item.receiptDate).toLocaleDateString("en-GB")}</span>}
+                    {item.receiptDate && <span style={{ fontSize:12,color:T.muted }}>{fmtDate(new Date(item.receiptDate))}</span>}
                     {item.categoryName && <span style={{ fontSize:12,color:T.muted }}>{item.categoryName}</span>}
                     {item.departmentName && <span style={{ fontSize:12,color:T.muted }}>{item.departmentName}</span>}
                     {item.notes && <span style={{ fontSize:12,color:T.muted,fontStyle:"italic" }}>{item.notes.slice(0,80)}{item.notes.length>80?"…":""}</span>}
@@ -502,7 +503,7 @@ export default function MonthlyExpenses() {
     allItemsFlat.forEach((r: any) => {
       const rd = r.receiptDate || r.paidAt || r.createdAt || r.date;
       csvRows.push([
-        escape(rd ? new Date(rd).toLocaleDateString("en-GB") : ""),
+        escape(rd ? fmtDate(new Date(rd)) : ""),
         escape(r.vendor || r.staffName || r.name || ""),
         escape(r._type || ""),
         escape(r.categoryName || r.departmentName || ""),

@@ -18,6 +18,7 @@ import {
   Upload, Eye, Clock, Tag, X, Paperclip, Filter, CalendarDays, ChevronDown,
   SquareCheck, Trash2, Flag
 } from "lucide-react";
+import { fmtDate } from "@/lib/dateUtils";
 
 const PRIORITY_COLORS: Record<string, string> = {
   urgent: "bg-red-500/20 text-red-400 border-red-500/30",
@@ -213,7 +214,7 @@ export default function CommsInboxPage() {
 
   const registerGmailPush = trpc.commsInbox.registerGmailPush.useMutation({
     onSuccess: (data) => {
-      toast.success(`Gmail push registered — expires ${new Date(data.expiresAt).toLocaleDateString()}`);
+      toast.success(`Gmail push registered — expires ${fmtDate(new Date(data.expiresAt))}`);
       setShowWebhookDialog(false);
     },
     onError: (e) => toast.error(`Webhook registration failed: ${e.message}`),
@@ -1313,7 +1314,7 @@ export default function CommsInboxPage() {
                     <div className="text-xs text-gray-400">
                       {r.vendor && <span>{r.vendor} · </span>}
                       {r.amount && <span>£{Number(r.amount).toFixed(2)} · </span>}
-                      {r.date && <span>{new Date(r.date).toLocaleDateString()}</span>}
+                      {r.date && <span>{fmtDate(new Date(r.date))}</span>}
                     </div>
                   </button>
                 ))}

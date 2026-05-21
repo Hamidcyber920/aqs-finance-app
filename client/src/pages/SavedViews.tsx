@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Bookmark, Plus, Trash2, Star } from "lucide-react";
+import { fmtDate } from "@/lib/dateUtils";
 
 const MODULE_LABELS: Record<string, string> = {
   donors: "Donors",
@@ -73,7 +74,7 @@ export default function SavedViews() {
               <CardContent className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Badge className="bg-blue-100 text-blue-800">{MODULE_LABELS[view.module] || view.module}</Badge>
-                  <span className="text-xs text-muted-foreground">{new Date(view.createdAt).toLocaleDateString("en-GB")}</span>
+                  <span className="text-xs text-muted-foreground">{fmtDate(new Date(view.createdAt))}</span>
                 </div>
                 {view.filters && Object.keys(view.filters).length > 0 && (
                   <div className="text-xs text-muted-foreground">

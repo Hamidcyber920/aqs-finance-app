@@ -21,6 +21,7 @@ import {
   Copy, MessageCircle, ExternalLink, Download, RefreshCw, Plus, Send,
   Smartphone, Globe, Landmark, QrCode, ScanLine, Banknote, Loader2
 } from "lucide-react";
+import { fmtDate, fmtDateTime } from "@/lib/dateUtils";
 
 // Stripe publishable key — loaded once outside any component
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string);
@@ -1136,7 +1137,7 @@ function GiftAidPanel() {
                   <td className="py-2 pr-4 font-mono text-xs text-blue-700">{d.uniqueReferenceNumber ?? d.stripePaymentIntentId ?? d.stripeTransactionRef ?? `#${d.id}`}</td>
                   <td className="py-2">
                     {d.consentTimestamp
-                      ? <span className="inline-flex items-center gap-1 text-xs text-green-700"><CheckCircle2 className="w-3 h-3" />{new Date(d.consentTimestamp).toLocaleDateString("en-GB")}</span>
+                      ? <span className="inline-flex items-center gap-1 text-xs text-green-700"><CheckCircle2 className="w-3 h-3" />{fmtDate(new Date(d.consentTimestamp))}</span>
                       : <span className="text-xs text-amber-600">Manual</span>}
                   </td>
                 </tr>

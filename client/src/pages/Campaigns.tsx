@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -90,7 +91,7 @@ export default function CampaignsPage() {
             <button onClick={() => {
               const filtered = campaigns.filter((c: any) => { const d = c.scheduledAt ? new Date(c.scheduledAt) : new Date(c.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); });
               if (!filtered.length) { toast.info("No campaigns in selected range"); return; }
-              const rows = filtered.map((c: any) => `${c.name},${c.type || "email"},${c.subject || ""},${c.status},${c.sentCount ?? 0},${c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : ""}`);
+              const rows = filtered.map((c: any) => `${c.name},${c.type || "email"},${c.subject || ""},${c.status},${c.sentCount ?? 0},${c.scheduledAt ? fmtDate(new Date(c.scheduledAt)) : ""}`);
               const csv = "Name,Type,Subject,Status,Sent Count,Scheduled\n" + rows.join("\n");
               const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
               const a = document.createElement("a"); a.href = url; a.download = `campaigns_${dateFrom}_to_${dateTo}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -103,7 +104,7 @@ export default function CampaignsPage() {
               let html = `<html><head><title>Campaigns ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}</style></head><body>`;
               html += `<h2>Campaign Report</h2><p>${dateFrom} to ${dateTo}</p><p><strong>Total Campaigns: ${filtered.length} | Emails Sent: ${filtered.reduce((s: number, c: any) => s + Number(c.sentCount ?? 0), 0)}</strong></p>`;
               html += `<table><tr><th>Name</th><th>Type</th><th>Subject</th><th>Status</th><th>Sent</th><th>Scheduled</th></tr>`;
-              filtered.forEach((c: any) => { html += `<tr><td>${c.name}</td><td>${c.type || "email"}</td><td>${c.subject || ""}</td><td>${c.status}</td><td>${c.sentCount ?? 0}</td><td>${c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : ""}</td></tr>`; });
+              filtered.forEach((c: any) => { html += `<tr><td>${c.name}</td><td>${c.type || "email"}</td><td>${c.subject || ""}</td><td>${c.status}</td><td>${c.sentCount ?? 0}</td><td>${c.scheduledAt ? fmtDate(new Date(c.scheduledAt)) : ""}</td></tr>`; });
               html += `</table></body></html>`;
               const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
             }} style={{height:32,borderRadius:8,border:`1px solid ${T.border}`,background:T.glass,color:T.white,padding:"0 10px",fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
@@ -174,7 +175,7 @@ export default function CampaignsPage() {
                       </td>
                       <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}`,maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{c.subject??"—"}</td>
                       <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>
-                        {c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString("en-GB") : "—"}
+                        {c.scheduledAt ? fmtDate(new Date(c.scheduledAt)) : "—"}
                       </td>
                       <td style={{ padding:"12px 12px 12px 0",fontSize:13,fontWeight:600,color:T.mint,borderBottom:`1px solid ${T.border}` }}>{c.sentCount??0}</td>
                       <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}><StatusBadge status={c.status??"draft"}/></td>

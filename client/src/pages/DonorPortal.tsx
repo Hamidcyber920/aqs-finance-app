@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { CreditCard, FileText, CheckCircle, AlertCircle, Loader2, Heart, Clock, UserCheck } from "lucide-react";
+import { fmtDate } from "@/lib/dateUtils";
 
 function statusColor(status: string) {
   if (status === "fulfilled") return "bg-green-100 text-green-800";
@@ -559,7 +560,7 @@ export default function DonorPortal() {
                     <p className="text-sm font-medium">{decl.campaignName ?? "General Donation"}</p>
                     <p className="text-xs text-muted-foreground">
                       £{Number(decl.amount).toLocaleString("en-GB", { minimumFractionDigits: 2 })} •{" "}
-                      {decl.donationDate ? new Date(decl.donationDate).toLocaleDateString("en-GB") : ""}
+                      {decl.donationDate ? fmtDate(new Date(decl.donationDate)) : ""}
                     </p>
                   </div>
                   <Badge className="bg-blue-100 text-blue-800">Gift Aid</Badge>

@@ -18,6 +18,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from "recharts";
+import { fmtDate } from "@/lib/dateUtils";
 
 const CHART_COLORS = ["#1a4731", "#c9a84c", "#2563eb", "#7c3aed", "#dc2626", "#059669", "#d97706", "#0891b2"];
 
@@ -158,7 +159,7 @@ export default function TrusteeDashboard() {
               rows.push("");
               rows.push("Pending Approvals");
               rows.push("Description,Amount,Date,Status");
-              (data.pendingApprovals ?? []).forEach((p: any) => rows.push(`${p.description || p.vendor || ""},${p.amount},${p.date ? new Date(p.date).toLocaleDateString() : ""},${p.status}`));
+              (data.pendingApprovals ?? []).forEach((p: any) => rows.push(`${p.description || p.vendor || ""},${p.amount},${p.date ? fmtDate(new Date(p.date)) : ""},${p.status}`));
               const csv = rows.join("\n");
               const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
               const a = document.createElement("a"); a.href = url; a.download = `trustee_dashboard_${year}_${month}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -175,7 +176,7 @@ export default function TrusteeDashboard() {
               }
               if (data.pendingApprovals?.length) {
                 html += `<h3>Pending Approvals</h3><table><tr><th>Description</th><th>Amount</th><th>Date</th><th>Status</th></tr>`;
-                data.pendingApprovals.forEach((p: any) => { html += `<tr><td>${p.description || p.vendor || ""}</td><td>${fmtGBP(Number(p.amount))}</td><td>${p.date ? new Date(p.date).toLocaleDateString() : ""}</td><td>${p.status}</td></tr>`; });
+                data.pendingApprovals.forEach((p: any) => { html += `<tr><td>${p.description || p.vendor || ""}</td><td>${fmtGBP(Number(p.amount))}</td><td>${p.date ? fmtDate(new Date(p.date)) : ""}</td><td>${p.status}</td></tr>`; });
                 html += `</table>`;
               }
               html += `</body></html>`;
@@ -420,7 +421,7 @@ export default function TrusteeDashboard() {
                               </button>
                             </td>
                             <td className="py-2 pr-4 text-gray-600">
-                              {row.receiptDate ? new Date(row.receiptDate).toLocaleDateString("en-GB") : "—"}
+                              {row.receiptDate ? fmtDate(new Date(row.receiptDate)) : "—"}
                             </td>
                             <td className="py-2 pr-4 font-medium">{row.vendor ?? "—"}</td>
                             <td className="py-2 pr-4 text-gray-500">{row.categoryName ?? "—"}</td>

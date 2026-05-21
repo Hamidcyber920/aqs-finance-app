@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Search, Filter, Receipt, CheckCircle2, Clock, XCircle, Camera, ShieldAlert, ThumbsUp, CheckSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -184,7 +185,7 @@ export default function ReceiptsPage() {
                   <div style={{ flex:1,minWidth:0 }}>
                     <span style={{ fontSize:13,fontWeight:600,color:T.white }}>{r.description ?? r.notes ?? "Receipt"}</span>
                     <span style={{ fontSize:12,color:T.muted,marginLeft:12 }}>£{Number(r.amount ?? 0).toLocaleString("en-GB",{minimumFractionDigits:2})}</span>
-                    <span style={{ fontSize:11,color:T.muted,marginLeft:12 }}>{r.date ? new Date(r.date).toLocaleDateString("en-GB") : ""}</span>
+                    <span style={{ fontSize:11,color:T.muted,marginLeft:12 }}>{r.date ? fmtDate(new Date(r.date)) : ""}</span>
                   </div>
                   <div style={{ display:"flex",gap:8,flexShrink:0 }}>
                     <button onClick={() => setLocation(`/receipts/${r.id}`)}
@@ -253,7 +254,7 @@ export default function ReceiptsPage() {
                     <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.category??r.categoryName??"—"}</td>
                     <td style={{ padding:"12px 12px 12px 0",fontSize:14,fontWeight:700,color:T.mint,borderBottom:`1px solid ${T.border}` }}>£{Number(r.amount??0).toLocaleString("en-GB",{minimumFractionDigits:2})}</td>
                     <td style={{ padding:"12px 12px 12px 0",borderBottom:`1px solid ${T.border}` }}><StatusBadge status={r.status??"pending"}/></td>
-                    <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.date?new Date(r.date).toLocaleDateString("en-GB"):r.createdAt?new Date(r.createdAt).toLocaleDateString("en-GB"):"—"}</td>
+                    <td style={{ padding:"12px 12px 12px 0",fontSize:12,color:T.muted,borderBottom:`1px solid ${T.border}` }}>{r.date?fmtDate(new Date(r.date)):r.createdAt?fmtDate(new Date(r.createdAt)):"—"}</td>
                     <td style={{ padding:"12px 0",borderBottom:`1px solid ${T.border}` }}>
                       <button onClick={e=>{e.stopPropagation();setLocation(`/receipts/${r.id}`);}}
                         style={{ padding:"4px 10px",borderRadius:8,background:"rgba(99,91,255,0.1)",border:"1px solid rgba(99,91,255,0.2)",color:T.purple,fontSize:11,fontWeight:600,cursor:"pointer" }}>

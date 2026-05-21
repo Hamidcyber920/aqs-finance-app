@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { AQS_LOGO_WHITE_B64 } from "./aqsLogoB64";
+import { fmtDate, fmtDateLong } from "./dateUtils";
 
 export interface LoanPdfData {
   id: number;
@@ -158,7 +159,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       y += 22;
       doc.fillColor(MUTED).fontSize(8.5).font("Helvetica")
         .text(
-          `Reference: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   Date: ${new Date(loan.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`,
+          `Reference: AQS-LOAN-${String(loan.id).padStart(6, "0")}   |   Date: ${fmtDateLong(new Date(loan.createdAt))}`,
           L, y, { width: W, align: "center" }
         );
       y += 10;
@@ -216,9 +217,9 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       y = drawRow("Monthly Repayment", `£${monthlyAmt.toFixed(2)}`, y);
 
       if (loan.startDate) {
-        y = drawRow("Start Date", new Date(loan.startDate).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }), y);
-        const endDate = new Date(new Date(loan.startDate).setMonth(new Date(loan.startDate).getMonth() + loan.termMonths));
-        y = drawRow("Expected Completion", endDate.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }), y);
+        y = drawRow("Start Date", fmtDateLong(new Date(loan.startDate)), y);
+        const endDate = new Date(new Date(loan.startDate).setMonth(fmtDateLong(new Date(loan.startDate)).getMonth() + loan.termMonths));
+        y = drawRow("Expected Completion", endDate, y);
       }
       if (loan.termNotes) y = drawRow("Notes", loan.termNotes, y);
       y += 8;
@@ -248,7 +249,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
 
       let balance = totalAmount;
       for (let i = 0; i < schedMonths; i++) {
-        const due = new Date(schedStart);
+        const due = fmtDate(new Date(schedStart));
         due.setMonth(due.getMonth() + i + 1);
         balance = Math.max(0, balance - monthlyAmt);
         if (i % 2 === 0) doc.rect(tblX, y, tblW, rowH).fill("#f0e8e0");
@@ -256,7 +257,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         let rx = tblX + 3;
         [
           String(i + 1),
-          due.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+          due,
           `£${monthlyAmt.toFixed(2)}`,
           `£${balance.toFixed(2)}`,
         ].forEach((v, ci) => {
@@ -347,7 +348,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         doc.rect(L + 4, y, 3, 18).fill(GOLD);
         doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
           .text(
-            `✓ Authorised by ${loan.adminApprovedByName} on ${new Date(loan.adminApprovedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })} at ${new Date(loan.adminApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
+            `✓ Authorised by ${loan.adminApprovedByName} on ${fmtDateLong(new Date(loan.adminApprovedAt))} at ${new Date(loan.adminApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
             L + 12, y + 5, { width: W - 20, lineBreak: false }
           );
         y += 24;
@@ -357,7 +358,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         doc.rect(L + 4, y, 3, 18).fill(GOLD);
         doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
           .text(
-            `✓ Trustee ${loan.trusteeName} confirmed on ${new Date(loan.trusteeApprovedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })} at ${new Date(loan.trusteeApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
+            `✓ Trustee ${loan.trusteeName} confirmed on ${fmtDateLong(new Date(loan.trusteeApprovedAt))} at ${new Date(loan.trusteeApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
             L + 12, y + 5, { width: W - 20, lineBreak: false }
           );
         y += 24;
@@ -399,11 +400,11 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
       drawSigBox(col1, y, sigBoxW, sigBoxH, borrowerSigBuf);
       drawSigBox(col2, y, sigBoxW, sigBoxH, trusteeSigBuf,
         loan.trusteeApprovedAt ? "✓ Confirmed digitally" : undefined,
-        loan.trusteeApprovedAt ? new Date(loan.trusteeApprovedAt).toLocaleDateString("en-GB") : undefined
+        loan.trusteeApprovedAt ? fmtDate(new Date(loan.trusteeApprovedAt)) : undefined
       );
       drawSigBox(col3, y, sigBoxW, sigBoxH, adminSigBuf,
         loan.adminApprovedAt ? "✓ Authorised digitally" : undefined,
-        loan.adminApprovedAt ? new Date(loan.adminApprovedAt).toLocaleDateString("en-GB") : undefined
+        loan.adminApprovedAt ? fmtDate(new Date(loan.adminApprovedAt)) : undefined
       );
       y += sigBoxH + 6;
 
@@ -511,7 +512,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     y += 22;
     doc.fillColor(MUTED).fontSize(8.5).font("Helvetica")
       .text(
-        `Reference: AQS-REPAY-${String(data.repaymentId).padStart(6, "0")}   |   Loan Ref: AQS-LOAN-${String(data.loanId).padStart(6, "0")}   |   Date: ${new Date(data.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`,
+        `Reference: AQS-REPAY-${String(data.repaymentId).padStart(6, "0")}   |   Loan Ref: AQS-LOAN-${String(data.loanId).padStart(6, "0")}   |   Date: ${fmtDateLong(new Date(data.paidAt))}`,
         L, y, { width: W, align: "center" }
       );
     y += 14;
@@ -548,7 +549,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
     y += 4;
     y = drawRow("Repayment Amount", `£${parseFloat(String(data.amount)).toFixed(2)}`, y);
     y = drawRow("Payment Method", data.paymentMethod.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()), y);
-    y = drawRow("Payment Date", new Date(data.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }), y);
+    y = drawRow("Payment Date", fmtDateLong(new Date(data.paidAt)), y);
     y = drawRow("Original Amanah Amount", `£${parseFloat(String(data.loanAmount)).toFixed(2)}`, y);
     y = drawRow("Total Returned to Date", `£${parseFloat(String(data.totalRepaid)).toFixed(2)}`, y);
     const waqfAmt = data.waqfEndowed ?? 0;
@@ -565,7 +566,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
       doc.rect(L + 4, y, W - 8, 18).fill("#f0e8d0");
       doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
         .text(
-          `✓ Authorised by ${data.adminApprovedByName} on ${new Date(data.adminApprovedAt).toLocaleDateString("en-GB")} at ${new Date(data.adminApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
+          `✓ Authorised by ${data.adminApprovedByName} on ${fmtDate(new Date(data.adminApprovedAt))} at ${new Date(data.adminApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
           L + 8, y + 5, { width: W - 16, lineBreak: false }
         );
       y += 24;
@@ -573,7 +574,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
         doc.rect(L + 4, y, W - 8, 18).fill("#f0e8d0");
         doc.fillColor(BURGUNDY).fontSize(8).font("Helvetica-Bold")
           .text(
-            `✓ Trustee ${data.trusteeName} confirmed on ${new Date(data.trusteeApprovedAt).toLocaleDateString("en-GB")} at ${new Date(data.trusteeApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
+            `✓ Trustee ${data.trusteeName} confirmed on ${fmtDate(new Date(data.trusteeApprovedAt))} at ${new Date(data.trusteeApprovedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`,
             L + 8, y + 5, { width: W - 16, lineBreak: false }
           );
         y += 24;
@@ -596,7 +597,7 @@ export async function generateRepaymentPdf(data: RepaymentPdfData): Promise<Buff
       .text("JazakAllahu Khayran — May Allah (SWT) bless you for your generous Amanah and accept it as Sadaqah Jariyah.", L, PH - 44, { width: W, align: "center" });
     doc.fillColor(MUTED).fontSize(7).font("Helvetica")
       .text(
-        `Abdullah Quilliam Society  |  Project Milestone Receipt  |  Ref: AQS-REPAY-${String(data.repaymentId).padStart(6, "0")}  |  Generated: ${new Date().toLocaleDateString("en-GB")}`,
+        `Abdullah Quilliam Society  |  Project Milestone Receipt  |  Ref: AQS-REPAY-${String(data.repaymentId).padStart(6, "0")}  |  Generated: ${fmtDate(new Date())}`,
         L, PH - 32, { width: W, align: "center" }
       );
 
@@ -725,7 +726,7 @@ export async function generateWaqfCertificate(data: WaqfCertificateData): Promis
       );
     y += 14;
     doc.fillColor(MUTED).fontSize(8).font("Helvetica")
-      .text(`Date of Conversion: ${new Date(data.convertedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}`, L, y, { width: W, align: "center" });
+      .text(`Date of Conversion: ${fmtDateLong(new Date(data.convertedAt))}`, L, y, { width: W, align: "center" });
     y += 26;
 
     doc.rect(L, y, W, 1).fill(MUTED);

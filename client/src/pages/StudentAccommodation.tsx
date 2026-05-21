@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { fmtDate } from "@/lib/dateUtils";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -609,7 +610,7 @@ function TenantDetailPanel({ tenant, onClose, onRefresh }: { tenant: any; onClos
   const checkMuminMutation = trpc.accommodation.checkMumin.useMutation({ onSuccess: () => refetchPayments(), onError: (e) => toast.error(e.message) });
   const trusteeVerifyMutation = trpc.accommodation.trusteeVerify.useMutation({ onSuccess: () => refetchPayments(), onError: (e) => toast.error(e.message) });
 
-  const formatDate = (d: any) => d ? new Date(d).toLocaleDateString("en-GB") : "—";
+  const formatDate = (d: any) => d ? fmtDate(new Date(d)) : "—";
   const formatCurrency = (v: any) => v ? `£${parseFloat(v).toFixed(2)}` : "—";
 
   // WhatsApp message
@@ -766,7 +767,7 @@ function TenantDetailPanel({ tenant, onClose, onRefresh }: { tenant: any; onClos
                   <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <Shield size={12} style={{ color: T.green }} />
                     <span style={{ color: T.muted, fontSize: 11 }}>
-                      {p.confirmedByName} · {p.confirmedAt ? new Date(p.confirmedAt).toLocaleDateString("en-GB") : ""}
+                      {p.confirmedByName} · {p.confirmedAt ? fmtDate(new Date(p.confirmedAt)) : ""}
                     </span>
                     {p.receiptUrl && (
                       <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer" style={{ color: T.mint, marginLeft: 4 }}>
@@ -939,7 +940,7 @@ export default function StudentAccommodationPage() {
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ height: 32, borderRadius: 8, border: `1px solid ${T.border}`, background: T.glass, color: T.white, padding: "0 8px", fontSize: 11 }} />
           <button onClick={() => {
             const allTenants = tenants ?? [];
-            const rows = allTenants.filter((t: any) => { const d = new Date(t.leaseStart || t.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); }).map((t: any) => `${t.fullName},${t.roomNumber || ""},${t.propertyAddress || ""},${t.status},\u00a3${Number(t.monthlyRent ?? 0).toFixed(2)},${t.leaseStart ? new Date(t.leaseStart).toLocaleDateString() : ""},${t.leaseEnd ? new Date(t.leaseEnd).toLocaleDateString() : ""}`);
+            const rows = allTenants.filter((t: any) => { const d = new Date(t.leaseStart || t.createdAt); return d >= new Date(dateFrom) && d <= new Date(dateTo + "T23:59:59"); }).map((t: any) => `${t.fullName},${t.roomNumber || ""},${t.propertyAddress || ""},${t.status},\u00a3${Number(t.monthlyRent ?? 0).toFixed(2)},${t.leaseStart ? fmtDate(new Date(t.leaseStart)) : ""},${t.leaseEnd ? fmtDate(new Date(t.leaseEnd)) : ""}`);
             if (!rows.length) { toast.info("No tenants in selected range"); return; }
             const csv = "Name,Room,Property,Status,Monthly Rent,Lease Start,Lease End\n" + rows.join("\n");
             const blob = new Blob([csv], { type: "text/csv" }); const url = URL.createObjectURL(blob);
@@ -955,7 +956,7 @@ export default function StudentAccommodationPage() {
             let html = `<html><head><title>Accommodation ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
             html += `<h2>Student Accommodation Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Tenants: ${filtered.length} | Total Monthly Rent: \u00a3${totalRent.toFixed(2)}</p>`;
             html += `<table><tr><th>Name</th><th>Room</th><th>Property</th><th>Status</th><th>Monthly Rent</th><th>Lease Start</th><th>Lease End</th></tr>`;
-            filtered.forEach((t: any) => { html += `<tr><td>${t.fullName}</td><td>${t.roomNumber || ""}</td><td>${t.propertyAddress || ""}</td><td>${t.status}</td><td>\u00a3${Number(t.monthlyRent ?? 0).toFixed(2)}</td><td>${t.leaseStart ? new Date(t.leaseStart).toLocaleDateString() : ""}</td><td>${t.leaseEnd ? new Date(t.leaseEnd).toLocaleDateString() : ""}</td></tr>`; });
+            filtered.forEach((t: any) => { html += `<tr><td>${t.fullName}</td><td>${t.roomNumber || ""}</td><td>${t.propertyAddress || ""}</td><td>${t.status}</td><td>\u00a3${Number(t.monthlyRent ?? 0).toFixed(2)}</td><td>${t.leaseStart ? fmtDate(new Date(t.leaseStart)) : ""}</td><td>${t.leaseEnd ? fmtDate(new Date(t.leaseEnd)) : ""}</td></tr>`; });
             html += `</table></body></html>`;
             const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
           }} style={{ height: 32, borderRadius: 8, border: `1px solid ${T.border}`, background: T.glass, color: T.white, padding: "0 10px", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
@@ -989,7 +990,7 @@ export default function StudentAccommodationPage() {
               <div key={r.payment?.id} style={{ display: "flex", alignItems: "center", gap: 12, background: T.glass, borderRadius: 10, padding: "10px 14px" }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ color: T.white, fontSize: 13, fontWeight: 600, margin: 0 }}>{r.tenant?.fullName}</p>
-                  <p style={{ color: T.muted, fontSize: 11, margin: 0 }}>{r.payment?.periodLabel} · Due {new Date(r.payment?.dueDate).toLocaleDateString("en-GB")}</p>
+                  <p style={{ color: T.muted, fontSize: 11, margin: 0 }}>{r.payment?.periodLabel} · Due {fmtDate(new Date(r.payment?.dueDate))}</p>
                 </div>
                 <span style={{ color: T.gold, fontWeight: 700, fontSize: 14 }}>£{parseFloat(r.payment?.amountDue ?? "0").toFixed(2)}</span>
                 <Button size="sm" variant="outline" onClick={() => setSelectedTenantId(r.tenant?.id)} style={{ borderColor: `${T.gold}66`, color: T.gold, background: "transparent", fontSize: 11 }}>View</Button>
@@ -1011,7 +1012,7 @@ export default function StudentAccommodationPage() {
               <div key={r.payment?.id} style={{ display: "flex", alignItems: "center", gap: 12, background: T.glass, borderRadius: 10, padding: "10px 14px" }}>
                 <div style={{ flex: 1 }}>
                   <p style={{ color: T.white, fontSize: 13, fontWeight: 600, margin: 0 }}>{r.tenant?.fullName}</p>
-                  <p style={{ color: T.muted, fontSize: 11, margin: 0 }}>{r.payment?.periodLabel} · Was due {new Date(r.payment?.dueDate).toLocaleDateString("en-GB")}</p>
+                  <p style={{ color: T.muted, fontSize: 11, margin: 0 }}>{r.payment?.periodLabel} · Was due {fmtDate(new Date(r.payment?.dueDate))}</p>
                 </div>
                 <span style={{ color: T.red, fontWeight: 700, fontSize: 14 }}>£{parseFloat(r.payment?.amountDue ?? "0").toFixed(2)}</span>
                 <PaymentBadge status={r.payment?.status ?? "overdue"} />

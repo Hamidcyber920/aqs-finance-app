@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { fmtDateLong } from "./dateUtils";
 
 export interface StatementData {
   donorName: string;
@@ -66,7 +67,7 @@ export async function generateAnnualStatement(data: StatementData): Promise<Buff
       doc.text(data.donorAddress, 50, yPos, { width: pageWidth });
       yPos += 14;
     }
-    doc.text(`Generated: ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, 50, yPos);
+    doc.text(`Generated: ${fmtDateLong(new Date())}`, 50, yPos);
     yPos += 24;
 
     // ── Summary box ──────────────────────────────────────────────────────────

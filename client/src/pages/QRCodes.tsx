@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { QrCode, Plus, Download, ExternalLink, Copy, Printer } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
+import { fmtDate } from "@/lib/dateUtils";
 
 /** Build the full URL with UTM params appended */
 function buildQrUrl(qr: { targetUrl: string; utmSource?: string | null; utmMedium?: string | null; utmCampaign?: string | null }) {
@@ -133,7 +134,7 @@ export default function QRCodes() {
                         <p className="truncate"><strong>URL:</strong> {qr.targetUrl}</p>
                         {qr.utmSource && <p><strong>UTM:</strong> {qr.utmSource}/{qr.utmMedium}/{qr.utmCampaign}</p>}
                         <p><strong>Scans:</strong> {qr.scanCount ?? 0}</p>
-                        <p><strong>Created:</strong> {new Date(qr.createdAt).toLocaleDateString("en-GB")}</p>
+                        <p><strong>Created:</strong> {fmtDate(new Date(qr.createdAt))}</p>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <Button size="sm" variant="outline" onClick={() => downloadQrPng(canvasId, qr.label || "qr-code")}>

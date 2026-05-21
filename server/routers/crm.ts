@@ -18,6 +18,7 @@ import { eq, desc, and, lt, isNull, gte, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 import { notifyOwner } from "../_core/notification";
+import { fmtDate } from "../dateUtils";
 
 // ─── Email helper (reuses the project's Gmail sender pattern) ─────────────────
 async function sendEmail(to: string, name: string, subject: string, htmlBody: string) {
@@ -292,7 +293,7 @@ export const crmRouter = router({
         const addressParts = (c.donorAddress || "").split(",");
         const houseNum = addressParts[0]?.trim() || "";
         const postcode = c.donorPostcode || "";
-        const declDate = c.signedAt ? new Date(c.signedAt).toLocaleDateString("en-GB") : "";
+        const declDate = c.signedAt ? fmtDate(new Date(c.signedAt)) : "";
         return `"","${firstName}","${lastName}","${houseNum}","${postcode}","","","${declDate}"`;
       });
 

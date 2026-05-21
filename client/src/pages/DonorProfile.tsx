@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { toast } from "sonner";
 import { ArrowLeft, User, Heart, FileText, MessageSquare, Activity, BookOpen, Plus, Share2, Send, Mail, Phone, Download, Calendar, Star } from "lucide-react";
 import { Link } from "wouter";
+import { fmtDate } from "@/lib/dateUtils";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: User },
@@ -391,7 +392,7 @@ export default function DonorProfile() {
               <CardContent className="space-y-2 text-sm">
                 {donor.totalDonated !== undefined && <p><span className="text-muted-foreground">Total donated:</span> <strong>£{Number(donor.totalDonated || 0).toLocaleString()}</strong></p>}
                 {donor.donationCount !== undefined && <p><span className="text-muted-foreground">Donations:</span> {donor.donationCount}</p>}
-                {donor.lastDonationDate && <p><span className="text-muted-foreground">Last donation:</span> {new Date(donor.lastDonationDate).toLocaleDateString("en-GB")}</p>}
+                {donor.lastDonationDate && <p><span className="text-muted-foreground">Last donation:</span> {fmtDate(new Date(donor.lastDonationDate))}</p>}
                 {donor.rfmScore !== undefined && <p><span className="text-muted-foreground">RFM Score:</span> {donor.rfmScore}</p>}
                 {donorTier && (
                   <div className="pt-2 border-t">
@@ -412,7 +413,7 @@ export default function DonorProfile() {
               <CardHeader><CardTitle className="text-sm">Compliance</CardTitle></CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <p><span className="text-muted-foreground">Gift Aid:</span> {donor.isGiftAidEligible ? "Eligible" : "Not eligible"}</p>
-                {donor.giftAidDeclarationDate && <p><span className="text-muted-foreground">Declaration:</span> {new Date(donor.giftAidDeclarationDate).toLocaleDateString("en-GB")}</p>}
+                {donor.giftAidDeclarationDate && <p><span className="text-muted-foreground">Declaration:</span> {fmtDate(new Date(donor.giftAidDeclarationDate))}</p>}
                 {donor.lawfulBasis && <p><span className="text-muted-foreground">Lawful basis:</span> {donor.lawfulBasis}</p>}
                 {donor.consentGiven !== undefined && <p><span className="text-muted-foreground">Consent:</span> {donor.consentGiven ? "Given" : "Not given"}</p>}
               </CardContent>
@@ -503,7 +504,7 @@ export default function DonorProfile() {
                   <tbody>
                     {donations.map((d: any) => (
                       <tr key={d.id} className="border-b hover:bg-muted/20">
-                        <td className="py-2 pr-4">{d.donatedAt ? new Date(d.donatedAt).toLocaleDateString("en-GB") : "—"}</td>
+                        <td className="py-2 pr-4">{d.donatedAt ? fmtDate(new Date(d.donatedAt)) : "—"}</td>
                         <td className="py-2 pr-4 font-semibold">£{Number(d.amount).toLocaleString()}</td>
                         <td className="py-2 pr-4 text-muted-foreground">{d.campaignName || "—"}</td>
                         <td className="py-2 pr-4 text-muted-foreground capitalize">{d.paymentMethod?.replace("_", " ") || "—"}</td>
@@ -593,7 +594,7 @@ export default function DonorProfile() {
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {p.frequency?.replace("_", "-")} · Paid: £{Number(p.paidAmount || 0).toLocaleString()} · Balance: £{Number(p.balanceOwing || 0).toLocaleString()}
                           </p>
-                          {p.nextDueDate && <p className="text-xs text-muted-foreground">Next due: {new Date(p.nextDueDate).toLocaleDateString("en-GB")}</p>}
+                          {p.nextDueDate && <p className="text-xs text-muted-foreground">Next due: {fmtDate(new Date(p.nextDueDate))}</p>}
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <Badge className={p.status === "fulfilled" ? "bg-green-100 text-green-800" : p.status === "lapsed" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}>
@@ -703,7 +704,7 @@ export default function DonorProfile() {
                             {e.priority === "urgent" && <span className="text-xs font-bold text-red-500 flex-shrink-0">URGENT</span>}
                             <span className="font-medium truncate">{e.subject || "(No subject)"}</span>
                           </div>
-                          <span className="text-xs text-muted-foreground flex-shrink-0">{e.receivedAt ? new Date(e.receivedAt).toLocaleDateString("en-GB") : ""}</span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">{e.receivedAt ? fmtDate(new Date(e.receivedAt)) : ""}</span>
                         </div>
                         <div className="flex items-center gap-2 mt-1">
                           <p className="text-muted-foreground text-xs">{e.fromName ? `${e.fromName} <${e.fromEmail}>` : e.fromEmail}</p>
@@ -747,7 +748,7 @@ export default function DonorProfile() {
                       <div key={n.id} className="border rounded p-3 text-sm">
                         <p>{n.note || n.content}</p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {n.authorName || "Staff"} · {new Date(n.createdAt).toLocaleDateString("en-GB")}
+                          {n.authorName || "Staff"} · {fmtDate(new Date(n.createdAt))}
                         </p>
                       </div>
                     ))}
@@ -794,7 +795,7 @@ export default function DonorProfile() {
                           </div>
                         </div>
                         {entry.beneficiaryNotes && <p className="text-sm text-muted-foreground mt-2 ml-6">{entry.beneficiaryNotes}</p>}
-                        <p className="text-xs text-muted-foreground mt-2 ml-6">{new Date(entry.createdAt).toLocaleDateString("en-GB")}</p>
+                        <p className="text-xs text-muted-foreground mt-2 ml-6">{fmtDate(new Date(entry.createdAt))}</p>
                       </div>
                     ))}
                   </div>

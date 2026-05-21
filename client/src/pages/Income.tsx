@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -495,7 +496,7 @@ export default function IncomePage() {
       r.period ?? "",
       Number(r.amount ?? 0).toFixed(2),
       r.paymentStatus ?? "",
-      r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "",
+      r.createdAt ? fmtDate(new Date(r.createdAt)) : "",
       (r.notes ?? "").replace(/,/g,";"),
       (r.signedByManager ?? "").replace(/,/g,";"),
       (r.signedByTrustee ?? "").replace(/,/g,";")

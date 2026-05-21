@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays, Clock, Users, Building2, PoundSterling, RefreshCw, ChevronRight, MapPin, Timer } from "lucide-react";
 import { useLocation } from "wouter";
+import { fmtDate } from "@/lib/dateUtils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtDate(v: string | Date | null | undefined) {

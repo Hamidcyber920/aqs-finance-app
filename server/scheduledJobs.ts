@@ -16,6 +16,7 @@ import { getDb } from "./db";
 import { loanRepayments, pledges, donors, fundraisingDonations, voiceSessions, accommodationTenants, invoices } from "../drizzle/schema";
 import { eq, and, lte, gte, or, sql } from "drizzle-orm";
 import { setGmailLastSyncedAt } from "./routers/commsInbox";
+import { fmtDate, fmtDateLong } from "./dateUtils";
 
 const stripeScheduler = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-04-22.dahlia" as any });
 
@@ -96,7 +97,7 @@ async function sendWeeklyRepaymentAlert() {
       const paidCount = (loan.repayments ?? []).filter((r: any) => r.trusteeApprovedAt).length;
 
       for (let m = paidCount + 1; m <= termMonths; m++) {
-        const dueDate = new Date(startDate);
+        const dueDate = fmtDate(new Date(startDate));
         dueDate.setMonth(dueDate.getMonth() + m);
         if (dueDate > now && dueDate <= fourWeeksLater) {
           dueItems.push({
@@ -126,10 +127,10 @@ async function sendWeeklyRepaymentAlert() {
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.borrowerEmail || "—"}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.borrowerPhone || "—"}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:#5C1A1A;">£${d.amount.toFixed(2)}</td>
-        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.dueDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${d.dueDate}</td>
       </tr>`).join("");
 
-    const reportDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    const reportDate = fmtDate(now);
 
     for (const recipient of WEEKLY_ALERT_RECIPIENTS) {
       // Full respectful salutation — recipient.name already includes title (e.g. "Dr Abdul Hamid")
@@ -187,8 +188,8 @@ async function sendMonthlyTrusteeReport() {
   try {
     const loans = await getActiveLoansWithRepayments();
     const trustees = await getActiveTrustees();
-    const now = new Date();
-    const monthName = now.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+    const now = fmtDate(new Date());
+    const monthName = now;
 
     // Compute stats
     const totalLoaned = loans.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
@@ -469,7 +470,7 @@ export async function sendPledgeReminders() {
     let skipped = 0;
     for (const pledge of activePledges) {
       if (!pledge.nextDueDate) { skipped++; continue; }
-      const dueDate = new Date(pledge.nextDueDate);
+      const dueDate = fmtDateLong(new Date(pledge.nextDueDate));
       const isOverdue = dueDate < today;
       // Look up donor email
       let donorEmail: string | null = null;
@@ -483,7 +484,7 @@ export async function sendPledgeReminders() {
       }
       if (!donorEmail) { skipped++; continue; }
       const donorFirstName = (pledge.donorName ?? "Valued Donor").split(" ")[0];
-      const dueDateFormatted = dueDate.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+      const dueDateFormatted = dueDate;
       const balanceFormatted = `£${Number(pledge.balanceOwing ?? 0).toFixed(2)}`;
       const campaignLine = pledge.campaignName ? `<br/>Campaign: <strong>${pledge.campaignName}</strong>` : "";
       const giftAidLine = pledge.isGiftAid ? "<br/><em>Your pledge includes Gift Aid — JazakAllah Khayran for your generosity.</em>" : "";
@@ -588,7 +589,7 @@ export async function sendRentReminders() {
       const { tenant, payment } = row;
       if (!tenant.email) continue;
       const firstName = (tenant.fullName ?? "").split(" ")[0] ?? tenant.fullName ?? "Tenant";
-      const dueDate = new Date(payment.dueDate as any).toLocaleDateString("en-GB");
+      const dueDate = fmtDate(new Date(payment.dueDate as any));
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
           <div style="background:#5C1A1A;padding:24px;text-align:center;">
@@ -636,7 +637,7 @@ export async function sendRentReminders() {
       const { tenant, payment } = row;
       if (!tenant.email) continue;
       const firstName = (tenant.fullName ?? "").split(" ")[0] ?? tenant.fullName ?? "Tenant";
-      const dueDate = new Date(payment.dueDate as any).toLocaleDateString("en-GB");
+      const dueDate = fmtDate(new Date(payment.dueDate as any));
       const daysOverdue = Math.floor((today.getTime() - new Date(payment.dueDate as any).getTime()) / 86400000);
       const html = `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
@@ -787,7 +788,7 @@ export async function sendComplianceDigest() {
     const THIRTY_DAYS_AGO = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const allMeetings = await db.select().from(trusteeMeetings);
     const quorumFailedMeetings = allMeetings.filter((m: any) =>
-      m.scheduledAt && new Date(m.scheduledAt) >= THIRTY_DAYS_AGO &&
+      m.scheduledAt && fmtDate(new Date(m.scheduledAt)) >= THIRTY_DAYS_AGO &&
       m.status === "completed" && !m.quorumMet
     );
 
@@ -797,7 +798,7 @@ export async function sendComplianceDigest() {
       return;
     }
 
-    const dateStr = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const dateStr = now;
     const score = Math.max(0, 100 - criticalActions.length * 20 - overdueActions.length * 10 - trainingGaps.length * 5 - policyReviews.length * 5 - decisionsNeedingAttention.length * 3 - quorumFailedMeetings.length * 10);
     const scoreColor = score >= 80 ? "#00FFC2" : score >= 60 ? "#f59e0b" : "#f87171";
 
@@ -807,12 +808,12 @@ export async function sendComplianceDigest() {
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px">
           <span style="padding:2px 8px;border-radius:999px;background:${a.priority==='critical'?'rgba(248,113,113,0.15)':'rgba(245,158,11,0.15)'};color:${a.priority==='critical'?'#f87171':'#f59e0b'};font-weight:600">${a.priority ?? "—"}</span>
         </td>
-        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${a.dueDate ? new Date(a.dueDate).toLocaleDateString("en-GB") : "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${a.dueDate ? fmtDate(new Date(a.dueDate)) : "—"}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${a.owner ?? "—"}</td>
       </tr>`;
 
     const trainingRow = (t: any) => {
-      const exp = t.expiresAt ? new Date(t.expiresAt) : null;
+      const exp = t.expiresAt ? fmtDate(new Date(t.expiresAt)) : null;
       const isExpired = exp && exp < now;
       return `<tr>
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:13px">${t.userName ?? `User #${t.userId}`}</td>
@@ -820,7 +821,7 @@ export async function sendComplianceDigest() {
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px">
           <span style="padding:2px 8px;border-radius:999px;background:${isExpired?'rgba(248,113,113,0.15)':'rgba(245,158,11,0.15)'};color:${isExpired?'#f87171':'#f59e0b'};font-weight:600">${isExpired?'Expired':'Expiring soon'}</span>
         </td>
-        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${exp ? exp.toLocaleDateString("en-GB") : "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${exp ? exp : "—"}</td>
       </tr>`;
     };
 
@@ -834,7 +835,7 @@ export async function sendComplianceDigest() {
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px">
           <span style="padding:2px 8px;border-radius:999px;background:${d.outcome==='passed'?'rgba(0,255,194,0.15)':d.outcome==='rejected'?'rgba(248,113,113,0.15)':'rgba(245,158,11,0.15)'};color:${d.outcome==='passed'?'#00FFC2':d.outcome==='rejected'?'#f87171':'#f59e0b'};font-weight:600;text-transform:capitalize">${d.outcome ?? "pending"}</span>
         </td>
-        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${d.meetingDate ? new Date(d.meetingDate).toLocaleDateString("en-GB") : "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${d.meetingDate ? fmtDate(new Date(d.meetingDate)) : "—"}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#f87171;font-size:12px;font-weight:600">${flags || "✓"}</td>
       </tr>`;
     };
@@ -845,7 +846,7 @@ export async function sendComplianceDigest() {
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px">
           <span style="padding:2px 8px;border-radius:999px;background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:600">${p.status === "overdue" ? "Overdue" : "Due Review"}</span>
         </td>
-        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${p.reviewDate ? new Date(p.reviewDate).toLocaleDateString("en-GB") : "—"}</td>
+        <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${p.reviewDate ? fmtDate(new Date(p.reviewDate)) : "—"}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${p.owner ?? "—"}</td>
       </tr>`;
 
@@ -991,7 +992,7 @@ export async function sendComplianceDigest() {
         </tr></thead>
         <tbody>${quorumFailedMeetings.map((m: any) => `<tr>
           <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:13px">${m.title ?? "—"}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${m.scheduledAt ? new Date(m.scheduledAt).toLocaleDateString("en-GB") : "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${m.scheduledAt ? fmtDate(new Date(m.scheduledAt)) : "—"}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${(m.meetingType ?? "—").replace(/_/g, " ")}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;font-size:12px"><span style="padding:2px 8px;border-radius:999px;background:rgba(244,63,94,0.15);color:#f43f5e;font-weight:600">${m.quorumRequired} trustees</span></td>
         </tr>`).join("")}</tbody>
@@ -1329,7 +1330,7 @@ export async function sendContractRenewalReminders() {
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.utilityType || "—"}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.building || "—"}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;">${acc.accountNumber || "—"}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${daysLeft <= 14 ? "#dc2626" : daysLeft <= 30 ? "#d97706" : "#5C1A1A"};">${daysLeft} days (${new Date(acc.contractEndDate).toLocaleDateString("en-GB")})</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:700;color:${daysLeft <= 14 ? "#dc2626" : daysLeft <= 30 ? "#d97706" : "#5C1A1A"};">${daysLeft} days (${fmtDate(new Date(acc.contractEndDate))})</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-size:12px;">${contactInfo}</td>
         </tr>`;
     }).join("");
@@ -1424,7 +1425,7 @@ async function sendWeeklyCashFlowDigest() {
 
     const rows = upcoming.map(p => {
       const isHeld = p.status === "held";
-      const dueDate = new Date(p.dueDate).toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short" });
+      const dueDate = fmtDate(new Date(p.dueDate));
       const statusBadge = isHeld
         ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">HELD</span>`
         : `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;">PENDING</span>`;
@@ -1441,7 +1442,7 @@ async function sendWeeklyCashFlowDigest() {
         </tr>`;
     }).join("");
 
-    const reportDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    const reportDate = fmtDate(now);
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;">
@@ -1536,7 +1537,7 @@ export async function generateMorningBriefing() {
     if (!db) return;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today);
+    const yesterday = fmtDate(new Date(today));
     yesterday.setDate(yesterday.getDate() - 1);
 
     const newDonations = await db
@@ -1578,7 +1579,7 @@ export async function generateMorningBriefing() {
       activeTenantCount = Number(tenants[0]?.count ?? 0);
     } catch { /* skip */ }
 
-    const dateStr = today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const dateStr = today;
     const urgentItems: string[] = [];
     const infoItems: string[] = [];
 
@@ -1673,7 +1674,7 @@ async function sendCalendarAndUrgentBriefing() {
   try {
     const { collectDailyBriefingData } = await import("./googleServices");
     const data = await collectDailyBriefingData();
-    const dateStr = new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const dateStr = fmtDate(new Date());
 
     // Build calendar section
     let calendarHtml = "";

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { SmartUpload } from "@/components/SmartUpload";
 import { useFormPersist } from "@/hooks/useFormPersist";
+import { fmtDate } from "@/lib/dateUtils";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtCurrency(v: string | number | null | undefined) {
@@ -29,7 +30,7 @@ function fmtCurrency(v: string | number | null | undefined) {
 
 function fmtDate(v: string | Date | null | undefined) {
   if (!v) return "—";
-  return new Date(v).toLocaleDateString("en-GB");
+  return fmtDate(new Date(v));
 }
 
 function progressPct(current: string | number, target: string | number) {

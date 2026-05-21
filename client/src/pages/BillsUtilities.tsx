@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 import { BarChart, Bar, XAxis, YAxis, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts";
+import { fmtDate } from "@/lib/dateUtils";
 
 const FALLBACK_BUILDINGS = ["QLH", "Bistro", "Accommodation", "Other"];
 const FALLBACK_CATEGORIES = ["electricity", "gas", "water", "broadband", "telephone", "insurance", "other"];
@@ -774,7 +775,7 @@ export default function BillsUtilities() {
                 <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-36 h-8 text-xs" />
                 <Button variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={() => {
                   if (!allBills.length) { toast.info("No bills in selected range"); return; }
-                  const rows = allBills.map((b: any) => `${b.billDate ? new Date(b.billDate).toLocaleDateString() : ""},${b.accountSupplier},${b.accountCategory},${b.accountBuilding},£${parseFloat(b.amount).toFixed(2)},${b.notes || ""}`);
+                  const rows = allBills.map((b: any) => `${b.billDate ? fmtDate(new Date(b.billDate)) : ""},${b.accountSupplier},${b.accountCategory},${b.accountBuilding},£${parseFloat(b.amount).toFixed(2)},${b.notes || ""}`);
                   const csv = "Date,Supplier,Category,Building,Amount,Notes\n" + rows.join("\n");
                   const blob = new Blob([csv], { type: "text/csv" });
                   const url = URL.createObjectURL(blob);
@@ -789,7 +790,7 @@ export default function BillsUtilities() {
                   let html = `<html><head><title>Bills ${dateFrom} to ${dateTo}</title><style>body{font-family:Arial,sans-serif;padding:20px}table{width:100%;border-collapse:collapse;margin-top:15px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#f5f5f5;font-weight:600}.total{font-weight:bold;font-size:14px;margin-top:10px}</style></head><body>`;
                   html += `<h2>Bills & Utilities Report</h2><p>${dateFrom} to ${dateTo}</p><p class="total">Total: £${totalAmount.toFixed(2)}</p>`;
                   html += `<table><tr><th>Date</th><th>Supplier</th><th>Category</th><th>Building</th><th>Amount</th><th>Notes</th></tr>`;
-                  allBills.forEach((b: any) => { html += `<tr><td>${b.billDate ? new Date(b.billDate).toLocaleDateString() : ""}</td><td>${b.accountSupplier}</td><td>${b.accountCategory}</td><td>${b.accountBuilding}</td><td>£${parseFloat(b.amount).toFixed(2)}</td><td>${b.notes || ""}</td></tr>`; });
+                  allBills.forEach((b: any) => { html += `<tr><td>${b.billDate ? fmtDate(new Date(b.billDate)) : ""}</td><td>${b.accountSupplier}</td><td>${b.accountCategory}</td><td>${b.accountBuilding}</td><td>£${parseFloat(b.amount).toFixed(2)}</td><td>${b.notes || ""}</td></tr>`; });
                   html += `</table></body></html>`;
                   const w = window.open("", "_blank"); if (w) { w.document.write(html); w.document.close(); w.print(); }
                 }}>
@@ -959,8 +960,8 @@ export default function BillsUtilities() {
                         {accountDetail.account.tariff && <div><span className="text-muted-foreground">Tariff:</span> <span className="font-medium">{accountDetail.account.tariff}</span></div>}
                         {accountDetail.account.directDebitAmount && <div><span className="text-muted-foreground">Direct Debit:</span> <span className="font-medium text-green-600">£{parseFloat(accountDetail.account.directDebitAmount).toFixed(2)}/mo</span></div>}
                         {accountDetail.account.billingDay && <div><span className="text-muted-foreground">DD Day:</span> <span className="font-medium">{accountDetail.account.billingDay}{["st","nd","rd"][accountDetail.account.billingDay - 1] ?? "th"} of month</span></div>}
-                        {accountDetail.account.contractStartDate && <div><span className="text-muted-foreground">Contract Start:</span> <span className="font-medium">{new Date(accountDetail.account.contractStartDate).toLocaleDateString()}</span></div>}
-                        {accountDetail.account.contractEndDate && <div><span className="text-muted-foreground">Contract End:</span> <span className={`font-medium ${new Date(accountDetail.account.contractEndDate) < new Date() ? "text-red-600" : ""}`}>{new Date(accountDetail.account.contractEndDate).toLocaleDateString()}</span></div>}
+                        {accountDetail.account.contractStartDate && <div><span className="text-muted-foreground">Contract Start:</span> <span className="font-medium">{fmtDate(new Date(accountDetail.account.contractStartDate))}</span></div>}
+                        {accountDetail.account.contractEndDate && <div><span className="text-muted-foreground">Contract End:</span> <span className={`font-medium ${new Date(accountDetail.account.contractEndDate) < new Date() ? "text-red-600" : ""}`}>{fmtDate(new Date(accountDetail.account.contractEndDate))}</span></div>}
                         {accountDetail.avg3m !== null && <div><span className="text-muted-foreground">3-Month Avg:</span> <span className="font-medium">£{parseFloat(accountDetail.avg3m!.toString()).toFixed(2)}</span></div>}
                         {accountDetail.account.monthlyBudget && <div><span className="text-muted-foreground">Monthly Budget:</span> <span className="font-medium text-blue-600">£{parseFloat(accountDetail.account.monthlyBudget).toFixed(2)}</span></div>}
                         {accountDetail.account.supplierNotes && <div className="col-span-2"><span className="text-muted-foreground">Supplier Notes:</span> <span className="font-medium">{accountDetail.account.supplierNotes}</span></div>}

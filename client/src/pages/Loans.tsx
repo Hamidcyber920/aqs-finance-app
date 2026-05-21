@@ -21,6 +21,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = {
   navy: "#0A192F", navyLight: "#112240", purple: "#635BFF",
@@ -380,7 +381,7 @@ export default function LoansPage() {
               html += `<table><tr><th>Date</th><th>Borrower</th><th>Email</th><th>Amount</th><th>Status</th><th>Purpose</th></tr>`;
               filtered.forEach((l: any) => {
                 const statusClass = `status-${l.status}`;
-                html += `<tr><td>${new Date(l.createdAt).toLocaleDateString("en-GB")}</td><td>${l.borrowerName}</td><td style="font-size:10px">${l.borrowerEmail || ""}</td><td>\u00a3${Number(l.amount).toFixed(2)}</td><td class="${statusClass}">${l.status}</td><td>${l.purpose || ""}</td></tr>`;
+                html += `<tr><td>${fmtDate(new Date(l.createdAt))}</td><td>${l.borrowerName}</td><td style="font-size:10px">${l.borrowerEmail || ""}</td><td>\u00a3${Number(l.amount).toFixed(2)}</td><td class="${statusClass}">${l.status}</td><td>${l.purpose || ""}</td></tr>`;
               });
               html += `</table>`;
               html += `

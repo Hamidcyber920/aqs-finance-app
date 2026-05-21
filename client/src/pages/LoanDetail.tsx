@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { fmtDate } from "@/lib/dateUtils";
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -150,13 +151,13 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
         <div style={{ fontSize:11,color:T.muted }}>
           <span style={{ color:"rgba(255,255,255,0.35)" }}>Due</span>{" "}
           <span style={{ color:isOverdue?"#ef4444":isDueSoon?"#fbbf24":T.white,fontWeight:600 }}>
-            {isOverdue && "⚠️ "}{isDueSoon && "⏰ "}{repayment.dueDate ? new Date(repayment.dueDate).toLocaleDateString("en-GB") : "—"}
+            {isOverdue && "⚠️ "}{isDueSoon && "⏰ "}{repayment.dueDate ? fmtDate(new Date(repayment.dueDate)) : "—"}
           </span>
         </div>
         {repayment.paidAt && (
           <div style={{ fontSize:11,color:T.muted }}>
             <span style={{ color:"rgba(255,255,255,0.35)" }}>Recorded</span>{" "}
-            <span style={{ color:T.white }}>{new Date(repayment.paidAt).toLocaleDateString("en-GB")}</span>
+            <span style={{ color:T.white }}>{fmtDate(new Date(repayment.paidAt))}</span>
           </div>
         )}
         {repayment.paymentMethod && (
@@ -175,14 +176,14 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
           <div style={{ fontSize:11,color:T.muted }}>
             <span style={{ color:"rgba(255,255,255,0.35)" }}>Admin</span>{" "}
             <span style={{ color:T.mint,fontWeight:600 }}>✓ {repayment.adminApprovedByName ?? ""}</span>{" "}
-            <span style={{ color:"rgba(255,255,255,0.3)" }}>{new Date(repayment.adminApprovedAt).toLocaleDateString("en-GB")}</span>
+            <span style={{ color:"rgba(255,255,255,0.3)" }}>{fmtDate(new Date(repayment.adminApprovedAt))}</span>
           </div>
         )}
         {repayment.trusteeApprovedAt && (
           <div style={{ fontSize:11,color:T.muted }}>
             <span style={{ color:"rgba(255,255,255,0.35)" }}>Trustee</span>{" "}
             <span style={{ color:"#fbbf24",fontWeight:600 }}>✓ {repayment.trusteeName ?? ""}</span>{" "}
-            <span style={{ color:"rgba(255,255,255,0.3)" }}>{new Date(repayment.trusteeApprovedAt).toLocaleDateString("en-GB")}</span>
+            <span style={{ color:"rgba(255,255,255,0.3)" }}>{fmtDate(new Date(repayment.trusteeApprovedAt))}</span>
           </div>
         )}
         {existingWaqf > 0 && repayment.waqfNote && (
@@ -194,7 +195,7 @@ function RepaymentRow({ repayment, isAdmin, isTrustee, onConfirm, onApproveTrust
         {repayment.lenderConfirmedAt && (
           <div style={{ fontSize:11,color:T.muted }}>
             <span style={{ color:"rgba(255,255,255,0.35)" }}>Lender</span>{" "}
-            <span style={{ color:T.mint,fontWeight:600 }}>✓ Confirmed {new Date(repayment.lenderConfirmedAt).toLocaleDateString("en-GB")}</span>
+            <span style={{ color:T.mint,fontWeight:600 }}>✓ Confirmed {fmtDate(new Date(repayment.lenderConfirmedAt))}</span>
           </div>
         )}
       </div>
@@ -709,8 +710,8 @@ The AQS Team`);
                     const outstanding = Math.max(0, parseFloat(String(loan.amount ?? 0)) - totalPaid - (isWaqf ? waqfEndowed : 0));
                     const endowmentLine = isWaqf ? `\nEndowment (Waqf): £${waqfEndowed.toFixed(2)}` : "";
                     setEmailPreviewType("statement");
-                    setEmailPreviewSubject(`Qarde Hasan Amanah Statement — ${new Date().toLocaleDateString("en-GB")} — AQ Society`);
-                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh,\n\n${stmtSalutation}\n\nMay Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the Rimmers Building Project as of ${new Date().toLocaleDateString("en-GB")}.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nTotal Paid: £${totalPaid.toFixed(2)}${endowmentLine}\nOutstanding Balance: £${outstanding.toFixed(2)}\n\nYour generosity is a pillar of this House of Allah.\nJazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.\n\nWith our sincere prayers and gratitude.\n\nWassalamu alaikum,\nDr Abdul Hamid (Chair)\nOn behalf of the Board of Trustees\nAbdullah Quilliam Society\n8-10 Brougham Terrace, Liverpool, L6 1AE\nadmin@abdullahquilliam.org`);
+                    setEmailPreviewSubject(`Qarde Hasan Amanah Statement — ${fmtDate(new Date())} — AQ Society`);
+                    setEmailPreviewBody(`Assalamu Alaikum wa Rahmatullahi wa Barakatuh,\n\n${stmtSalutation}\n\nMay Allah (SWT) bless you and your family abundantly. Please find below your Qarde Hasan Amanah Statement for the Rimmers Building Project as of ${fmtDate(new Date())}.\n\nLoan Amount: £${parseFloat(String(loan.amount ?? 0)).toFixed(2)}\nTotal Paid: £${totalPaid.toFixed(2)}${endowmentLine}\nOutstanding Balance: £${outstanding.toFixed(2)}\n\nYour generosity is a pillar of this House of Allah.\nJazakAllahu Khayran for your patience, generosity, and continued support of the AQ Society.\n\nWith our sincere prayers and gratitude.\n\nWassalamu alaikum,\nDr Abdul Hamid (Chair)\nOn behalf of the Board of Trustees\nAbdullah Quilliam Society\n8-10 Brougham Terrace, Liverpool, L6 1AE\nadmin@abdullahquilliam.org`);
                     setEmailPreviewOpen(true);
                   }}
                   style={{ background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.15)",color:"#fbbf24",borderRadius:12,padding:"10px 18px",fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:7 }}>
@@ -864,7 +865,7 @@ The AQS Team`);
               </div>
             </div>
             <p style={{ fontSize:12,color:T.muted,margin:"0 0 16px" }}>
-              {termMonths} monthly payments of £{monthly} · Started {(loan as any).startDate ? new Date((loan as any).startDate).toLocaleDateString("en-GB") : loan.createdAt ? new Date(loan.createdAt).toLocaleDateString("en-GB") : "—"}
+              {termMonths} monthly payments of £{monthly} · Started {(loan as any).startDate ? fmtDate(new Date((loan as any).startDate)) : loan.createdAt ? fmtDate(new Date(loan.createdAt)) : "—"}
             </p>
             {repayments.length === 0 ? (
               <div style={{ textAlign:"center",padding:"32px 0",color:T.muted }}>
