@@ -41,6 +41,11 @@ export default function TrusteeDashboard() {
   const [reportYear, setReportYear] = useState(now.getFullYear());
   const [reportMonth, setReportMonth] = useState(now.getMonth() + 1);
   const [sendToTrustees, setSendToTrustees] = useState(false);
+  const [useCustomRange, setUseCustomRange] = useState(false);
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
+  const [selectedRecipients, setSelectedRecipients] = useState<number[]>([]);
+  const [sendByEmail, setSendByEmail] = useState(false);
   const [approveNoteId, setApproveNoteId] = useState<number | null>(null);
   const [approveNote, setApproveNote] = useState("");
 
