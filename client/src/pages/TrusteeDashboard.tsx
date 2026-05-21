@@ -83,6 +83,8 @@ export default function TrusteeDashboard() {
     onError: (e) => toast.error(e.message),
   });
 
+  const { data: reportRecipients } = trpc.trusteeFinance.getReportRecipients.useQuery(undefined, { enabled: closeReportOpen });
+
   const closeReportMutation = trpc.trusteeFinance.generateMonthlyCloseReport.useMutation({
     onSuccess: (res) => {
       toast.success(`Report generated${res.emailsSent > 0 ? ` — ${res.emailsSent} email(s) sent` : ""}`);
@@ -550,53 +552,135 @@ export default function TrusteeDashboard() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-gray-500">
-              Generate a comprehensive PDF financial close report for the selected month, including income, expenses, bills, scheduled payments, and pending approvals.
+              Generate a comprehensive PDF financial close report including income, expenses, bills, scheduled payments, and pending approvals.
             </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Year</Label>
-                <Select value={String(reportYear)} onValueChange={v => setReportYear(Number(v))}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {years.map(y => (
-                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Month</Label>
-                <Select value={String(reportMonth)} onValueChange={v => setReportMonth(Number(v))}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {months.map(m => (
-                      <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+
+            {/* Date mode toggle */}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={!useCustomRange ? "default" : "outline"}
+                className={!useCustomRange ? "bg-[#1a4731] text-white" : ""}
+                onClick={() => setUseCustomRange(false)}
+              >Month</Button>
+              <Button
+                size="sm"
+                variant={useCustomRange ? "default" : "outline"}
+                className={useCustomRange ? "bg-[#1a4731] text-white" : ""}
+                onClick={() => setUseCustomRange(true)}
+              >Custom Range</Button>
             </div>
+
+            {!useCustomRange ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Year</Label>
+                  <Select value={String(reportYear)} onValueChange={v => setReportYear(Number(v))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Month</Label>
+                  <Select value={String(reportMonth)} onValueChange={v => setReportMonth(Number(v))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {months.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>From</Label>
+                  <Input type="date" className="mt-1" value={customDateFrom} onChange={e => setCustomDateFrom(e.target.value)} />
+                </div>
+                <div>
+                  <Label>To</Label>
+                  <Input type="date" className="mt-1" value={customDateTo} onChange={e => setCustomDateTo(e.target.value)} />
+                </div>
+              </div>
+            )}
+
+            {/* Send toggle */}
             <div className="flex items-center gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <Switch
-                checked={sendToTrustees}
-                onCheckedChange={setSendToTrustees}
-                id="send-trustees"
-              />
+              <Switch checked={sendToTrustees} onCheckedChange={setSendToTrustees} id="send-trustees" />
               <div>
-                <Label htmlFor="send-trustees" className="cursor-pointer font-medium">Send to Trustees</Label>
-                <p className="text-xs text-gray-500">Email the PDF report to all trustees and admins</p>
+                <Label htmlFor="send-trustees" className="cursor-pointer font-medium">Send Report by Email</Label>
+                <p className="text-xs text-gray-500">Email the PDF report to selected recipients</p>
               </div>
             </div>
+
+            {/* Recipient selector — shown when send is on */}
+            {sendToTrustees && (
+              <div className="border rounded-lg p-3 space-y-2 max-h-52 overflow-y-auto">
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Select Recipients</Label>
+                  <button
+                    className="text-xs text-[#1a4731] underline"
+                    onClick={() => {
+                      if (!reportRecipients) return;
+                      setSelectedRecipients(
+                        selectedRecipients.length === reportRecipients.length
+                          ? []
+                          : reportRecipients.map(r => r.id)
+                      );
+                    }}
+                  >
+                    {selectedRecipients.length === (reportRecipients?.length ?? 0) ? "Deselect all" : "Select all"}
+                  </button>
+                </div>
+                {!reportRecipients ? (
+                  <div className="text-xs text-gray-400 py-2">Loading...</div>
+                ) : (
+                  (() => {
+                    const groups = ["Trustees", "Staff / Managers"] as const;
+                    return groups.map(group => {
+                      const members = reportRecipients.filter(r => r.group === group);
+                      if (!members.length) return null;
+                      return (
+                        <div key={group}>
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2 mb-1">{group}</p>
+                          {members.map(r => (
+                            <label key={r.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
+                              <Checkbox
+                                checked={selectedRecipients.includes(r.id)}
+                                onCheckedChange={checked => {
+                                  setSelectedRecipients(prev =>
+                                    checked ? [...prev, r.id] : prev.filter(x => x !== r.id)
+                                  );
+                                }}
+                              />
+                              <span className="text-sm font-medium">{r.name}</span>
+                              <span className="text-xs text-gray-400 ml-auto">{r.email}</span>
+                            </label>
+                          ))}
+                        </div>
+                      );
+                    });
+                  })()
+                )}
+                {selectedRecipients.length > 0 && (
+                  <p className="text-xs text-[#1a4731] font-medium pt-1">{selectedRecipients.length} recipient(s) selected</p>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseReportOpen(false)}>Cancel</Button>
             <Button
               className="bg-[#1a4731] hover:bg-[#1a4731]/90 text-white"
-              onClick={() => closeReportMutation.mutate({ year: reportYear, month: reportMonth, sendToTrustees })}
+              onClick={() => closeReportMutation.mutate({
+                year: reportYear,
+                month: reportMonth,
+                sendToTrustees,
+                recipientIds: selectedRecipients.length > 0 ? selectedRecipients : undefined,
+                dateFrom: useCustomRange && customDateFrom ? customDateFrom : undefined,
+                dateTo: useCustomRange && customDateTo ? customDateTo : undefined,
+              })}
               disabled={closeReportMutation.isPending}
             >
               {closeReportMutation.isPending

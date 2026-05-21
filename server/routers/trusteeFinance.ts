@@ -291,18 +291,67 @@ export const trusteeFinanceRouter = router({
       return { approved: input.ids.length };
     }),
 
+  // ── List available report recipients (trustees + staff/managers)
+  getReportRecipients: adminProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const { trustees } = await import("../../drizzle/schema");
+      const trusteeRows = await db.select({
+        id: trustees.id,
+        fullName: trustees.fullName,
+        email: trustees.email,
+        role: trustees.role,
+        isActive: trustees.isActive,
+      }).from(trustees);
+      const staffRows = await db.select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        isActive: users.isActive,
+      }).from(users).where(and(
+        sql`${users.role} IN ('superadmin', 'admin', 'trustee', 'manager', 'deputy')`,
+        eq(users.isActive, true),
+        sql`${users.email} IS NOT NULL`
+      ));
+      const trustees_list = trusteeRows
+        .filter((t: any) => t.isActive !== false && t.email)
+        .map((t: any) => ({ id: `t-${t.id}`, name: t.fullName, email: t.email!, role: t.role ?? 'Trustee', group: 'Trustees' as const }));
+      const staff_list = staffRows
+        .filter((u: any) => u.email)
+        .map((u: any) => ({ id: `u-${u.id}`, name: u.name ?? u.email!, email: u.email!, role: u.role, group: 'Staff / Managers' as const }));
+      // Deduplicate by email
+      const seen = new Set<string>();
+      const combined = [...trustees_list, ...staff_list].filter(r => {
+        if (seen.has(r.email)) return false;
+        seen.add(r.email);
+        return true;
+      });
+      return combined;
+    }),
+
   // ── Monthly Close Report: generate a PDF summary for trustees
   generateMonthlyCloseReport: adminProcedure
     .input(z.object({
       year: z.number().int().min(2020).max(2030),
       month: z.number().int().min(1).max(12),
       sendToTrustees: z.boolean().default(false),
+      recipientIds: z.array(z.string()).optional(), // e.g. ["t-1", "u-3"]
+      dateFrom: z.string().optional(), // ISO date string for custom range
+      dateTo: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-      const { from, to } = monthRange(input.year, input.month);
-      const monthName = new Date(input.year, input.month - 1, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
+      // Support custom date range or fall back to month range
+      const useCustomRange = !!(input.dateFrom && input.dateTo);
+      const { from, to } = useCustomRange
+        ? { from: new Date(input.dateFrom!), to: new Date(input.dateTo! + "T23:59:59") }
+        : monthRange(input.year, input.month);
+      const monthName = useCustomRange
+        ? `${fmtDate(from)} to ${fmtDate(to)}`
+        : new Date(input.year, input.month - 1, 1).toLocaleString("en-GB", { month: "long", year: "numeric" });
 
       // Gather data
       const expenseRows = await db.select().from(receipts)
@@ -452,19 +501,14 @@ export const trusteeFinanceRouter = router({
       const key = `trustee-reports/monthly-close-${input.year}-${String(input.month).padStart(2, "0")}-${Date.now()}.pdf`;
       const { url } = await storagePut(key, pdfBuffer, "application/pdf");
 
-      // Optionally email trustees
-      let emailsSent = 0;
-      if (input.sendToTrustees) {
-        const allUsers = await db.select().from(users);
-        const trustees = allUsers.filter((u: any) => u.role === "admin" || u.isTrustee);
-        const subject = `Monthly Financial Close Report — ${monthName}`;
-        const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      // Build email HTML
+      const buildEmailHtml = (recipientName: string) => `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
           <div style="background:#5C1A1A;padding:24px;text-align:center">
             <h1 style="color:#fff;margin:0;font-size:20px">Abdullah Quilliam Society</h1>
             <p style="color:#c9a84c;margin:4px 0 0">Monthly Financial Close Report</p>
           </div>
           <div style="padding:24px;background:#fff">
-            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh,</p>
+            <p>Assalamu Alaikum wa Rahmatullahi wa Barakatuh, ${recipientName},</p>
             <p>Please find the Monthly Financial Close Report for <strong>${monthName}</strong> for your review.</p>
             <table style="width:100%;border-collapse:collapse;margin:16px 0">
               <tr><td style="padding:8px;border:1px solid #e5e7eb;font-weight:bold">Total Income</td><td style="padding:8px;border:1px solid #e5e7eb;color:#5C1A1A;font-weight:bold">${fmtGBP(totalIncome)}</td></tr>
@@ -479,9 +523,41 @@ export const trusteeFinanceRouter = router({
           </div>
           <div style="background:#f5f5f5;padding:12px;text-align:center;font-size:11px;color:#666">AQ Society — Monthly Close Report — Confidential</div>
         </div>`;
-        for (const trustee of trustees) {
+
+      // Optionally email selected recipients
+      let emailsSent = 0;
+      if (input.sendToTrustees) {
+        const { trustees: trusteesTable } = await import("../../drizzle/schema");
+        let recipients: { name: string; email: string }[] = [];
+
+        if (input.recipientIds && input.recipientIds.length > 0) {
+          // Use specifically selected recipients
+          for (const rid of input.recipientIds) {
+            if (rid.startsWith('t-')) {
+              const tid = parseInt(rid.slice(2));
+              const rows = await db.select({ fullName: trusteesTable.fullName, email: trusteesTable.email })
+                .from(trusteesTable).where(eq(trusteesTable.id, tid));
+              if (rows[0]?.email) recipients.push({ name: rows[0].fullName, email: rows[0].email });
+            } else if (rid.startsWith('u-')) {
+              const uid = parseInt(rid.slice(2));
+              const rows = await db.select({ name: users.name, email: users.email })
+                .from(users).where(eq(users.id, uid));
+              if (rows[0]?.email) recipients.push({ name: rows[0].name ?? rows[0].email!, email: rows[0].email! });
+            }
+          }
+        } else {
+          // Default: all active trustees
+          const allTrustees = await db.select({ fullName: trusteesTable.fullName, email: trusteesTable.email, isActive: trusteesTable.isActive })
+            .from(trusteesTable);
+          recipients = allTrustees
+            .filter((t: any) => t.isActive !== false && t.email)
+            .map((t: any) => ({ name: t.fullName, email: t.email! }));
+        }
+
+        const subject = `Monthly Financial Close Report — ${monthName} — AQ Society`;
+        for (const recipient of recipients) {
           try {
-            await sendGmail((trustee as any).email, (trustee as any).fullName ?? "Trustee", subject, html);
+            await sendGmail(recipient.email, recipient.name, subject, buildEmailHtml(recipient.name));
             emailsSent++;
           } catch (e) {
             console.error("[TrusteeFinance] Email failed:", e);
