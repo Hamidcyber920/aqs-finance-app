@@ -301,7 +301,7 @@ export default function LoansPage() {
               lines.push(`Pending Review,${csvPending}`);
               lines.push("");
               lines.push("LOAN DETAILS");
-              lines.push("Date,Borrower,Email,Amount (GBP),Status,Purpose");
+              lines.push("Date,Borrower,Email,Amount (GBP),Paid (GBP),Outstanding (GBP),Pay Back By,Status,Purpose");
               filtered.forEach((l: any) => {
                 // Prefix date with a tab so Excel treats it as text, not a date value (prevents #########)
                 const raw = new Date(l.createdAt);
@@ -310,7 +310,14 @@ export default function LoansPage() {
                 const yyyy = raw.getFullYear();
                 const d = `\t${dd}/${mm}/${yyyy}`; // tab prefix forces text mode in Excel
                 const amt = Number(l.amount).toFixed(2);
-                lines.push([d, esc(l.borrowerName || ""), esc(l.borrowerEmail || ""), amt, esc(l.status || ""), esc(l.purpose || "")].join(","));
+                const paid = Number(l.totalRepaid ?? 0).toFixed(2);
+                const outstanding = (l._summary?.outstanding ?? Math.max(0, Number(l.amount ?? 0) - Number(l.totalRepaid ?? 0))).toFixed(2);
+                const termMo = l._summary?.termMonths ?? (l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6));
+                const startD = l.startDate ? new Date(l.startDate) : new Date(l.createdAt ?? Date.now());
+                const payBackBy = new Date(startD);
+                payBackBy.setMonth(payBackBy.getMonth() + termMo);
+                const pbd = `\t${String(payBackBy.getDate()).padStart(2,'0')}/${String(payBackBy.getMonth()+1).padStart(2,'0')}/${payBackBy.getFullYear()}`;
+                lines.push([d, esc(l.borrowerName || ""), esc(l.borrowerEmail || ""), amt, paid, outstanding, pbd, esc(l.status || ""), esc(l.purpose || "")].join(","));
               });
               lines.push("");
               lines.push("JazakAllahu Khayran - Abdullah Quilliam Society - Qarde Hasan Amanah Finance System");
@@ -369,7 +376,9 @@ export default function LoansPage() {
               html += `<div><p class="letterhead-title">Abdullah Quilliam Society</p><p class="letterhead-sub">Qarde Hasan Amanah — Finance Report</p></div>`;
               html += `<div class="letterhead-meta">Generated: ${generatedDate}<br>Registered Charity No. 1194942<br>receiptapp-excmtodu.manus.space</div>`;
               html += `</div>`;
-              html += `<div class="report-info"><h2>Qarde Hasan Loans Report</h2><p>Period: ${dateFrom} to ${dateTo}</p></div>`;
+              // Format period dates as dd/mm/yyyy
+              const fmtPeriodDate = (iso: string) => { const p = iso.split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso; };
+              html += `<div class="report-info"><h2>Qarde Hasan Loans Report</h2><p>Period: ${fmtPeriodDate(dateFrom)} to ${fmtPeriodDate(dateTo)}</p></div>`;
               html += `<div class="stats-grid">`;
               html += `<div class="stat-box"><p class="stat-label">Total Borrowed</p><p class="stat-value">\u00a3${totalBorrowed.toLocaleString("en-GB", {minimumFractionDigits:2,maximumFractionDigits:2})}</p></div>`;
               html += `<div class="stat-box red"><p class="stat-label">Total Outstanding</p><p class="stat-value">\u00a3${filteredOutstanding.toLocaleString("en-GB", {minimumFractionDigits:2,maximumFractionDigits:2})}</p></div>`;
@@ -378,10 +387,16 @@ export default function LoansPage() {
               html += `<div class="stat-box amber"><p class="stat-label">Pending Review</p><p class="stat-value">${filteredPending}</p></div>`;
               html += `</div>`;
               html += `<div class="hadith">The Prophet (PBUH) said: \u201cWhoever builds a mosque for Allah, Allah will build for him a house in Jannah.\u201d</div>`;
-              html += `<table><tr><th>Date</th><th>Borrower</th><th>Email</th><th>Amount</th><th>Status</th><th>Purpose</th></tr>`;
+              html += `<table><tr><th>Date</th><th>Borrower</th><th>Email</th><th>Amount</th><th>Paid</th><th>Outstanding</th><th>Pay Back By</th><th>Status</th><th>Purpose</th></tr>`;
               filtered.forEach((l: any) => {
                 const statusClass = `status-${l.status}`;
-                html += `<tr><td>${fmtDate(new Date(l.createdAt))}</td><td>${l.borrowerName}</td><td style="font-size:10px">${l.borrowerEmail || ""}</td><td>\u00a3${Number(l.amount).toFixed(2)}</td><td class="${statusClass}">${l.status}</td><td>${l.purpose || ""}</td></tr>`;
+                const paid = Number(l.totalRepaid ?? 0);
+                const outstanding = l._summary?.outstanding ?? Math.max(0, Number(l.amount ?? 0) - paid);
+                const termMonths = l._summary?.termMonths ?? (l.termUnit === "years" ? (l.termValue ?? 6) * 12 : (l.termValue ?? l.termMonths ?? 6));
+                const startD = l.startDate ? new Date(l.startDate) : new Date(l.createdAt ?? Date.now());
+                const payBackBy = new Date(startD);
+                payBackBy.setMonth(payBackBy.getMonth() + termMonths);
+                html += `<tr><td>${fmtDate(new Date(l.createdAt))}</td><td>${l.borrowerName}</td><td style="font-size:10px">${l.borrowerEmail || ""}</td><td>\u00a3${Number(l.amount).toFixed(2)}</td><td>\u00a3${paid.toFixed(2)}</td><td style="color:${outstanding > 0 ? '#dc2626' : '#16a34a'};font-weight:700">\u00a3${outstanding.toFixed(2)}</td><td>${fmtDate(payBackBy)}</td><td class="${statusClass}">${l.status}</td><td>${l.purpose || ""}</td></tr>`;
               });
               html += `</table>`;
               html += `
