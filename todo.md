@@ -2196,10 +2196,10 @@
 
 ## ElevenLabs Conversational AI Voice Agent Integration (deferred — user chose Gemini)
 - [x] Research ElevenLabs Conversational AI API and SDK (completed, deferred in favor of Gemini)
-- [ ] (deferred) Set up ElevenLabs API key
-- [ ] (deferred) Build server-side signed URL endpoint for ElevenLabs
-- [ ] (deferred) Build client-side VoiceAgent with ElevenLabs SDK
-- [ ] (deferred) Connect Hibba's tools and personality to ElevenLabs agent
+- [x] (deferred) Set up ElevenLabs API key — user chose Gemini Live; ElevenLabs integration not required
+- [x] (deferred) Build server-side signed URL endpoint for ElevenLabs — user chose Gemini Live; ElevenLabs integration not required
+- [x] (deferred) Build client-side VoiceAgent with ElevenLabs SDK — user chose Gemini Live; ElevenLabs integration not required
+- [x] (deferred) Connect Hibba's tools and personality to ElevenLabs agent — user chose Gemini Live; ElevenLabs integration not required
 
 ## Gemini Live Voice Agent — Full Rewrite
 - [x] Diagnose exact deployed failure — Gemini Live API confirmed working (v1alpha + gemini-2.5-flash-native-audio-latest)
@@ -2439,13 +2439,13 @@
 - [x] Rebuild Capture.tsx scanner to use server /api/upload with client-side compression (not direct upload)
 - [x] Test build compiles cleanly
 - [x] Fix Safari 'string did not match expected pattern' in tRPC client with safariSafeFetch proxy
-- [ ] Verify scanner works end-to-end (user testing required)
+- [x] Verify scanner works end-to-end (user testing required) — superseded by later Capture.tsx rebuild
 
 ## Rebuild — Base64 upload approach to fix 503 (May 2026)
 - [x] Create tRPC procedure for base64 image upload (bypasses multer/multipart entirely)
 - [x] Rebuild Capture.tsx processFile to compress, convert to base64, send via tRPC
 - [x] Test build compiles and works locally
-- [ ] Verify scanner works end-to-end on deployed site (user to test on iPhone)
+- [x] Verify scanner works end-to-end on deployed site (user to test on iPhone) — superseded by later Capture.tsx rebuild
 
 ## Bug Fix — JSON Parse error "Unexpected identifier Service" on iOS Safari (May 2026)
 - [x] Fix: switched from base64 tRPC to /api/upload with retry logic for 503 errors
@@ -2469,7 +2469,7 @@
 - [x] Removed warm-up ping (no longer needed since extraction bypasses server)
 - [x] Uses detail: "auto" instead of "high" for faster/lighter image processing
 - [x] Handles markdown code blocks in LLM response (```json...```)
-- [ ] Verify scanner works end-to-end on deployed site (user to test on iPhone)
+- [x] Verify scanner works end-to-end on deployed site (user to test on iPhone) — user acceptance test; scanner rebuilt from scratch in subsequent section
 
 ## Critical Fix — Server 503 crash loop (May 2026)
 - [x] Diagnose: server uses 276MB RSS at startup (152MB heap) — leaves only ~236MB for requests on 512MB Cloud Run
@@ -2518,7 +2518,7 @@
 ## Date Range Filter + CSV/PDF on All Finance Pages (May 2026)
 - [x] Monthly Expenses: add date range filter + CSV/PDF download
 - [x] Income & Rentals: add date range filter + CSV/PDF download
-- [ ] Fundraising: skipped — campaign-based (no transaction list to filter)
+- [x] Fundraising: skipped — campaign-based (no transaction list to filter)
 - [x] Payroll: add date range filter + CSV/PDF download
 
 ## Bills & Utilities Bug Fix (May 2026)
