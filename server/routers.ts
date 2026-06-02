@@ -60,7 +60,7 @@ import {
   getDashboardStats,
 } from "./db";
 import { eq, and, sql, desc, isNull, gte, lte } from "drizzle-orm";
-import { loanRepayments, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations, donorLeads, donorCommsLog, donors } from "../drizzle/schema";
+import { loanRepayments, loanApplications, commChannels, commMessages, commTemplates, successionEvents, users, trusteeDecisions, donorPortalTokens, pledges, pledgePayments, giftAidDeclarations, donorLeads, donorCommsLog, donors } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { buildWhatsAppUrl } from "./lib/whatsapp";
 import { fmtDate, fmtDateLong, fmtDateTime } from "./dateUtils";
@@ -270,12 +270,22 @@ async function _fullyApproveRepayment(repayment: any) {
     );
     const repaymentNumber = allSorted.findIndex((r: any) => r.id === repayment.id) + 1 || allRepayments.length;
     const waqfEndowed = allRepayments.reduce((s, r) => s + Number((r as any).waqfAmount ?? 0), 0);
+    // Recalculate totalRepaid from actual approved repayments (including the one being approved now)
+    // This fixes the stale-cache bug where totalRepaid on loan_applications was never updated after approval
+    const approvedRepayments = allRepayments.filter((r: any) => r.status === 'approved' || r.id === repayment.id);
+    const freshTotalRepaid = approvedRepayments.reduce((s: number, r: any) => s + parseFloat(String(r.amount ?? 0)), 0);
+    const freshTotalRepaidStr = freshTotalRepaid.toFixed(2);
+    // Update the cached totalRepaid on the loan record
+    const dbForUpdate = await getDb();
+    if (dbForUpdate) {
+      await dbForUpdate.update(loanApplications).set({ totalRepaid: freshTotalRepaidStr } as any).where(eq(loanApplications.id, loan.id));
+    }
     const pdfBuffer = await generateRepaymentPdf({
       repaymentId: repayment.id, loanId: loan.id,
       borrowerName: loan.borrowerName, borrowerEmail: loan.borrowerEmail, borrowerPhone: loan.borrowerPhone,
       borrowerTitle: (loan as any).borrowerTitle,
       amount: repayment.amount, paymentMethod: repayment.paymentMethod,
-      paidAt: repayment.paidAt, loanAmount: loan.amount, totalRepaid: loan.totalRepaid ?? "0",
+      paidAt: repayment.paidAt, loanAmount: loan.amount, totalRepaid: freshTotalRepaidStr,
       termMonths: loan.termMonths,
       adminApprovedByName: repayment.adminApprovedByName, adminApprovedAt: repayment.adminApprovedAt,
       trusteeName: repayment.trusteeName, trusteeApprovedAt: repayment.trusteeApprovedAt,
@@ -288,7 +298,7 @@ async function _fullyApproveRepayment(repayment: any) {
     if (db) await db.update(loanRepayments).set({ confirmationPdfUrl: url, status: "approved" } as any).where(eq(loanRepayments.id, repayment.id));
     if (loan.borrowerEmail) {
       const firstName = (loan.borrowerName ?? '').split(' ')[0];
-      const outstanding = Math.max(0, parseFloat(String(loan.amount)) - parseFloat(String(loan.totalRepaid ?? 0)) - waqfEndowed);
+      const outstanding = Math.max(0, parseFloat(String(loan.amount)) - freshTotalRepaid - waqfEndowed);
       const whatsappPhone = (loan.borrowerPhone ?? '').replace(/[^0-9]/g, '');
       const waMsg = `Assalamu Alaikum wa Rahmatullahi wa Barakatuh ${firstName}, JazakAllahu Khayran for your Qarde Hasana Repayment No.${repaymentNumber} of £${parseFloat(String(repayment.amount)).toFixed(2)} to the Abdullah Quilliam Society. Outstanding Amanah balance: £${outstanding.toFixed(2)}. May Allah (SWT) bless you and accept this as Sadaqah Jariyah. Download receipt: ${url}`;
       const waLink = buildWhatsAppUrl(whatsappPhone, waMsg);
@@ -4171,6 +4181,16 @@ export const appRouter = router({
         const { and: andFn3 } = await import('drizzle-orm');
         const db = await import('./db').then(m => m.getDb());
         if (!db) return { success: true };
+        // Guard: prevent finalising if bank balance has not been entered (still at default '0')
+        const [existing] = await db.select({ bankBalance: reconciliationSessions.bankBalance, status: reconciliationSessions.status })
+          .from(reconciliationSessions)
+          .where(andFn3(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)))
+          .limit(1);
+        if (!existing) throw new TRPCError({ code: 'NOT_FOUND', message: 'No reconciliation session found for this month. Please create one first.' });
+        if (existing.status === 'finalised') throw new TRPCError({ code: 'BAD_REQUEST', message: 'This month has already been finalised.' });
+        if (!existing.bankBalance || parseFloat(String(existing.bankBalance)) === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Bank balance must be entered before finalising. Please update the bank balance first.' });
+        }
         await db.update(reconciliationSessions)
           .set({ status: 'finalised', finalisedAt: new Date(), finalisedById: ctx.user.id, notes: input.notes ?? null } as any)
           .where(andFn3(eq(reconciliationSessions.month, input.month), eq(reconciliationSessions.year, input.year)));

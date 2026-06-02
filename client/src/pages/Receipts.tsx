@@ -193,8 +193,9 @@ export default function ReceiptsPage() {
                       View
                     </button>
                     <button onClick={() => secondApproveMutation?.mutate?.({ id: r.id })}
-                      style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5 }}>
-                      <ThumbsUp size={11}/> Approve
+                      disabled={(secondApproveMutation as any)?.isPending || bulkApproving}
+                      style={{ padding:"5px 12px",borderRadius:8,background:"rgba(0,255,194,0.1)",border:"1px solid rgba(0,255,194,0.2)",color:T.mint,fontSize:11,fontWeight:600,cursor:(secondApproveMutation as any)?.isPending?"not-allowed":"pointer",display:"flex",alignItems:"center",gap:5,opacity:(secondApproveMutation as any)?.isPending?0.5:1 }}>
+                      <ThumbsUp size={11}/> {(secondApproveMutation as any)?.isPending ? 'Approving…' : 'Approve'}
                     </button>
                   </div>
                 </div>

@@ -626,8 +626,9 @@ export default function LoansPage() {
                   <div style={{ display: "flex", gap: 8 }}>
                     {isAdmin && l.status === "pending" && (
                       <button onClick={(e) => { e.stopPropagation(); approveMutation.mutate({ id: l.id }); }}
-                        style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,255,194,0.1)", border: "1px solid rgba(0,255,194,0.2)", color: T.mint, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                        Approve
+                        disabled={approveMutation.isPending}
+                        style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,255,194,0.1)", border: "1px solid rgba(0,255,194,0.2)", color: T.mint, fontSize: 11, fontWeight: 600, cursor: approveMutation.isPending ? "not-allowed" : "pointer", opacity: approveMutation.isPending ? 0.5 : 1 }}>
+                        {approveMutation.isPending ? 'Approving…' : 'Approve'}
                       </button>
                     )}
                     <button onClick={(e) => { e.stopPropagation(); setLocation(`/loans/${l.id}`); }}
