@@ -92,9 +92,9 @@ export default function AdminPanelPage() {
   const [qaActions, setQaActions] = useState<string[]>(["Show overdue loans", "Summarise active loans", "Any loans due this month?"]);
   const [qaInput, setQaInput] = useState("");
   const sharedActionsData: any[] = []; const refetchSharedActions = () => {};
-  const shareActionsMut = { mutate: () => toast.info("Voice agent removed"), isPending: false };
-  const deleteSharedMut = { mutate: () => toast.info("Voice agent removed"), isPending: false };
-  const triggerBriefingMut = { mutate: () => toast.info("Voice agent removed"), isPending: false };
+  const shareActionsMut = { mutate: (_args?: any) => toast.info("Voice agent removed"), isPending: false };
+  const deleteSharedMut = { mutate: (_args?: any) => toast.info("Voice agent removed"), isPending: false };
+  const triggerBriefingMut = { mutate: (_args?: any) => toast.info("Voice agent removed"), isPending: false };
   const sharedActionsList = { data: sharedActionsData ?? [], refetch: refetchSharedActions };
 
   useEffect(() => {

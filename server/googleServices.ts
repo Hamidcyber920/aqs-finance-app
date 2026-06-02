@@ -667,7 +667,7 @@ export async function fetchUpcomingWithin(hours: number): Promise<CalendarEvent[
     description: ev.description ?? undefined,
     location: ev.location ?? undefined,
     start: new Date(ev.start?.dateTime ?? ev.start?.date ?? now.toISOString()),
-    end: fmtDate(new Date(ev.end?.dateTime ?? ev.end?.date ?? now.toISOString())),
+    end: new Date(ev.end?.dateTime ?? ev.end?.date ?? now.toISOString()),
     allDay: !!ev.start?.date && !ev.start?.dateTime,
   }));
 }

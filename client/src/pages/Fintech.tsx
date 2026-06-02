@@ -21,7 +21,7 @@ import {
   Copy, MessageCircle, ExternalLink, Download, RefreshCw, Plus, Send,
   Smartphone, Globe, Landmark, QrCode, ScanLine, Banknote, Loader2
 } from "lucide-react";
-import { fmtDate, fmtDateTime } from "@/lib/dateUtils";
+import { fmtDate } from "@/lib/dateUtils";
 
 // Stripe publishable key — loaded once outside any component
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string);
@@ -1011,7 +1011,7 @@ function GiftAidPanel() {
     donorName: "", donorEmail: "", donorAddress: "", amount: "", donationDate: "", campaignName: "",
   });
 
-  const { data: r68Data, refetch, isLoading } = trpc.fintech.exportGiftAidR68.useQuery({ month, year });
+  const { data: r68Data, refetch, isLoading } = trpc.fintech.exportGiftAidChr1.useQuery({ month, year });
   const addDeclaration = trpc.fintech.addGiftAidDeclaration.useMutation({
     onSuccess: () => {
       refetch();
@@ -1121,7 +1121,7 @@ function GiftAidPanel() {
               </tr>
             </thead>
             <tbody>
-              {r68Data.declarations.map((d) => (
+              {r68Data.declarations.map((d: any) => (
                 <tr key={d.id} className="border-b last:border-0">
                   <td className="py-2 pr-4">
                     <p className="font-medium">{[d.donorTitle, d.donorFirstName, d.donorSurname].filter(Boolean).join(" ") || d.donorName}</p>

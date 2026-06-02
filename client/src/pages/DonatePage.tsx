@@ -53,8 +53,8 @@ export default function DonatePage() {
               <iframe
                 src="https://donorbox.org/embed/build-a-new-mosque?default_interval=m&hide_donation_meter=true"
                 name="donorbox"
-                allowPaymentRequest
-                seamless
+                
+                seamless={true}
                 frameBorder="0"
                 scrolling="no"
                 height="900px"

@@ -15,7 +15,6 @@ import {
   GraduationCap, FileText, ExternalLink, RefreshCw, Upload, Download } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import SmartDocumentUpload from "@/components/SmartDocumentUpload";
-import { fmtDate } from "@/lib/dateUtils";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

@@ -673,8 +673,8 @@ export const trusteeFinanceRouter = router({
       // Build 13 weekly buckets
       const weeks = Array.from({ length: 13 }, (_, i) => {
         const weekStart = new Date(now.getTime() + i * 7 * 24 * 60 * 60 * 1000);
-        const weekEnd = fmtDate(new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000));
-        const weekLabel = `W${i + 1} ${weekStart}`;
+        const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const weekLabel = `W${i + 1} ${fmtDate(weekStart)}`;
         const weekPayments = scheduled.filter((s: any) => {
           const d = new Date(s.dueDate);
           return d >= weekStart && d < weekEnd;

@@ -78,7 +78,7 @@ export async function runBackup(
     }
   }
 
-  const now = fmtDate(new Date());
+  const now = new Date();
   const dateStr = now.toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const filename = `backup-${dateStr}.json`;
   const s3Key = `system-backups/${filename}`;

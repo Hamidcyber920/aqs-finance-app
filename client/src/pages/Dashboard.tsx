@@ -607,8 +607,8 @@ export default function DashboardPage() {
                   <p style={{ fontSize: 13, fontWeight: 600, color: T.muted, margin: 0 }}>{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(bankBalance.month ?? 1) - 1]} {bankBalance.year}</p>
                   <p style={{ fontSize: 10, color: T.muted, margin: 0 }}>Reconciliation Period</p>
                 </div>
-                <div style={{ padding: '3px 10px', borderRadius: 999, background: bankBalance.status === 'reconciled' ? `${T.mint}22` : 'rgba(251,191,36,0.15)', border: `1px solid ${bankBalance.status === 'reconciled' ? T.mint : '#fbbf24'}44` }}>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: bankBalance.status === 'reconciled' ? T.mint : '#fbbf24', margin: 0, textTransform: 'capitalize' }}>{bankBalance.status}</p>
+                <div style={{ padding: '3px 10px', borderRadius: 999, background: bankBalance.status === 'finalised' ? `${T.mint}22` : 'rgba(251,191,36,0.15)', border: `1px solid ${bankBalance.status === 'finalised' ? T.mint : '#fbbf24'}44` }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: bankBalance.status === 'finalised' ? T.mint : '#fbbf24', margin: 0, textTransform: 'capitalize' }}>{bankBalance.status}</p>
                 </div>
               </div>
               <span style={{ fontSize: 11, color: T.muted, marginLeft: 'auto' }}>View Reconciliation →</span>

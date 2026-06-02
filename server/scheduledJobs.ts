@@ -97,7 +97,7 @@ async function sendWeeklyRepaymentAlert() {
       const paidCount = (loan.repayments ?? []).filter((r: any) => r.trusteeApprovedAt).length;
 
       for (let m = paidCount + 1; m <= termMonths; m++) {
-        const dueDate = fmtDate(new Date(startDate));
+        const dueDate = new Date(startDate);
         dueDate.setMonth(dueDate.getMonth() + m);
         if (dueDate > now && dueDate <= fourWeeksLater) {
           dueItems.push({
@@ -188,8 +188,8 @@ async function sendMonthlyTrusteeReport() {
   try {
     const loans = await getActiveLoansWithRepayments();
     const trustees = await getActiveTrustees();
-    const now = fmtDate(new Date());
-    const monthName = now;
+    const now = new Date();
+    const monthName = fmtDate(now);
 
     // Compute stats
     const totalLoaned = loans.reduce((s: number, l: any) => s + Number(l.amount ?? 0), 0);
@@ -470,7 +470,8 @@ export async function sendPledgeReminders() {
     let skipped = 0;
     for (const pledge of activePledges) {
       if (!pledge.nextDueDate) { skipped++; continue; }
-      const dueDate = fmtDateLong(new Date(pledge.nextDueDate));
+      const dueDate = new Date(pledge.nextDueDate);
+      const dueDateFormatted2 = fmtDateLong(dueDate);
       const isOverdue = dueDate < today;
       // Look up donor email
       let donorEmail: string | null = null;
@@ -484,7 +485,7 @@ export async function sendPledgeReminders() {
       }
       if (!donorEmail) { skipped++; continue; }
       const donorFirstName = (pledge.donorName ?? "Valued Donor").split(" ")[0];
-      const dueDateFormatted = dueDate;
+      const dueDateFormatted = dueDateFormatted2;
       const balanceFormatted = `£${Number(pledge.balanceOwing ?? 0).toFixed(2)}`;
       const campaignLine = pledge.campaignName ? `<br/>Campaign: <strong>${pledge.campaignName}</strong>` : "";
       const giftAidLine = pledge.isGiftAid ? "<br/><em>Your pledge includes Gift Aid — JazakAllah Khayran for your generosity.</em>" : "";
@@ -788,7 +789,7 @@ export async function sendComplianceDigest() {
     const THIRTY_DAYS_AGO = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const allMeetings = await db.select().from(trusteeMeetings);
     const quorumFailedMeetings = allMeetings.filter((m: any) =>
-      m.scheduledAt && fmtDate(new Date(m.scheduledAt)) >= THIRTY_DAYS_AGO &&
+      m.scheduledAt && new Date(m.scheduledAt) >= THIRTY_DAYS_AGO &&
       m.status === "completed" && !m.quorumMet
     );
 
@@ -813,8 +814,9 @@ export async function sendComplianceDigest() {
       </tr>`;
 
     const trainingRow = (t: any) => {
-      const exp = t.expiresAt ? fmtDate(new Date(t.expiresAt)) : null;
-      const isExpired = exp && exp < now;
+      const expDateObj = t.expiresAt ? new Date(t.expiresAt) : null;
+      const exp = expDateObj ? fmtDate(expDateObj) : null;
+      const isExpired = expDateObj && expDateObj < now;
       return `<tr>
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#e2e8f0;font-size:13px">${t.userName ?? `User #${t.userId}`}</td>
         <td style="padding:8px 12px;border-bottom:1px solid #1e3a5f;color:#94a3b8;font-size:12px">${t.module ?? "—"}</td>
@@ -1537,7 +1539,7 @@ export async function generateMorningBriefing() {
     if (!db) return;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const yesterday = fmtDate(new Date(today));
+    const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
     const newDonations = await db

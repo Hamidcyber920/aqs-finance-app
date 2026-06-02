@@ -337,11 +337,11 @@ export const facilitiesRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-      const [result] = await db.insert(facilityEnquiries).values({
+      const [result] = (await db.insert(facilityEnquiries).values({
         ...input,
         eventDate: input.eventDate || null,
         createdByUserId: ctx.user.id,
-      });
+      })) as any;
       await db.insert(enquiryAuditTrail).values({
         enquiryId: result.insertId,
         action: "enquiry_created",
@@ -401,7 +401,7 @@ export const facilitiesRouter = router({
     }),
 
   updateEnquiry: protectedProcedure
-    .input(z.object({ id: z.number(), data: z.record(z.any()) }))
+    .input(z.object({ id: z.number(), data: z.record(z.string(), z.any()) }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
@@ -429,14 +429,14 @@ export const facilitiesRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
-      const [result] = await db.insert(enquiryPayments).values({
+      const [result] = (await db.insert(enquiryPayments).values({
         enquiryId: input.enquiryId,
         paymentType: input.paymentType,
         amount: input.amount,
         dueDate: input.dueDate || null,
         paymentMethod: input.paymentMethod || null,
         reference: input.reference || null,
-      });
+      })) as any;
       await db.insert(enquiryAuditTrail).values({
         enquiryId: input.enquiryId,
         action: "payment_recorded",
@@ -578,11 +578,11 @@ export const facilitiesRouter = router({
       const response = await invokeLLM({
         messages: [
           { role: "system", content: "You are an AI assistant that extracts facility booking enquiry information from scanned forms. Return a JSON object with these fields (use null for missing): contactName, contactEmail, contactPhone, contactAddress, organisationName, eventType (one of: wedding, conference, community_event, funeral, birthday, corporate, charity, religious, other), eventDate (YYYY-MM-DD), eventStartTime (HH:MM), eventEndTime (HH:MM), expectedAttendees (number), foodRequired (boolean), foodHeadcount (number), cateringType (internal/external/self_catering/none), teaCoffeeRequired (boolean), tablesRequired (boolean), tablesCount (number), chairsRequired (boolean), chairsCount (number), cutleryPlatesRequired (boolean), decorRequired (boolean), decorType (internal/external/both/none), speakersRequired (boolean), micSystemRequired (boolean), meetAndGreetRoom (boolean), groomRoom (boolean), brideRoom (boolean), parkingRequired (boolean), parkingSpaces (number), beveragesRequired (boolean), notes (string)." },
-          { role: "user", content: [{ type: "image_url", image_url: { url, detail: "high" } }, { type: "text", text: "Extract all booking enquiry information from this form/document." }] },
+          { role: "user", content: [{ type: "image_url", image_url: { url, detail: "high" } }, { type: "text", text: "Extract all booking enquiry information from this form/document." }] as any },
         ],
       });
       let extracted = {};
-      try { extracted = JSON.parse(response.choices[0].message.content || "{}"); } catch { extracted = {}; }
+      try { extracted = JSON.parse((response.choices[0].message.content as string) || "{}"); } catch { extracted = {}; }
       return { extracted, sourceDocument: url };
     }),
 
@@ -680,7 +680,7 @@ export const facilitiesRouter = router({
           lte(facilityBookings.startDatetime, future),
           or(
             eq(facilityBookings.status, "confirmed"),
-            eq(facilityBookings.status, "pending")
+            eq(facilityBookings.status, "completed")
           )
         ))
         .orderBy(facilityBookings.startDatetime);
@@ -702,7 +702,7 @@ export const facilitiesRouter = router({
           eq(facilityBookings.roomId, input.roomId),
           or(
             eq(facilityBookings.status, "confirmed"),
-            eq(facilityBookings.status, "pending")
+            eq(facilityBookings.status, "enquiry")
           ),
           // Overlapping: existing.start < new.end AND existing.end > new.start
           lte(facilityBookings.startDatetime, input.endDatetime),
@@ -1069,7 +1069,7 @@ export const facilitiesRouter = router({
       const response = await invokeLLM({
         messages: [
           { role: "system", content: "You are an AI assistant that reads scanned reply documents or emails from clients regarding facility booking enquiries. Extract the key information and return a JSON object with: senderName (string), senderEmail (string|null), senderPhone (string|null), subject (string), body (string — full text of the reply), receivedDate (YYYY-MM-DD or null)." },
-          { role: "user", content: [{ type: "image_url", image_url: { url, detail: "high" } }, { type: "text", text: "Extract the reply information from this document." }] },
+          { role: "user", content: [{ type: "image_url", image_url: { url, detail: "high" } }, { type: "text", text: "Extract the reply information from this document." }] as any },
         ],
         response_format: { type: "json_schema", json_schema: { name: "reply_extract", strict: true, schema: { type: "object", properties: { senderName: { type: "string" }, senderEmail: { type: ["string", "null"] }, senderPhone: { type: ["string", "null"] }, subject: { type: "string" }, body: { type: "string" }, receivedDate: { type: ["string", "null"] } }, required: ["senderName", "senderEmail", "senderPhone", "subject", "body", "receivedDate"], additionalProperties: false } } },
       });

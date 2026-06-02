@@ -11,6 +11,7 @@ import {
   getLoans,
   getLoanById,
   getLoanRepayments,
+  getDb,
   getDonors,
   getDonorById,
   getPayrollRecords,
@@ -230,11 +231,28 @@ export const hibbaToolsRouter = router({
   getOverdueLoans: protectedProcedure
     .query(async () => {
       const loans = await getLoans("active");
+      if (!loans.length) return { total: 0, overdueLoans: [] };
       const now = new Date();
+      // Batch fetch all repayments in a single query instead of N+1
+      const db = await getDb();
+      if (!db) return { total: 0, overdueLoans: [] };
+      const { loanRepayments } = await import("../../drizzle/schema");
+      const { inArray, isNull } = await import("drizzle-orm");
+      const loanIds = loans.map(l => l.id);
+      const allRepayments = await db
+        .select()
+        .from(loanRepayments)
+        .where(inArray(loanRepayments.loanId, loanIds));
+      // Group by loanId in memory
+      const repByLoan = new Map<number, typeof allRepayments>();
+      for (const r of allRepayments) {
+        const arr = repByLoan.get(r.loanId) ?? [];
+        arr.push(r);
+        repByLoan.set(r.loanId, arr);
+      }
       const overdue = [];
       for (const loan of loans) {
-        const repayments = await getLoanRepayments(loan.id);
-        // A repayment is overdue if it has a dueDate in the past and no trusteeApprovedAt
+        const repayments = repByLoan.get(loan.id) ?? [];
         const overdueReps = repayments.filter((r: any) =>
           !r.trusteeApprovedAt && r.dueDate && new Date(r.dueDate) < now
         );

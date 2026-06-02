@@ -218,8 +218,10 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
 
       if (loan.startDate) {
         y = drawRow("Start Date", fmtDateLong(new Date(loan.startDate)), y);
-        const endDate = new Date(new Date(loan.startDate).setMonth(fmtDateLong(new Date(loan.startDate)).getMonth() + loan.termMonths));
-        y = drawRow("Expected Completion", endDate, y);
+        const startDateObj = new Date(loan.startDate);
+        const endDate = new Date(startDateObj);
+        endDate.setMonth(endDate.getMonth() + loan.termMonths);
+        y = drawRow("Expected Completion", fmtDateLong(endDate), y);
       }
       if (loan.termNotes) y = drawRow("Notes", loan.termNotes, y);
       y += 8;
@@ -249,7 +251,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
 
       let balance = totalAmount;
       for (let i = 0; i < schedMonths; i++) {
-        const due = fmtDate(new Date(schedStart));
+        const due = new Date(schedStart);
         due.setMonth(due.getMonth() + i + 1);
         balance = Math.max(0, balance - monthlyAmt);
         if (i % 2 === 0) doc.rect(tblX, y, tblW, rowH).fill("#f0e8e0");
@@ -257,7 +259,7 @@ export async function generateLoanPdf(loan: LoanPdfData): Promise<Buffer> {
         let rx = tblX + 3;
         [
           String(i + 1),
-          due,
+          fmtDate(due),
           `£${monthlyAmt.toFixed(2)}`,
           `£${balance.toFixed(2)}`,
         ].forEach((v, ci) => {

@@ -35,15 +35,14 @@ const EMPTY_FORM = {
 
 export default function PayrollV3Page() {
   const { user } = useAuth();
-  useEffect(() => {
-  }, [month, year, tab]);
-
   const utils = trpc.useUtils();
   const isAdmin = ["superadmin", "trustee", "manager", "admin"].includes(user?.role ?? "");
 
   const [tab, setTab] = useState("payroll");
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(CURRENT_YEAR);
+  useEffect(() => {
+  }, [month, year, tab]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showOcrDialog, setShowOcrDialog] = useState(false);
   const [form, setForm] = useState({ ...EMPTY_FORM });

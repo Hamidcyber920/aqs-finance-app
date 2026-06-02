@@ -17,7 +17,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AiDocumentScanner } from "@/components/AiDocumentScanner";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { fmtDate } from "@/lib/dateUtils";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-500/20 text-amber-400 border-amber-500/30",

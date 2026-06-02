@@ -30,7 +30,7 @@ function StatusBadge({ status }: { status?: string }) {
     approved:{bg:"rgba(0,255,194,0.12)",color:"#00FFC2"}, pending:{bg:"rgba(251,191,36,0.12)",color:"#fbbf24"},
     rejected:{bg:"rgba(244,63,94,0.12)",color:"#f43f5e"}, paid:{bg:"rgba(99,91,255,0.12)",color:"#635BFF"},
   };
-  const s = map[status?.toLowerCase()] ?? {bg:T.glass,color:T.muted};
+  const s = (status ? map[status.toLowerCase()] : undefined) ?? {bg:T.glass,color:T.muted};
   return <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,fontWeight:600,background:s.bg,color:s.color,textTransform:"capitalize" }}>{status}</span>;
 }
 
