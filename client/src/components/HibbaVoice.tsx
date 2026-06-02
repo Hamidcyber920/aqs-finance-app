@@ -355,6 +355,118 @@ const HIBBA_TOOLS = [{
       description: "Get a comprehensive strategic briefing combining financials, active loans, campaigns, and prayer times. Use when user says 'give me a briefing', 'morning update', 'status report', or at session start for Dr. Hamid.",
       parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
     },
+    {
+      name: "get_loan_details",
+      description: "Get detailed information about a specific loan including outstanding balance and repayment history. Use when user asks about a specific borrower's loan, outstanding balance, or repayment status.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          loan_id: { type: "NUMBER" as const, description: "Numeric loan ID" },
+          borrower_name: { type: "STRING" as const, description: "Borrower's name to search for" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "get_loan_repayments",
+      description: "Get the repayment history for a specific loan. Use when user asks how much has been repaid, repayment history, or instalment details.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          loan_id: { type: "NUMBER" as const, description: "Numeric loan ID" },
+        },
+        required: ["loan_id"],
+      },
+    },
+    {
+      name: "get_overdue_loans",
+      description: "Get all loans with overdue repayments. Use when user asks who has overdue loans, outstanding Amanah, or missed payments.",
+      parameters: { type: "OBJECT" as const, properties: {}, required: [] as string[] },
+    },
+    {
+      name: "get_expenses_by_category",
+      description: "Get expense breakdown by category for a specific month. Use when user asks what was spent on utilities, salaries, or a specific category in a given month.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          year: { type: "NUMBER" as const, description: "Year e.g. 2026" },
+          month: { type: "NUMBER" as const, description: "Month number 1-12" },
+        },
+        required: ["year", "month"],
+      },
+    },
+    {
+      name: "get_income_by_month",
+      description: "Get income breakdown for a specific month: total paid, pending, and individual records. Use when user asks about income in a specific month.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          year: { type: "NUMBER" as const, description: "Year e.g. 2026" },
+          month: { type: "NUMBER" as const, description: "Month number 1-12" },
+        },
+        required: ["year", "month"],
+      },
+    },
+    {
+      name: "get_pending_approvals",
+      description: "Get the list of expense receipts currently pending approval. Use when user asks about pending approvals, what needs signing off, or approval queue.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          limit: { type: "NUMBER" as const, description: "Number of results 1-20, default 10" },
+        },
+        required: [] as string[],
+      },
+    },
+    {
+      name: "send_loan_reminder_email",
+      description: "Send a reminder email to a loan borrower about their outstanding Amanah balance. Use when user says 'send a reminder to [name]', 'email [borrower]', or 'remind them about their loan'. ALWAYS confirm with the user before sending.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          loan_id: { type: "NUMBER" as const, description: "Numeric loan ID" },
+          type: { type: "STRING" as const, description: "Email type: 'reminder' (standard) or 'overdue' (urgent). Default: reminder" },
+        },
+        required: ["loan_id"],
+      },
+    },
+    {
+      name: "send_repayment_confirmation_email",
+      description: "Send a repayment confirmation email to a borrower for a specific repayment. Use when user says 'send confirmation for repayment [ID]' or 'email the lender about repayment'. ALWAYS confirm with the user before sending.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          repayment_id: { type: "NUMBER" as const, description: "Numeric repayment ID" },
+        },
+        required: ["repayment_id"],
+      },
+    },
+    {
+      name: "generate_monthly_report",
+      description: "Generate a monthly financial close report summary for a given month. Use when user asks for a monthly report, month-end summary, or financial close.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          year: { type: "NUMBER" as const, description: "Year e.g. 2026" },
+          month: { type: "NUMBER" as const, description: "Month number 1-12" },
+          send_to_trustees: { type: "BOOLEAN" as const, description: "Whether to email the report to all trustees. Default false." },
+        },
+        required: ["year", "month"],
+      },
+    },
+    {
+      name: "open_whatsapp",
+      description: "Open WhatsApp to send a message to a specific phone number. Use when user says 'send a WhatsApp to [name/number]', 'WhatsApp [person]', or 'message them on WhatsApp'. ALWAYS confirm with the user before opening.",
+      parameters: {
+        type: "OBJECT" as const,
+        properties: {
+          phone: { type: "STRING" as const, description: "Phone number in international format e.g. +447700900123. Always include +44 for UK numbers." },
+          message: { type: "STRING" as const, description: "Pre-filled message text" },
+          name: { type: "STRING" as const, description: "Recipient name for display" },
+        },
+        required: ["phone"],
+      },
+    },
   ],
 }];
 
@@ -412,6 +524,18 @@ Never give long monologues. 2-3 sentences max per turn unless asked for detail.
 ALWAYS use tools for real data — NEVER invent numbers. Summarise results in 2-3 sentences with key £ figures.
 User identity is in RUNTIME CONTEXT — no need to call get_current_user for greetings.
 For briefings, use get_strategic_briefing(). For prayer, use get_prayer_times() and tell them the NEXT upcoming prayer.
+
+# NEW SKILLS
+- Loan details: get_loan_details(loan_id or borrower_name) — outstanding balance, repayment count
+- Loan repayments: get_loan_repayments(loan_id) — full repayment history
+- Overdue loans: get_overdue_loans() — who has missed payments
+- Expenses by category: get_expenses_by_category(year, month) — breakdown by category
+- Income by month: get_income_by_month(year, month) — paid vs pending income
+- Pending approvals: get_pending_approvals() — expense receipts awaiting sign-off
+- Send loan reminder: send_loan_reminder_email(loan_id, type) — ALWAYS confirm before sending
+- Send repayment confirmation: send_repayment_confirmation_email(repayment_id) — ALWAYS confirm before sending
+- Monthly report: generate_monthly_report(year, month) — financial close summary
+- WhatsApp: open_whatsapp(phone, message, name) — opens WhatsApp with pre-filled message, ALWAYS confirm before opening
 `;
 
 /** Build full system instruction with runtime context, UK time, user identity, and speaker mode */
@@ -917,6 +1041,84 @@ export function HibbaVoice() {
           case "get_strategic_briefing": {
             const briefing = await utils.hibbaTools.strategicBriefing.fetch();
             result = briefing;
+            break;
+          }
+          case "get_loan_details": {
+            const data = await utils.client.hibbaTools.getLoanDetails.query({
+              loanId: fc.args?.loan_id ? Number(fc.args.loan_id) : undefined,
+              borrowerName: fc.args?.borrower_name,
+            });
+            result = data;
+            break;
+          }
+          case "get_loan_repayments": {
+            const data = await utils.client.hibbaTools.getLoanRepayments.query({
+              loanId: Number(fc.args?.loan_id),
+            });
+            result = data;
+            break;
+          }
+          case "get_overdue_loans": {
+            const data = await utils.client.hibbaTools.getOverdueLoans.query();
+            result = data;
+            break;
+          }
+          case "get_expenses_by_category": {
+            const data = await utils.client.hibbaTools.getExpensesByCategory.query({
+              year: Number(fc.args?.year),
+              month: Number(fc.args?.month),
+            });
+            result = data;
+            break;
+          }
+          case "get_income_by_month": {
+            const data = await utils.client.hibbaTools.getIncomeByMonth.query({
+              year: Number(fc.args?.year),
+              month: Number(fc.args?.month),
+            });
+            result = data;
+            break;
+          }
+          case "get_pending_approvals": {
+            const data = await utils.client.hibbaTools.getPendingApprovals.query({
+              limit: fc.args?.limit ? Number(fc.args.limit) : 10,
+            });
+            result = data;
+            break;
+          }
+          case "send_loan_reminder_email": {
+            const emailResult = await utils.client.hibbaTools.sendLoanReminderEmail.mutate({
+              loanId: Number(fc.args?.loan_id),
+              type: (fc.args?.type === "overdue" ? "overdue" : "reminder") as "reminder" | "overdue",
+            });
+            result = emailResult;
+            upsertMessage(`tool-${fc.id}`, "system", `Reminder email sent to ${emailResult.borrowerName ?? "borrower"}`, true);
+            break;
+          }
+          case "send_repayment_confirmation_email": {
+            const emailResult = await utils.client.hibbaTools.sendRepaymentConfirmationEmail.mutate({
+              repaymentId: Number(fc.args?.repayment_id),
+            });
+            result = emailResult;
+            upsertMessage(`tool-${fc.id}`, "system", `Repayment confirmation sent to ${emailResult.borrowerName ?? "borrower"}`, true);
+            break;
+          }
+          case "generate_monthly_report": {
+            const reportResult = await utils.client.hibbaTools.generateMonthlyReport.mutate({
+              year: Number(fc.args?.year),
+              month: Number(fc.args?.month),
+              sendToTrustees: fc.args?.send_to_trustees === true,
+            });
+            result = reportResult;
+            break;
+          }
+          case "open_whatsapp": {
+            const phone = String(fc.args?.phone || "").replace(/[^0-9+]/g, "");
+            const msg = fc.args?.message ? encodeURIComponent(String(fc.args.message)) : "";
+            const waUrl = `https://wa.me/${phone.replace("+", "")}${msg ? `?text=${msg}` : ""}`;
+            window.open(waUrl, "_blank");
+            result = { success: true, opened: waUrl, recipient: fc.args?.name || phone };
+            upsertMessage(`tool-${fc.id}`, "system", `WhatsApp opened for ${fc.args?.name || phone}`, true);
             break;
           }
           default:
