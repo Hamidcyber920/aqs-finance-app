@@ -9,6 +9,7 @@ import { invokeLLM } from "../_core/llm";
 import { getDb } from "../db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { commsTemplates, commsOutbox, users, donors } from "../../drizzle/schema";
+import { logAudit } from "./auditTrail";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
 
@@ -286,9 +287,27 @@ Return JSON: { subject: string, body: string }`;
           sentAt: new Date(),
         }).where(sql`id = LAST_INSERT_ID()`);
 
+        // Audit log for immediate sends
+        await logAudit({
+          userId: ctx.user.id,
+          entity: "comms_bulk",
+          entityId: (outboxResult as any).insertId ?? 0,
+          action: "sent",
+          newValue: { recipientGroup: input.recipientGroup, subject: input.subject, sentCount, failCount, total: recipients.length },
+          ipAddress: (ctx.req as any).ip || "unknown",
+        });
         return { success: true, sentCount, failCount, total: recipients.length };
       }
 
+      // Audit log for scheduled sends
+      await logAudit({
+        userId: ctx.user.id,
+        entity: "comms_bulk",
+        entityId: (outboxResult as any).insertId ?? 0,
+        action: input.scheduledAt ? "scheduled" : "queued",
+        newValue: { recipientGroup: input.recipientGroup, subject: input.subject, scheduledAt: input.scheduledAt },
+        ipAddress: (ctx.req as any).ip || "unknown",
+      });
       return { success: true, sentCount: 0, failCount: 0, total: 0, scheduled: !!input.scheduledAt };
     }),
 });

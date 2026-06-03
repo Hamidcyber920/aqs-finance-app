@@ -2679,8 +2679,8 @@
 - [x] Add composite unique index on gift_aid_certificates(donorId, coversFrom) (migration 0092)
 - [x] Add 50-recipient approval gate to commsV3.sendBulk (trustee/superadmin only for large groups)
 - [x] Add Gift Aid certificate HTML audit trail stored in S3 (crm.ts signGiftAidDeclaration)
-- [ ] Add logAudit to commsV3.sendBulk and facilities mutations
-- [ ] Add restricted fund expenditure guard in expenses router
+- [x] Add logAudit to commsV3.sendBulk and facilities mutations
+- [x] Add restricted fund expenditure guard in expenses router
 - [ ] Add FK .references() to 12 critical columns in schema
 - [ ] Add audit log retention heartbeat job (7-year archive to S3)
 - [ ] Add data retention schedule (anonymise donors after 3 years)

@@ -11,6 +11,7 @@ import { eq, and, gte, lte, desc, or, sql } from "drizzle-orm";
 import { facilityRooms, facilityBookings, incomeRecords, incomeCategories, facilityEnquiries, enquiryPayments, enquiryAuditTrail, facilityBuildings, enquiryReplies, commMessages, commChannels, facilitySettings } from "../../drizzle/schema";
 import { storagePut } from "../storage";
 import { buildWhatsAppUrl } from "../lib/whatsapp";
+import { logAudit } from "./auditTrail";
 import { fmtDate, fmtDateLong } from "../dateUtils";
 
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
@@ -201,7 +202,9 @@ export const facilitiesRouter = router({
         internalNotes: input.internalNotes ?? null,
         status: "enquiry",
       });
-      return { id: (result as any).insertId };
+      const newId = (result as any).insertId;
+      await logAudit({ userId: ctx.user.id, entity: "facility_booking", entityId: newId, action: "create", newValue: { roomId: input.roomId, title: input.title, startDatetime: input.startDatetime, endDatetime: input.endDatetime, agreedAmount: input.agreedAmount }, ipAddress: (ctx.req as any).ip || "unknown" });
+      return { id: newId };
     }),
 
   updateBooking: protectedProcedure
@@ -233,6 +236,7 @@ export const facilitiesRouter = router({
       if (startDatetime) data.startDatetime = new Date(startDatetime);
       if (endDatetime) data.endDatetime = new Date(endDatetime);
       await db.update(facilityBookings).set(data).where(eq(facilityBookings.id, id));
+      await logAudit({ userId: ctx.user.id, entity: "facility_booking", entityId: id, action: "update", newValue: rest, ipAddress: (ctx.req as any).ip || "unknown" });
       return { success: true };
     }),
 
@@ -243,6 +247,7 @@ export const facilitiesRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
       await db.delete(facilityBookings).where(eq(facilityBookings.id, input.id));
+      await logAudit({ userId: ctx.user.id, entity: "facility_booking", entityId: input.id, action: "delete", newValue: { deleted: true }, ipAddress: (ctx.req as any).ip || "unknown" });
       return { success: true };
     }),
 

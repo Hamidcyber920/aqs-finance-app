@@ -622,6 +622,30 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
         const { receipts: receiptsTable } = await import("../drizzle/schema");
+
+        // ── Restricted fund guard ──────────────────────────────────────────────
+        // If any fundAllocation entry names a restricted campaign, only trustees
+        // and superadmins may record expenditure against it.
+        if (input.fundAllocation && input.fundAllocation.length > 0) {
+          const { fundraisingCampaigns } = await import("../drizzle/schema");
+          const { like, or: orClause } = await import("drizzle-orm");
+          const fundNames = input.fundAllocation.map((f: { fund: string }) => f.fund);
+          const conditions = fundNames.map((name: string) => like(fundraisingCampaigns.name, `%${name.substring(0, 40)}%`));
+          if (conditions.length > 0) {
+            const restrictedCampaigns = await db.select({ id: fundraisingCampaigns.id, isRestricted: fundraisingCampaigns.isRestricted })
+              .from(fundraisingCampaigns)
+              .where(orClause(...conditions))
+              .limit(10);
+            const hasRestricted = restrictedCampaigns.some((c: any) => c.isRestricted);
+            if (hasRestricted && !['superadmin', 'trustee'].includes(ctx.user.role)) {
+              throw new TRPCError({
+                code: 'FORBIDDEN',
+                message: 'Expenditure against a restricted fund requires Trustee or Super Admin authorisation.',
+              });
+            }
+          }
+        }
+
         const id = await createReceipt({
           userId: ctx.user.id,
           amount: input.amount,
