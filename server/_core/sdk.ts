@@ -303,6 +303,10 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
+    // Enforce account suspension for Manus OAuth users (same check as local auth)
+    if (!user.isActive) throw ForbiddenError("Account suspended");
+    if (user.status === "suspended") throw ForbiddenError("Account suspended by administrator");
+
     await db.upsertUser({
       openId: user.openId!,
       lastSignedIn: signedInAt,

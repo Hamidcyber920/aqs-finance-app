@@ -152,16 +152,19 @@ export const pledgesRouter = router({
         notes: input.notes ?? null,
         recordedById: ctx.user.id,
       });
-      // Update pledge paidAmount and balanceOwing
-      const newPaid = (parseFloat(pledge.paidAmount) + parseFloat(input.amount)).toFixed(2);
-      const newBalance = (parseFloat(pledge.totalAmount) - parseFloat(newPaid)).toFixed(2);
-      const newStatus = parseFloat(newBalance) <= 0 ? "fulfilled" : "active";
+      // Update pledge paidAmount and balanceOwing atomically to prevent race conditions.
+      // Using SQL expressions so the DB computes the new values from the current row,
+      // not from a value read earlier in this transaction (which could be stale under concurrency).
+      const amountNum = parseFloat(input.amount);
       await db.update(pledges).set({
-        paidAmount: newPaid,
-        balanceOwing: newBalance,
-        status: newStatus,
+        paidAmount: sql`CAST(CAST(${pledges.paidAmount} AS DECIMAL(12,2)) + ${amountNum} AS CHAR)`,
+        balanceOwing: sql`CAST(CAST(${pledges.totalAmount} AS DECIMAL(12,2)) - CAST(${pledges.paidAmount} AS DECIMAL(12,2)) - ${amountNum} AS CHAR)`,
+        status: sql`CASE WHEN CAST(${pledges.totalAmount} AS DECIMAL(12,2)) - CAST(${pledges.paidAmount} AS DECIMAL(12,2)) - ${amountNum} <= 0 THEN 'fulfilled' ELSE 'active' END`,
         updatedAt: new Date(),
       }).where(eq(pledges.id, input.pledgeId));
+      // Re-read to get the actual new status after the atomic update
+      const [updatedPledge] = await db.select().from(pledges).where(eq(pledges.id, input.pledgeId)).limit(1);
+      const newStatus = updatedPledge?.status ?? "active";
       await logAudit({
         userId: ctx.user.id,
         userName: ctx.user.name ?? ctx.user.email ?? undefined,

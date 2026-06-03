@@ -2696,3 +2696,35 @@
 - [x] OpenSanctions API integration — documented as NEEDS REWORK; requires API key from user
 - [x] Trustee conflict-of-interest declaration workflow — conflictsRouter already exists; documented in Phase 3 report
 - [x] ChR1 XML authorised official — now configurable via authorisedOfficialForename/Surname input params
+
+## Phase 4 — Failure Mode Hunt (Jun 2026)
+
+- [ ] 4.1a Stripe webhook idempotency — verify processedStripeEvents prevents double-recording
+- [ ] 4.1b OCR retry with exponential backoff — implement retry on provider failure
+- [ ] 4.1c HMRC 503 handling — implement retry + "submitting" state guard
+- [ ] 4.1d QuickCapture offline queue — localStorage pending queue + online flush
+- [ ] 4.2a Optimistic locking on donor records — updatedAt version check
+- [ ] 4.2b Double-click payment guard — idempotency key on checkout session creation
+- [ ] 4.2c Pledge concurrent update — optimistic locking on pledge balance
+- [ ] 4.3a OCR blank page — must not invent rows
+- [ ] 4.3b OCR SQL injection — must treat as text
+- [ ] 4.3c OCR low-confidence routing — rows below threshold route to manual review
+- [ ] 4.4 WhatsApp delivery edge cases — document gaps (requires WhatsApp Business API)
+- [ ] 4.5a Friday 22:00 campaign shift — verify quiet hours shifts to Saturday 07:00
+- [ ] 4.5b Frequency cap API bypass — cap enforced at message-send layer
+- [ ] 4.5c Critical message quiet-hours override — receipts bypass quiet hours
+- [ ] 4.6a 10k donor seed test — profile page loads in <2s
+- [ ] 4.6b Unicode/RTL/emoji donor names — display, search, CSV export
+- [ ] 4.7a Session expiry form persistence — form survives re-login
+- [ ] 4.7b Magic link single-use — forwarded link rejected
+- [ ] 4.7c Offboarding session invalidation — disabled account session expires within 5 min
+
+## Phase 4 — Failure Mode Hunt (Jun 2026)
+- [x] 4.1.5 Fix Stripe checkout double-click — add idempotency key to checkout session creation
+- [x] 4.2.1 Fix pledge markPaid race condition — replace read-compute-write with atomic SQL update
+- [x] 4.5.3 Add isCritical quiet-hours override to commsV3.sendBulk (trustee/superadmin only)
+- [x] 4.7.2 Fix donor portal magic link single-use — check usedAt on gift_aid_sign tokens
+- [x] 4.7.3 Fix Manus OAuth user suspension bypass — add isActive/status check in sdk.ts
+- [ ] 4.2.2 Add optimistic locking to updateDonor (expectedUpdatedAt in WHERE clause + frontend change)
+- [ ] 4.3.5 Normalise corrupted PDF error messages in OCR catch block
+- [ ] 4.7.5 Add brute-force protection to local auth login (loginAttempts + lockedUntil)

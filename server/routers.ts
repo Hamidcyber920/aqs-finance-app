@@ -6389,6 +6389,10 @@ Return ONLY valid JSON with these exact fields. If a field is not found, use nul
           .limit(1);
         if (!tokenRow) throw new TRPCError({ code: "NOT_FOUND", message: "Invalid or expired link" });
         if (tokenRow.expiresAt < new Date()) throw new TRPCError({ code: "FORBIDDEN", message: "This link has expired" });
+        // Single-use enforcement: gift_aid_sign tokens can only be used once
+        if (tokenRow.purpose === "gift_aid_sign" && tokenRow.usedAt) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "This Gift Aid signing link has already been used. Please request a new link from the charity." });
+        }
 
         // Handle donor lead tokens (from QuickCapture or Send Portal Link on a lead)
         if (tokenRow.donorLeadId && !tokenRow.donorId) {

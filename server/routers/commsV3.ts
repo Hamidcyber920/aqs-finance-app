@@ -158,6 +158,7 @@ Return JSON: { subject: string, body: string }`;
       ]),
       recipientIds: z.array(z.number()).optional(), // for 'individual' or 'custom'
       scheduledAt: z.string().optional(), // ISO timestamp for scheduled send
+      isCritical: z.boolean().optional(), // Trustee/superadmin override for quiet hours (e.g. urgent safeguarding, emergency)
     }))
     .mutation(async ({ input, ctx }) => {
       if (!ADMIN_ROLES.includes(ctx.user.role)) {
@@ -167,7 +168,9 @@ Return JSON: { subject: string, body: string }`;
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
 
       // ── Quiet hours enforcement (UK time) ─────────────────────────────────────────────
-      if (!input.scheduledAt) {
+      // isCritical=true (trustee/superadmin only) bypasses quiet hours for urgent safeguarding or emergency messages
+      const isCriticalOverride = input.isCritical === true && ["superadmin", "trustee"].includes(ctx.user.role);
+      if (!input.scheduledAt && !isCriticalOverride) {
         const nowUK = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/London" }));
         const hour = nowUK.getHours();
         const minute = nowUK.getMinutes();
