@@ -70,6 +70,13 @@ export default function CapturePage() {
   // Store the S3 URL after upload so it can be attached to the saved receipt
   const uploadedUrlRef = useRef<string>("");
 
+  // ── Offline queue ──────────────────────────────────────────────────────────
+  const OFFLINE_QUEUE_KEY = "capture_offline_queue";
+  const [isOnline, setIsOnline] = useState(() => typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [offlineQueueCount, setOfflineQueueCount] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("capture_offline_queue") || "[]").length; } catch { return 0; }
+  });
+
   // ── tRPC mutations ─────────────────────────────────────────────────────────
   const createReceiptMutation = trpc.receipts.create.useMutation({
     onSuccess: () => {
@@ -113,8 +120,13 @@ export default function CapturePage() {
     resetAll();
     const objectUrl = URL.createObjectURL(file);
     setPreview(objectUrl);
+    // Offline: save to localStorage queue, skip upload until connection returns
+    if (!navigator.onLine) {
+      saveToOfflineQueue(file, docType);
+      return;
+    }
     setPendingFile(file);
-  }, [resetAll]);
+  }, [resetAll, docType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Step 2: Upload → /api/upload (same as Payroll) ─────────────────────────
   const uploadFile = useCallback(async (file: File): Promise<{ url: string; mimeType: string }> => {
@@ -225,6 +237,60 @@ export default function CapturePage() {
     window.addEventListener("hibba:open-scanner", handler);
     return () => window.removeEventListener("hibba:open-scanner", handler);
   }, []);
+
+  // Track online/offline status and flush queue when connection returns
+  useEffect(() => {
+    const handleOnline  = () => { setIsOnline(true);  flushOfflineQueue(); };
+    const handleOffline = () => { setIsOnline(false); toast.warning("You’re offline — scans will be saved locally and uploaded when you reconnect"); };
+    window.addEventListener("online",  handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online",  handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Save a captured image to the offline queue (base64 + metadata) */
+  function saveToOfflineQueue(file: File, type: DocType) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const queue = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || "[]");
+        queue.push({ dataUrl: reader.result, name: file.name, type, savedAt: Date.now() });
+        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+        setOfflineQueueCount(queue.length);
+        toast.info(`Saved offline — will upload when connection returns (${queue.length} pending)`);
+      } catch {
+        toast.error("Could not save offline — storage may be full");
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /** Flush the offline queue when connection is restored */
+  async function flushOfflineQueue() {
+    try {
+      const queue: Array<{ dataUrl: string; name: string; type: DocType; savedAt: number }> =
+        JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || "[]");
+      if (queue.length === 0) return;
+      toast.info(`Back online — uploading ${queue.length} pending scan(s)…`);
+      const remaining: typeof queue = [];
+      for (const item of queue) {
+        try {
+          const res = await fetch(item.dataUrl);
+          const blob = await res.blob();
+          const file = new File([blob], item.name, { type: blob.type });
+          await runScan(file);
+        } catch {
+          remaining.push(item);
+        }
+      }
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(remaining));
+      setOfflineQueueCount(remaining.length);
+      if (remaining.length === 0) toast.success("All offline scans uploaded successfully");
+      else toast.warning(`${remaining.length} scan(s) still failed — tap to retry`);
+    } catch { /* ignore */ }
+  }
 
   // ── Save all CRM records (bulk) ────────────────────────────────────────────
   const saveAllToCrm = useCallback(async () => {

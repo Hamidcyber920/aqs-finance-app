@@ -2702,7 +2702,7 @@
 - [x] 4.1a Stripe webhook idempotency — PASS: processedStripeEvents unique constraint confirmed
 - [x] 4.1b OCR retry — PASS: try/catch saves receipt as 'failed' with extractionError; retry is manual via re-upload
 - [x] 4.1c HMRC 503 handling — PASS by design: ChR1 is local XML export, no live HMRC API call
-- [ ] 4.1d QuickCapture offline queue — NEEDS REWORK (deferred to Phase 5 UX)
+- [x] 4.1d QuickCapture offline queue — FIXED: navigator.onLine check + localStorage queue + online event flush added to Capture.tsx
 - [x] 4.2a Optimistic locking on donor records — FIXED: expectedUpdatedAt guard added to donors.update procedure
 - [x] 4.2b Double-click payment guard — FIXED: idempotency key added to checkout session creation
 - [x] 4.2c Pledge concurrent update — FIXED: atomic SQL update in pledges.markPaid
