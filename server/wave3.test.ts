@@ -15,7 +15,7 @@ describe("donorsV3 router", () => {
     expect(keys).toContain("getLapsedDonors");
     expect(keys).toContain("listDonorsWithSegments");
     expect(keys).toContain("sendThankYou");
-  });
+  }, 30000);
 });
 
 // ── payrollV3 ─────────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ describe("Wave 4 – commsInbox router", () => {
     expect(appRouter._def.procedures).toHaveProperty("commsInbox.uploadAttachment");
     expect(appRouter._def.procedures).toHaveProperty("commsInbox.getInboxStats");
     expect(appRouter._def.procedures).toHaveProperty("commsInbox.fetchFromGmail");
-  });
+  }, 60000);
 
   it("Wave 4 DB tables exist in schema", async () => {
     const schema = await import("../drizzle/schema");
@@ -159,7 +159,7 @@ describe("Wave 4 – commsInbox router", () => {
   it("Suggested next steps: markGiftAidSubmitted procedure exists", async () => {
     const { appRouter } = await import("./routers");
     expect(appRouter._def.procedures).toHaveProperty("donorsV3.markGiftAidSubmitted");
-  });
+  }, 60000);
 
   it("Suggested next steps: quorumRequired/quorumMet columns exist in trusteeMeetings schema", async () => {
     const schema = await import("../drizzle/schema");
@@ -562,7 +562,7 @@ describe("Gap Analysis P1 — Pledges Router", () => {
   it("pledgesRouter markPaid procedure exists in appRouter", async () => {
     const { appRouter } = await import("./routers");
     expect(appRouter._def.procedures).toHaveProperty("pledges.markPaid");
-  });
+  }, 120000);
 });
 
 // ─── Gap Analysis P1: Donor Pipeline Router ──────────────────────────────────

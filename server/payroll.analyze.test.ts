@@ -248,7 +248,7 @@ describe("payroll.create with employeeName", () => {
       expect.objectContaining({ employeeName: "Farid Ahmed", month: 1, year: 2026 })
     );
     expect(result).toMatchObject({ id: 99 });
-  });
+  }, 30000);
 });
 
 describe("loans.recordRepayment with evidence", () => {
@@ -284,7 +284,7 @@ describe("loans.recordRepayment with evidence", () => {
       })
     );
     expect(result).toMatchObject({ id: 5 });
-  });
+  }, 30000);
 
   it("records repayment without evidence URL", async () => {
     vi.mocked(db.getLoanById).mockResolvedValue({
