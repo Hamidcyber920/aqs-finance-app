@@ -2684,3 +2684,15 @@
 - [x] Add FK .references() — deferred to Phase 3 (non-destructive, medium priority). Documented in Phase 2 report.
 - [x] Add audit log retention heartbeat job — deferred to Phase 3. Documented in Phase 2 report.
 - [x] Add data retention schedule — deferred to Phase 3. Documented in Phase 2 report.
+
+## Phase 3 — Money & Compliance Audit (June 2026)
+- [x] Stripe fee capture — stripeFeeAmount/netAmount added to stripe_payment_sessions (migration 0093)
+- [x] UK postcode validation on Gift Aid sign — regex added to signGiftAidDeclaration
+- [x] ChR1 CSV Aggregated Donations column — populated from totalDonationsCovered
+- [x] donorTitle field added to gift_aid_certificates (migration 0094)
+- [x] Trustee role enforcement on majorDonor.trusteeSignOff
+- [ ] End-of-day variance flagging — daily heartbeat reconciliation job (deferred to Phase 4)
+- [ ] Anonymous donation SIR auto-trigger for £5k+ anonymous donations
+- [ ] OpenSanctions API integration (deferred — requires API key)
+- [ ] Trustee conflict-of-interest declaration workflow
+- [ ] ChR1 XML authorised official — make configurable

@@ -108,6 +108,10 @@ export const majorDonorRouter = router({
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      // Only trustees and superadmins may sign off on major donor due diligence
+      if (!(["trustee", "superadmin"] as string[]).includes(ctx.user.role)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only trustees may sign off on major donor due diligence cases" });
+      }
       const newStatus = input.escalate ? "escalated" : "cleared";
       await db.update(majorDonorDueDiligence).set({
         trusteeSignOffUserId: ctx.user.id,

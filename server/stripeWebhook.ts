@@ -111,6 +111,22 @@ export function registerStripeWebhook(app: Express) {
               .where(eq(stripePaymentSessions.stripeSessionId, session.id));
 
             if (localSession) {
+              // Capture Stripe processing fee from balance transaction for reconciliation
+              let stripeFeeAmount: string | null = null;
+              let netAmount: string | null = null;
+              if (paymentIntentId) {
+                try {
+                  const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ["latest_charge.balance_transaction"] });
+                  const charge = (pi as any).latest_charge;
+                  const bt = charge?.balance_transaction;
+                  if (bt && typeof bt === "object") {
+                    stripeFeeAmount = (bt.fee / 100).toFixed(2);
+                    netAmount = (bt.net / 100).toFixed(2);
+                  }
+                } catch (feeErr: any) {
+                  console.warn("[Stripe Webhook] Could not retrieve balance transaction for fee:", feeErr.message);
+                }
+              }
               // Mark as completed
               await db
                 .update(stripePaymentSessions)
@@ -119,6 +135,8 @@ export function registerStripeWebhook(app: Express) {
                   stripePaymentIntentId: paymentIntentId ?? null,
                   paymentMethod: session.payment_method_types?.[0] ?? null,
                   webhookConfirmedAt: new Date(),
+                  ...(stripeFeeAmount !== null ? { stripeFeeAmount } : {}),
+                  ...(netAmount !== null ? { netAmount } : {}),
                 })
                 .where(eq(stripePaymentSessions.id, localSession.id));
 

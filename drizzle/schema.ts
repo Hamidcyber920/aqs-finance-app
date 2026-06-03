@@ -1027,6 +1027,8 @@ export const stripePaymentSessions = mysqlTable("stripe_payment_sessions", {
   externalOrderId: varchar("externalOrderId", { length: 255 }),
   webhookConfirmedAt: timestamp("webhookConfirmedAt"),
   thankYouWhatsAppSentAt: timestamp("thankYouWhatsAppSentAt"),
+  stripeFeeAmount: decimal("stripeFeeAmount", { precision: 10, scale: 2 }), // Stripe processing fee captured from balance transaction
+  netAmount: decimal("netAmount", { precision: 10, scale: 2 }), // amount - stripeFeeAmount
   fundraisingDonationId: int("fundraisingDonationId"),
   loanRepaymentId: int("loanRepaymentId"),
   loanApplicationId: int("loanApplicationId"),
@@ -1118,6 +1120,8 @@ export const giftAidCertificates = mysqlTable("gift_aid_certificates", {
   donorId: int("donorId"),
   donorLeadId: int("donorLeadId"),
   donorName: varchar("donorName", { length: 200 }).notNull(),
+  donorTitle: varchar("donorTitle", { length: 20 }), // Mr/Mrs/Dr etc — required for HMRC ChR1 export
+  totalDonationsCovered: decimal("totalDonationsCovered", { precision: 12, scale: 2 }), // Aggregated donations amount for HMRC ChR1
   donorAddress: text("donorAddress").notNull(),
   donorPostcode: varchar("donorPostcode", { length: 20 }),
   declarationText: text("declarationText").notNull(),

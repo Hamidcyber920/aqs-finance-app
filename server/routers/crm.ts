@@ -222,7 +222,10 @@ export const crmRouter = router({
         donorLeadId: z.number().optional(),
         donorName: z.string().min(2),
         donorAddress: z.string().min(5),
-        donorPostcode: z.string().min(3),
+        donorPostcode: z.string().min(3).regex(
+          /^[A-Z]{1,2}[0-9][0-9A-Z]?\s?[0-9][A-Z]{2}$/i,
+          "A valid UK postcode is required for Gift Aid declarations (HMRC requirement)"
+        ),
         signatureMethod: z.enum(["click_to_sign", "typed_name", "checkbox"]).default("click_to_sign"),
         coversFrom: z.string().optional(),
         coversTo: z.string().optional(),
@@ -302,7 +305,7 @@ export const crmRouter = router({
         )
         .orderBy(giftAidCertificates.createdAt);
 
-      // HMRC ChR1 format CSV
+      // HMRC ChR1 format CSV — Aggregated Donations column is required by HMRC
       const header = "Title,First Name,Last Name,House Name/Number,Postcode,Aggregated Donations,Sponsored Event,Declaration Date";
       const rows = certs.map((c) => {
         const nameParts = c.donorName.split(" ");
@@ -312,7 +315,10 @@ export const crmRouter = router({
         const houseNum = addressParts[0]?.trim() || "";
         const postcode = c.donorPostcode || "";
         const declDate = c.signedAt ? fmtDate(new Date(c.signedAt)) : "";
-        return `"","${firstName}","${lastName}","${houseNum}","${postcode}","","","${declDate}"`;
+        // Aggregated donations: total amount covered by this declaration (required for HMRC)
+        const aggregated = c.totalDonationsCovered ? Number(c.totalDonationsCovered).toFixed(2) : "";
+        const title = c.donorTitle || "";
+        return `"${title}","${firstName}","${lastName}","${houseNum}","${postcode}","${aggregated}","","${declDate}"`;
       });
 
       const csv = [header, ...rows].join("\n");
