@@ -2647,3 +2647,8 @@
 - [x] Add Endowment (Waqf) Amount row and adjusted Outstanding Balance to repayment receipt PDF
 - [x] Update routers.ts _fullyApproveRepayment: fetch all repayments, compute waqfEndowed, pass to generateRepaymentPdf
 - [x] Update routers.ts generateRepaymentPdf adminProcedure: fetch all repayments, compute waqfEndowed, pass to generateRepaymentPdf
+
+## Deployment Crash Fix — path-to-regexp (Jun 2026)
+- [x] Root cause: pnpm override "path-to-regexp": ">=0.1.13" forced Express 4's internal dependency (requires exactly 0.1.12) to resolve to v8.4.2 — completely different API, causing TypeError: pathRegexp is not a function on startup
+- [x] Fix: removed path-to-regexp from pnpm overrides; Express 4 now correctly gets 0.1.12 in its own node_modules; top-level path-to-regexp 8.4.2 remains for other packages
+- [x] Verified: pnpm install + pnpm build clean + node dist/index.js starts without crash
