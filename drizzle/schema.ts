@@ -34,6 +34,9 @@ export const users = mysqlTable("users", {
   resetToken: varchar("resetToken", { length: 128 }),
   resetTokenExpiry: timestamp("resetTokenExpiry"),
   isActive: boolean("isActive").default(true).notNull(),
+  // Brute-force protection for local auth
+  loginAttempts: int("loginAttempts").default(0).notNull(),
+  lockedUntil: timestamp("lockedUntil"),
   // Supervision hierarchy
   supervisedById: int("supervisedById"), // FK to users.id — who supervises this user
   isPropertyManager: boolean("isPropertyManager").default(false).notNull(),

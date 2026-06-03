@@ -3258,8 +3258,8 @@ export const appRouter = router({
     list: adminProcedure.input(z.object({ isRegular: z.boolean().optional(), search: z.string().optional(), limit: z.number().default(100), offset: z.number().default(0) })).query(({ input }) => getDonors(input)),
     get: adminProcedure.input(z.object({ id: z.number() })).query(async ({ input }) => { const d = await getDonorById(input.id); if (!d) throw new TRPCError({ code: "NOT_FOUND" }); return d; }),
     create: adminProcedure.input(z.object({ name: z.string(), email: z.string().optional(), phone: z.string().optional(), address: z.string().optional(), isRegular: z.boolean().default(false), isGiftAid: z.boolean().default(false), notes: z.string().optional() })).mutation(({ input }) => createDonor(input)),
-    update: adminProcedure.input(z.object({ id: z.number(), name: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), address: z.string().optional(), isRegular: z.boolean().optional(), isGiftAid: z.boolean().optional(), notes: z.string().optional(), totalGiven: z.string().optional() })).mutation(async ({ input }) => {
-      const { id, ...data } = input;
+    update: adminProcedure.input(z.object({ id: z.number(), name: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), address: z.string().optional(), isRegular: z.boolean().optional(), isGiftAid: z.boolean().optional(), notes: z.string().optional(), totalGiven: z.string().optional(), expectedUpdatedAt: z.string().optional() })).mutation(async ({ input }) => {
+      const { id, expectedUpdatedAt, ...data } = input;
       // ── Gift Aid UK postcode guard ─────────────────────────────────────────────
       if (data.isGiftAid === true) {
         // If enabling Gift Aid, check the donor has a UK address/postcode
@@ -3272,6 +3272,21 @@ export const appRouter = router({
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "Gift Aid can only be claimed for UK taxpayers with a valid UK address and postcode. Please add a UK address before enabling Gift Aid.",
+            });
+          }
+        }
+      }
+      // ── Optimistic locking guard ─────────────────────────────────────────────
+      // If the caller passes expectedUpdatedAt, reject the update if the record
+      // has been modified by another user since the caller last fetched it.
+      if (expectedUpdatedAt) {
+        const db = await getDb();
+        if (db) {
+          const [current] = await db.select({ updatedAt: donors.updatedAt }).from(donors).where(eq(donors.id, id)).limit(1);
+          if (current && current.updatedAt && new Date(current.updatedAt).toISOString() !== new Date(expectedUpdatedAt).toISOString()) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "This donor record was modified by another user while you were editing it. Please refresh and try again.",
             });
           }
         }
