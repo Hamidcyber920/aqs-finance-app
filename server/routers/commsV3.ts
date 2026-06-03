@@ -187,6 +187,18 @@ Return JSON: { subject: string, body: string }`;
         }
       }
 
+      // ── 50-recipient approval gate ─────────────────────────────────────────────────
+      // Sends to large groups (donors_*, staff_all) require Trustee or Super Admin role.
+      // Managers can only send to individual/custom groups (typically < 50 recipients).
+      const LARGE_GROUP_PATTERNS = ["donors_all", "donors_major", "donors_monthly", "donors_eid", "donors_friday", "staff_all"];
+      const LARGE_SEND_ROLES = ["superadmin", "trustee"];
+      if (LARGE_GROUP_PATTERNS.includes(input.recipientGroup) && !LARGE_SEND_ROLES.includes(ctx.user.role)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Bulk sends to '${input.recipientGroup}' (potentially >50 recipients) require Trustee or Super Admin authorisation. Please ask a trustee to approve and send this message, or use the 'individual' group to target fewer than 50 recipients.`,
+        });
+      }
+
       // Create outbox record
       const [outboxResult] = await db.insert(commsOutbox).values({
         templateId: input.templateId,

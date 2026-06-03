@@ -9,6 +9,7 @@ import {
   json,
   boolean,
   date,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 // ─── USERS & AUTH ────────────────────────────────────────────────────────────
@@ -199,6 +200,9 @@ export const fundraisingCampaigns = mysqlTable("fundraising_campaigns", {
   endDate: date("endDate"),
   isActive: boolean("isActive").default(true).notNull(),
   imageUrl: text("imageUrl"),
+  // Restricted fund ring-fencing (Phase 2 Data Integrity)
+  isRestricted: boolean("isRestricted").default(false).notNull(),
+  restrictedPurpose: varchar("restrictedPurpose", { length: 500 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -1005,7 +1009,7 @@ export type InsertAccommodationRentPayment = typeof accommodationRentPayments.$i
 // ─── STRIPE PAYMENT SESSIONS ──────────────────────────────────────────────────
 export const stripePaymentSessions = mysqlTable("stripe_payment_sessions", {
   id: int("id").autoincrement().primaryKey(),
-  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }).unique(),
   stripeSessionId: varchar("stripeSessionId", { length: 255 }),
   donorName: varchar("donorName", { length: 200 }).notNull(),
   donorEmail: varchar("donorEmail", { length: 320 }),
@@ -1126,7 +1130,10 @@ export const giftAidCertificates = mysqlTable("gift_aid_certificates", {
   revokedAt: timestamp("revokedAt"),
   certificateUrl: varchar("certificateUrl", { length: 500 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Prevent duplicate active declarations for same donor + start date
+  donorCoversFromIdx: uniqueIndex("uq_gift_aid_cert_donor_from").on(table.donorId, table.coversFrom),
+}));
 export type GiftAidCertificate = typeof giftAidCertificates.$inferSelect;
 export type InsertGiftAidCertificate = typeof giftAidCertificates.$inferInsert;
 

@@ -2652,3 +2652,35 @@
 - [x] Root cause: pnpm override "path-to-regexp": ">=0.1.13" forced Express 4's internal dependency (requires exactly 0.1.12) to resolve to v8.4.2 — completely different API, causing TypeError: pathRegexp is not a function on startup
 - [x] Fix: removed path-to-regexp from pnpm overrides; Express 4 now correctly gets 0.1.12 in its own node_modules; top-level path-to-regexp 8.4.2 remains for other packages
 - [x] Verified: pnpm install + pnpm build clean + node dist/index.js starts without crash
+
+## Phase 2 — Data Integrity Audit (June 2026)
+
+- [ ] 2.1 Audit FK constraints on all relationship columns
+- [ ] 2.1 Audit check constraints on all enum/status fields
+- [ ] 2.1 Audit NOT NULL on all required fields
+- [ ] 2.1 Add unique constraints: donor phone, donor email, stripe_payment_intent_id, gift_aid_declaration(donor+valid_from)
+- [ ] 2.1 Verify all monetary columns use INT (pence) not DECIMAL/FLOAT
+- [ ] 2.2 Add fund_id to fundraisingDonations; verify zero donations without fund_id
+- [ ] 2.2 Add isRestricted + balance guard to fundraisingCampaigns
+- [ ] 2.2 Add race condition protection (SELECT FOR UPDATE) on fund balance check
+- [ ] 2.2 Add daily reconciliation job for restricted fund balance drift
+- [ ] 2.3 Verify audit log has no UPDATE/DELETE permissions
+- [ ] 2.3 Verify all mutating endpoints write to audit log
+- [ ] 2.3 Run 30-day gap query: donors updated without audit_log row
+- [ ] 2.3 Document audit log retention / archive policy
+- [ ] 2.4 Assess encryption at rest for PII fields (DOB, address, phone, email)
+- [ ] 2.5 Implement SAR (Subject Access Request) export endpoint
+- [ ] 2.5 Implement right-to-erasure (depersonalisation) endpoint
+- [ ] 2.5 Verify SAR export includes audit_log entries for the donor
+
+## Phase 2 Data Integrity Fixes (June 2026)
+- [x] Add isRestricted + restrictedPurpose to fundraisingCampaigns (migration 0092)
+- [x] Add unique constraint on stripe_payment_sessions.stripePaymentIntentId (migration 0092)
+- [x] Add composite unique index on gift_aid_certificates(donorId, coversFrom) (migration 0092)
+- [x] Add 50-recipient approval gate to commsV3.sendBulk (trustee/superadmin only for large groups)
+- [x] Add Gift Aid certificate HTML audit trail stored in S3 (crm.ts signGiftAidDeclaration)
+- [ ] Add logAudit to commsV3.sendBulk and facilities mutations
+- [ ] Add restricted fund expenditure guard in expenses router
+- [ ] Add FK .references() to 12 critical columns in schema
+- [ ] Add audit log retention heartbeat job (7-year archive to S3)
+- [ ] Add data retention schedule (anonymise donors after 3 years)
