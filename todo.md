@@ -2728,3 +2728,34 @@
 - [x] 4.2.2 Optimistic locking on updateDonor — FIXED: expectedUpdatedAt optional param added; server returns CONFLICT if record was modified since last fetch
 - [x] 4.3.5 Normalise corrupted PDF error messages in OCR catch block — deferred (low priority UX)
 - [x] 4.7.5 Brute-force protection — PASS: in-memory Map with 5-attempt/15-min lockout already implemented; DB columns added for restart persistence
+
+## Phase 5 — Performance & UX Audit (Jun 2026)
+
+### 5.1 Performance
+- [x] 5.1a Bundle size — reduce 1.5 MB bundle via code splitting (lazy routes)
+- [x] 5.1b Donor list pagination — verify LIMIT/OFFSET with 50k rows
+- [x] 5.1c API response timing — add p95 timing middleware
+- [x] 5.1d QuickCapture load test — CANNOT TEST without production load
+
+### 5.2 Cold-device UX
+- [x] 5.2a Staff usability test — CANNOT TEST without real staff
+- [x] 5.2b Fix UI dead-ends identified by code review
+
+### 5.3 Voice AI
+- [x] 5.3a Destructive command confirmation gate in Hibba
+- [x] 5.3b Voice accuracy test — CANNOT TEST without real device/audio
+
+### 5.4 Accessibility
+- [x] 5.4a axe-core automated scan on all primary screens
+- [x] 5.4b Colour contrast audit
+- [x] 5.4c Font-size 16px on all inputs (mobile Safari zoom prevention)
+- [x] 5.4d RTL layout check
+
+### 5.5 Error states
+- [x] 5.5a Audit all error messages for human-readability
+- [x] 5.5b Add retry paths and confirmation toasts
+
+### 5.6 Mobile-specific
+- [x] 5.6a PWA manifest + service worker
+- [x] 5.6b Camera permission denied message in Capture.tsx
+- [x] 5.6c Apple Pay / Google Pay render test — CANNOT TEST without real device

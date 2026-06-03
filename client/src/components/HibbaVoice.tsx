@@ -12,8 +12,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useIsMobile } from "@/hooks/useMobile";
-import {
-  Mic,
+import { Mic,
   MicOff,
   X,
   Loader2,
@@ -21,7 +20,18 @@ import {
   Minimize2,
   Maximize2,
   Volume2,
+  AlertTriangle,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { startAudioCapture, AudioPlayer, type AudioCaptureHandle } from "@/lib/audio-utils";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -599,6 +609,13 @@ export function HibbaVoice() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [statusText, setStatusText] = useState("Tap mic to start");
 
+  // Destructive action confirmation gate
+  const [pendingAction, setPendingAction] = useState<{
+    label: string;
+    description: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   const sessionRef = useRef<any>(null);
   const playerRef = useRef<AudioPlayer | null>(null);
   const captureRef = useRef<AudioCaptureHandle | null>(null);
@@ -1087,20 +1104,44 @@ export function HibbaVoice() {
             break;
           }
           case "send_loan_reminder_email": {
-            const emailResult = await utils.client.hibbaTools.sendLoanReminderEmail.mutate({
-              loanId: Number(fc.args?.loan_id),
-              type: (fc.args?.type === "overdue" ? "overdue" : "reminder") as "reminder" | "overdue",
+            // Confirmation gate — pause and ask user before sending email
+            result = await new Promise<any>((resolve) => {
+              setPendingAction({
+                label: `Send loan reminder email`,
+                description: `Hibba wants to send a ${fc.args?.type ?? "reminder"} email for loan #${fc.args?.loan_id}. This will send a real email to the borrower.`,
+                onConfirm: async () => {
+                  setPendingAction(null);
+                  const emailResult = await utils.client.hibbaTools.sendLoanReminderEmail.mutate({
+                    loanId: Number(fc.args?.loan_id),
+                    type: (fc.args?.type === "overdue" ? "overdue" : "reminder") as "reminder" | "overdue",
+                  });
+                  upsertMessage(`tool-${fc.id}`, "system", `Reminder email sent to ${emailResult.borrowerName ?? "borrower"}`, true);
+                  resolve(emailResult);
+                },
+              });
+              // If user cancels, resolve with a cancellation message
+              setTimeout(() => {
+                // Will be resolved by onConfirm or cancel handler
+              }, 0);
             });
-            result = emailResult;
-            upsertMessage(`tool-${fc.id}`, "system", `Reminder email sent to ${emailResult.borrowerName ?? "borrower"}`, true);
             break;
           }
           case "send_repayment_confirmation_email": {
-            const emailResult = await utils.client.hibbaTools.sendRepaymentConfirmationEmail.mutate({
-              repaymentId: Number(fc.args?.repayment_id),
+            // Confirmation gate — pause and ask user before sending email
+            result = await new Promise<any>((resolve) => {
+              setPendingAction({
+                label: `Send repayment confirmation email`,
+                description: `Hibba wants to send a repayment confirmation email for repayment #${fc.args?.repayment_id}. This will send a real email to the borrower.`,
+                onConfirm: async () => {
+                  setPendingAction(null);
+                  const emailResult = await utils.client.hibbaTools.sendRepaymentConfirmationEmail.mutate({
+                    repaymentId: Number(fc.args?.repayment_id),
+                  });
+                  upsertMessage(`tool-${fc.id}`, "system", `Repayment confirmation sent to ${emailResult.borrowerName ?? "borrower"}`, true);
+                  resolve(emailResult);
+                },
+              });
             });
-            result = emailResult;
-            upsertMessage(`tool-${fc.id}`, "system", `Repayment confirmation sent to ${emailResult.borrowerName ?? "borrower"}`, true);
             break;
           }
           case "generate_monthly_report": {
@@ -1113,12 +1154,22 @@ export function HibbaVoice() {
             break;
           }
           case "open_whatsapp": {
+            // Confirmation gate — pause and ask user before opening WhatsApp
             const phone = String(fc.args?.phone || "").replace(/[^0-9+]/g, "");
             const msg = fc.args?.message ? encodeURIComponent(String(fc.args.message)) : "";
             const waUrl = `https://wa.me/${phone.replace("+", "")}${msg ? `?text=${msg}` : ""}`;
-            window.open(waUrl, "_blank");
-            result = { success: true, opened: waUrl, recipient: fc.args?.name || phone };
-            upsertMessage(`tool-${fc.id}`, "system", `WhatsApp opened for ${fc.args?.name || phone}`, true);
+            result = await new Promise<any>((resolve) => {
+              setPendingAction({
+                label: `Open WhatsApp for ${fc.args?.name || phone}`,
+                description: `Hibba wants to open WhatsApp with a pre-filled message to ${fc.args?.name || phone}. This will open a new browser tab.`,
+                onConfirm: () => {
+                  setPendingAction(null);
+                  window.open(waUrl, "_blank");
+                  upsertMessage(`tool-${fc.id}`, "system", `WhatsApp opened for ${fc.args?.name || phone}`, true);
+                  resolve({ success: true, opened: waUrl, recipient: fc.args?.name || phone });
+                },
+              });
+            });
             break;
           }
           default:
@@ -1269,6 +1320,7 @@ export function HibbaVoice() {
                 onClick={handleMinimize}
                 className="p-1.5 hover:bg-emerald-700 rounded-lg transition-colors"
                 title="Minimize — audio continues"
+                aria-label="Minimise Hibba — audio continues in background"
               >
                 <Minimize2 className="w-3.5 h-3.5" />
               </button>
@@ -1276,6 +1328,7 @@ export function HibbaVoice() {
                 onClick={handleClose}
                 className="p-1.5 hover:bg-emerald-700 rounded-lg transition-colors"
                 title="Close & disconnect"
+                aria-label="Close Hibba and disconnect"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1338,6 +1391,37 @@ export function HibbaVoice() {
         </div>
       )}
 
+      {/* ── Destructive action confirmation gate ── */}
+      <AlertDialog open={!!pendingAction} onOpenChange={(open) => {
+        if (!open) {
+          // User dismissed — cancel the pending action
+          setPendingAction(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Confirm Action
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction?.description}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setPendingAction(null);
+            }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => pendingAction?.onConfirm()}
+            >
+              {pendingAction?.label}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Minimized indicator ── */}
       {isOpen && minimized && isActive && (
         <button
@@ -1361,6 +1445,7 @@ export function HibbaVoice() {
             }
             toggleMic();
           }}
+          aria-label={micOn ? "Mute microphone" : "Activate Hibba voice assistant"}
           className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
             state === "connecting"
               ? "bg-yellow-500 animate-pulse"

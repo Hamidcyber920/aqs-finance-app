@@ -420,7 +420,22 @@ export default function CapturePage() {
         />
 
         <div
-          onClick={() => !isProcessing && fileInputRef.current?.click()}
+          onClick={async () => {
+            if (isProcessing) return;
+            // Check camera/file permission before opening picker
+            if (typeof navigator !== "undefined" && navigator.permissions) {
+              try {
+                const perm = await navigator.permissions.query({ name: "camera" as PermissionName });
+                if (perm.state === "denied") {
+                  setScanError("Camera access was denied. Please allow camera access in your browser settings, then try again. Alternatively, tap the button below to browse files from your gallery.");
+                  return;
+                }
+              } catch {
+                // permissions API not supported — proceed normally
+              }
+            }
+            fileInputRef.current?.click();
+          }}
           style={{
             border: `2px dashed ${preview ? currentDocType.color : T.border}`,
             borderRadius: 16, padding: preview ? 0 : 24, textAlign: "center",

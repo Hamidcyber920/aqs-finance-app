@@ -130,8 +130,12 @@ queryClient.getMutationCache().subscribe(event => {
       const code = (error.data as any)?.code;
       const msg = error.message;
       if (code === "BAD_REQUEST" || code === "FORBIDDEN" || code === "NOT_FOUND") {
-        // Use sonner toast if available
         toast.error(msg || "An error occurred. Please try again.");
+      } else if (code === "INTERNAL_SERVER_ERROR" || code === "TIMEOUT") {
+        // Never expose raw server error codes to users
+        toast.error("Something went wrong on our end. Please try again or contact support.");
+      } else if (code === "TOO_MANY_REQUESTS") {
+        toast.error("Too many requests. Please wait a moment before trying again.");
       }
     }
   }
