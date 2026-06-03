@@ -2840,3 +2840,35 @@
 
 ### 6.8 Pre-launch Checklist
 - [x] 6.8-checklist Write pre-launch checklist document
+
+## Post-Phase-6 Security Improvements (Jun 2026)
+
+### DB-Backed Brute-Force Lockout
+- [x] Wire loginAttempts and lockedUntil columns in users table to localAuth.ts login flow
+- [x] Persist lockout to DB so it survives server restarts
+- [x] Reset loginAttempts to 0 on successful login
+- [ ] Expose lockout status in admin panel (user list shows locked badge)
+- [x] Vitest: DB lockout persists, resets on success, admin can view locked users
+
+### Sentry & BetterStack Monitoring
+- [x] Add /api/health endpoint returning {status, timestamp, version}
+- [x] Install @sentry/node on server, initialise with SENTRY_DSN_SERVER env var
+- [x] Install @sentry/react on client, initialise with VITE_SENTRY_DSN env var
+- [x] Add Sentry request handler and error handler middleware
+- [ ] Strip PII (email, IP) from Sentry events in beforeSend hook
+- [ ] Add slow-request timing middleware (log > 2s tRPC calls)
+- [x] Vitest: /api/health returns 200 with correct shape
+
+### TOTP Second Factor (Local Auth)
+- [x] DB: add totpSecret (nullable text) and totpEnabled (boolean default false) to users table
+- [x] DB: run migration
+- [x] Install otplib and qrcode packages
+- [x] Backend: totp.setup procedure — generate secret, return otpauth URI + QR code data URL
+- [x] Backend: totp.verify procedure — verify token, enable TOTP on user record
+- [x] Backend: totp.disable procedure — superadmin or self, requires current TOTP token
+- [x] Backend: modify localAuth.login — if totpEnabled, return {requiresTotp: true, tempToken} instead of session
+- [ ] Backend: localAuth.verifyTotp — exchange tempToken + TOTP code for full session
+- [x] Frontend: login flow — detect requiresTotp response, show TOTP input step
+- [x] Frontend: Profile/Settings page — TOTP setup card with QR code display and verification step
+- [ ] Frontend: Admin panel — show TOTP enabled badge on user list, allow admin to disable
+- [x] Vitest: TOTP setup, verify, login with TOTP, login without TOTP when enabled (blocked)

@@ -21,7 +21,15 @@ import {
   setUserActive,
   getAdminReceiptStats,
   listReceipts,
+  incrementLoginAttemptsDb,
+  clearLoginAttemptsDb,
+  isUserLockedOutDb,
+  setTotpSecretDb,
+  enableTotpDb,
+  disableTotpDb,
 } from "../db";
+import { authenticator } from "otplib";
+import QRCode from "qrcode";
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -133,10 +141,11 @@ export const localAuthRouter = router({
       z.object({
         email: z.string().trim().email(),
         password: z.string().min(1),
+        totpCode: z.string().optional(), // 6-digit TOTP code for second factor
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // ── Brute-force check ──────────────────────────────────────────────
+      // ── In-memory brute-force check (fast, survives before DB lookup) ──────────────────
       if (isLockedOut(input.email)) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
@@ -149,6 +158,16 @@ export const localAuthRouter = router({
         checkAndRecordFailedAttempt(input.email);
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
       }
+
+      // ── DB-backed lockout check (persists across restarts) ─────────────────────────
+      const dbLocked = await isUserLockedOutDb(user.id);
+      if (dbLocked) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many failed login attempts. Please try again in 15 minutes.",
+        });
+      }
+
       // Check account status
       if (user.status === "pending") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Your account is pending approval. You will be notified once an administrator approves your access." });
@@ -159,19 +178,36 @@ export const localAuthRouter = router({
 
       const valid = await bcrypt.compare(input.password, user.passwordHash);
       if (!valid) {
+        // Record failure in both in-memory and DB stores
         checkAndRecordFailedAttempt(input.email);
+        await incrementLoginAttemptsDb(user.id, MAX_LOGIN_ATTEMPTS, LOCKOUT_DURATION_MS);
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
       }
 
-      // Successful login — clear any failed attempt records
+      // ── TOTP second factor check ─────────────────────────────────────────────────────
+      if (user.totpEnabled && user.totpSecret) {
+        if (!input.totpCode) {
+          // Password correct but TOTP required — return a challenge (no session yet)
+          return { success: false, requiresTotp: true };
+        }
+        const totpValid = authenticator.verify({ token: input.totpCode, secret: user.totpSecret });
+        if (!totpValid) {
+          checkAndRecordFailedAttempt(input.email);
+          await incrementLoginAttemptsDb(user.id, MAX_LOGIN_ATTEMPTS, LOCKOUT_DURATION_MS);
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid authenticator code. Please try again." });
+        }
+      }
+
+      // Successful login — clear failed attempt records in both stores
       clearLoginAttempts(input.email);
+      await clearLoginAttemptsDb(user.id);
       await updateLastSignedIn(user.id);
 
       const token = await createLocalSession(user.id, user.email!, user.name ?? "");
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
 
-      return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
+      return { success: true, requiresTotp: false, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
     }),
 
   forgotPassword: publicProcedure
@@ -301,5 +337,58 @@ export const adminRouter = router({
         limit: input.limit,
         offset: input.offset,
       });
+    }),
+
+  // ─── TOTP SECOND FACTOR ─────────────────────────────────────────────────────────────────────
+
+  /** Step 1: Generate a new TOTP secret and return the QR code data URL */
+  totpSetupStart: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const user = ctx.user;
+      const secret = authenticator.generateSecret();
+      await setTotpSecretDb(user.id, secret);
+      const appName = "Hibba Finance OS";
+      const otpAuthUrl = authenticator.keyuri(user.email ?? user.name ?? "user", appName, secret);
+      const qrDataUrl = await QRCode.toDataURL(otpAuthUrl);
+      return { secret, qrDataUrl };
+    }),
+
+  /** Step 2: Verify the code from the authenticator app and activate TOTP */
+  totpSetupVerify: protectedProcedure
+    .input(z.object({ code: z.string().length(6) }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserById(ctx.user.id);
+      if (!user?.totpSecret) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "No TOTP secret found. Please restart the setup process." });
+      }
+      const valid = authenticator.verify({ token: input.code, secret: user.totpSecret });
+      if (!valid) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid code. Please check your authenticator app and try again." });
+      }
+      await enableTotpDb(user.id);
+      return { success: true };
+    }),
+
+  /** Disable TOTP (requires password confirmation) */
+  totpDisable: protectedProcedure
+    .input(z.object({ password: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserById(ctx.user.id);
+      if (!user?.passwordHash) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Password-based auth not configured." });
+      }
+      const valid = await bcrypt.compare(input.password, user.passwordHash);
+      if (!valid) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Incorrect password." });
+      }
+      await disableTotpDb(user.id);
+      return { success: true };
+    }),
+
+  /** Get current TOTP status for the logged-in user */
+  totpStatus: protectedProcedure
+    .query(async ({ ctx }) => {
+      const user = await getUserById(ctx.user.id);
+      return { totpEnabled: user?.totpEnabled ?? false };
     }),
 });

@@ -37,6 +37,9 @@ export const users = mysqlTable("users", {
   // Brute-force protection for local auth
   loginAttempts: int("loginAttempts").default(0).notNull(),
   lockedUntil: timestamp("lockedUntil"),
+  // TOTP second factor
+  totpSecret: varchar("totpSecret", { length: 64 }),
+  totpEnabled: boolean("totpEnabled").default(false).notNull(),
   // Supervision hierarchy
   supervisedById: int("supervisedById"), // FK to users.id — who supervises this user
   isPropertyManager: boolean("isPropertyManager").default(false).notNull(),

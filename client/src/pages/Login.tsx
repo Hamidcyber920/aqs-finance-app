@@ -71,9 +71,16 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  // TOTP second-factor state
+  const [totpRequired, setTotpRequired] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
 
   const loginMutation = trpc.localAuth.login.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      if ((data as any)?.requiresTotp) {
+        setTotpRequired(true);
+        return;
+      }
       await utils.auth.me.invalidate();
       window.location.href = "/dashboard";
     },
@@ -95,7 +102,12 @@ export default function LoginPage() {
       toast.error("Please enter both email and password");
       return;
     }
-    loginMutation.mutate({ email: trimmedEmail, password });
+    if (totpRequired) {
+      if (totpCode.length !== 6) { toast.error("Please enter the 6-digit code from your authenticator app"); return; }
+      loginMutation.mutate({ email: trimmedEmail, password, totpCode });
+    } else {
+      loginMutation.mutate({ email: trimmedEmail, password });
+    }
   };
 
   return (
@@ -218,12 +230,30 @@ export default function LoginPage() {
                   </div>
                 </div>
 
+                {/* TOTP challenge step */}
+                {totpRequired && (
+                  <div style={{ display:"flex",flexDirection:"column",gap:6 }}>
+                    <Label htmlFor="totpCode" style={{ fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.7)",letterSpacing:"0.05em",textTransform:"uppercase" }}>
+                      Authenticator Code
+                    </Label>
+                    <Input
+                      id="totpCode" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={6}
+                      placeholder="000000" value={totpCode}
+                      onChange={(e) => setTotpCode(e.target.value.replace(/\D/g,"").slice(0,6))}
+                      autoFocus autoComplete="one-time-code"
+                      style={{ height:48,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(99,91,255,0.4)",borderRadius:12,color:"#fff",fontSize:22,letterSpacing:"0.4em",textAlign:"center" }}
+                      className="placeholder:text-white/30 focus:border-[#635BFF]"
+                    />
+                    <p style={{ fontSize:11,color:"rgba(255,255,255,0.4)",margin:0,textAlign:"center" }}>Enter the 6-digit code from your authenticator app</p>
+                  </div>
+                )}
+
                 <Button type="submit" disabled={loginMutation.isPending}
                   style={{ height:48,borderRadius:12,background:"linear-gradient(135deg,#00FFC2,#00DDB0)",color:"#081526",fontWeight:700,fontSize:15,letterSpacing:"0.03em",border:"none",boxShadow:"0 8px 28px rgba(0,255,194,0.2)",marginTop:4 }}
                   className="hover:shadow-[0_16px_48px_rgba(0,255,194,0.35)] transition-all hover:-translate-y-0.5">
                   {loginMutation.isPending ? (
                     <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Signing in…</>
-                  ) : "Enter Portal →"}
+                  ) : totpRequired ? "Verify Code →" : "Enter Portal →"}
                 </Button>
 
                 <p style={{ textAlign:"center",fontSize:13,color:"rgba(255,255,255,0.4)",margin:0 }}>

@@ -119,6 +119,51 @@ export async function updateLastSignedIn(userId: number) {
   await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.id, userId));
 }
 
+// ─── BRUTE-FORCE LOCKOUT (DB-BACKED) ─────────────────────────────────────────
+export async function incrementLoginAttemptsDb(userId: number, maxAttempts: number, lockoutMs: number) {
+  const db = await getDb();
+  if (!db) return;
+  const user = await db.select({ loginAttempts: users.loginAttempts }).from(users).where(eq(users.id, userId)).limit(1);
+  const current = user[0]?.loginAttempts ?? 0;
+  const newAttempts = current + 1;
+  const lockedUntil = newAttempts >= maxAttempts ? new Date(Date.now() + lockoutMs) : null;
+  await db.update(users).set({ loginAttempts: newAttempts, lockedUntil }).where(eq(users.id, userId));
+}
+export async function clearLoginAttemptsDb(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ loginAttempts: 0, lockedUntil: null }).where(eq(users.id, userId));
+}
+export async function isUserLockedOutDb(userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const result = await db.select({ lockedUntil: users.lockedUntil }).from(users).where(eq(users.id, userId)).limit(1);
+  const lockedUntil = result[0]?.lockedUntil;
+  if (!lockedUntil) return false;
+  if (new Date() > lockedUntil) {
+    await db.update(users).set({ lockedUntil: null, loginAttempts: 0 }).where(eq(users.id, userId));
+    return false;
+  }
+  return true;
+}
+
+// ─── TOTP ─────────────────────────────────────────────────────────────────────
+export async function setTotpSecretDb(userId: number, secret: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ totpSecret: secret, totpEnabled: false }).where(eq(users.id, userId));
+}
+export async function enableTotpDb(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ totpEnabled: true }).where(eq(users.id, userId));
+}
+export async function disableTotpDb(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ totpEnabled: false, totpSecret: null }).where(eq(users.id, userId));
+}
+
 export async function approveUser(userId: number, approvedById: number) {
   const db = await getDb();
   if (!db) return;

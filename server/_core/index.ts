@@ -1,4 +1,16 @@
 import "dotenv/config";
+import * as Sentry from "@sentry/node";
+
+// Initialise Sentry as early as possible (before any imports that might throw)
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? "development",
+    tracesSampleRate: 0.1,
+  });
+  console.log("[Sentry] Initialised");
+}
+
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -127,6 +139,23 @@ async function startServer() {
   // Voice token route removed — ephemeral token served via tRPC voice.getEphemeralToken
   // Voice SSE + HTTP routes (must be BEFORE Vite/static catch-all)
   // Voice gateway removed — browser connects directly to Gemini Live API
+
+  // Health check endpoint for uptime monitoring (BetterStack, etc.)
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      const dbOk = db !== null;
+      res.status(dbOk ? 200 : 503).json({
+        status: dbOk ? "ok" : "degraded",
+        timestamp: new Date().toISOString(),
+        uptime: Math.floor(process.uptime()),
+        db: dbOk ? "connected" : "unavailable",
+      });
+    } catch {
+      res.status(503).json({ status: "error", timestamp: new Date().toISOString() });
+    }
+  });
 
   // tRPC API
   app.use(

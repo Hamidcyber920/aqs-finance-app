@@ -17,6 +17,14 @@ vi.mock("./db", () => ({
   listReceipts: vi.fn(),
   upsertUser: vi.fn(),
   getUserByOpenId: vi.fn(),
+  // DB-backed brute-force lockout helpers
+  isUserLockedOutDb: vi.fn().mockResolvedValue(false),
+  incrementLoginAttemptsDb: vi.fn().mockResolvedValue(undefined),
+  clearLoginAttemptsDb: vi.fn().mockResolvedValue(undefined),
+  // TOTP helpers
+  setTotpSecretDb: vi.fn().mockResolvedValue(undefined),
+  enableTotpDb: vi.fn().mockResolvedValue(undefined),
+  disableTotpDb: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./storage", () => ({ storagePut: vi.fn() }));

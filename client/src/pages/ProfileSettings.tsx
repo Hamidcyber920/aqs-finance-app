@@ -3,10 +3,111 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { User, Lock, Bell, Shield, Eye, EyeOff, Save, LogOut } from "lucide-react";
+import { User, Lock, Bell, Shield, Eye, EyeOff, Save, LogOut, Smartphone, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+// ─── TOTP Setup Component ──────────────────────────────────────────────────────
+function TotpSection({ T }: { T: Record<string, string> }) {
+  const statusQuery = trpc.localAuth.totpStatus.useQuery();
+  const setupMut = trpc.localAuth.totpSetupStart.useMutation({
+    onError: (e: any) => toast.error(e.message),
+  });
+  const verifyMut = trpc.localAuth.totpSetupVerify.useMutation({
+    onSuccess: () => { toast.success("Two-factor authentication enabled!"); statusQuery.refetch(); setStep("idle"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const disableMut = trpc.localAuth.totpDisable.useMutation({
+    onSuccess: () => { toast.success("Two-factor authentication disabled."); statusQuery.refetch(); setStep("idle"); setDisablePassword(""); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const [step, setStep] = useState<"idle" | "setup" | "verify" | "disable">("idle");
+  const [code, setCode] = useState("");
+  const [disablePassword, setDisablePassword] = useState("");
+  const totpEnabled = statusQuery.data?.totpEnabled ?? false;
+
+  const handleStartSetup = async () => {
+    setStep("setup");
+    await setupMut.mutateAsync();
+  };
+
+  return (
+    <div style={{ marginTop:24,padding:20,borderRadius:14,background:"rgba(99,91,255,0.06)",border:"1px solid rgba(99,91,255,0.2)" }}>
+      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16 }}>
+        <div style={{ display:"flex",alignItems:"center",gap:10 }}>
+          <Smartphone size={16} style={{ color:T.purple }}/>
+          <div>
+            <p style={{ fontSize:14,fontWeight:700,color:T.white,margin:0 }}>Two-Factor Authentication (2FA)</p>
+            <p style={{ fontSize:12,color:T.muted,margin:"2px 0 0" }}>Use an authenticator app for extra security on login</p>
+          </div>
+        </div>
+        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+          {totpEnabled && <span style={{ display:"flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,color:T.mint }}><CheckCircle2 size={12}/>Active</span>}
+          {!totpEnabled && step === "idle" && (
+            <Button onClick={handleStartSetup} disabled={setupMut.isPending}
+              style={{ background:`linear-gradient(135deg,${T.purple},#4f46e5)`,color:T.white,fontWeight:700,height:34,borderRadius:10,border:"none",fontSize:12,padding:"0 16px" }}>
+              {setupMut.isPending ? "Loading…" : "Enable 2FA"}
+            </Button>
+          )}
+          {totpEnabled && step === "idle" && (
+            <Button onClick={() => setStep("disable")}
+              style={{ background:"rgba(255,80,80,0.1)",color:"#ff5050",fontWeight:700,height:34,borderRadius:10,border:"1px solid rgba(255,80,80,0.2)",fontSize:12,padding:"0 16px" }}>
+              Disable 2FA
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Setup: show QR code */}
+      {step === "setup" && setupMut.data && (
+        <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:16 }}>
+          <p style={{ fontSize:13,color:T.muted,textAlign:"center",margin:0 }}>Scan this QR code with <strong style={{color:T.white}}>Google Authenticator</strong>, <strong style={{color:T.white}}>Authy</strong>, or any TOTP app.</p>
+          <img src={setupMut.data.qrDataUrl} alt="TOTP QR Code" style={{ width:180,height:180,borderRadius:12,border:`2px solid ${T.border}` }}/>
+          <p style={{ fontSize:11,color:T.muted,textAlign:"center",margin:0 }}>Manual entry key: <code style={{color:T.mint,letterSpacing:"0.1em"}}>{setupMut.data.secret}</code></p>
+          <Button onClick={() => setStep("verify")}
+            style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:40,borderRadius:10,border:"none",fontSize:13,padding:"0 24px" }}>
+            I've scanned it — Continue
+          </Button>
+          <button onClick={() => setStep("idle")} style={{ background:"none",border:"none",color:T.muted,fontSize:12,cursor:"pointer" }}>Cancel</button>
+        </div>
+      )}
+
+      {/* Verify: enter 6-digit code */}
+      {step === "verify" && (
+        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+          <p style={{ fontSize:13,color:T.muted,margin:0 }}>Enter the 6-digit code from your authenticator app to confirm setup.</p>
+          <div style={{ display:"flex",gap:10 }}>
+            <Input value={code} onChange={e => setCode(e.target.value.replace(/\D/g,"").slice(0,6))} placeholder="000000" maxLength={6}
+              style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,letterSpacing:"0.3em",fontSize:18,textAlign:"center",flex:1 }}/>
+            <Button onClick={() => verifyMut.mutate({ code })} disabled={code.length < 6 || verifyMut.isPending}
+              style={{ background:`linear-gradient(135deg,${T.mint},#00DDB0)`,color:"#081526",fontWeight:700,height:44,borderRadius:10,border:"none",fontSize:13,padding:"0 20px",flexShrink:0 }}>
+              {verifyMut.isPending ? "Verifying…" : "Verify"}
+            </Button>
+          </div>
+          <button onClick={() => setStep("idle")} style={{ background:"none",border:"none",color:T.muted,fontSize:12,cursor:"pointer",textAlign:"left" }}>Cancel</button>
+        </div>
+      )}
+
+      {/* Disable: confirm with password */}
+      {step === "disable" && (
+        <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+          <p style={{ fontSize:13,color:T.muted,margin:0 }}>Enter your password to confirm disabling 2FA.</p>
+          <div style={{ display:"flex",gap:10 }}>
+            <Input type="password" value={disablePassword} onChange={e => setDisablePassword(e.target.value)} placeholder="Your password"
+              style={{ background:"rgba(255,255,255,0.06)",border:`1px solid ${T.border}`,borderRadius:10,color:T.white,height:44,flex:1 }}/>
+            <Button onClick={() => disableMut.mutate({ password: disablePassword })} disabled={!disablePassword || disableMut.isPending}
+              style={{ background:"rgba(255,80,80,0.15)",color:"#ff5050",fontWeight:700,height:44,borderRadius:10,border:"1px solid rgba(255,80,80,0.3)",fontSize:13,padding:"0 20px",flexShrink:0 }}>
+              {disableMut.isPending ? "Disabling…" : "Confirm"}
+            </Button>
+          </div>
+          <button onClick={() => setStep("idle")} style={{ background:"none",border:"none",color:T.muted,fontSize:12,cursor:"pointer",textAlign:"left" }}>Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const T = { navy:"#0A192F",purple:"#635BFF",mint:"#00FFC2",white:"#FFFFFF",muted:"rgba(255,255,255,0.5)",border:"rgba(255,255,255,0.08)",glass:"rgba(255,255,255,0.04)",card:"rgba(13,34,64,0.8)" };
 
@@ -175,6 +276,9 @@ export default function ProfileSettingsPage() {
                   {passwordMutation?.isPending?"Updating…":"Update Password"}
                 </Button>
               </form>
+
+              {/* TOTP Second Factor */}
+              <TotpSection T={T} />
 
               <div style={{ marginTop:24,padding:18,borderRadius:14,background:"rgba(0,255,194,0.06)",border:"1px solid rgba(0,255,194,0.15)" }}>
                 <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:8 }}>
