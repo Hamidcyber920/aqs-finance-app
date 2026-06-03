@@ -14,6 +14,28 @@ import { buildWhatsAppUrl } from "../lib/whatsapp";
 import { logAudit } from "./auditTrail";
 import { fmtDate, fmtDateLong } from "../dateUtils";
 
+/**
+ * SSRF guard: reject URLs pointing to internal/metadata addresses.
+ * Call before any server-side fetch of a user-supplied URL.
+ */
+function assertSafeUrl(url: string, label = "URL"): void {
+  let parsed: URL;
+  try { parsed = new URL(url); } catch {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `Invalid ${label}` });
+  }
+  const h = parsed.hostname.toLowerCase();
+  const BLOCKED = ["169.254.169.254", "metadata.google.internal", "100.100.100.200"];
+  const BLOCKED_PFX = ["127.", "10.", "192.168.", "::1",
+    "172.16.","172.17.","172.18.","172.19.","172.20.","172.21.","172.22.","172.23.",
+    "172.24.","172.25.","172.26.","172.27.","172.28.","172.29.","172.30.","172.31."];
+  if (BLOCKED.includes(h) || BLOCKED_PFX.some(p => h.startsWith(p))) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `${label} points to a disallowed address` });
+  }
+  if (!["https:", "http:"].includes(parsed.protocol)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `${label} must use http or https` });
+  }
+}
+
 const ADMIN_ROLES = ["superadmin", "trustee", "manager", "admin"];
 
 export const facilitiesRouter = router({
@@ -904,6 +926,7 @@ export const facilitiesRouter = router({
       if (!enquiry.pdfUrl) throw new TRPCError({ code: "BAD_REQUEST", message: "Generate PDF first" });
       try {
         const { uploadToDrive } = await import("../googleServices");
+        assertSafeUrl(enquiry.pdfUrl, "pdfUrl");
         const response = await fetch(enquiry.pdfUrl);
         const pdfBuffer = Buffer.from(await response.arrayBuffer());
         const fileName = `Enquiry-${enquiry.id}-${enquiry.contactName.replace(/[^a-z0-9]/gi, "-")}-${new Date().toISOString().split("T")[0]}.pdf`;

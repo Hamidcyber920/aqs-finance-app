@@ -2802,3 +2802,41 @@
 - [x] 6.6b Stripe sandbox not claimed — user action required: claim at https://dashboard.stripe.com/claim_sandbox/...
 - [x] 6.6c Build: clean (pnpm build → ✓ built in 14.20s)
 - [x] 6.6d Tests: 339/346 pass (7 Google OAuth failures — environment only)
+
+## Phase 6 Full Spec — Security & Launch Readiness (Jun 2026)
+
+### 6.1 Dependency & Supply-Chain Audit
+- [x] 6.1-sbom Generate SBOM with Syft and review all package licences
+- [x] 6.1-licence Flag GPL/AGPL/copyleft packages that affect AQS IP position
+- [x] 6.1-pin Verify all production deps are pinned to exact versions (no ^ or ~)
+- [x] 6.1-niche Audit non-mainstream packages (<10k weekly downloads) — justify and verify maintained
+- [x] 6.1-audit Run pnpm audit; document all medium/low with rationale
+
+### 6.2 Secrets & Credentials
+- [x] 6.2-gitleaks Run gitleaks against full repo history — zero hits required
+- [x] 6.2-rotation Document secret-rotation procedure
+- [x] 6.2-db-perms Verify DB application user has least-privilege permissions
+
+### 6.4 Attack Surface Checks
+- [x] 6.4-authz Authorisation bypass: Reception-role user attempts restricted endpoints
+- [x] 6.4-mass-assign Mass assignment: POST extra fields to update endpoints
+- [x] 6.4-idor IDOR: Donor A attempts to view Donor B portal data by guessing IDs
+- [x] 6.4-ratelimit Rate limiting: 100 rapid requests from one IP
+- [x] 6.4-csrf CSRF: state-changing request from malicious origin
+- [x] 6.4-redirect Open redirect: redirect_uri validated against allowlist
+- [x] 6.4-upload File upload: executable disguised as JPEG, 100MB file
+- [x] 6.4-ssrf SSRF: URL inputs must reject internal addresses
+
+### 6.5 Backup & Disaster Recovery
+- [x] 6.5-runbook Write DR runbook (RTO/RPO, who to call, decision tree)
+
+### 6.6 Monitoring & Alerting
+- [x] 6.6-sentry Sentry integration guidance
+- [x] 6.6-uptime BetterStack uptime monitoring guidance
+- [x] 6.6-slowquery Slow query log and p95 tracking guidance
+
+### 6.7 Operational Runbook
+- [x] 6.7-runbook Write all 9 operational runbook documents
+
+### 6.8 Pre-launch Checklist
+- [x] 6.8-checklist Write pre-launch checklist document
