@@ -2759,3 +2759,46 @@
 - [x] 5.6a PWA manifest + service worker
 - [x] 5.6b Camera permission denied message in Capture.tsx
 - [x] 5.6c Apple Pay / Google Pay render test — CANNOT TEST without real device
+
+## Phase 6 — Security & Launch Readiness Audit (Jun 2026)
+
+### 6.1 Dependency Vulnerabilities
+- [x] 6.1a pnpm audit (all deps): 43 vulns — 1 critical (vitest UI, dev-only), 15 high (mostly dev tools), 10 moderate, 2 low
+- [x] 6.1b pnpm audit --prod: 14 vulns — 0 critical, 2 high (path-to-regexp 0.1.12 ReDoS, lodash-es template injection), 10 moderate, 2 low
+- [x] 6.1c path-to-regexp ReDoS: Express 4 uses 0.1.12 (fixed in 0.1.13). Routes use only static paths — no user-controlled route params. Risk: LOW in practice.
+- [x] 6.1d lodash-es template injection: via mermaid→langium→chevrotain chain. Not called with user input. Risk: LOW.
+- [x] 6.1e vitest critical: UI server file read/execute — vitest UI is never run in production. Risk: NONE in production.
+
+### 6.2 Secrets & Credentials
+- [x] 6.2a No hardcoded secrets found in server/ or client/src/ code
+- [x] 6.2b .gitignore correctly excludes .env, .env.local, .env.*.local
+- [x] 6.2c All credentials injected via environment variables (process.env.*)
+- [x] 6.2d Stripe webhook secret verified via constructEvent signature check
+- [x] 6.2e Password reset tokens cleared after use (single-use enforced in updateUserPassword)
+
+### 6.3 Authentication & Authorisation
+- [x] 6.3a Helmet security headers: CSP, X-Frame-Options, X-Content-Type-Options, HSTS (via Helmet defaults)
+- [x] 6.3b Rate limiting: 300 req/min general, 10 req/min auth, 60 req/min webhook
+- [x] 6.3c bcrypt cost factor 12 on all password hashes (PASS)
+- [x] 6.3d Session cookies: httpOnly=true, sameSite=none, secure=true (production)
+- [x] 6.3e Brute-force lockout: in-memory Map (5 attempts → 15-min lockout). NOTE: in-memory only — resets on server restart. DB columns (loginAttempts, lockedUntil) added but not yet wired. Logged as post-launch item.
+- [x] 6.3f Local auth MFA bypass: documented P1 concern — local email/password bypasses Manus OAuth MFA. Deferred to post-launch.
+
+### 6.4 Input Validation & XSS
+- [x] 6.4a 223 tRPC procedures use Zod .input() validation — no unvalidated inputs found
+- [x] 6.4b DOMPurify sanitization on CommsInbox email HTML rendering (PASS)
+- [x] 6.4c MIME type allowlist added to uploadHandler.ts (images, PDF, CSV, Excel, audio only)
+- [x] 6.4d File size limit: 5MB enforced by multer
+- [x] 6.4e SQL injection: all queries use Drizzle ORM parameterized queries or Drizzle sql`` tagged template literals (safe)
+
+### 6.5 Backup & Restore
+- [x] 6.5a Daily backup: POST /api/scheduled/backup runs at 02:00 UTC via Manus scheduled task
+- [x] 6.5b Backup stored in S3 as JSON export of all tables
+- [x] 6.5c Restore procedure: documented in server/routers/backup.ts — admin can trigger manual backup; restore requires DBA intervention
+- [x] 6.5d Backup authentication: scheduled task uses system cookie; manual backup requires trustee/superadmin role
+
+### 6.6 Launch Readiness
+- [x] 6.6a Google OAuth tokens expired (GMAIL_REFRESH_TOKEN, GOOGLE_DRIVE_REFRESH_TOKEN) — user action required: rotate in Settings → Secrets
+- [x] 6.6b Stripe sandbox not claimed — user action required: claim at https://dashboard.stripe.com/claim_sandbox/...
+- [x] 6.6c Build: clean (pnpm build → ✓ built in 14.20s)
+- [x] 6.6d Tests: 339/346 pass (7 Google OAuth failures — environment only)

@@ -3,9 +3,25 @@ import multer from "multer";
 import { storagePut } from "./storage";
 import { sdk } from "./_core/sdk";
 
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic", "image/heif",
+  "application/pdf",
+  "text/csv",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-excel", // .xls
+  "audio/webm", "audio/ogg", "audio/mpeg", "audio/wav", "audio/mp4",
+]);
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB — client compresses images to ~400KB; higher limit for PDFs via SmartUpload
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type '${file.mimetype}' is not allowed. Permitted types: images, PDF, CSV, Excel, audio.`));
+    }
+  },
 });
 
 export const uploadRouter = express.Router();
