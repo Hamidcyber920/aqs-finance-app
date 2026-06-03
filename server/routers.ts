@@ -1287,7 +1287,21 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => createFundraisingCampaign({ name: input.name, description: input.description, targetAmount: input.targetAmount, startDate: input.startDate, endDate: input.endDate, imageUrl: input.imageUrl })),
     recordDonation: adminProcedure
       .input(z.object({ campaignId: z.number(), donorName: z.string().optional(), donorEmail: z.string().optional(), amount: z.string(), paymentMethod: z.string().default("cash"), isGiftAid: z.boolean().default(false), notes: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => { const d = await createDonation({ campaignId: input.campaignId, donorName: input.donorName ?? "Anonymous", donorEmail: input.donorEmail, amount: input.amount, paymentMethod: input.paymentMethod as any, notes: input.notes }); await updateCampaignAmount(input.campaignId, parseFloat(input.amount)); await logAudit({ userId: ctx.user.id, userName: ctx.user.name ?? ctx.user.email ?? undefined, action: "create", entity: "donation", entityId: (d as any)?.id, meta: { campaignId: input.campaignId, amount: input.amount, donorName: input.donorName } }); return d; }),
+      .mutation(async ({ ctx, input }) => {
+        const d = await createDonation({ campaignId: input.campaignId, donorName: input.donorName ?? "Anonymous", donorEmail: input.donorEmail, amount: input.amount, paymentMethod: input.paymentMethod as any, notes: input.notes });
+        await updateCampaignAmount(input.campaignId, parseFloat(input.amount));
+        await logAudit({ userId: ctx.user.id, userName: ctx.user.name ?? ctx.user.email ?? undefined, action: "create", entity: "donation", entityId: (d as any)?.id, meta: { campaignId: input.campaignId, amount: input.amount, donorName: input.donorName } });
+        // Charity Commission SIR requirement: anonymous donations >= £5,000 must be reported
+        const donorIsAnonymous = !input.donorName || input.donorName.trim().toLowerCase() === "anonymous";
+        const donationAmountNum = parseFloat(input.amount);
+        if (donorIsAnonymous && donationAmountNum >= 5000) {
+          await notifyOwner({
+            title: `🚨 Anonymous Donation ≥ £5,000 — Serious Incident Report May Be Required`,
+            content: `An anonymous donation of £${donationAmountNum.toLocaleString()} has been recorded (Campaign ID: ${input.campaignId}). Under Charity Commission guidance, anonymous donations of £5,000 or more may require a Serious Incident Report. Please review and file via the Major Donor Due Diligence module if required.`,
+          });
+        }
+        return d;
+      }),
     listFridayCollections: protectedProcedure.query(() => getFridayCollections()),
     recordFridayCollection: adminProcedure
       .input(z.object({ collectionDate: z.date(), amount: z.string(), collectedById: z.number().optional(), notes: z.string().optional() }))

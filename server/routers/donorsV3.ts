@@ -408,6 +408,8 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
     .input(z.object({
       taxYear: z.string().regex(/^\d{4}-\d{2}$/, "Format: YYYY-YY e.g. 2024-25"),
       quarter: z.enum(["Q1", "Q2", "Q3", "Q4"]),
+      authorisedOfficialForename: z.string().default("Abdul"),
+      authorisedOfficialSurname: z.string().default("Hamid"),
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -465,7 +467,7 @@ Start with "Dear ${(donor as any).name ?? "Valued Supporter"}, AssalamuAlaikum".
       </IRheader>
       <CHARITYCLAIM>
         <AuthorisedOfficial>
-          <Name><Fore>Abdul</Fore><Sur>Hamid</Sur></Name>
+          <Name><Fore>${escapeXml(input.authorisedOfficialForename)}</Fore><Sur>${escapeXml(input.authorisedOfficialSurname)}</Sur></Name>
         </AuthorisedOfficial>
         <Repayment>
           <EarliestGAdate>${claims[0]?.donationDate ?? ""}</EarliestGAdate>

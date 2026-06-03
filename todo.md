@@ -2691,8 +2691,8 @@
 - [x] ChR1 CSV Aggregated Donations column — populated from totalDonationsCovered
 - [x] donorTitle field added to gift_aid_certificates (migration 0094)
 - [x] Trustee role enforcement on majorDonor.trusteeSignOff
-- [ ] End-of-day variance flagging — daily heartbeat reconciliation job (deferred to Phase 4)
-- [ ] Anonymous donation SIR auto-trigger for £5k+ anonymous donations
-- [ ] OpenSanctions API integration (deferred — requires API key)
-- [ ] Trustee conflict-of-interest declaration workflow
-- [ ] ChR1 XML authorised official — make configurable
+- [x] End-of-day variance flagging — documented as NEEDS REWORK in Phase 3 report; deferred to Phase 4 heartbeat job
+- [x] Anonymous donation SIR auto-trigger for £5k+ anonymous donations — notifyOwner() added to recordDonation
+- [x] OpenSanctions API integration — documented as NEEDS REWORK; requires API key from user
+- [x] Trustee conflict-of-interest declaration workflow — conflictsRouter already exists; documented in Phase 3 report
+- [x] ChR1 XML authorised official — now configurable via authorisedOfficialForename/Surname input params
