@@ -194,6 +194,9 @@ export async function listAllUsers(limit = 100, offset = 0) {
       id: users.id, name: users.name, email: users.email, role: users.role,
       isActive: users.isActive, status: users.status, createdAt: users.createdAt,
       fullName: staffProfiles.fullName,
+      totpEnabled: users.totpEnabled,
+      lockedUntil: users.lockedUntil,
+      loginAttempts: users.loginAttempts,
     })
       .from(users)
       .leftJoin(staffProfiles, eq(users.id, staffProfiles.userId))

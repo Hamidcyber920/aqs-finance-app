@@ -7,6 +7,20 @@ if (process.env.SENTRY_DSN) {
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV ?? "development",
     tracesSampleRate: 0.1,
+    // Strip PII before sending to Sentry
+    beforeSend(event) {
+      // Remove user email and IP address from all events
+      if (event.user) {
+        delete event.user.email;
+        delete event.user.ip_address;
+      }
+      // Scrub Authorization and Cookie headers from request data
+      if (event.request?.headers) {
+        delete (event.request.headers as Record<string, unknown>)["authorization"];
+        delete (event.request.headers as Record<string, unknown>)["cookie"];
+      }
+      return event;
+    },
   });
   console.log("[Sentry] Initialised");
 }
@@ -117,6 +131,17 @@ async function startServer() {
   // 5MB is enough for base64 images (~500KB compressed → ~667KB base64)
   app.use(express.json({ limit: "5mb" }));
   app.use(express.urlencoded({ limit: "5mb", extended: true }));
+  // Slow-request timing middleware: logs tRPC calls taking > 2s
+  app.use("/api/trpc", (req, _res, next) => {
+    const start = Date.now();
+    _res.on("finish", () => {
+      const ms = Date.now() - start;
+      if (ms > 2000) {
+        console.warn(`[SlowRequest] ${req.method} ${req.url} took ${ms}ms`);
+      }
+    });
+    next();
+  });
   // Storage proxy for /manus-storage/* paths
   registerStorageProxy(app);
   // OAuth callback under /api/oauth/callback

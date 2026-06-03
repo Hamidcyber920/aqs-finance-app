@@ -318,6 +318,14 @@ export default function AdminPanelPage() {
                               {u.isPropertyManager && <span style={{ marginLeft:6,fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:999,background:"rgba(99,91,255,0.2)",color:T.purple }}>PROPERTY MGR</span>}
                             </p>
                             <p style={{ fontSize:11,color:T.muted,margin:0 }}>{u.email}</p>
+                            <div style={{ display:"flex",gap:4,marginTop:3,flexWrap:"wrap" }}>
+                              {u.totpEnabled && (
+                                <span style={{ fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:999,background:"rgba(0,255,194,0.12)",color:"#00FFC2",border:"1px solid rgba(0,255,194,0.25)" }}>2FA ON</span>
+                              )}
+                              {u.lockedUntil && new Date(u.lockedUntil) > new Date() && (
+                                <span style={{ fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:999,background:"rgba(239,68,68,0.12)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.25)" }}>LOCKED</span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
